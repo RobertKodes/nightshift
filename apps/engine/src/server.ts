@@ -78,6 +78,38 @@ function publicView(engine: Engine, c: Company) {
   };
 }
 
+let swarmCache: { at: number; agents: number | null; working: number | null } = { at: 0, agents: null, working: null };
+async function landing(engine: Engine) {
+  if (Date.now() - swarmCache.at > 30_000) {
+    const h = await engine.reads.health().catch(() => null);
+    swarmCache = { at: Date.now(), agents: h?.connectedDaemons ?? null, working: h?.workingNow ?? null };
+  }
+  const companies = [...engine.store.companies.values()];
+  const live = companies.flatMap((c) => c.products.filter((p) => p.status === "live").map((p) => ({ c, p })));
+  const since = Date.now() - 24 * 3600_000;
+  const featured = [...companies].sort((a, b) => b.products.reduce((x, p) => x + Number(p.revenueUsdc), 0) - a.products.reduce((x, p) => x + Number(p.revenueUsdc), 0))[0];
+  const fm = featured ? engine.store.metricsOf(featured.id) : null;
+  const kinds = config.requireAuth ? new Set(["result"]) : new Set(["result", "sale", "decision"]);
+  const activity = companies
+    .flatMap((c) => c.journal.filter((j) => kinds.has(j.kind)).map((j) => ({ at: j.at, kind: j.kind, company: c.name, slug: c.slug, text: j.text.replace(/^\[sim\] /, "") })))
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 12);
+  return {
+    mode: config.mode,
+    swarm: { agentsOnline: swarmCache.agents, workingNow: swarmCache.working, source: "api.imd.fun/health" },
+    companies: companies.length,
+    productsLive: live.length,
+    featured: featured ? {
+      name: featured.name, slug: featured.slug, mission: featured.mission, status: featured.status, shift: featured.cycle,
+      product: featured.products.find((p) => p.status === "live")?.name ?? null,
+      revenue24hUsd: (fm?.sales ?? []).filter((s) => s.at >= since).reduce((a, s) => a + Number(s.usdc) / 1e6, 0),
+      customers: featured.products.reduce((a, p) => a + p.sales, 0),
+      working: featured.tasks.some((t) => ["checking", "ordering", "building"].includes(t.status)),
+    } : null,
+    activity,
+  };
+}
+
 function series(visits: number[], sales: { at: number; usd: number }[]) {
   const now = Date.now();
   const bucket = config.mode === "sim" ? 60_000 : 3600_000;
@@ -112,6 +144,9 @@ export function serve(engine: Engine) {
 
       const owner = engine.auth.owner(req);
 
+      // ---- the landing page's live numbers: real where they can be, labelled where simulated
+      if (p === "/api/landing") return json(res, 200, await landing(engine));
+
       // ---- sign-in with a wallet
       if (p === "/api/auth/nonce") {
         if (limited(req, "nonce", 30, 60_000)) return json(res, 429, { error: "slow down" });
@@ -138,7 +173,9 @@ export function serve(engine: Engine) {
       }
 
       // ---- NIGHTSHIFT over MCP (streamable HTTP, stateless)
-      if (p === "/mcp") {
+      // A browser opening /mcp wants the page about it, not the protocol endpoint.
+      const wantsPage = req.method === "GET" && (req.headers.accept ?? "").includes("text/html");
+      if (p === "/mcp" && !wantsPage) {
         const b = req.method === "POST" ? await body(req) : undefined;
         return await handleMcp(engine, req, res, b);
       }

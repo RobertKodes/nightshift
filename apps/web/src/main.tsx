@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { type Health, api, short } from "./api";
 import { CompanyPage } from "./CompanyPage";
 import { Home } from "./Home";
+import { Landing } from "./landing/Landing";
 import { McpPage } from "./McpPage";
 import { PublicPage } from "./PublicPage";
 import { Link, useRoute } from "./router";
@@ -33,6 +34,8 @@ function App() {
   const [health, setHealth] = useState<Health | null>(null);
   useEffect(() => { api.health().then(setHealth).catch(() => setHealth(null)); }, []);
   const seg = path.split("/").filter(Boolean);
+  // The landing is a full-bleed experience with its own header; every other route uses the app shell.
+  if (seg.length === 0) return <Landing />;
   let page: React.ReactNode = <Home health={health} />;
   if (seg[0] === "co" && seg[1]) page = <CompanyPage id={seg[1]} health={health} />;
   if (seg[0] === "c" && seg[1]) page = <PublicPage slug={seg[1]} health={health} />;
@@ -43,7 +46,7 @@ function App() {
       <header className="top">
         <Link to="/" className="brand"><span className="brand-moon" />NIGHTSHIFT</Link>
         <nav>
-          <Link to="/" className={seg.length === 0 ? "on" : ""}>Companies</Link>
+          <Link to="/companies" className={seg[0] === "companies" || seg[0] === "launch" ? "on" : ""}>Companies</Link>
           <Link to="/mcp" className={seg[0] === "mcp" ? "on" : ""}>MCP</Link>
           <Link to="/terms" className={seg[0] === "terms" ? "on" : ""}>Terms & risks</Link>
         </nav>
