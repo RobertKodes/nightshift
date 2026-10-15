@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ImdPlane } from "@nightshift/imd";
 import type { Ledger } from "@nightshift/ledger";
 import type { LlmClient } from "@nightshift/llm";
+import { inputHash, keywords } from "imd-mcp/lib";
 import { imdOrder } from "./catalog.js";
 import { type CompanyStats, type Decision, heuristicDecision, llmDecision } from "./planner.js";
 import { canSpend } from "./policy.js";
@@ -18,6 +19,8 @@ export interface ShiftDeps {
   /** Public URL prefix of a company's buy links, e.g. https://host/buy/acme */
   buyBase: (c: Company) => string;
   emit: (c: Company, type: "task" | "journal" | "company", payload: unknown) => void;
+  /** The saver's first rule: look for shipped public work before paying for research. */
+  findExisting?: (query: string) => Promise<{ title: string; url: string } | null>;
   now?: () => number;
 }
 
@@ -84,6 +87,23 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
   if (!order) {
     doInHouse(c, t, decision, d);
     return t;
+  }
+
+  // The saver: never buy the same body twice, and reuse public research instead of paying for it.
+  const hash = inputHash(order.action, order.input);
+  const twin = c.tasks.find((x) => x !== t && x.imd && !["failed", "rejected"].includes(x.status) && inputHash(x.imd.action, x.imd.input) === hash);
+  if (twin) {
+    touch(c, t, d, { status: "failed", error: `already bought in shift ${twin.cycle}; not paying twice` });
+    note(c, d, "note", `Saver: "${t.title}" is identical to shift ${twin.cycle}'s order. Skipped, nothing spent.`);
+    return t;
+  }
+  if (decision.kind === "research" && d.findExisting) {
+    const hit = await d.findExisting(keywords(`${decision.brief} ${c.idea}`)).catch(() => null);
+    if (hit) {
+      touch(c, t, d, { status: "done", result: { files: { research: hit.url }, note: `Reused: ${hit.title}` } });
+      note(c, d, "result", `Saver: the swarm already published research on this ("${hit.title.slice(0, 80)}"). Reused it for free instead of paying 0.5 IMD.`);
+      return t;
+    }
   }
 
   if (decision.kind === "build_product" && decision.product) {

@@ -4,10 +4,14 @@
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
-  "scripts": { "typecheck": "tsc -p .", "test": "vitest run" },
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "vitest run"
+  },
   "dependencies": {
     "@nightshift/imd": "workspace:*",
     "@nightshift/ledger": "workspace:*",
-    "@nightshift/llm": "workspace:*"
+    "@nightshift/llm": "workspace:*",
+    "imd-mcp": "github:RobertKodes/imd-mcp"
   }
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { type CompanyFull, type Health, type Policy, type TaskView, ago, api, events, fromUsdc, short, until, usd } from "./api";
 import { Link } from "./router";
+import { useSession } from "./session";
 
 const ACTIVE = ["checking", "ordering", "building"];
 const KIND_LABEL: Record<string, string> = {
@@ -88,7 +89,9 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
     return () => { off(); clearInterval(t); if (pending) clearTimeout(pending); };
   }, [id, load]);
 
-  if (err) return <div className="card empty">{err} · <Link to="/">back</Link></div>;
+  const { address, signIn } = useSession();
+  useEffect(() => { if (address) load(); }, [address, load]);
+  if (err && !c) return <div className="card empty">{err} {!address && <button className="btn primary" style={{ marginLeft: 8 }} onClick={signIn}>Sign in</button>} · <Link to="/">back</Link></div>;
   if (!c) return <div className="card empty">Loading…</div>;
 
   const current = [...c.tasks].reverse().find((t) => ACTIVE.includes(t.status));
@@ -205,9 +208,13 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
             <div className="card-b"><PolicyForm c={c} onSaved={load} /></div>
           </div>
           <div className="card">
-            <div className="card-h"><h3>Treasury</h3></div>
+            <div className="card-h"><h3>Treasury</h3><span className="good mono">{usd(c.withdrawableUsd)} available</span></div>
             <div className="card-b" style={{ display: "grid", gap: 8 }}>
               <div className="wallet">{c.wallet}</div>
+              <button className="btn primary" disabled={busy || c.withdrawableUsd <= 0 || (health?.requireAuth && !c.isOwner)} onClick={() => {
+                if (!confirm(`Withdraw ${usd(c.withdrawableUsd)} of revenue to ${address ?? "your wallet"}?${health?.platformFeeBps ? ` A ${(health.platformFeeBps / 100).toFixed(2)}% platform fee applies.` : ""}`)) return;
+                void act(() => api.withdraw(c.id));
+              }}>Withdraw revenue</button>
               <div className="dim" style={{ fontSize: 13 }}>Revenue lands here in USDC. IMD for the swarm is paid from here. {health?.mode === "sim" ? "In simulation it starts with 20 simulated IMD." : "Fund it with IMD and a little ETH for the one-time Permit2 approval."}</div>
             </div>
           </div>

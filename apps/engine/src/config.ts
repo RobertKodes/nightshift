@@ -23,6 +23,13 @@ export const config = {
   simShiftMinutes: num(env.SIM_SHIFT_MINUTES, 2),
   simJobSeconds: num(env.SIM_JOB_SECONDS, 40),
   webDist: resolve(env.WEB_DIST ?? "../web/dist"),
+  /** Owners sign in with their wallet. On by default in live mode; the sim demo stays open. */
+  requireAuth: env.REQUIRE_AUTH ? env.REQUIRE_AUTH === "1" : env.NIGHTSHIFT_MODE === "live",
+  /** Platform fee on revenue, taken when the owner withdraws. 0 = none. */
+  platformFeeBps: num(env.PLATFORM_FEE_BPS, 0),
+  platformTreasury: (env.PLATFORM_TREASURY ?? "") as `0x${string}` | "",
+  /** Companies one wallet may run at once. */
+  maxCompaniesPerOwner: num(env.MAX_COMPANIES_PER_OWNER, 5),
 };
 
 export type Config = typeof config;

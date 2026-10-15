@@ -16,8 +16,12 @@ import {
 } from "@nightshift/core";
 import { HttpImdPlane, type ImdAction, type ImdPlane, SimImdPlane } from "@nightshift/imd";
 import { Ledger } from "@nightshift/ledger";
+import { ImdReads } from "imd-mcp/lib";
+import { erc20Abi } from "viem";
+import { USDC } from "@nightshift/x402";
+import { Auth } from "./auth.js";
 import { LlmClient } from "@nightshift/llm";
-import { ensurePermit2 } from "./chain.js";
+import { ensurePermit2, sales, salesWallet } from "./chain.js";
 import { config } from "./config.js";
 import { simulateTraffic } from "./market.js";
 import { SimDeliveries } from "./simdeliver.js";
@@ -38,8 +42,11 @@ export class Engine {
   readonly #inputOwner = new WeakMap<object, string>();
   readonly #listeners = new Set<(e: EngineEvent) => void>();
   readonly #busy = new Set<string>();
+  readonly auth: Auth;
+  readonly reads = new ImdReads("https://api.imd.fun");
 
   constructor() {
+    this.auth = new Auth(this.vault.material, this.store.apiKeys, () => this.store.markDirty());
     this.sim = new SimDeliveries(config.publicUrl, this.llm, config.model, (input) => {
       const id = typeof input === "object" && input ? this.#inputOwner.get(input) : undefined;
       return id ? this.store.companies.get(id) : undefined;
@@ -125,10 +132,20 @@ export class Engine {
       stats: (x) => this.stats(x),
       buyBase: (x) => `${config.publicUrl}/buy/${x.slug}`,
       emit: (x, type, payload) => this.#emit(x.id, type, payload),
+      findExisting: async (q) => {
+        if (!q.trim()) return null;
+        const r = await this.reads.publications(q, "research", 3);
+        const hit = r.items[0];
+        return hit ? { title: hit.title, url: hit.repo ?? hit.explorer } : null;
+      },
     };
   }
 
   async create(idea: string, policy: Partial<Policy> = {}, owner: string | null = null): Promise<Company> {
+    if (owner) {
+      const mine = [...this.store.companies.values()].filter((x) => x.owner === owner.toLowerCase()).length;
+      if (mine >= config.maxCompaniesPerOwner) throw new Error(`One wallet can run ${config.maxCompaniesPerOwner} companies at once.`);
+    }
     const clean = idea.trim();
     if (clean.length < 12) throw new Error("Describe the idea in a sentence: what it sells and to whom.");
     if (clean.length > 1000) throw new Error("Keep the idea under 1000 characters.");
@@ -139,7 +156,7 @@ export class Engine {
     const p = validatePolicy({ ...DEFAULT_POLICY, ...(config.mode === "sim" ? { shiftMinutes: config.simShiftMinutes } : {}), ...policy });
     const c: Company = {
       id, slug, name: f.name, idea: clean, mission: f.mission, audience: f.audience,
-      createdAt: Date.now(), owner, wallet: this.vault.create(id), policy: p, status: "active",
+      createdAt: Date.now(), owner: owner?.toLowerCase() ?? null, wallet: this.vault.create(id), policy: p, status: "active",
       cycle: 0, nextShiftAt: p.autopilot ? Date.now() + 3000 : null,
       site: null, products: [], tasks: [], journal: [], marketing: [],
     };
@@ -202,6 +219,46 @@ export class Engine {
     ] });
     note(c, this.#deps(c), "sale", `${sim ? "[sim] " : ""}Sold ${p.name} for $${fromUsdc(amount).toFixed(2)} to ${payer.slice(0, 6)}…${payer.slice(-4)}.`);
     this.#emit(c.id, "sale", { productId, amount: amount.toString(), sim });
+  }
+
+  /** Revenue the owner can take out now: what the company earned, minus what was already withdrawn. */
+  async withdrawable(c: Company): Promise<bigint> {
+    return this.ledger.balance(`co:${c.id}:usdc`, "USDC");
+  }
+
+  /**
+   * Sends the company's USDC to its owner. The platform fee, when one is set, goes to the platform
+   * treasury in the same withdrawal. In sim mode only the books move.
+   */
+  async withdraw(c: Company, to: `0x${string}`, amount?: bigint): Promise<{ sent: bigint; fee: bigint; txs: string[] }> {
+    const available = await this.withdrawable(c);
+    const total = amount ?? available;
+    if (total <= 0n || total > available) throw new Error(`Nothing to withdraw, or more than the $${fromUsdc(available).toFixed(2)} available.`);
+    const fee = config.platformTreasury ? (total * BigInt(config.platformFeeBps)) / 10_000n : 0n;
+    const sent = total - fee;
+    const txs: string[] = [];
+    if (config.mode === "live") {
+      const account = this.vault.account(c.id);
+      const wallet = salesWallet(account);
+      const usdcAddr = USDC[config.salesChainId]!.address;
+      const send = async (dest: `0x${string}`, v: bigint) => {
+        const hash = await wallet.writeContract({ address: usdcAddr, abi: erc20Abi, functionName: "transfer", args: [dest, v] });
+        const r = await sales.waitForTransactionReceipt({ hash });
+        if (r.status !== "success") throw new Error(`transfer reverted: ${hash}`);
+        txs.push(hash);
+      };
+      await send(to, sent);
+      if (fee > 0n) await send(config.platformTreasury as `0x${string}`, fee);
+    }
+    const id = txs[0] ?? randomUUID();
+    await this.ledger.post({ id: `withdraw:${id}`, at: new Date(), kind: "withdrawal", memo: `to ${to}`, ref: txs[0] ? { chainTx: txs[0] } : undefined, postings: [
+      { account: `co:${c.id}:usdc`, asset: "USDC", amount: -total },
+      { account: `ext:owner:${to.toLowerCase()}`, asset: "USDC", amount: sent },
+      ...(fee > 0n ? [{ account: "ext:platform", asset: "USDC", amount: fee }] : []),
+    ] });
+    note(c, this.#deps(c), "note", `Withdrew $${fromUsdc(sent).toFixed(2)} to ${to.slice(0, 6)}…${to.slice(-4)}${fee > 0n ? ` (platform fee $${fromUsdc(fee).toFixed(2)})` : ""}${config.mode === "sim" ? " [sim]" : ""}.`);
+    this.#emit(c.id, "company", null);
+    return { sent, fee, txs };
   }
 
   async #tick(): Promise<void> {

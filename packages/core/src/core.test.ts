@@ -81,3 +81,27 @@ describe("founding without a model", () => {
     expect(f.mission.endsWith(".")).toBe(true);
   });
 });
+
+describe("the saver inside a company", () => {
+  it("reuses published research instead of paying, and never buys the same body twice", async () => {
+    const now = { t: 1_000_000 };
+    const c = company();
+    c.products.push({ id: "p", name: "P", kind: "report", pitch: "x", priceUsdc: 1n, status: "live", deliverableUrl: null, taskId: "t", sales: 9, revenueUsdc: 0n, createdAt: Date.now() });
+    c.site = { url: "http://s", jobId: "j" };
+    c.marketing.push({ at: Date.now(), channel: "x", text: "hi", status: "drafted" });
+    c.products[0]!.sales = 0;
+    const d = { ...deps(now), findExisting: async () => ({ title: "Existing research", url: "https://explorer.imd.fun/jobs/abc" }) };
+    const t = await runShift(c, d);
+    expect(t?.kind).toBe("research");
+    expect(t?.status).toBe("done");
+    expect(t?.costImd).toBe(0n);
+    expect(await d.ledger.balance("co:c1:imd", "IMD")).toBe(0n);
+
+    const d2 = deps(now);
+    const t2 = await runShift(c, d2);
+    expect(t2?.kind).toBe("research");
+    expect(t2?.status).toBe("building");
+    const t3 = await runShift(c, d2); // same playbook move, same body
+    expect(t3).toBeNull(); // still building: no second purchase
+  });
+});

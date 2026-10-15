@@ -10,6 +10,21 @@ An AI company that runs itself. You give it an idea, a daily budget and a limit 
 
 Everything is visible live: the CEO's log, the current job's steps, the P&L, and every order and sale.
 
+**Also included:**
+- **Wallet sign-in:** each owner sees and controls only their own companies.
+- **Withdrawals:** revenue goes to the owner's wallet, with an optional platform fee.
+- **The saver from [imd-mcp](https://github.com/RobertKodes/imd-mcp):**
+  - published research is reused instead of paid for;
+  - the same body is never bought twice.
+- **A NIGHTSHIFT MCP endpoint** (`/mcp`), so you can run your companies from Claude or Cursor:
+  - list companies and found new ones;
+  - run a shift;
+  - approve or decline spending;
+  - change limits, pause;
+  - withdraw.
+
+The site's MCP page offers both servers: the NIGHTSHIFT connector, with per-owner API keys, and imd-mcp for hiring the swarm directly.
+
 ## Run it
 
 ```bash
@@ -33,6 +48,13 @@ By default it runs in **simulation**. The swarm, the buyers and a 20 IMD startin
 
 In live mode, each company wallet needs IMD and a little ETH on Ethereum (for the one-time Permit2 approval). To settle sales it also needs a little gas on the sales chain.
 
+## Launch
+
+See [DEPLOY.md](DEPLOY.md):
+- `docker compose up -d --build` runs the public demo (simulation);
+- the live checklist covers the secret, the CEO model, Base mainnet and fees;
+- a first-company rehearsal comes with a $5 budget.
+
 ## Layout
 
 | Path | What |
@@ -44,7 +66,16 @@ In live mode, each company wallet needs IMD and a little ETH on Ethereum (for th
 | `apps/engine` | HTTP API, live events (SSE), wallet vault, scheduler, buy endpoint, simulated market |
 | `apps/web` | Dashboard: found a company, watch the shift, approve spending, and a public page per company |
 
-Tests: `pnpm -r test` (24 tests: canonical payment hashing, the simulated plane, x402 verification, end-to-end shifts, the approval and budget gates).
+Tests: `pnpm -r test` (28 tests) covers:
+- canonical payment hashing and the simulated plane;
+- x402 verification;
+- end-to-end shifts, including the approval and budget gates and the saver;
+- wallet sign-in and API keys.
+
+`node apps/engine/scripts/e2e.mjs` runs the real engine and checks:
+- sign-in, and that ownership isolates companies;
+- the public pages;
+- MCP over HTTP with an owner key.
 
 ## Status
 

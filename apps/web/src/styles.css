@@ -167,3 +167,18 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
   .top nav { display: none; }
   td, th { padding: 9px 10px; }
 }
+
+/* ---------- docs, footer */
+.docs { max-width: 860px; margin: 0 auto; display: grid; gap: 18px; }
+.docs h1 { font-size: clamp(30px, 4vw, 44px); letter-spacing: -.03em; margin: 8px 0 0; }
+.docs .lead { color: var(--dim); font-size: 17px; margin: 0; }
+.docs-b { display: grid; gap: 10px; font-size: 14.5px; }
+.docs-b p, .docs-b ul { margin: 0; color: var(--text); }
+.docs-b ul { padding-left: 18px; color: var(--dim); }
+.docs-b h4 { margin: 10px 0 0; font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: .05em; }
+.code { position: relative; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+.code pre { margin: 0; padding: 12px 14px; overflow-x: auto; font: 12.5px/1.6 var(--mono); color: #cfe0ff; white-space: pre; }
+.code .btn { position: absolute; top: 6px; right: 6px; height: 28px; padding: 0 10px; font-size: 12px; }
+.keys { display: grid; gap: 10px; }
+.foot { max-width: 1200px; margin: 0 auto; padding: 22px clamp(16px, 4vw, 40px) 40px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; color: var(--faint); font-size: 12.5px; border-top: 1px solid var(--line); }
+.foot a { color: var(--dim); }

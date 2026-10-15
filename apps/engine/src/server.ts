@@ -7,6 +7,21 @@ import { type PaymentPayload, challenge, decodeHeader, encodeHeader, requirement
 import { balances, sales, salesWallet } from "./chain.js";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
+import { handleMcp } from "./mcp.js";
+import { usdc } from "@nightshift/core";
+import { getAddress } from "viem";
+
+/** A small fixed-window limiter per IP and route. */
+const hits = new Map<string, { n: number; reset: number }>();
+function limited(req: IncomingMessage, key: string, max: number, windowMs: number): boolean {
+  const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "?";
+  const k = `${key}:${ip}`;
+  const now = Date.now();
+  const h = hits.get(k);
+  if (!h || h.reset < now) { hits.set(k, { n: 1, reset: now + windowMs }); return false; }
+  h.n += 1;
+  return h.n > max;
+}
 
 const json = (res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) => {
   res.writeHead(status, { "Content-Type": "application/json", ...headers });
@@ -93,16 +108,53 @@ export function serve(engine: Engine) {
     const p = url.pathname;
     const seg = p.split("/").filter(Boolean);
     try {
-      if (p === "/api/health") return json(res, 200, { ok: true, mode: config.mode, llm: Boolean(engine.llm), model: config.model, imdUsd: config.imdUsd, salesChainId: config.salesChainId, generatedSecret: engine.vault.generatedSecret });
+      if (p === "/api/health") return json(res, 200, { ok: true, mode: config.mode, llm: Boolean(engine.llm), model: config.model, imdUsd: config.imdUsd, salesChainId: config.salesChainId, requireAuth: config.requireAuth, platformFeeBps: config.platformTreasury ? config.platformFeeBps : 0 });
+
+      const owner = engine.auth.owner(req);
+
+      // ---- sign-in with a wallet
+      if (p === "/api/auth/nonce") {
+        if (limited(req, "nonce", 30, 60_000)) return json(res, 429, { error: "slow down" });
+        const address = url.searchParams.get("address");
+        if (!address) return json(res, 400, { error: "address required" });
+        const n = engine.auth.nonce();
+        return json(res, 200, { nonce: n.nonce, message: n.message(getAddress(address)) });
+      }
+      if (p === "/api/auth/verify" && req.method === "POST") {
+        const b = await body(req);
+        const token = await engine.auth.verify(String(b.address), String(b.nonce), String(b.signature) as `0x${string}`);
+        const secure = config.publicUrl.startsWith("https") ? "; Secure" : "";
+        return json(res, 200, { token, address: getAddress(String(b.address)) }, { "Set-Cookie": `ns_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure}` });
+      }
+      if (p === "/api/auth/me") return json(res, 200, { address: owner, requireAuth: config.requireAuth });
+      if (p === "/api/auth/logout" && req.method === "POST") return json(res, 200, { ok: true }, { "Set-Cookie": "ns_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" });
+
+      // ---- API keys for the MCP endpoint
+      if (seg[0] === "api" && seg[1] === "keys") {
+        if (!owner) return json(res, 401, { error: "sign in first" });
+        if (req.method === "GET") return json(res, 200, engine.auth.listKeys(owner));
+        if (req.method === "POST") { const b = await body(req); return json(res, 201, engine.auth.createKey(owner, String(b.label ?? "MCP"))); }
+        if (req.method === "DELETE" && seg[2]) return json(res, engine.auth.revokeKey(owner, seg[2]) ? 200 : 404, { ok: true });
+      }
+
+      // ---- NIGHTSHIFT over MCP (streamable HTTP, stateless)
+      if (p === "/mcp") {
+        const b = req.method === "POST" ? await body(req) : undefined;
+        return await handleMcp(engine, req, res, b);
+      }
 
       // Live events: every task step, journal line and sale, as it happens.
       if (p === "/api/events") {
         res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
         res.write(": ok\n\n");
         const only = url.searchParams.get("company");
+        const viewer = engine.auth.owner(req);
         const off = engine.on((e) => {
           if (only && e.companyId !== only) return;
-          res.write(`data: ${JSON.stringify(e, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}\n\n`);
+          // Other people's companies only say "something changed"; their tasks and log stay private.
+          const c = engine.store.companies.get(e.companyId);
+          const ev = config.requireAuth && c?.owner !== viewer ? { type: "company", companyId: e.companyId, payload: null, at: e.at } : e;
+          res.write(`data: ${JSON.stringify(ev, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}\n\n`);
         });
         const ping = setInterval(() => res.write(": ping\n\n"), 20_000);
         req.on("close", () => { off(); clearInterval(ping); });
@@ -110,7 +162,8 @@ export function serve(engine: Engine) {
       }
 
       if (p === "/api/companies" && req.method === "GET") {
-        const list = await Promise.all([...engine.store.companies.values()].sort((a, b) => b.createdAt - a.createdAt).map(async (c) => {
+        const onlyMine = url.searchParams.get("mine") === "1";
+        const list = await Promise.all([...engine.store.companies.values()].filter((c) => !onlyMine || (owner !== null && c.owner === owner)).sort((a, b) => b.createdAt - a.createdAt).map(async (c) => {
           const v = publicView(engine, c);
           const working = c.tasks.find((t) => ["checking", "ordering", "building", "awaiting_approval"].includes(t.status));
           return { id: c.id, ...v, nextShiftAt: c.nextShiftAt, working: working ? { title: working.title, status: working.status, activity: working.activity } : null };
@@ -118,15 +171,19 @@ export function serve(engine: Engine) {
         return json(res, 200, list);
       }
       if (p === "/api/companies" && req.method === "POST") {
+        if (config.requireAuth && !owner) return json(res, 401, { error: "Sign in with your wallet to start a company." });
+        if (limited(req, "create", 10, 3600_000)) return json(res, 429, { error: "Too many new companies from here; try again later." });
         const b = await body(req);
-        const c = await engine.create(String(b.idea ?? ""), (b.policy ?? {}) as never, typeof b.owner === "string" ? b.owner : null);
+        const c = await engine.create(String(b.idea ?? ""), (b.policy ?? {}) as never, owner);
         return json(res, 201, { id: c.id, slug: c.slug });
       }
       if (seg[0] === "api" && seg[1] === "companies" && seg[2]) {
         const c = engine.get(seg[2]);
         if (!c) return json(res, 404, { error: "no such company" });
         const action = seg[3];
-        if (!action && req.method === "GET") return json(res, 200, await full(engine, c));
+        // The owner's view and every control are the owner's alone once sign-in is on.
+        if (config.requireAuth && c.owner !== owner) return json(res, owner ? 403 : 401, { error: owner ? "This company belongs to another wallet." : "Sign in as the owner." });
+        if (!action && req.method === "GET") return json(res, 200, { ...(await full(engine, c)), withdrawableUsd: fromUsdc(await engine.withdrawable(c)), isOwner: owner !== null && c.owner === owner });
         if (action === "wallet") {
           if (config.mode === "sim") return json(res, 200, { address: c.wallet, mode: "sim" });
           const b = await balances(c.wallet);
@@ -135,6 +192,13 @@ export function serve(engine: Engine) {
         if (req.method !== "POST") return json(res, 405, { error: "method" });
         if (action === "shift") { await engine.shiftNow(c); return json(res, 200, { ok: true }); }
         if (action === "policy") { engine.setPolicy(c, (await body(req)) as never); return json(res, 200, c.policy); }
+        if (action === "withdraw") {
+          const b = await body(req);
+          const to = (owner ?? (typeof b.to === "string" ? b.to : null)) as `0x${string}` | null;
+          if (!to || !/^0x[0-9a-fA-F]{40}$/.test(to)) return json(res, 400, { error: "Sign in, or give a destination address." });
+          const r = await engine.withdraw(c, getAddress(to), typeof b.amountUsd === "number" ? usdc(b.amountUsd) : undefined);
+          return json(res, 200, { ok: true, sentUsd: fromUsdc(r.sent), feeUsd: fromUsdc(r.fee), txs: r.txs });
+        }
         if (action === "pause") { engine.setStatus(c, "paused"); return json(res, 200, { ok: true }); }
         if (action === "resume") { engine.setStatus(c, "active"); return json(res, 200, { ok: true }); }
         if (action === "tasks" && seg[4] && seg[5] === "approve") { await engine.approve(c, seg[4]); return json(res, 200, { ok: true }); }

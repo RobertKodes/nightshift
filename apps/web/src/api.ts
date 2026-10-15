@@ -1,4 +1,4 @@
-export interface Health { ok: boolean; mode: "sim" | "live"; llm: boolean; model: string; imdUsd: number; salesChainId: number }
+export interface Health { ok: boolean; mode: "sim" | "live"; llm: boolean; model: string; imdUsd: number; salesChainId: number; requireAuth: boolean; platformFeeBps: number }
 
 export interface TaskView {
   id: string; cycle: number; kind: string; title: string; why: string; status: string;
@@ -20,6 +20,9 @@ export interface CompanyFull {
   pnl: { revenueUsd: number; spentImd: number; spentUsd: number; profitUsd: number; imdBalance: number };
   recentSales: { at: number; productId: string; usdc: string; payer: string; tx: string | null; sim: boolean }[];
   series: { bucketMs: number; points: { t: number; visits: number; revenue: number }[] };
+  withdrawableUsd: number;
+  isOwner: boolean;
+  owner: string | null;
 }
 
 export interface CompanyCard {
@@ -40,9 +43,19 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return j as T;
 }
 
+export interface ApiKeyView { id: string; label: string; createdAt: number; lastUsedAt: number | null }
+
 export const api = {
   health: () => req<Health>("GET", "/api/health"),
-  companies: () => req<CompanyCard[]>("GET", "/api/companies"),
+  me: () => req<{ address: string | null; requireAuth: boolean }>("GET", "/api/auth/me"),
+  nonce: (address: string) => req<{ nonce: string; message: string }>("GET", `/api/auth/nonce?address=${address}`),
+  verify: (address: string, nonce: string, signature: string) => req<{ token: string; address: string }>("POST", "/api/auth/verify", { address, nonce, signature }),
+  logout: () => req("POST", "/api/auth/logout"),
+  keys: () => req<ApiKeyView[]>("GET", "/api/keys"),
+  createKey: (label: string) => req<{ key: string; record: ApiKeyView }>("POST", "/api/keys", { label }),
+  revokeKey: (id: string) => req("DELETE", `/api/keys/${id}`),
+  withdraw: (id: string, amountUsd?: number) => req<{ ok: boolean; sentUsd: number; feeUsd: number; txs: string[] }>("POST", `/api/companies/${id}/withdraw`, amountUsd ? { amountUsd } : {}),
+  companies: (mine = false) => req<CompanyCard[]>("GET", `/api/companies${mine ? "?mine=1" : ""}`),
   company: (id: string) => req<CompanyFull>("GET", `/api/companies/${id}`),
   publicCompany: (slug: string) => req<PublicCompany>("GET", `/api/public/${slug}`),
   create: (idea: string, policy: Partial<Policy>) => req<{ id: string; slug: string }>("POST", "/api/companies", { idea, policy }),

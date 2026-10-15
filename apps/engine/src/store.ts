@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { join } from "node:path";
 import type { Company } from "@nightshift/core";
 import { type LedgerStore, type LedgerTx, MemoryLedgerStore } from "@nightshift/ledger";
+import type { ApiKey } from "./auth.js";
 
 export interface Metrics {
   visits: number[];
@@ -13,6 +14,7 @@ interface Snapshot {
   metrics: Record<string, Metrics>;
   ledger: LedgerTx[];
   requestTokens: Record<string, string>;
+  apiKeys?: ApiKey[];
 }
 
 // bigint and Date survive the round trip as tagged strings.
@@ -29,6 +31,7 @@ export class Store {
   companies = new Map<string, Company>();
   metrics = new Map<string, Metrics>();
   requestTokens = new Map<string, string>();
+  apiKeys: ApiKey[] = [];
   readonly ledgerStore: LedgerStore = new MemoryLedgerStore();
   #dirty = false;
 
@@ -43,6 +46,7 @@ export class Store {
     for (const c of s.companies) this.companies.set(c.id, c);
     for (const [k, m] of Object.entries(s.metrics ?? {})) this.metrics.set(k, m);
     for (const [k, t] of Object.entries(s.requestTokens ?? {})) this.requestTokens.set(k, t);
+    this.apiKeys.push(...(s.apiKeys ?? []));
     for (const tx of s.ledger ?? []) await this.ledgerStore.insert({ ...tx, at: new Date(tx.at) });
   }
 
@@ -62,6 +66,7 @@ export class Store {
       metrics: Object.fromEntries(this.metrics),
       ledger: await this.ledgerStore.list(""),
       requestTokens: Object.fromEntries(this.requestTokens),
+      apiKeys: this.apiKeys,
     };
     const tmp = `${this.#file}.tmp`;
     writeFileSync(tmp, JSON.stringify(snap, replacer));

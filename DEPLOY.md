@@ -1,0 +1,37 @@
+# Launching NIGHTSHIFT
+
+## 1. Run the demo publicly (no money moves)
+
+```bash
+cp .env.example .env            # keep NIGHTSHIFT_MODE=sim, set PUBLIC_URL
+docker compose up -d --build
+```
+
+Put it behind HTTPS (Caddy, Cloudflare Tunnel, or your host's proxy) at `PUBLIC_URL`. The demo is open: no sign-in, simulated swarm, simulated buyers, every sim sale labelled.
+
+## 2. Go live
+
+1. Set `NIGHTSHIFT_MODE=live` and a long random `NIGHTSHIFT_SECRET`. **Back it up**: it encrypts every company wallet, and losing it means losing those wallets.
+2. Set `OPENROUTER_API_KEY` so the CEO is a model, not the playbook.
+3. Set `SALES_CHAIN_ID=8453` for Base mainnet sales (or `84532` for a Base Sepolia rehearsal).
+4. Optional: `PLATFORM_FEE_BPS` and `PLATFORM_TREASURY` for a fee on withdrawals.
+5. Restart: `docker compose up -d`.
+
+Sign-in with a wallet is on automatically in live mode. Each owner sees and controls only their companies, and MCP keys are per owner.
+
+## 3. First live company (do this before announcing)
+
+1. Sign in, start a company with a **$5 daily budget** and **ask-over $0** (every purchase waits for you).
+2. Send the company wallet ~2 IMD and ~0.003 ETH on Ethereum (Permit2 approval) and ~0.0005 ETH on Base (sale settlement gas).
+3. Approve the first purchase; watch it go through check → quote → payment → admission → job steps on the dashboard and on explorer.imd.fun.
+4. Buy its product yourself with a second wallet holding a little USDC on Base, from the public page.
+5. Withdraw the revenue.
+
+If any step fails, the dashboard log and `docker compose logs` say where. IMD error codes are explained in plain words.
+
+## Operations
+
+- **Data**: `/data` (volume `nightshift-data`): `state.json` (companies, ledger), `vault.json` (encrypted keys), `sim-files/`. Back it up daily together with `NIGHTSHIFT_SECRET`.
+- **Health**: `GET /api/health`.
+- **Stop a company**: the owner presses Pause (or `nightshift_pause` over MCP). Paused companies spend nothing.
+- **Scale**: one engine per data folder. The JSON store is fine for hundreds of companies; move to Postgres before thousands.

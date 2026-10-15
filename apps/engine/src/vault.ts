@@ -14,6 +14,8 @@ export class Vault {
   readonly #key: Buffer;
   readonly #entries: Record<string, { iv: string; tag: string; data: string }>;
   readonly generatedSecret: boolean;
+  /** The secret material, for deriving other keys (sessions). Never sent anywhere. */
+  readonly material: string;
 
   constructor(dataDir: string, secret: string) {
     mkdirSync(dataDir, { recursive: true });
@@ -26,6 +28,7 @@ export class Vault {
       s = readFileSync(f, "utf8").trim();
       this.generatedSecret = true;
     }
+    this.material = s;
     this.#key = scryptSync(s, "nightshift-vault-v1", 32);
     this.#entries = existsSync(this.#file) ? JSON.parse(readFileSync(this.#file, "utf8")) : {};
   }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { type CompanyCard, type Health, api, events, until, usd } from "./api";
 import { Link, go } from "./router";
+import { useSession } from "./session";
 
 const EXAMPLES = [
   "Weekly reviews of new AI tools for solo founders who have no time to test them",
@@ -17,6 +18,8 @@ export function Home({ health }: { health: Health | null }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [, tick] = useState(0);
+  const { address, signIn } = useSession();
+  const needSignIn = Boolean(health?.requireAuth && !address);
 
   useEffect(() => {
     const load = () => api.companies().then(setList).catch(() => {});
@@ -57,9 +60,13 @@ export function Home({ health }: { health: Health | null }) {
           <div className="row">
             <label>Daily budget $<input className="field" type="number" min={0} value={budget} onChange={(e) => setBudget(Number(e.target.value))} /></label>
             <label>Ask me over $<input className="field" type="number" min={0} value={limit} onChange={(e) => setLimit(Number(e.target.value))} /></label>
-            <button className="btn primary" style={{ marginLeft: "auto" }} disabled={busy || idea.trim().length < 12} onClick={start}>
-              {busy ? "Founding…" : "Start the company"}
-            </button>
+            {needSignIn ? (
+              <button className="btn primary" style={{ marginLeft: "auto" }} onClick={signIn}>Sign in to start</button>
+            ) : (
+              <button className="btn primary" style={{ marginLeft: "auto" }} disabled={busy || idea.trim().length < 12} onClick={start}>
+                {busy ? "Founding…" : "Start the company"}
+              </button>
+            )}
           </div>
           {err && <p className="bad" style={{ margin: "10px 0 0", fontSize: 13 }}>{err}</p>}
           {health?.mode === "sim" && <p className="faint" style={{ margin: "10px 0 0", fontSize: 12 }}>Simulation: the swarm, the buyers and the 20 IMD starting balance are simulated. Switch the engine to live to spend and earn for real.</p>}
