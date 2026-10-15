@@ -1,0 +1,28 @@
+import { resolve } from "node:path";
+
+const env = process.env;
+const num = (v: string | undefined, d: number) => (v !== undefined && v !== "" && !Number.isNaN(Number(v)) ? Number(v) : d);
+
+export const config = {
+  port: num(env.PORT, 8787),
+  /** sim: nothing leaves the machine. live: real IMD orders and real USDC sales. */
+  mode: (env.NIGHTSHIFT_MODE === "live" ? "live" : "sim") as "live" | "sim",
+  publicUrl: (env.PUBLIC_URL ?? `http://localhost:${num(env.PORT, 8787)}`).replace(/\/$/, ""),
+  dataDir: resolve(env.DATA_DIR ?? "data"),
+  /** Encrypts every company's wallet key at rest. Set it in production. */
+  secret: env.NIGHTSHIFT_SECRET ?? "",
+  openrouterKey: env.OPENROUTER_API_KEY ?? "",
+  model: env.NIGHTSHIFT_MODEL ?? "anthropic/claude-sonnet-5.5",
+  /** USD per IMD, for budgets. Live price feeds can replace it. */
+  imdUsd: num(env.IMD_USD, 6.34),
+  ethRpc: env.ETH_RPC ?? "https://ethereum-rpc.publicnode.com",
+  /** Where products are sold: Base (8453) or Base Sepolia (84532). */
+  salesChainId: num(env.SALES_CHAIN_ID, 84532),
+  salesRpc: env.SALES_RPC ?? (num(env.SALES_CHAIN_ID, 84532) === 8453 ? "https://mainnet.base.org" : "https://sepolia.base.org"),
+  /** Demo pacing: minutes between autopilot shifts and seconds per swarm job in sim mode. */
+  simShiftMinutes: num(env.SIM_SHIFT_MINUTES, 2),
+  simJobSeconds: num(env.SIM_JOB_SECONDS, 40),
+  webDist: resolve(env.WEB_DIST ?? "../web/dist"),
+};
+
+export type Config = typeof config;

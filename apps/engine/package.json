@@ -1,0 +1,20 @@
+{
+  "name": "@nightshift/engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nightshift/core": "workspace:*",
+    "@nightshift/imd": "workspace:*",
+    "@nightshift/ledger": "workspace:*",
+    "@nightshift/llm": "workspace:*",
+    "@nightshift/x402": "workspace:*",
+    "viem": "^2.21.54"
+  }
+}

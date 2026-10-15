@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.turbo/
+data/
+data-*/
+.env
+.env.*
+*.log
