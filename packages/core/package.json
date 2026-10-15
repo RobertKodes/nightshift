@@ -12,6 +12,6 @@
     "@nightshift/imd": "workspace:*",
     "@nightshift/ledger": "workspace:*",
     "@nightshift/llm": "workspace:*",
-    "imd-mcp": "github:RobertKodes/imd-mcp"
+    "imd-mcp": "github:RobertKodes/imd-mcp#15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f"
   }
 }

@@ -45,8 +45,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/x402
       imd-mcp:
-        specifier: github:RobertKodes/imd-mcp
-        version: https://codeload.github.com/RobertKodes/imd-mcp/tar.gz/badc6e90d3940cbcbbe075995bb1d8ba86344686(typescript@5.9.3)
+        specifier: github:RobertKodes/imd-mcp#15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f
+        version: https://codeload.github.com/RobertKodes/imd-mcp/tar.gz/15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f(typescript@5.9.3)
       viem:
         specifier: ^2.21.54
         version: 2.57.7(typescript@5.9.3)(zod@3.25.76)
@@ -91,8 +91,8 @@ importers:
         specifier: workspace:*
         version: link:../llm
       imd-mcp:
-        specifier: github:RobertKodes/imd-mcp
-        version: https://codeload.github.com/RobertKodes/imd-mcp/tar.gz/badc6e90d3940cbcbbe075995bb1d8ba86344686(typescript@5.9.3)
+        specifier: github:RobertKodes/imd-mcp#15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f
+        version: https://codeload.github.com/RobertKodes/imd-mcp/tar.gz/15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f(typescript@5.9.3)
 
   packages/imd:
     dependencies:
@@ -1053,8 +1053,8 @@ packages:
     resolution: {integrity: sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ==}
     engines: {node: '>=0.10.0'}
 
-  imd-mcp@https://codeload.github.com/RobertKodes/imd-mcp/tar.gz/badc6e90d3940cbcbbe075995bb1d8ba86344686:
-    resolution: {tarball: https://codeload.github.com/RobertKodes/imd-mcp/tar.gz/badc6e90d3940cbcbbe075995bb1d8ba86344686}
+  imd-mcp@https://codeload.github.com/RobertKodes/imd-mcp/tar.gz/15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f:
+    resolution: {tarball: https://codeload.github.com/RobertKodes/imd-mcp/tar.gz/15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f}
     version: 0.2.0
     engines: {node: '>=20'}
     hasBin: true
@@ -2311,7 +2311,7 @@ snapshots:
     dependencies:
       safer-buffer: 2.1.2
 
-  imd-mcp@https://codeload.github.com/RobertKodes/imd-mcp/tar.gz/badc6e90d3940cbcbbe075995bb1d8ba86344686(typescript@5.9.3):
+  imd-mcp@https://codeload.github.com/RobertKodes/imd-mcp/tar.gz/15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f(typescript@5.9.3):
     dependencies:
       '@modelcontextprotocol/sdk': 1.32.1(zod@3.25.76)
       '@x402/core': 2.28.0
