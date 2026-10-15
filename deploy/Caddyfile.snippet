@@ -1,0 +1,9 @@
+# Add to the existing Caddyfile, then reload Caddy. Caddy fetches the TLS certificate itself once
+# the DNS record (A nightshift -> the server's IP) resolves.
+nightshift.solstones.xyz {
+	encode zstd gzip
+	reverse_proxy nightshift:8787 {
+		# the live event stream must not be buffered
+		flush_interval -1
+	}
+}

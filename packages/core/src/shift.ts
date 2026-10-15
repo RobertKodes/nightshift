@@ -5,7 +5,7 @@ import type { LlmClient } from "@nightshift/llm";
 import { inputHash, keywords } from "imd-mcp/lib";
 import { imdOrder } from "./catalog.js";
 import { type CompanyStats, type Decision, heuristicDecision, llmDecision } from "./planner.js";
-import { canSpend } from "./policy.js";
+import { budgetFreesAt, canSpend } from "./policy.js";
 import type { Company, JournalEntry, Product, Task } from "./types.js";
 import { fromImd, usdc } from "./types.js";
 
@@ -49,6 +49,9 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
     note(c, d, "note", "Work from an earlier shift is still in progress; checking on it instead of starting more.");
     return null;
   }
+  // Out of budget for today: rest quietly instead of picking a move it cannot pay for.
+  if (c.restUntil && now(d) < c.restUntil) return null;
+  delete c.restUntil;
   c.cycle += 1;
   const stats = d.stats(c);
   let decision: Decision | null = null;
@@ -150,7 +153,8 @@ async function buy(c: Company, t: Task, d: ShiftDeps, approved: boolean): Promis
     } else {
       touch(c, t, d, { status: "failed", error: gate.reason, activity: null });
       dropProduct(c, t);
-      note(c, d, "warning", `Skipped "${t.title}": ${gate.reason}.`);
+      c.restUntil = budgetFreesAt(c, costUsd, d.imdUsd(), now(d));
+      note(c, d, "warning", `Skipped "${t.title}": ${gate.reason}. Resting until ${new Date(c.restUntil).toUTCString().slice(17, 22)} UTC, when the budget frees up, or until you raise it.`);
     }
     return;
   }

@@ -29,6 +29,19 @@ Sign-in with a wallet is on automatically in live mode. Each owner sees and cont
 
 If any step fails, the dashboard log and `docker compose logs` say where. IMD error codes are explained in plain words.
 
+## On a server that already runs Caddy (shared host)
+
+The image is built by GitHub Actions (`.github/workflows/image.yml`) and published as
+`ghcr.io/robertkodes/nightshift:latest`, so the server only pulls it.
+
+1. DNS: an `A` record `nightshift.<domain>` pointing at the server.
+2. Copy `deploy/compose.shared-host.yml` and a filled `.env` to the server. Set `EDGE_NETWORK` to
+   the Docker network Caddy is on (`docker network ls`).
+3. `docker compose -f compose.shared-host.yml --env-file .env up -d`
+4. Add `deploy/Caddyfile.snippet` to the Caddyfile and reload Caddy.
+
+The service is capped at 384 MB and half a CPU so it cannot starve the other apps on the box.
+
 ## Operations
 
 - **Data**: `/data` (volume `nightshift-data`): `state.json` (companies, ledger), `vault.json` (encrypted keys), `sim-files/`. Back it up daily together with `NIGHTSHIFT_SECRET`.

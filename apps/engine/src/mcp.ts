@@ -57,7 +57,7 @@ function build(engine: Engine, owner: string | null) {
   }));
 
   server.registerTool("nightshift_shift", { title: "Run a shift now", description: "Makes the CEO decide and start its next move now instead of waiting for autopilot.", inputSchema: { id: z.string() } },
-    run(async ({ id }: { id: string }) => { const c = pick(id); await engine.shiftNow(c); return brief(c); }));
+    run(async ({ id }: { id: string }) => { const c = pick(id); await engine.shiftNow(c, true); return brief(c); }));
 
   server.registerTool("nightshift_approve", { title: "Approve a pending purchase", description: "Approves an IMD purchase the company is holding for you. SPENDS the company's IMD.", inputSchema: { id: z.string(), taskId: z.string() } },
     run(async ({ id, taskId }: { id: string; taskId: string }) => { const c = pick(id); await engine.approve(c, taskId); return brief(c); }));

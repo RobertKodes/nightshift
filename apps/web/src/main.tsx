@@ -1,33 +1,17 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { type Health, api, short } from "./api";
+import { type Health, api } from "./api";
 import { CompanyPage } from "./CompanyPage";
 import { Home } from "./Home";
+import { SiteFooter, SiteHeader } from "./landing/chrome";
 import { Landing } from "./landing/Landing";
 import { McpPage } from "./McpPage";
 import { PublicPage } from "./PublicPage";
-import { Link, useRoute } from "./router";
-import { SessionProvider, useSession } from "./session";
+import { useRoute } from "./router";
+import { SessionProvider } from "./session";
 import { TermsPage } from "./TermsPage";
 import "./styles.css";
-
-function Account() {
-  const { address, signIn, signOut, busy, error } = useSession();
-  if (address) {
-    return (
-      <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <span className="mono dim" style={{ fontSize: 12 }}>{short(address)}</span>
-        <button className="btn ghost" style={{ height: 32 }} onClick={signOut}>Sign out</button>
-      </span>
-    );
-  }
-  return (
-    <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      {error && <span className="bad" style={{ fontSize: 12, maxWidth: 220 }}>{error}</span>}
-      <button className="btn" style={{ height: 32 }} disabled={busy} onClick={signIn}>{busy ? "Check your wallet…" : "Sign in with wallet"}</button>
-    </span>
-  );
-}
+import "./landing/landing.css";
 
 function App() {
   const path = useRoute();
@@ -41,29 +25,13 @@ function App() {
   if (seg[0] === "c" && seg[1]) page = <PublicPage slug={seg[1]} health={health} />;
   if (seg[0] === "mcp") page = <McpPage health={health} />;
   if (seg[0] === "terms") page = <TermsPage health={health} />;
+  const active = seg[0] === "co" ? "company" : seg[0] === "mcp" ? "mcp" : seg[0] === "terms" ? "terms" : "companies";
   return (
-    <>
-      <header className="top">
-        <Link to="/" className="brand"><span className="brand-moon" />NIGHTSHIFT</Link>
-        <nav>
-          <Link to="/companies" className={seg[0] === "companies" || seg[0] === "launch" ? "on" : ""}>Companies</Link>
-          <Link to="/mcp" className={seg[0] === "mcp" ? "on" : ""}>MCP</Link>
-          <Link to="/terms" className={seg[0] === "terms" ? "on" : ""}>Terms & risks</Link>
-        </nav>
-        {health && (
-          <span className="mode" title={health.mode === "sim" ? "Simulated swarm and buyers. No IMD or USDC moves." : "Live: real IMD orders, real USDC sales."}>
-            <span className={`dot ${health.mode === "sim" ? "sim" : ""}`} />
-            {health.mode === "sim" ? "SIMULATION" : "LIVE"} · {health.llm ? health.model.split("/").pop() : "playbook CEO"}
-          </span>
-        )}
-        <Account />
-      </header>
+    <div className="ns ns-app">
+      <SiteHeader active={active} />
       <main>{page}</main>
-      <footer className="foot">
-        <span>NIGHTSHIFT · autonomous companies on the <a href="https://imd.fun" target="_blank" rel="noreferrer">IMD</a> swarm</span>
-        <span><Link to="/mcp">MCP</Link> · <Link to="/terms">Terms & risks</Link> · <a href="https://github.com/RobertKodes/nightshift" target="_blank" rel="noreferrer">GitHub</a></span>
-      </footer>
-    </>
+      <SiteFooter />
+    </div>
   );
 }
 

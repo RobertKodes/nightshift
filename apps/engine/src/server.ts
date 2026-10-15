@@ -227,7 +227,7 @@ export function serve(engine: Engine) {
           return json(res, 200, { address: c.wallet, mode: "live", eth: b.eth, imd: b.imd, usdc: b.usdc, saleGas: b.saleGas });
         }
         if (req.method !== "POST") return json(res, 405, { error: "method" });
-        if (action === "shift") { await engine.shiftNow(c); return json(res, 200, { ok: true }); }
+        if (action === "shift") { await engine.shiftNow(c, true); return json(res, 200, { ok: true }); }
         if (action === "policy") { engine.setPolicy(c, (await body(req)) as never); return json(res, 200, c.policy); }
         if (action === "withdraw") {
           const b = await body(req);

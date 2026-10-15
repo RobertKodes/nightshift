@@ -177,8 +177,10 @@ export class Engine {
     return this.store.companies.get(idOrSlug) ?? [...this.store.companies.values()].find((c) => c.slug === idOrSlug);
   }
 
-  async shiftNow(c: Company): Promise<void> {
+  /** `byOwner`: the owner pressed "run a shift", which also ends a budget rest. */
+  async shiftNow(c: Company, byOwner = false): Promise<void> {
     if (this.#busy.has(c.id)) throw new Error("a shift is already running");
+    if (byOwner) delete c.restUntil;
     this.#busy.add(c.id);
     try {
       await runShift(c, this.#deps(c));
@@ -194,6 +196,7 @@ export class Engine {
 
   setPolicy(c: Company, p: Partial<Policy>): void {
     c.policy = validatePolicy({ ...c.policy, ...p });
+    delete c.restUntil; // new limits: worth trying again
     c.nextShiftAt = c.policy.autopilot ? Date.now() + c.policy.shiftMinutes * 60_000 : null;
     this.#emit(c.id, "company", null);
   }

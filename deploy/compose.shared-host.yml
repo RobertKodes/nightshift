@@ -1,0 +1,20 @@
+# NIGHTSHIFT next to other apps on one Docker host that already runs Caddy (for example the
+# Solstones EC2 box). Joins Caddy's network instead of publishing a port, and is capped so it
+# can never starve its neighbours.
+#   docker compose -f compose.shared-host.yml --env-file .env up -d
+services:
+  nightshift:
+    image: ghcr.io/robertkodes/nightshift:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - nightshift-data:/data
+    mem_limit: 384m
+    cpus: 0.5
+    networks: [edge]
+volumes:
+  nightshift-data:
+networks:
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:-solstones_default}

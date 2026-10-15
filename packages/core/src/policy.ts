@@ -45,3 +45,22 @@ export function validatePolicy(p: Partial<Policy>): Policy {
   if (!(out.shiftMinutes >= 1 && out.shiftMinutes <= 7 * 24 * 60)) throw new Error("shiftMinutes must be between 1 and 10080");
   return out;
 }
+
+/**
+ * When a purchase that broke the budget would fit again: spending older than a day stops counting,
+ * so walk the spend in order until enough of it has aged out.
+ */
+export function budgetFreesAt(c: Company, costUsd: number, imdUsd: number, now = Date.now()): number {
+  const spends = c.tasks
+    .filter((t) => t.costImd > 0n && now - t.updatedAt < DAY)
+    .map((t) => ({ at: t.updatedAt, usd: fromImd(t.costImd) * imdUsd }))
+    .sort((a, b) => a.at - b.at);
+  let spent = spends.reduce((s, x) => s + x.usd, 0);
+  for (const x of spends) {
+    if (spent + costUsd <= c.policy.dailyBudgetUsd + 1e-9) break;
+    spent -= x.usd;
+    if (spent + costUsd <= c.policy.dailyBudgetUsd + 1e-9) return x.at + DAY;
+  }
+  // Still too big even with nothing spent: it needs a larger budget, so look again in a day.
+  return spent + costUsd <= c.policy.dailyBudgetUsd + 1e-9 ? now : now + DAY;
+}

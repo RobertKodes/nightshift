@@ -69,6 +69,12 @@ describe("the autonomous company", () => {
     expect(t?.status).toBe("failed");
     expect(t?.error).toMatch(/budget/);
     expect(c.products).toHaveLength(0);
+    // and then rests instead of retrying the same unaffordable move every shift
+    const tasks = c.tasks.length;
+    expect(await runShift(c, deps(now))).toBeNull();
+    expect(c.tasks).toHaveLength(tasks);
+    now.t += 25 * 60 * 60 * 1000;
+    expect(await runShift(c, deps(now))).not.toBeNull();
   });
 });
 

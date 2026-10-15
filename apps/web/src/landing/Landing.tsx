@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usd } from "../api";
 import { Link, go } from "../router";
-import { useSession } from "../session";
+import { Magnetic, SiteFooter, SiteHeader } from "./chrome";
 import { ANCHORS, ART_H, ART_W, startScene } from "./scene";
 import "./landing.css";
 
@@ -32,18 +32,6 @@ const LABELS = [
 
 const clock = (ms: number) => new Date(ms).toTimeString().slice(0, 5);
 
-/** A crescent: the NIGHTSHIFT mark. */
-export function Crescent({ size = 30 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className="crescent">
-      <defs>
-        <linearGradient id="cr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#e9e2ff" /><stop offset="1" stopColor="#7c5cff" /></linearGradient>
-      </defs>
-      <path d="M21.5 3.2A13 13 0 1 0 28.8 22 10.6 10.6 0 1 1 21.5 3.2Z" fill="url(#cr)" />
-    </svg>
-  );
-}
-
 function useReveal() {
   useEffect(() => {
     const els = document.querySelectorAll<HTMLElement>("[data-reveal]");
@@ -51,25 +39,6 @@ function useReveal() {
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, []);
-}
-
-function Magnetic({ children, className, onClick, href }: { children: React.ReactNode; className: string; onClick?: () => void; href?: string }) {
-  const ref = useRef<HTMLAnchorElement>(null);
-  return (
-    <a
-      ref={ref}
-      href={href ?? "#"}
-      className={className}
-      onClick={(e) => { e.preventDefault(); onClick?.(); }}
-      onPointerMove={(e) => {
-        const r = ref.current!.getBoundingClientRect();
-        ref.current!.style.transform = `translate(${(e.clientX - r.left - r.width / 2) * 0.18}px, ${(e.clientY - r.top - r.height / 2) * 0.3}px)`;
-      }}
-      onPointerLeave={() => { ref.current!.style.transform = ""; }}
-    >
-      {children}
-    </a>
-  );
 }
 
 function Count({ to, prefix = "", decimals = 0 }: { to: number; prefix?: string; decimals?: number }) {
@@ -93,7 +62,6 @@ export function Landing() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<LandingData | null>(null);
-  const { address, signIn } = useSession();
   const reduce = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   useReveal();
 
@@ -137,24 +105,7 @@ export function Landing() {
 
   return (
     <div className="ns" ref={stage}>
-      <header className="ns-bar">
-        <Link to="/" className="ns-logo"><Crescent /><span>NIGHTSHIFT</span><small>AUTONOMOUS<br />COMPANIES<br />WHILE YOU SLEEP</small></Link>
-        <nav className="ns-nav">
-          <Link to="/" className="on">Home</Link>
-          <a href="#mission">Mission</a>
-          <a href="#tech">Tech</a>
-          <Link to="/companies">Companies</Link>
-          <Link to="/mcp">MCP</Link>
-          <a href="https://github.com/RobertKodes/nightshift#readme" target="_blank" rel="noreferrer">Docs</a>
-        </nav>
-        <div className="ns-status" title="Live from api.imd.fun/health">
-          <i className="pulse" />
-          <span>SWARM {data?.swarm.agentsOnline ? "ONLINE" : "…"}<br /><b>{data?.swarm.agentsOnline?.toLocaleString() ?? "—"}</b> IMD AGENTS CONNECTED</span>
-        </div>
-        {address === null && data?.mode === "live"
-          ? <button className="ns-cta sm" onClick={signIn}>SIGN IN</button>
-          : <Magnetic className="ns-cta sm" onClick={launch} href="/launch">LAUNCH A COMPANY <span className="arr">→</span></Magnetic>}
-      </header>
+      <SiteHeader active="home" home />
 
       <section className="ns-hero" aria-label="NIGHTSHIFT">
         <div className="ns-art">
@@ -298,7 +249,7 @@ export function Landing() {
       <section id="mission" className="ns-section" data-reveal>
         <span className="eyebrow">MISSION</span>
         <h2>Humanity sleeps. <em>Progress continues.</em></h2>
-        <div className="steps">
+        <div className="ns-steps">
           {[
             ["01", "Decide", "Every shift, the CEO agent reads revenue, visits and what is still building, then picks one move."],
             ["02", "Check for free", "Each purchase goes through IMD's free check first. A body IMD would refuse costs nothing."],
@@ -306,7 +257,7 @@ export function Landing() {
             ["04", "Build with the swarm", "Products and sites are bought from the IMD swarm, then built, reviewed and hosted."],
             ["05", "Sell to people and agents", "Every product is an x402 link. Buyers pay in USDC, straight to the company wallet."],
             ["06", "Withdraw", "Revenue is yours. Take it out to your wallet whenever you want."],
-          ].map(([n, t, d]) => <div key={n} className="step"><span>{n}</span><b>{t}</b><p>{d}</p></div>)}
+          ].map(([n, t, d]) => <div key={n} className="ns-step"><span>{n}</span><b>{t}</b><p>{d}</p></div>)}
         </div>
       </section>
 
@@ -332,17 +283,7 @@ export function Landing() {
         </div>
       </section>
 
-      <footer className="ns-foot">
-        <Link to="/" className="ns-logo"><Crescent size={26} /><span>NIGHTSHIFT</span><small>AUTONOMOUS COMPANIES<br />FOR A BRIGHTER TOMORROW</small></Link>
-        <nav>
-          <a href="https://github.com/RobertKodes/nightshift" target="_blank" rel="noreferrer">GITHUB</a>
-          <Link to="/mcp">MCP</Link>
-          <a href="https://github.com/RobertKodes/nightshift#readme" target="_blank" rel="noreferrer">DOCS</a>
-          <Link to="/terms">TERMS</Link>
-        </nav>
-        <span className="built">BUILT BY HUMANS. POWERED BY AI.</span>
-      </footer>
-      {!address && data?.mode === "live" && <span hidden />}
+      <SiteFooter />
     </div>
   );
 }

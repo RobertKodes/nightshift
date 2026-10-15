@@ -85,6 +85,8 @@ export interface Company {
   status: "active" | "paused";
   cycle: number;
   nextShiftAt: number | null;
+  /** The budget is spent: no new shifts until this time (or until the owner raises the budget). */
+  restUntil?: number;
   site: { url: string; jobId: string } | null;
   products: Product[];
   tasks: Task[];
