@@ -79,13 +79,14 @@ export function ImdVisitor() {
   return (
     <div className="visit" aria-label="IMD's frog, visiting">
       <a className={`visit-portal${open ? " open" : ""}`} href="https://imd.fun" target="_blank" rel="noreferrer" title="He came from imd.fun">
-        <span className="visit-glow" /><b>IMD.FUN</b><i>&gt; portal open_</i>
+        <span className="visit-room" /><span className="visit-ring" /><span className="visit-glow" /><b>IMD.FUN</b><i>&gt; portal open_</i>
       </a>
       <div className="visit-walk" style={{ transform: `translateX(${x}%)` }}>
         {say && <div className="visit-say">{say}</div>}
         <button className="visit-frog" onClick={poke} aria-label="Say hi to IMD's frog"><FrogSprite frame={frame} /></button>
       </div>
-      <span className="visit-tag">VISITOR · FROM IMD</span>
+      <span className="visit-beam" aria-hidden="true" />
+      <span className="visit-tag">IMD.FUN → NIGHTSHIFT · VISITOR</span>
     </div>
   );
 }

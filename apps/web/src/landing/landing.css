@@ -404,7 +404,7 @@
 .imd-frog { display: block; aspect-ratio: 240 / 284; background: url(/art/imd/imd-frog.webp) 0 0 / 1900% 100% no-repeat; image-rendering: auto; }
 .visit { position: absolute; left: 58vw; top: calc(34px + 29vw); width: clamp(64px, 5.6vw, 108px); aspect-ratio: 240 / 284; z-index: 6; }
 .visit::after { content: ""; position: absolute; left: -40%; width: 420%; bottom: -4px; height: 2px; background: linear-gradient(90deg, transparent, rgba(184, 255, 74, .55), rgba(164, 139, 255, .5), transparent); box-shadow: 0 0 14px rgba(184, 255, 74, .5); pointer-events: none; }
-.visit-portal { position: absolute; left: -20%; bottom: -4px; width: 140%; height: 135%; display: grid; place-items: end center; padding-bottom: 6px; border: 1px solid rgba(125, 255, 161, .0); background: rgba(5, 12, 7, 0); color: #7dffa1 !important; font: 600 9px var(--mono); letter-spacing: .2em; overflow: hidden; transform: scaleY(0); transform-origin: 50% 100%; transition: transform .7s cubic-bezier(.2, .8, .2, 1), border-color .7s, background .7s; }
+.visit-portal { position: absolute; left: -24%; bottom: -4px; width: 148%; height: 150%; border-radius: 48% 48% 8px 8px / 32% 32% 8px 8px; display: grid; place-items: end center; padding-bottom: 6px; border: 1px solid rgba(125, 255, 161, .0); background: rgba(5, 12, 7, 0); color: #7dffa1 !important; font: 600 9px var(--mono); letter-spacing: .2em; overflow: hidden; transform: scaleY(0); transform-origin: 50% 100%; transition: transform .7s cubic-bezier(.2, .8, .2, 1), border-color .7s, background .7s; }
 .visit-portal.open { transform: none; border-color: rgba(125, 255, 161, .55); background: radial-gradient(ellipse at 50% 100%, rgba(125, 255, 161, .28), rgba(5, 12, 7, .82) 70%); box-shadow: 0 0 40px rgba(125, 255, 161, .35), inset 0 0 30px rgba(125, 255, 161, .2); }
 .visit-portal::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(125, 255, 161, .12) 0 1px, transparent 1px 4px); animation: visit-scan 1.6s linear infinite; }
 .visit-portal b { position: absolute; top: 8px; left: 0; right: 0; text-align: center; font-weight: 600; }
@@ -421,3 +421,12 @@
 @keyframes visit-pulse { 50% { opacity: .5; } }
 @media (max-width: 1100px) { .visit { left: auto; right: 34vw; top: auto; bottom: 30px; width: 70px; } }
 @media (prefers-reduced-motion: reduce) { .visit-portal::before, .visit-glow { animation: none; } .visit-walk { transition: none; } }
+.visit-room { position: absolute; inset: 0; background: url(/art/imd/imd-room.webp) center / cover; opacity: 0; transition: opacity 1s .3s; filter: saturate(1.2) contrast(1.05); }
+.visit-portal.open .visit-room { opacity: .92; animation: visit-breathe 5s ease-in-out infinite; }
+.visit-ring { position: absolute; inset: -3px; border-radius: inherit; padding: 3px; background: conic-gradient(from 0deg, #7dffa1, #a48bff, #b8ff4a, #7c5cff, #7dffa1); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: visit-spin 4s linear infinite; opacity: .9; }
+.visit-portal b { z-index: 2; background: rgba(5, 12, 7, .8); padding: 3px 0; }
+.visit-portal i { position: relative; z-index: 2; background: rgba(5, 12, 7, .75); padding: 2px 6px; }
+.visit-beam { position: absolute; left: 26%; bottom: 150%; width: 2px; height: 8.5vw; background: linear-gradient(0deg, rgba(125, 255, 161, .9), rgba(164, 139, 255, .5) 60%, transparent); box-shadow: 0 0 12px rgba(125, 255, 161, .7); transform-origin: 50% 100%; transform: rotate(8deg); pointer-events: none; }
+.visit-beam::after { content: ""; position: absolute; left: -9px; top: -6px; width: 20px; height: 10px; border-radius: 50%; background: radial-gradient(ellipse, rgba(184, 255, 74, .9), transparent 70%); animation: visit-pulse 1.8s ease-in-out infinite; }
+@keyframes visit-spin { to { filter: hue-rotate(360deg); } }
+@keyframes visit-breathe { 50% { transform: scale(1.06); } }
