@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { short } from "../api";
 import { Link, go } from "../router";
 import { useSession } from "../session";
+import { FrogSprite } from "./visitor";
 
 /** A crescent: the NIGHTSHIFT mark. */
 export function Crescent({ size = 30 }: { size?: number }) {
@@ -128,8 +129,8 @@ export function NightFrog() {
           <div><a href="https://imd.fun" target="_blank" rel="noreferrer">Meet the swarm ↗</a><button onClick={() => { setHidden(true); try { sessionStorage.setItem("ns_frog", "off"); } catch { /* private */ } }}>hide frog</button></div>
         </div>
       )}
-      <button key={hop} className={`ns-frog-btn${hop ? " hop" : ""}`} onClick={poke} aria-label="The night shift frog">
-        <img src="/art/frog/frog-coin.webp" alt="" width="72" height="72" />
+      <button key={hop} className={`ns-frog-btn${hop ? " hop" : ""}`} onClick={poke} aria-label="IMD's frog">
+        <FrogSprite frame={hop ? 18 : 14} />
       </button>
     </div>
   );
