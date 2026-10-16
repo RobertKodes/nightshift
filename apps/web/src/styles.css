@@ -231,3 +231,26 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 .launch-stage { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .launch-stage .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 12px var(--good); animation: nsPulse 1.4s ease-in-out infinite; }
 @keyframes nsPulse { 50% { opacity: .35; } }
+
+/* ---------- guide, token page */
+.docs h1 em, .guide-h2 em { font-style: italic; color: #b9a6ff; }
+.guide-h2 { margin: 26px 0 0; font: 400 clamp(30px, 4vw, 44px)/1.05 var(--serif); }
+.guide-steps { display: grid; gap: 12px; }
+.guide-step { display: grid; grid-template-columns: 64px 1fr; gap: 6px; padding: 20px 22px; transition: border-color .25s; }
+.guide-step:hover { border-color: var(--moon); }
+.guide-n { font: 400 40px/1 var(--serif); color: #b9a6ff; }
+.guide-step h3 { margin: 2px 0 6px; font: 600 15px var(--sans, inherit); letter-spacing: .01em; }
+.guide-step p { margin: 0; color: var(--dim); font-size: 14.5px; line-height: 1.6; }
+.guide-tip { display: inline-block; margin-top: 8px; font: 500 11.5px var(--mono); color: var(--good); }
+.guide-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.guide-grid b { font-size: 14.5px; } .guide-grid p { margin: 4px 0 0; color: var(--dim); font-size: 13.5px; }
+.guide-list { margin: 0; padding-left: 36px; display: grid; gap: 8px; color: var(--dim); font-size: 14px; }
+.guide-list b { color: var(--text); }
+.guide-end { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.token-page .tkn-card { margin-top: 6px; }
+.token-specs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--edge); border-left: 1px solid var(--edge); }
+.token-specs div { display: grid; gap: 4px; padding: 12px 14px; border-right: 1px solid var(--edge); border-bottom: 1px solid var(--edge); }
+.token-specs span { font: 500 10.5px var(--mono); letter-spacing: .2em; color: var(--faint); text-transform: uppercase; }
+.token-specs b { font-size: 14px; }
+.tkn-util.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 700px) { .token-specs, .tkn-util.two, .guide-grid { grid-template-columns: 1fr; } .guide-step { grid-template-columns: 1fr; } }

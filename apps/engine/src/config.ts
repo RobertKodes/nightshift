@@ -45,7 +45,7 @@ export const config = {
    */
   token: {
     address: (env.TOKEN_ADDRESS ?? "") as `0x${string}` | "",
-    symbol: env.TOKEN_SYMBOL ?? "TOKEN",
+    symbol: env.TOKEN_SYMBOL ?? "SHIFT",
     holderMin: num(env.TOKEN_HOLDER_MIN, 0),
     buyUrl: env.TOKEN_BUY_URL ?? "",
   },

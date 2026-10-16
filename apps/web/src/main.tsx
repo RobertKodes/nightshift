@@ -12,6 +12,7 @@ import { SessionProvider } from "./session";
 import { SetupPage } from "./SetupPage";
 import { MarketPage } from "./MarketPage";
 import { TokenPage } from "./TokenPage";
+import { GuidePage } from "./GuidePage";
 import { TermsPage } from "./TermsPage";
 import "./styles.css";
 import "./landing/landing.css";
@@ -31,7 +32,8 @@ function App() {
   if (seg[0] === "setup") page = <SetupPage />;
   if (seg[0] === "market") page = <MarketPage />;
   if (seg[0] === "token") page = <TokenPage />;
-  const active = seg[0] === "co" ? "company" : seg[0] === "mcp" ? "mcp" : seg[0] === "terms" ? "terms" : seg[0] === "market" ? "market" : seg[0] === "token" ? "token" : "companies";
+  if (seg[0] === "guide") page = <GuidePage />;
+  const active = seg[0] === "co" ? "company" : seg[0] === "mcp" ? "mcp" : seg[0] === "terms" ? "terms" : seg[0] === "market" ? "market" : seg[0] === "token" ? "token" : seg[0] === "guide" ? "guide" : "companies";
   return (
     <div className="ns ns-app">
       <SiteHeader active={active} />

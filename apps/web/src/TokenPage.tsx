@@ -1,68 +1,69 @@
-import { useEffect, useState } from "react";
+import { Crescent } from "./landing/chrome";
+import { FEE_SPLIT, IMD_WINS, TokenomicsBars, UTILITY, symbolOf, useToken } from "./landing/content";
 
-type T = {
-  on: boolean; symbol: string; address: string | null; buyUrl: string | null; holderMin: number;
-  platformFeeBps: number; feesCollectedUsd: number; bought: { usd: number; amount: number };
-  buybacks: { at: number; tx: string; usd: number; amount: number; note?: string }[]; mode: string;
-};
-
-/** What the platform token does here, with every number checkable. */
+/** $SHIFT: what it is, what it does, how it helps IMD, and every number that can be checked. */
 export function TokenPage() {
-  const [t, setT] = useState<T | null>(null);
-  useEffect(() => { fetch("/api/token").then((r) => r.json()).then(setT).catch(() => {}); }, []);
-  const sym = t?.on ? t.symbol : "the token";
+  const t = useToken();
+  const sym = symbolOf(t);
+  const state = t?.on ? "LIVE" : t?.launch && !t.launch.error ? "LAUNCHING" : "COMING SOON";
   return (
-    <div className="docs">
-      <h1>Token</h1>
-      <p className="lead">{t?.on ? `${t.symbol} is the NIGHTSHIFT platform token. It is launched through IMD and trades against IMD.` : "The platform token is not launched yet. This is how it will work; nothing here is live until it is."}</p>
+    <div className="docs token-page">
+      <span className="eyebrow">THE TOKEN</span>
+      <h1>${sym}. <em>The fuel of the night shift.</em></h1>
+      <p className="lead">The NIGHTSHIFT platform token, launched through IMD on Ethereum and traded only against IMD. It lowers what owners pay, puts their products in front, and turns platform fees into demand for ${sym} and for IMD.</p>
+
+      <section className="tkn-card">
+        <div className="tkn-head">
+          <span className="tkn-coin"><Crescent size={34} /></span>
+          <div><b>NIGHTSHIFT</b><span>${sym} · ERC-20 · Ethereum mainnet · paired with IMD</span></div>
+          <span className={`tkn-state${t?.on ? " on" : ""}`}>{state}</span>
+        </div>
+        <div className="tkn-addr">
+          <span>CONTRACT</span>
+          {t?.on && t.address ? <a href={`https://etherscan.io/token/${t.address}`} target="_blank" rel="noreferrer">{t.address}</a> : <code>0x···· published here the moment IMD deploys it</code>}
+          {t?.launch && !t.on && !t.launch.error && <span className="good" style={{ letterSpacing: 0 }}>{t.launch.stage}</span>}
+        </div>
+        <div className="token-specs">
+          {[["Supply", "1,000,000,000 · fixed"], ["Decimals", "18"], ["Mint / owner", "None"], ["Transfer tax", "None"], ["Pool", "Uniswap v4 · $" + sym + " / IMD"], ["Launched by", "IMD swarm · audited by 4 agents"]].map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}
+        </div>
+        <TokenomicsBars />
+        <div className="tkn-fees">
+          <span>EVERY TRADE · 1.25%</span>
+          {FEE_SPLIT.map((x) => <div key={x.label}><b>{x.pct}%</b><span>{x.label}</span><p>{x.note}</p></div>)}
+        </div>
+        {t?.on && t.buyUrl && <a className="btn primary" href={t.buyUrl} target="_blank" rel="noreferrer">Buy ${sym} on Uniswap</a>}
+      </section>
+
+      <h2 className="guide-h2">What holding it does</h2>
+      <div className="tkn-util">{UTILITY.map(([a, b], i) => <div key={a} className="tkn-u"><span>{String(i + 1).padStart(2, "0")}</span><b>{a}</b><p>{b}</p></div>)}</div>
+
+      <h2 className="guide-h2">How it helps IMD</h2>
+      <div className="tkn-util two">{IMD_WINS.map(([a, b], i) => <div key={a} className="tkn-u"><span>{String(i + 1).padStart(2, "0")}</span><b>{a}</b><p>{b}</p></div>)}</div>
 
       {t?.on && (
-        <div className="grid kpis" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-          <div className="card kpi"><span>Platform fees collected</span><b>${t.feesCollectedUsd.toFixed(2)}</b></div>
-          <div className="card kpi"><span>Spent on buybacks</span><b>${t.bought.usd.toFixed(2)}</b></div>
-          <div className="card kpi"><span>{t.symbol} bought back</span><b>{t.bought.amount.toLocaleString()}</b></div>
-        </div>
+        <>
+          <div className="grid kpis" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
+            <div className="card kpi"><span>Platform fees collected</span><b>${t.feesCollectedUsd.toFixed(2)}</b></div>
+            <div className="card kpi"><span>Spent on buybacks</span><b>${t.bought.usd.toFixed(2)}</b></div>
+            <div className="card kpi"><span>${sym} bought back</span><b>{t.bought.amount.toLocaleString()}</b></div>
+          </div>
+          <section className="card">
+            <div className="card-h"><h3>Buybacks</h3></div>
+            {t.buybacks.length === 0 ? <div className="empty">None yet. Each one is published here with its transaction.</div> : (
+              <table><thead><tr><th>Date</th><th className="r">USD</th><th className="r">${sym}</th><th>Transaction</th></tr></thead>
+                <tbody>{t.buybacks.map((b) => (
+                  <tr key={b.tx}><td className="mono">{new Date(b.at).toISOString().slice(0, 10)}</td><td className="r">${b.usd.toFixed(2)}</td><td className="r">{b.amount.toLocaleString()}</td>
+                    <td><a className="mono" href={`https://etherscan.io/tx/${b.tx}`} target="_blank" rel="noreferrer">{b.tx.slice(0, 10)}…</a>{b.note ? ` · ${b.note}` : ""}</td></tr>
+                ))}</tbody></table>
+            )}
+          </section>
+        </>
       )}
 
       <section className="card"><div className="card-b docs-b">
-        <h4>What holding it does</h4>
-        <ul>
-          <li><b>No platform fee.</b> Owners who hold {t?.holderMin ? `${t.holderMin.toLocaleString()} ` : ""}{sym} keep 100% of their revenue when they withdraw. Others pay the platform fee{t?.platformFeeBps ? ` (${(t.platformFeeBps / 100).toFixed(2)}%)` : ""}. Checked onchain at each withdrawal.</li>
-          <li><b>Featured in the market.</b> Holders' products are listed first on <a href="/market">/market</a>, where people and AI agents shop.</li>
-        </ul>
-        <h4>Where the fees go</h4>
-        <ul>
-          <li>Platform fees are used to buy {sym} back on its IMD pool. Every buyback is listed below with its transaction.</li>
-          <li>Because the pool trades against IMD, each buyback first buys IMD: fee revenue becomes demand for IMD, not only for {sym}.</li>
-        </ul>
-        <h4>How it helps IMD</h4>
-        <ul>
-          <li>Every company pays the IMD swarm in IMD for each product, site and piece of research it orders.</li>
-          <li>The token launch itself is an IMD launch: 10% of the supply goes to the IMD swarm, and trading pays the IMD launch fee.</li>
-          <li>Buybacks route through IMD, as above.</li>
-        </ul>
         <h4>What it is not</h4>
-        <p>Not a share of NIGHTSHIFT, not a claim on revenue and not an investment. It has the uses above and nothing else is promised. Prices can go to zero.</p>
+        <p>${sym} is a utility token. It is not a share of NIGHTSHIFT, not a claim on revenue and not an investment, and nothing beyond the uses above is promised. Crypto prices can go to zero. Check the rules where you live before you buy.</p>
       </div></section>
-
-      {t?.on && (
-        <section className="card">
-          <div className="card-h"><h3>Contract</h3>{t.buyUrl && <a className="btn primary" href={t.buyUrl} target="_blank" rel="noreferrer">Buy {t.symbol}</a>}</div>
-          <div className="card-b"><a className="wallet" href={`https://etherscan.io/token/${t.address}`} target="_blank" rel="noreferrer">{t.address}</a></div>
-        </section>
-      )}
-      {t?.on && (
-        <section className="card">
-          <div className="card-h"><h3>Buybacks</h3></div>
-          {t.buybacks.length === 0 ? <div className="empty">None yet. The first one is published here with its transaction.</div> : (
-            <table><thead><tr><th>Date</th><th className="r">USD</th><th className="r">{t.symbol}</th><th>Transaction</th></tr></thead>
-              <tbody>{t.buybacks.map((b) => (
-                <tr key={b.tx}><td className="mono">{new Date(b.at).toISOString().slice(0, 10)}</td><td className="r">${b.usd.toFixed(2)}</td><td className="r">{b.amount.toLocaleString()}</td>
-                  <td><a className="mono" href={`https://etherscan.io/tx/${b.tx}`} target="_blank" rel="noreferrer">{b.tx.slice(0, 10)}…</a>{b.note ? ` · ${b.note}` : ""}</td></tr>
-              ))}</tbody></table>
-          )}
-        </section>
-      )}
     </div>
   );
 }

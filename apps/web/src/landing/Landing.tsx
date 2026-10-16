@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { usd } from "../api";
 import { Link, go } from "../router";
-import { Magnetic, SiteFooter, SiteHeader } from "./chrome";
+import { Crescent, Magnetic, SiteFooter, SiteHeader } from "./chrome";
+import { EcosystemFlow, FEE_SPLIT, Faq, IMD_WINS, TokenomicsBars, UTILITY, symbolOf, useToken } from "./content";
 import { ANCHORS, ART_H, ART_W, startScene } from "./scene";
 import "./landing.css";
 
@@ -86,6 +87,8 @@ export function Landing() {
   }, [reduce]);
 
   const sim = data?.mode !== "live";
+  const token = useToken();
+  const tsym = symbolOf(token);
   const f = data?.featured;
   const R = ANCHORS.reactor;
   const ring = ANCHORS.ring;
@@ -258,6 +261,65 @@ export function Landing() {
             ["05", "Sell to people and agents", "Every product is an x402 link. Buyers pay in USDC, straight to the company wallet."],
             ["06", "Withdraw", "Revenue is yours. Take it out to your wallet whenever you want."],
           ].map(([n, t, d]) => <div key={n} className="ns-step"><span>{n}</span><b>{t}</b><p>{d}</p></div>)}
+        </div>
+      </section>
+
+      <section id="ecosystem" className="ns-section" data-reveal>
+        <span className="eyebrow">ECOSYSTEM</span>
+        <h2>One loop. <em>Everyone gets paid.</em></h2>
+        <p className="ns-intro">You bring the idea and the limits. Your company buys its work from the IMD swarm, sells what it ships to people and AI agents, and the money lands in your wallet. Platform fees flow back into $SHIFT, and every $SHIFT trade runs through IMD.</p>
+        <EcosystemFlow symbol={tsym} />
+      </section>
+
+      <section id="token" className="ns-section" data-reveal>
+        <span className="eyebrow">THE TOKEN</span>
+        <h2>${tsym}. <em>The fuel of the night shift.</em></h2>
+        <div className="tkn">
+          <div className="tkn-card">
+            <div className="tkn-head">
+              <span className="tkn-coin"><Crescent size={34} /></span>
+              <div><b>NIGHTSHIFT</b><span>${tsym} · Ethereum · paired with IMD</span></div>
+              <span className={`tkn-state${token?.on ? " on" : ""}`}>{token?.on ? "LIVE" : token?.launch && !token.launch.error ? "LAUNCHING" : "COMING SOON"}</span>
+            </div>
+            <div className="tkn-addr">
+              <span>CONTRACT</span>
+              {token?.on && token.address ? <a href={`https://etherscan.io/token/${token.address}`} target="_blank" rel="noreferrer">{token.address}</a> : <code>0x···· announced at launch</code>}
+            </div>
+            <TokenomicsBars />
+            <div className="tkn-fees">
+              <span>EVERY TRADE · 1.25%</span>
+              {FEE_SPLIT.map((x) => <div key={x.label}><b>{x.pct}%</b><span>{x.label}</span><p>{x.note}</p></div>)}
+            </div>
+            <div className="tkn-cta">
+              {token?.on && token.buyUrl ? <a className="ns-cta sm" href={token.buyUrl} target="_blank" rel="noreferrer">BUY ${tsym} <span className="arr">→</span></a> : <span className="ns-ghost sm">LAUNCHING SOON</span>}
+              <Link to="/token" className="ns-more">TOKEN DETAILS <span>→</span><i /></Link>
+            </div>
+          </div>
+          <div className="tkn-util">
+            {UTILITY.map(([t, d], i) => <div key={t} className="tkn-u"><span>{String(i + 1).padStart(2, "0")}</span><b>{t}</b><p>{d}</p></div>)}
+            <p className="tkn-legal">$SHIFT is a utility token. It is not a share of NIGHTSHIFT, not a claim on revenue and not an investment; its price can go to zero.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="imd" className="ns-section" data-reveal>
+        <span className="eyebrow">WHY IMD WINS</span>
+        <h2>Built on IMD. <em>Built for IMD.</em></h2>
+        <div className="ns-steps four">
+          {IMD_WINS.map(([t, d], i) => <div key={t} className="ns-step"><span>{String(i + 1).padStart(2, "0")}</span><b>{t}</b><p>{d}</p></div>)}
+        </div>
+      </section>
+
+      <section id="faq" className="ns-section" data-reveal>
+        <span className="eyebrow">FOR FOUNDERS</span>
+        <h2>What you get. <em>What it costs.</em></h2>
+        <div className="faq-wrap">
+          <Faq />
+          <aside className="faq-side">
+            <b>New here?</b>
+            <p>The guide walks through it step by step: start, fund, watch, approve, withdraw.</p>
+            <Link to="/guide" className="ns-more">READ THE GUIDE <span>→</span><i /></Link>
+          </aside>
         </div>
       </section>
 
