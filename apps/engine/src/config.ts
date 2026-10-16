@@ -49,6 +49,23 @@ export const config = {
     holderMin: num(env.TOKEN_HOLDER_MIN, 0),
     buyUrl: env.TOKEN_BUY_URL ?? "",
   },
+  /**
+   * The community chat (public group or channel, "@name" or "-100…"): buy bot, X raids, new
+   * Bluesky posts, milestones and welcomes. The bot must be a member (an admin in a channel).
+   */
+  telegramCommunity: env.TELEGRAM_COMMUNITY ?? "@getnightshift",
+  /** Buys below this many dollars are not posted; one 🌙 per BUYBOT_EMOJI_USD dollars. */
+  buyMinUsd: num(env.BUYBOT_MIN_USD, 0),
+  buyEmojiUsd: Math.max(1, num(env.BUYBOT_EMOJI_USD, 10)),
+  /** A picture, GIF or MP4 URL shown on every buy. */
+  buyMedia: env.BUYBOT_MEDIA ?? "",
+  /** Branded loops (the site's /bot/*.mp4) on top of community cards and operator alerts. */
+  botAnimations: (env.BOT_ANIMATIONS ?? "1") === "1",
+  /** Pin each X raid in the community chat (the bot needs the pin right). */
+  raidPin: (env.RAID_PIN ?? "1") === "1",
+  xUrl: env.X_URL ?? "https://x.com/nightshiftidm",
+  telegramUrl: env.TELEGRAM_URL ?? "https://t.me/getnightshift",
+  blueskyHandle: (env.BLUESKY_HANDLE ?? "nightshifttech.bsky.social").replace(/^@/, ""),
   /** Companies one wallet may run at once. */
   maxCompaniesPerOwner: num(env.MAX_COMPANIES_PER_OWNER, 5),
 };

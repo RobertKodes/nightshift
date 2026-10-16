@@ -28,6 +28,7 @@ import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
+import { buyCard, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
 import { type Button, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands } from "./social.js";
 import { followLaunch, holderStatus, holdsCached, launchState } from "./token.js";
 import { writeSettings } from "./settings.js";
@@ -66,7 +67,21 @@ export class Engine {
     setInterval(() => void this.#tick().catch((e) => console.error("tick", e)), 4000);
     setInterval(() => void this.store.flush(), 3000);
     void this.alert(`Engine started in ${config.mode.toUpperCase()} mode · ${config.publicUrl}`, "start");
-    if (config.telegramToken && config.telegramAdmins.length) telegramCommands(config.telegramToken, config.telegramAdmins, (cmd, args) => this.#command(cmd, args));
+    if (config.telegramToken) {
+      telegramCommands(config.telegramToken, config.telegramAdmins, {
+        admin: (cmd, args) => this.#command(cmd, args),
+        open: (cmd) => publicCommand(cmd),
+        // Share an X post to the bot and it raids it in the community chat.
+        adminText: async (text) => {
+          const url = text.match(/https?:\/\/(?:x|twitter)\.com\/\S+\/status\/\d+\S*/)?.[0];
+          if (!url) return null;
+          const note = text.replace(url, "").trim();
+          return { text: (await raid(url.split("?")[0]!, note)) ? "🚨 Raid posted in the community." : "⚠️ Could not post. Is the bot in the community chat?" };
+        },
+        joined: (chat, names) => { const w = welcome(names); void sendCard(chat, "welcome", w.text, w.buttons); },
+      });
+      startCommunity();
+    }
     setInterval(() => void this.#followTokenLaunch(), 60_000);
     // The daily report, at 08:00 UTC.
     let reported = "";
@@ -75,7 +90,7 @@ export class Engine {
       const day = d.toISOString().slice(0, 10);
       if (d.getUTCHours() !== 8 || reported === day || !config.telegramToken) return;
       reported = day;
-      void this.#report().then((t) => Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => telegram(config.telegramToken, id, t))));
+      void this.#report().then((t) => Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => sendCard(id, "report", t))));
     }, 60_000);
     if (!config.imdUsdPinned) {
       void this.#refreshImdPrice();
@@ -143,6 +158,19 @@ export class Engine {
       return { text: `🪙 <b>Token</b>\n\n${body}`, buttons: [...btns, ...back] };
     }
     if (cmd === "report") return { text: await this.#report(), buttons: back };
+    if (cmd === "raid") {
+      const url = args.find((a) => /(?:x|twitter)\.com\/.+\/status\/\d+/.test(a));
+      if (!url) return { text: "Usage: /raid &lt;x.com post link&gt; [note]\nOr just share the X post to me.", buttons: back };
+      const ok = await raid(url.split("?")[0]!, args.filter((a) => a !== url).join(" "));
+      return { text: ok ? "🚨 Raid posted in the community." : `⚠️ Could not post to ${esc(config.telegramCommunity)}. Add the bot to the group (as admin in a channel).`, buttons: back };
+    }
+    if (cmd === "testall") return { text: await this.testAll(), buttons: back };
+    if (cmd === "testbuy") {
+      const usdv = Number(args[0]) > 0 ? Number(args[0]) : 420;
+      const card = buyCard({ test: true, usd: usdv, imd: usdv / config.imdUsd, tokens: usdv / 0.0000025, buyer: "0x8f3a1c2b4d5e6f708192a3b4c5d6e7f8091a2b3c", tx: "0x" + "0".repeat(64), newHolder: true, position: 0, mcap: 2500 * config.imdUsd, liquidity: 2500 * config.imdUsd * 0.9 });
+      const ok = await toCommunity(card.text, card.buttons, usdv >= 2500 ? "whale" : "buy");
+      return { text: ok ? `🧪 Sample $${usdv} buy card sent to ${esc(config.telegramCommunity)}.` : `⚠️ Could not post to ${esc(config.telegramCommunity)}. Add the bot to the group first.`, buttons: back };
+    }
     if (cmd === "pause" || cmd === "resume") {
       const c = find(args[0]);
       if (!c) return { text: `Usage: /${cmd} &lt;slug&gt;`, buttons: back };
@@ -189,6 +217,11 @@ export class Engine {
       const buyUrl = `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7&outputCurrency=${l.token}`;
       writeSettings({ TOKEN_ADDRESS: l.token, TOKEN_SYMBOL: l.symbol, TOKEN_BUY_URL: buyUrl });
       Object.assign(config.token, { address: l.token as `0x${string}`, symbol: l.symbol, buyUrl });
+      void toCommunity(`🚀🌙 <b>$${esc(l.symbol)} IS LIVE</b>
+
+<code>${l.token}</code>
+
+Paired with IMD on Ethereum. Every trade pays the IMD swarm.`, [[{ text: `🟢 Buy $${l.symbol}`, url: buyUrl }], [{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch");
       void this.alert(`🚀 $${l.symbol} is live: ${l.token}
 ${config.publicUrl}/token`, "launch-live");
     }
@@ -362,6 +395,10 @@ ${config.publicUrl}/token`, "launch-live");
   async recordSale(c: Company, productId: string, amount: bigint, payer: string, tx: string | null, sim: boolean): Promise<void> {
     const p = c.products.find((x) => x.id === productId);
     if (!p) return;
+    if (!sim) void toCommunity(`💰 <b>A NIGHTSHIFT company just made a sale</b>
+
+${esc(c.name)} sold <b>${esc(p.name)}</b> for $${fromUsdc(amount).toFixed(2)}.
+Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See the market", url: `${config.publicUrl}/market` }]], "sale");
     if (!sim) void this.alert(`💰 ${c.name} sold ${p.name} for $${fromUsdc(amount).toFixed(2)}${tx ? ` · tx ${tx}` : ""}`, `sale-${tx ?? Date.now()}`);
     p.sales += 1;
     p.revenueUsdc += amount;
@@ -424,8 +461,31 @@ ${config.publicUrl}/token`, "launch-live");
     const last = this.#lastAlert.get(topic) ?? 0;
     if (Date.now() - last < 60_000) return false;
     this.#lastAlert.set(topic, Date.now());
-    const sent = await Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => telegram(config.telegramToken, id, `🌙 <b>NIGHTSHIFT</b>\n${esc(text)}`)));
+    const kind = topic.startsWith("sale") ? "sale" : topic.startsWith("launch") ? "launch" : "alert";
+    const sent = await Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => sendCard(id, kind, `🌙 <b>NIGHTSHIFT</b>\n${esc(text)}`)));
     return sent.some(Boolean);
+  }
+
+  /** Every card the bot can send, marked TEST, to the chats they belong in. */
+  async testAll(): Promise<string> {
+    const T = "🧪 <b>TEST</b> · ";
+    const sym = config.token.symbol;
+    const shown: string[] = [];
+    const say = async (what: string, p: Promise<boolean>) => { shown.push(`${(await p) ? "✅" : "❌"} ${what}`); };
+    const buy = (usdv: number) => buyCard({ test: true, usd: usdv, imd: usdv / config.imdUsd, tokens: usdv / 0.0000068, buyer: "0x8f3a1c2b4d5e6f708192a3b4c5d6e7f8091a2b3c", tx: `0x${"0".repeat(64)}`, newHolder: usdv < 1000, position: 35, mcap: 2500 * config.imdUsd, liquidity: 2250 * config.imdUsd });
+    const b1 = buy(180); await say("Buy", toCommunity(b1.text, b1.buttons, "buy"));
+    const b2 = buy(3200); await say("Whale buy", toCommunity(b2.text, b2.buttons, "whale"));
+    await say("X raid", raid(`${config.xUrl}/status/1846000000000000000`, "TEST: this is how a raid looks"));
+    await say("Token launch", toCommunity(`${T}🚀🌙 <b>$${esc(sym)} IS LIVE</b>\n\n<code>0x0000…TEST</code>\n\nPaired with IMD on Ethereum. Every trade pays the IMD swarm.`, [[{ text: `🟢 Buy $${sym}`, url: `${config.publicUrl}/token` }]], "launch"));
+    await say("Company sale", toCommunity(`${T}💰 <b>A NIGHTSHIFT company just made a sale</b>\n\nLetsBuild sold <b>Market report</b> for $9.00.\nBuilt by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See the market", url: `${config.publicUrl}/market` }]], "sale"));
+    await say("Milestone", toCommunity(`${T}🏆 <b>$${esc(sym)} just crossed $25.0K market cap!</b>\n\nThe night shift keeps building 🌙🐸`, [[{ text: "📊 Chart", url: `${config.publicUrl}/token` }]], "milestone"));
+    const w = welcome(["Test Frog"]); await say("Welcome", toCommunity(`${T}${w.text}`, w.buttons, "welcome"));
+    await say("New Bluesky post", toCommunity(`${T}🦋 <b>New on Bluesky</b>\n\nOne sentence becomes a company. Built by the IMD swarm while you sleep.\n\nLike and repost it 🌙`, [[{ text: "🦋 Open on Bluesky", url: `https://bsky.app/profile/${config.blueskyHandle}` }]], "post"));
+    const admin = config.telegramChat.split(",").map((x) => x.trim()).filter(Boolean);
+    await say("Operator alert", Promise.all(admin.map((id) => sendCard(id, "alert", `${T}🌙 <b>NIGHTSHIFT</b>\nLetsBuild: the swarm job failed, retrying in 5 minutes.`))).then((r) => r.some(Boolean)));
+    await say("Sale alert", Promise.all(admin.map((id) => sendCard(id, "sale", `${T}🌙 <b>NIGHTSHIFT</b>\n💰 LetsBuild sold Market report for $9.00`))).then((r) => r.some(Boolean)));
+    await say("Daily report", Promise.all(admin.map(async (id) => sendCard(id, "report", `${T}${await this.#report()}`))).then((r) => r.some(Boolean)));
+    return `🧪 <b>Test run</b>\nCommunity: ${esc(config.telegramCommunity)}\n\n${shown.join("\n")}`;
   }
 
   /** Checks the app password with Bluesky before keeping it. */

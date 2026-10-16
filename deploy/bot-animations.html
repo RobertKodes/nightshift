@@ -1,0 +1,93 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@500;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root { --bg:#03020A; --uv:#7C5CFF; --uvl:#A48BFF; --moon:#C4B4FF; --ink:#F2EFFF; --dim:#A9A3C4; --acid:#B8FF4A; --amber:#FFC46B; --red:#FF4D6D; --acc: var(--uv); }
+* { margin:0; box-sizing:border-box; }
+html,body { width:800px; height:450px; overflow:hidden; background:var(--bg); }
+.stage { position:relative; width:800px; height:450px; overflow:hidden; font-family:Inter, sans-serif; color:var(--ink);
+  background: radial-gradient(90% 120% at 30% 20%, #1d1150 0%, #0b0724 45%, #03020a 80%); }
+.stars i { position:absolute; width:2px; height:2px; background:#fff; border-radius:50%; animation: tw 2s ease-in-out infinite; }
+@keyframes tw { 0%,100% { opacity:.15 } 50% { opacity:.9 } }
+.grid { position:absolute; left:-10%; right:-10%; bottom:-40px; height:220px; transform: perspective(300px) rotateX(62deg);
+  background: linear-gradient(transparent 0 95%, color-mix(in srgb, var(--acc) 55%, transparent) 95%) 0 0/100% 40px,
+              linear-gradient(90deg, transparent 0 97%, color-mix(in srgb, var(--acc) 40%, transparent) 97%) 0 0/40px 100%;
+  animation: run 1s linear infinite; opacity:.55; mask-image: linear-gradient(transparent, #000 60%); }
+@keyframes run { to { background-position: 0 40px, 0 0; } }
+.moon { position:absolute; right:58px; top:44px; width:150px; height:150px; animation: float 4s ease-in-out infinite; filter: drop-shadow(0 0 30px color-mix(in srgb, var(--acc) 70%, transparent)); }
+@keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+.halo { position:absolute; right:20px; top:6px; width:226px; height:226px; border-radius:50%; border:1px solid color-mix(in srgb, var(--acc) 50%, transparent); animation: pulse 2s ease-out infinite; }
+.halo.b { animation-delay: -1s; }
+@keyframes pulse { 0% { transform: scale(.7); opacity:.9 } 100% { transform: scale(1.35); opacity:0 } }
+.brand { position:absolute; left:44px; top:36px; display:flex; align-items:center; gap:10px; font:600 13px 'JetBrains Mono', monospace; letter-spacing:.32em; color:var(--moon); }
+.brand svg { width:22px; height:22px; }
+.tag { position:absolute; left:44px; top:118px; font:600 14px 'JetBrains Mono', monospace; letter-spacing:.3em; color:var(--acc); }
+.tag b { display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--acc); margin-right:10px; animation: blink 1s steps(1) infinite; box-shadow: 0 0 14px var(--acc); }
+@keyframes blink { 50% { opacity:.15 } }
+h1 { position:absolute; left:40px; top:146px; font:800 98px/0.92 Inter, sans-serif; letter-spacing:-.04em; text-transform:uppercase;
+  background: linear-gradient(100deg, var(--ink) 0 35%, var(--acc) 50%, var(--ink) 65% 100%) 0 0/300% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation: shine 2s linear infinite, pop 1s ease-in-out infinite; transform-origin: left center; }
+@keyframes shine { from { background-position: 100% 0 } to { background-position: -50% 0 } }
+@keyframes pop { 0%,100% { transform: scale(1) } 50% { transform: scale(1.025) } }
+h2 { position:absolute; left:44px; top:340px; font: italic 400 34px 'Instrument Serif', serif; color:var(--moon); }
+.foot { position:absolute; left:44px; right:44px; bottom:24px; display:flex; justify-content:space-between; font:500 12px 'JetBrains Mono', monospace; letter-spacing:.24em; color:var(--dim); }
+.fx { position:absolute; inset:0; pointer-events:none; }
+.fx i { position:absolute; bottom:-40px; font-size:26px; animation: rise 2s linear infinite; }
+@keyframes rise { 0% { transform: translateY(0) rotate(0); opacity:0 } 10% { opacity:1 } 100% { transform: translateY(-520px) rotate(25deg); opacity:0 } }
+.fx.fall i { top:-40px; bottom:auto; animation-name: fall; }
+@keyframes fall { 0% { transform: translateY(0) rotate(0); opacity:0 } 10% { opacity:1 } 100% { transform: translateY(520px) rotate(-30deg); opacity:0 } }
+.bars { position:absolute; right:48px; bottom:60px; display:flex; gap:9px; align-items:flex-end; height:150px; }
+.bars span { width:16px; background: linear-gradient(var(--acc), color-mix(in srgb, var(--acc) 20%, transparent)); border-radius:3px 3px 0 0; animation: grow 2s ease-in-out infinite; transform-origin: bottom; }
+@keyframes grow { 0%,100% { transform: scaleY(.35) } 50% { transform: scaleY(1) } }
+.scan { position:absolute; left:0; right:0; height:90px; background: linear-gradient(transparent, color-mix(in srgb, var(--acc) 22%, transparent), transparent); animation: scan 2s linear infinite; }
+@keyframes scan { from { top:-90px } to { top:450px } }
+.siren { position:absolute; inset:0; background: radial-gradient(60% 80% at 20% 40%, color-mix(in srgb, var(--red) 40%, transparent), transparent 70%); animation: siren 1s ease-in-out infinite; }
+.siren.b { background: radial-gradient(60% 80% at 80% 40%, color-mix(in srgb, var(--uv) 50%, transparent), transparent 70%); animation-delay: -.5s; }
+@keyframes siren { 0%,100% { opacity:0 } 50% { opacity:1 } }
+.fx.glyph i { color:var(--acc); font-family:Inter; font-weight:800; text-shadow:0 0 12px var(--acc); }
+.vig { position:absolute; inset:0; box-shadow: inset 0 0 120px #000; }
+</style></head>
+<body><div class="stage" id="s">
+  <div class="stars" id="stars"></div>
+  <div class="grid"></div>
+  <div id="extra"></div>
+  <div class="halo"></div><div class="halo b"></div>
+  <svg class="moon" viewBox="0 0 100 100"><defs><linearGradient id="m" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f0ff"/><stop offset=".45" stop-color="#c4b4ff"/><stop offset="1" stop-color="#6d4dff"/></linearGradient><mask id="c"><rect width="100" height="100" fill="#fff"/><circle cx="64" cy="38" r="36" fill="#000"/></mask></defs><circle cx="50" cy="50" r="42" fill="url(#m)" mask="url(#c)"/></svg>
+  <div class="fx" id="fx"></div>
+  <div class="brand"><svg viewBox="0 0 100 100"><mask id="c2"><rect width="100" height="100" fill="#fff"/><circle cx="64" cy="38" r="36" fill="#000"/></mask><circle cx="50" cy="50" r="42" fill="#C4B4FF" mask="url(#c2)"/></svg>NIGHTSHIFT</div>
+  <div class="tag" id="tag"><b></b><span></span></div>
+  <h1 id="h1"></h1>
+  <h2 id="h2"></h2>
+  <div class="foot"><span>GETNIGHTSHIFT.TECH</span><span id="ft">POWERED BY THE IMD SWARM</span></div>
+  <div class="vig"></div>
+</div>
+<script>
+const K = new URLSearchParams(location.search).get("k") || "buy";
+const S = {
+  buy:      { acc:"--acid",  tag:"NEW BUY · ETHEREUM",     h1:"$SHIFT<br>BUY!",        h2:"another one joins the night shift", fx:"$", glyph:1, bars:1 },
+  whale:    { acc:"--acid",  tag:"WHALE ALERT",             h1:"WHALE<br>BUY 🐳",       h2:"the moon just got closer", fx:"🐳", bars:1 },
+  raid:     { acc:"--red",   tag:"NEW POST ON X",           h1:"RAID<br>TIME",          h2:"like · repost · reply", fx:"❤️", siren:1 },
+  launch:   { acc:"--acid",  tag:"TOKEN LAUNCH",            h1:"$SHIFT<br>IS LIVE",     h2:"paired with IMD on Ethereum", fx:"▲", glyph:1 },
+  sale:     { acc:"--acid",  tag:"A COMPANY MADE A SALE",   h1:"SOLD<br>WHILE IT SLEPT", h2:"built by the IMD swarm", fx:"💵", fall:1, size:78 },
+  milestone:{ acc:"--amber", tag:"MARKET CAP MILESTONE",    h1:"NEW<br>MILESTONE",      h2:"the night shift keeps building", fx:"🏆" },
+  welcome:  { acc:"--uvl",   tag:"GM · NEW CREW MEMBER",    h1:"WELCOME<br>ABOARD",     h2:"to the night crew", fx:"✨", fall:1 },
+  post:     { acc:"--uvl",   tag:"NEW POST",                h1:"FRESH<br>FROM US",      h2:"go show it some love", fx:"🦋" },
+  alert:    { acc:"--amber", tag:"CONTROL ROOM",            h1:"NIGHTSHIFT<br>ALERT",   h2:"the operator should know", fx:"", scan:1, size:84 },
+  report:   { acc:"--uvl",   tag:"DAILY REPORT · 08:00 UTC", h1:"THE NIGHT<br>REPORT",  h2:"what the companies did while you slept", fx:"", scan:1, size:84 },
+}[K];
+document.documentElement.style.setProperty("--acc", `var(${S.acc})`);
+document.querySelector("#tag span").textContent = S.tag;
+const h1 = document.getElementById("h1"); h1.innerHTML = S.h1; if (S.size) h1.style.fontSize = S.size + "px";
+document.getElementById("h2").textContent = S.h2;
+// deterministic pseudo-random so every render matches
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const stars = document.getElementById("stars");
+for (let i = 0; i < 70; i++) { const e = document.createElement("i"); e.style.left = rnd() * 800 + "px"; e.style.top = rnd() * 300 + "px"; e.style.animationDelay = -rnd() * 2 + "s"; if (rnd() > .8) { e.style.width = e.style.height = "3px"; } stars.append(e); }
+const fx = document.getElementById("fx"); if (S.fall) fx.classList.add("fall"); if (S.glyph) fx.classList.add("glyph");
+if (S.fx) for (let i = 0; i < 16; i++) { const e = document.createElement("i"); e.textContent = S.fx; e.style.left = (380 + rnd() * 400) + "px"; e.style.animationDelay = -(i / 16) * 2 + "s"; e.style.fontSize = 18 + rnd() * 18 + "px"; fx.append(e); }
+const extra = document.getElementById("extra");
+if (S.bars) { const b = document.createElement("div"); b.className = "bars"; for (let i = 0; i < 7; i++) { const s = document.createElement("span"); s.style.height = 50 + i * 15 + "px"; s.style.animationDelay = -(i * 0.18) + "s"; b.append(s); } extra.append(b); }
+if (S.siren) extra.innerHTML += '<div class="siren"></div><div class="siren b"></div>';
+if (S.scan) extra.innerHTML += '<div class="scan"></div>';
+window.seek = (t) => document.getAnimations().forEach((a) => { a.pause(); a.currentTime = t; });
+</script></body></html>

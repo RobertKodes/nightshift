@@ -178,6 +178,9 @@ export function serve(engine: Engine) {
         if (p === "/api/admin/test-alert" && req.method === "POST") {
           return json(res, 200, { ok: await engine.alert("Test alert from /setup. Alerts work.", `test-${Date.now()}`) });
         }
+        if (p === "/api/admin/test-all" && req.method === "POST") {
+          return json(res, 200, { ok: true, result: await engine.testAll() });
+        }
         if (p === "/api/admin/restart" && req.method === "POST") {
           if (process.env.NIGHTSHIFT_SUPERVISED !== "1") return json(res, 409, { error: "Not running under a supervisor; restart the process yourself to apply." });
           json(res, 200, { ok: true });

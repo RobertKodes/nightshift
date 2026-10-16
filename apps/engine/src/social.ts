@@ -42,11 +42,23 @@ export type Button = { text: string; data?: string; url?: string };
 export type Reply = { text: string; buttons?: Button[][] };
 const kb = (b?: Button[][]) => (b?.length ? { inline_keyboard: b.map((row) => row.map((x) => (x.url ? { text: x.text, url: x.url } : { text: x.text, callback_data: x.data ?? x.text }))) } : undefined);
 
-async function tg(token: string, method: string, body: unknown): Promise<boolean> {
+/** One Bot API call; the result, or null when it failed. Never throws. */
+export async function tgCall<T = unknown>(token: string, method: string, body: unknown): Promise<T | null> {
   try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });
-    return r.ok;
-  } catch { return false; }
+    const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+    const j = (await r.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string };
+    if (!j.ok) { console.error(`telegram ${method}: ${j.description ?? r.status}`); return null; }
+    return (j.result ?? true) as T;
+  } catch { return null; }
+}
+const tg = async (token: string, method: string, body: unknown) => (await tgCall(token, method, body)) !== null;
+
+/** A card with a picture, GIF or video on top (caption up to 1024 characters). */
+export async function telegramMedia(token: string, chatId: string, media: string, caption: string, buttons?: Button[][]): Promise<boolean> {
+  const method = /\.(gif|mp4)(\?|$)/i.test(media) ? "sendAnimation" : "sendPhoto";
+  const key = method === "sendAnimation" ? "animation" : "photo";
+  if (await tg(token, method, { chat_id: chatId, [key]: media, caption: caption.slice(0, 1024), parse_mode: "HTML", reply_markup: kb(buttons) })) return true;
+  return telegram(token, chatId, caption, buttons);
 }
 
 /** The operator's alert channel: a Telegram message (HTML), optionally with buttons. Never throws. */
@@ -56,27 +68,48 @@ export async function telegram(token: string, chatId: string, text: string, butt
 
 export const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]!));
 
+export type BotHandlers = {
+  /** Operator commands, for the admin ids only. */
+  admin: (cmd: string, args: string[]) => Promise<Reply>;
+  /** Commands anyone may use (null: not a public command). */
+  open: (cmd: string, args: string[]) => Promise<Reply | null>;
+  /** A plain message from an admin in a private chat, e.g. a shared X link. */
+  adminText?: (text: string) => Promise<Reply | null>;
+  /** People joined a chat the bot is in. */
+  joined?: (chat: string, names: string[]) => void;
+};
+
 /**
- * The admin bot: long-polls Telegram, answers commands and button presses from the listed user ids
- * only, and registers its command menu and description once.
+ * The bot: long-polls Telegram, answers public commands for anyone, operator commands and button
+ * presses for the listed user ids only, and registers its command menus and description once.
  */
-export function telegramCommands(token: string, admins: string[], handle: (cmd: string, args: string[]) => Promise<Reply>): void {
-  void tg(token, "setMyCommands", { commands: [
+export function telegramCommands(token: string, admins: string[], h: BotHandlers): void {
+  const open = [
+    { command: "price", description: "Price, market cap, liquidity" },
+    { command: "ca", description: "The official contract address" },
+    { command: "links", description: "Website, X, Telegram, Bluesky" },
+  ];
+  void tg(token, "setMyCommands", { commands: open });
+  for (const id of admins) void tg(token, "setMyCommands", { scope: { type: "chat", chat_id: Number(id) }, commands: [
     { command: "status", description: "Mode, companies, swarm, price" },
     { command: "companies", description: "Every company and its money" },
     { command: "market", description: "What is on sale" },
     { command: "token", description: "The platform token" },
     { command: "report", description: "Today's report" },
+    { command: "raid", description: "Raid an X post: /raid <link> [note]" },
+    { command: "testbuy", description: "Send a sample buy card to the community" },
+    { command: "testall", description: "Send every alert and announcement, marked TEST" },
     { command: "stop", description: "Pause every company now" },
     { command: "help", description: "All commands" },
+    ...open,
   ] });
-  void tg(token, "setMyDescription", { description: "NIGHTSHIFT control room: autonomous AI companies that build with the IMD swarm. Status, sales, alerts and an emergency stop." });
-  void tg(token, "setMyShortDescription", { short_description: "NIGHTSHIFT control room · alerts, sales, emergency stop" });
+  void tg(token, "setMyDescription", { description: "NIGHTSHIFT: autonomous AI companies built by the IMD swarm. Buy alerts, X raids, price and the official links." });
+  void tg(token, "setMyShortDescription", { short_description: "NIGHTSHIFT · buys, raids, price, official links" });
   let offset = 0;
   const loop = async (): Promise<void> => {
     try {
       const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates?timeout=25&offset=${offset}&allowed_updates=${encodeURIComponent('["message","callback_query"]')}`, { signal: AbortSignal.timeout(35000) });
-      const j = (await r.json()) as { result?: { update_id: number; message?: { chat: { id: number }; from?: { id: number }; text?: string }; callback_query?: { id: string; from: { id: number }; data?: string; message?: { chat: { id: number }; message_id: number } } }[] };
+      const j = (await r.json()) as { result?: { update_id: number; message?: { chat: { id: number; type: string }; from?: { id: number }; text?: string; new_chat_members?: { first_name: string; is_bot?: boolean }[] }; callback_query?: { id: string; from: { id: number }; data?: string; message?: { chat: { id: number }; message_id: number } } }[] };
       for (const u of j.result ?? []) {
         offset = u.update_id + 1;
         const q = u.callback_query;
@@ -84,11 +117,20 @@ export function telegramCommands(token: string, admins: string[], handle: (cmd: 
         const from = String(q?.from.id ?? m?.from?.id ?? "");
         const chat = String(q?.message?.chat.id ?? m?.chat.id ?? "");
         const text = q?.data ?? m?.text ?? "";
-        if (!chat || !text.startsWith("/")) continue;
+        const isAdmin = admins.includes(from);
+        if (!chat) continue;
+        const people = (m?.new_chat_members ?? []).filter((x) => !x.is_bot).map((x) => x.first_name);
+        if (people.length && h.joined) { h.joined(chat, people); continue; }
+        if (!text.startsWith("/")) {
+          if (isAdmin && m?.chat.type === "private" && h.adminText) { const rep = await h.adminText(text).catch(() => null); if (rep) await telegram(token, chat, rep.text, rep.buttons); }
+          continue;
+        }
         if (q) void tg(token, "answerCallbackQuery", { callback_query_id: q.id });
         const [raw, ...args] = text.trim().split(/\s+/);
         const cmd = raw!.slice(1).split("@")[0]!.toLowerCase();
-        const reply: Reply = admins.includes(from) ? await handle(cmd, args).catch((e) => ({ text: `⚠️ ${esc((e as Error).message)}` })) : { text: "🔒 This bot answers the NIGHTSHIFT operator only." };
+        const pub = await h.open(cmd, args).catch(() => null);
+        const reply: Reply | null = pub ?? (isAdmin ? await h.admin(cmd, args).catch((e) => ({ text: `⚠️ ${esc((e as Error).message)}` })) : m?.chat.type === "private" ? { text: "🌙 Public commands: /price · /ca · /links" } : null);
+        if (!reply) continue;
         if (q?.message && cmd !== "stop") await tg(token, "editMessageText", { chat_id: chat, message_id: q.message.message_id, text: reply.text, parse_mode: "HTML", disable_web_page_preview: true, reply_markup: kb(reply.buttons) });
         else await telegram(token, chat, reply.text, reply.buttons);
       }
