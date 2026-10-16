@@ -15,8 +15,10 @@ export const config = {
   secret: env.NIGHTSHIFT_SECRET ?? "",
   openrouterKey: env.OPENROUTER_API_KEY ?? "",
   model: env.NIGHTSHIFT_MODEL ?? "anthropic/claude-sonnet-5.5",
-  /** USD per IMD, for budgets. Live price feeds can replace it. */
+  /** USD per IMD, for budgets. Follows the market every 10 minutes unless IMD_USD pins it. */
   imdUsd: num(env.IMD_USD, 6.87),
+  imdUsdPinned: Boolean(env.IMD_USD),
+  imdUsdAt: 0,
   ethRpc: env.ETH_RPC ?? "https://ethereum-rpc.publicnode.com",
   /** Where products are sold: Base (8453) or Base Sepolia (84532). */
   salesChainId: num(env.SALES_CHAIN_ID, 84532),

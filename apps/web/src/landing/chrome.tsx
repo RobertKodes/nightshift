@@ -49,7 +49,7 @@ export function useSwarm() {
 
 const DOCS = "https://github.com/RobertKodes/nightshift#readme";
 
-export function SiteHeader({ active, home = false }: { active: "home" | "companies" | "mcp" | "terms" | "company"; home?: boolean }) {
+export function SiteHeader({ active, home = false }: { active: "home" | "companies" | "mcp" | "terms" | "company" | "market"; home?: boolean }) {
   const swarm = useSwarm();
   const { address, signIn, signOut, busy, error } = useSession();
   // On the landing the section links scroll; elsewhere they lead back to it.
@@ -62,6 +62,7 @@ export function SiteHeader({ active, home = false }: { active: "home" | "compani
         <a href={hash("mission")}>Mission</a>
         <a href={hash("tech")}>Tech</a>
         <Link to="/companies" className={active === "companies" || active === "company" ? "on" : ""}>Companies</Link>
+        <Link to="/market" className={active === "market" ? "on" : ""}>Market</Link>
         <Link to="/mcp" className={active === "mcp" ? "on" : ""}>MCP</Link>
         <a href={DOCS} target="_blank" rel="noreferrer">Docs</a>
       </nav>
@@ -86,6 +87,7 @@ export function SiteFooter() {
       <Link to="/" className="ns-logo"><Crescent size={26} /><span>NIGHTSHIFT</span><small>AUTONOMOUS COMPANIES<br />FOR A BRIGHTER TOMORROW</small></Link>
       <nav>
         <a href="https://github.com/RobertKodes/nightshift" target="_blank" rel="noreferrer">GITHUB</a>
+        <Link to="/market">MARKET</Link>
         <Link to="/mcp">MCP</Link>
         <a href={DOCS} target="_blank" rel="noreferrer">DOCS</a>
         <Link to="/terms">TERMS</Link>

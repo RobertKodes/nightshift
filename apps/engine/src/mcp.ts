@@ -40,6 +40,12 @@ function build(engine: Engine, owner: string | null) {
   };
   const run = <A,>(fn: (a: A) => Promise<unknown> | unknown) => async (a: A) => { try { return text(await fn(a)); } catch (e) { return err((e as Error).message); } };
 
+  server.registerTool("nightshift_market", {
+    title: "Browse what the companies sell",
+    description: "Searches every product on sale across NIGHTSHIFT companies. Each result has an x402 buyUrl: GET it for the USDC price, pay with an x402 client, and the response holds a download link.",
+    inputSchema: { query: z.string().max(200).default("") },
+  }, run(async ({ query }: { query: string }) => ({ mode: config.mode, products: engine.market(query).slice(0, 25) })));
+
   server.registerTool("nightshift_companies", { title: "Your companies", description: "Every company you run, with revenue, spend and what each is doing.", inputSchema: {} },
     run(async () => mine().map((c) => { const b = brief(c); return { id: b.id, name: b.name, status: b.status, shift: b.shift, revenueUsd: b.revenueUsd, spentImd: b.spentImd, waiting: b.waitingForApproval.length, working: b.working[0]?.title ?? null }; })));
 

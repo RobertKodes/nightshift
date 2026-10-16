@@ -1,0 +1,110 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { Company, Product } from "@nightshift/core";
+import type { LlmClient } from "@nightshift/llm";
+
+/**
+ * What a buyer actually receives. The IMD swarm publishes its work openly (research lands in a
+ * public GitHub repo), so a company cannot sell that link. Instead each product is packaged into a
+ * private file kept here, with every cited link checked, and handed out through download links
+ * that are signed per sale and expire.
+ */
+export class ProductFiles {
+  readonly #dir: string;
+  readonly #key: string;
+  readonly #inflight = new Set<string>();
+
+  constructor(dataDir: string, secretMaterial: string, private readonly llm: LlmClient | null, private readonly model: string, private readonly publicUrl: string) {
+    this.#dir = join(dataDir, "products");
+    mkdirSync(this.#dir, { recursive: true });
+    this.#key = createHmac("sha256", secretMaterial).update("nightshift-downloads-v1").digest("hex");
+  }
+
+  #file(p: Product) { return join(this.#dir, `${p.id.replace(/[^a-zA-Z0-9-]/g, "")}.md`); }
+  has(p: Product): boolean { return existsSync(this.#file(p)); }
+  read(p: Product): string | null { return this.has(p) ? readFileSync(this.#file(p), "utf8") : null; }
+
+  /** A link that opens this product for 7 days. `ref` ties it to one sale (a tx hash or a buyer). */
+  link(c: Company, p: Product, ref: string, days = 7): string {
+    const exp = Math.floor(Date.now() / 1000) + days * 86400;
+    return `${this.publicUrl}/download/${c.slug}/${p.id}/${exp}/${this.#sig(p.id, exp, ref)}?ref=${encodeURIComponent(ref)}`;
+  }
+  check(productId: string, exp: string, sig: string, ref: string): boolean {
+    const e = Number(exp);
+    if (!Number.isFinite(e) || e < Date.now() / 1000) return false;
+    const want = Buffer.from(this.#sig(productId, e, ref));
+    const got = Buffer.from(sig);
+    return want.length === got.length && timingSafeEqual(want, got);
+  }
+  #sig(id: string, exp: number, ref: string) { return createHmac("sha256", this.#key).update(`${id}|${exp}|${ref}`).digest("base64url").slice(0, 32); }
+
+  /** Builds the private copy once the swarm has delivered. Safe to call every tick. */
+  async ensure(c: Company, p: Product, source: () => Promise<string | null>): Promise<void> {
+    if (p.status !== "live" || this.has(p) || this.#inflight.has(p.id)) return;
+    this.#inflight.add(p.id);
+    try {
+      const raw = await source();
+      if (!raw) return;
+      const body = await this.#package(c, p, raw);
+      const checked = await checkLinks(body);
+      writeFileSync(this.#file(p), `${body.trim()}\n\n---\n\n${checked}\n`, { mode: 0o600 });
+    } catch (e) {
+      console.error("package", c.slug, p.id, (e as Error).message);
+    } finally {
+      this.#inflight.delete(p.id);
+    }
+  }
+
+  async #package(c: Company, p: Product, raw: string): Promise<string> {
+    const head = `# ${p.name}\n\n_${p.pitch}_\n\n> Made by ${c.name}, an autonomous company on NIGHTSHIFT. Researched by the IMD agent swarm and packaged by AI. Check anything you rely on: every link cited below was tested when this file was made.\n\n`;
+    if (!this.llm) return head + raw;
+    try {
+      const r = await this.llm.chat({
+        model: this.model,
+        maxTokens: 3000,
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: "You turn research notes into a clear, practical paid guide in Markdown. Use ONLY facts, numbers, names and links present in the notes. Never invent a statistic, tool, price, quote or URL. If the notes do not support a section, leave it out. Keep every source link next to the claim it supports. End with a checklist." },
+          { role: "user", content: `Product: ${p.name}\nPromise: ${p.pitch}\nAudience: ${c.audience}\n\nNOTES:\n${raw.slice(0, 60_000)}` },
+        ],
+      });
+      return head + (r.message.content?.trim() || raw);
+    } catch {
+      return head + raw;
+    }
+  }
+}
+
+/** Tests every http(s) link in the text and reports which answered. */
+async function checkLinks(text: string): Promise<string> {
+  const urls = [...new Set((text.match(/https?:\/\/[^\s)\]>"'`]+/g) ?? []).map((u) => u.replace(/[.,;:]+$/, "")))].slice(0, 60);
+  const day = new Date().toISOString().slice(0, 10);
+  if (!urls.length) return `_Sources: this file cites no links (checked ${day})._`;
+  const res = await Promise.all(urls.map(async (u) => {
+    try {
+      const r = await fetch(u, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(8000), headers: { "User-Agent": "NIGHTSHIFT link check" } });
+      return [u, r.status < 400] as const;
+    } catch { return [u, false] as const; }
+  }));
+  const ok = res.filter(([, v]) => v).length;
+  return `## Sources checked on ${day}\n\n${ok} of ${res.length} cited links answered.\n\n${res.map(([u, v]) => `- ${v ? "✓" : "✗ did not answer:"} ${u}`).join("\n")}`;
+}
+
+/**
+ * The Markdown behind a swarm delivery: a delivered file, or the files IMD published for the job.
+ * IMD's repo README is an index that links the real artifacts in ../files/, so those are followed.
+ */
+export async function fetchDelivery(files: Record<string, string> | undefined, repoUrl: string | null | undefined): Promise<string | null> {
+  const get = async (u: string) => { const r = await fetch(u, { signal: AbortSignal.timeout(15000) }); return r.ok ? r.text() : null; };
+  const first = Object.values(files ?? {})[0];
+  if (first) return get(first);
+  if (!repoUrl) return null;
+  const readme = repoUrl.replace("https://github.com/", "https://raw.githubusercontent.com/").replace("/blob/", "/");
+  const index = await get(readme);
+  if (!index) return null;
+  const links = [...index.matchAll(/\]\((\.\.\/files\/[^)\s]+)\)/g)].map((m) => new URL(m[1]!, readme).toString()).slice(0, 5);
+  if (!links.length) return index.length > 200 ? index : null;
+  const parts = (await Promise.all(links.map(get))).filter((x): x is string => Boolean(x));
+  return parts.length ? parts.join("\n\n---\n\n") : null;
+}

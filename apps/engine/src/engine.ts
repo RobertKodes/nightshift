@@ -27,6 +27,7 @@ import { simulateTraffic } from "./market.js";
 import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
+import { ProductFiles, fetchDelivery } from "./products.js";
 
 export type EngineEvent = { type: "task" | "journal" | "company" | "sale"; companyId: string; payload: unknown; at: number };
 const DAY = 24 * 3600_000;
@@ -37,6 +38,8 @@ export class Engine {
   readonly ledger = new Ledger(this.store.ledgerStore);
   readonly llm = config.openrouterKey ? new LlmClient({ apiKey: config.openrouterKey, appName: "NIGHTSHIFT" }) : null;
   readonly sim: SimDeliveries;
+  /** Private, packaged copies of what each company sells. */
+  readonly files: ProductFiles;
   readonly #simPlane: SimImdPlane;
   readonly #livePlanes = new Map<string, ImdPlane>();
   readonly #inputOwner = new WeakMap<object, string>();
@@ -51,6 +54,7 @@ export class Engine {
       const id = typeof input === "object" && input ? this.#inputOwner.get(input) : undefined;
       return id ? this.store.companies.get(id) : undefined;
     }, `${config.dataDir}/sim-files`);
+    this.files = new ProductFiles(config.dataDir, this.vault.material, this.llm, config.model, config.publicUrl);
     this.#simPlane = new SimImdPlane({ jobMs: config.simJobSeconds * 1000, deliver: (j, a, i) => this.sim.deliver(j, a, i) });
   }
 
@@ -58,6 +62,23 @@ export class Engine {
     await this.store.load();
     setInterval(() => void this.#tick().catch((e) => console.error("tick", e)), 4000);
     setInterval(() => void this.store.flush(), 3000);
+    if (!config.imdUsdPinned) {
+      void this.#refreshImdPrice();
+      setInterval(() => void this.#refreshImdPrice(), 10 * 60_000);
+    }
+  }
+
+  /** The IMD price from its deepest Ethereum pool on DexScreener; keeps the last good value on failure. */
+  async #refreshImdPrice(): Promise<void> {
+    try {
+      const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/0xD34a99Bc0f67aE1bbd63C660e6d0b0dd03E263B7", { signal: AbortSignal.timeout(8000) });
+      const d = (await r.json()) as { pairs?: { chainId: string; baseToken: { address: string }; priceUsd?: string; liquidity?: { usd?: number } }[] };
+      const best = (d.pairs ?? [])
+        .filter((p) => p.chainId === "ethereum" && p.baseToken.address.toLowerCase() === "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7")
+        .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
+      const price = Number(best?.priceUsd);
+      if (price > 0.01 && price < 10_000) { config.imdUsd = price; config.imdUsdAt = Date.now(); }
+    } catch { /* keep the last price */ }
   }
 
   on(fn: (e: EngineEvent) => void): () => void {
@@ -264,12 +285,39 @@ export class Engine {
     return { sent, fee, txs };
   }
 
+  /** Every product on sale across all companies: the public catalog for people and agents. */
+  market(q = ""): { company: string; slug: string; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; buyUrl: string; page: string }[] {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    return [...this.store.companies.values()]
+      .flatMap((c) => c.products.filter((p) => p.status === "live" && this.files.has(p)).map((p) => ({
+        company: c.name, slug: c.slug, id: p.id, name: p.name, kind: p.kind, pitch: p.pitch,
+        priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales,
+        buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, page: `${config.publicUrl}/c/${c.slug}#${p.id}`,
+        text: `${c.name} ${c.mission} ${c.audience} ${p.name} ${p.pitch}`.toLowerCase(),
+      })))
+      .filter((x) => words.every((w) => x.text.includes(w)))
+      .sort((a, b) => b.sales - a.sales)
+      .map(({ text: _t, ...x }) => x);
+  }
+
   async #tick(): Promise<void> {
     const now = Date.now();
     for (const c of this.store.companies.values()) {
       if (c.tasks.some((t) => t.status === "building")) await advance(c, this.#deps(c)).catch((e) => console.error("advance", c.slug, e));
       if (c.status === "active" && c.policy.autopilot && c.nextShiftAt && now >= c.nextShiftAt && !this.#busy.has(c.id)) {
         await this.shiftNow(c).catch((e) => console.error("shift", c.slug, e));
+      }
+      for (const p of c.products) {
+        if (p.status !== "live" || this.files.has(p)) continue;
+        const t = c.tasks.find((x) => x.id === p.taskId);
+        void this.files.ensure(c, p, async () => {
+          if (!t?.result) return null;
+          if (config.mode === "sim" && t.imd?.jobId) {
+            const name = Object.keys(t.result.files ?? {})[0];
+            return name ? this.sim.file(t.imd.jobId, name) : null;
+          }
+          return fetchDelivery(t.result.files, t.result.repoUrl);
+        });
       }
       if (config.mode === "sim") {
         const m = this.store.metricsOf(c.id);

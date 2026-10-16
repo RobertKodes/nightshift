@@ -9,7 +9,7 @@ async function buyWithWallet(buyUrl: string): Promise<{ deliverable: string | nu
   const eth = (window as unknown as { ethereum?: unknown }).ethereum;
   if (!eth) throw new Error("No wallet found. Install MetaMask or Rabby.");
   const challenge = await fetch(buyUrl);
-  if (challenge.status !== 402) throw new Error(`unexpected ${challenge.status}`);
+  if (challenge.status !== 402) throw new Error(((await challenge.json().catch(() => ({}))) as { error?: string }).error ?? `unexpected ${challenge.status}`);
   const ch = (await challenge.json()) as { accepts: Requirement[] };
   const req = ch.accepts[0]!;
   const chainId = Number(req.network.split(":")[1]);
@@ -43,6 +43,7 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
   const [c, setC] = useState<PublicCompany | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [got, setGot] = useState<{ name: string; url: string } | null>(null);
   useEffect(() => {
     const load = () => api.publicCompany(slug).then(setC).catch((e) => setErr((e as Error).message));
     load();
@@ -56,13 +57,14 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
       if (health?.mode === "sim") {
         const r = await fetch(`${p.buyUrl.replace(/^https?:\/\/[^/]+/, "")}?sim=1`, { method: "POST" });
         const j = await r.json();
+        if (!r.ok) throw new Error(j.error ?? "purchase failed");
         say("Demo purchase recorded. In live mode your wallet pays in USDC.");
-        if (j.deliverable) window.open(j.deliverable, "_blank");
+        if (j.deliverable) { setGot({ name: p.name, url: j.deliverable }); window.open(j.deliverable, "_blank"); }
         return;
       }
       const r = await buyWithWallet(p.buyUrl);
       say(`Paid · ${short(r.tx)}`);
-      if (r.deliverable) window.open(r.deliverable, "_blank");
+      if (r.deliverable) { setGot({ name: p.name, url: r.deliverable }); window.open(r.deliverable, "_blank"); }
     } catch (e) {
       say((e as Error).message);
     }
@@ -94,6 +96,7 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
           </div>
         ))}
       </div>
+      {got && <div className="card card-b got"><b>Your download: {got.name}</b><a className="btn primary" href={got.url}>Download</a><span className="faint">The link works for 7 days. Save the file.</span></div>}
       <div className="card">
         <div className="card-h"><h3>What it did, shift by shift</h3><span className="faint mono" style={{ fontSize: 11 }}>wallet {short(c.wallet)}</span></div>
         <table><tbody>{c.shifts.filter((s) => s.status !== "failed" && s.status !== "rejected").map((s, i) => <tr key={i}><td className="mono faint">{s.cycle}</td><td>{s.title}</td><td><span className={`pill ${s.status}`}>{s.status.replace(/_/g, " ")}</span></td></tr>)}</tbody></table>

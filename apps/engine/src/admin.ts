@@ -60,6 +60,8 @@ export async function setupState(engine: Engine) {
     { id: "llm", label: "CEO model", state: or === false ? "warn" : "ok", detail: or === null ? "No OpenRouter key: the free playbook decides. Fine to start" : or ? `${config.model} via OpenRouter` : "OpenRouter rejected the key" },
     { id: "fee", label: "Platform fee", state: config.platformFeeBps > 0 && !isAddress(config.platformTreasury || "0x") ? "block" : "ok",
       detail: config.platformFeeBps > 0 ? `${config.platformFeeBps / 100}% to ${config.platformTreasury || "missing treasury"}` : "None" },
+    { id: "price", label: "IMD price for budgets", state: config.imdUsdPinned || Date.now() - config.imdUsdAt < 30 * 60_000 ? "ok" : "warn",
+      detail: config.imdUsdPinned ? `Pinned at $${config.imdUsd} by IMD_USD` : config.imdUsdAt ? `$${config.imdUsd.toFixed(2)} from DexScreener, ${Math.round((Date.now() - config.imdUsdAt) / 60_000)} min ago` : `No market price yet; using $${config.imdUsd}` },
     { id: "mode", label: "Mode", state: live ? "ok" : "warn", detail: live ? "LIVE: real IMD orders and real sales" : "Simulation: nothing leaves the server" },
   ];
   return {

@@ -165,6 +165,7 @@ export function serve(engine: Engine) {
 
       // ---- the landing page's live numbers: real where they can be, labelled where simulated
       if (p === "/api/landing") return json(res, 200, await landing(engine));
+      if (p === "/api/market") return json(res, 200, { mode: config.mode, chainId: config.salesChainId, products: engine.market(url.searchParams.get("q") ?? "") });
 
       // ---- sign-in with a wallet
       if (p === "/api/auth/nonce") {
@@ -255,6 +256,12 @@ export function serve(engine: Engine) {
           const r = await engine.withdraw(c, getAddress(to), typeof b.amountUsd === "number" ? usdc(b.amountUsd) : undefined);
           return json(res, 200, { ok: true, sentUsd: fromUsdc(r.sent), feeUsd: fromUsdc(r.fee), txs: r.txs });
         }
+        if (action === "products" && seg[4] && seg[5] === "download") {
+          const product = c.products.find((x) => x.id === seg[4]);
+          if (!product || !engine.files.has(product)) return json(res, 409, { error: "Not packaged yet." });
+          res.writeHead(302, { Location: engine.files.link(c, product, `owner-${Date.now()}`, 1) });
+          return res.end();
+        }
         if (action === "pause") { engine.setStatus(c, "paused"); return json(res, 200, { ok: true }); }
         if (action === "resume") { engine.setStatus(c, "active"); return json(res, 200, { ok: true }); }
         if (action === "tasks" && seg[4] && seg[5] === "approve") { await engine.approve(c, seg[4]); return json(res, 200, { ok: true }); }
@@ -271,12 +278,14 @@ export function serve(engine: Engine) {
         const c = engine.get(seg[1]);
         const product = c?.products.find((x) => x.id === seg[2] && x.status === "live");
         if (!c || !product) return json(res, 404, { error: "no such product" });
+        // Never take money for something that cannot be handed over yet.
+        if (!engine.files.has(product)) return json(res, 409, { error: "This product is being packaged. Try again in a few minutes." });
         const req402 = requirement(config.salesChainId, c.wallet, product.priceUsdc);
         const resource = { url: `${config.publicUrl}/buy/${c.slug}/${product.id}`, description: `${product.name}: ${product.pitch}`, mimeType: "application/json" };
         const sig = req.headers["payment-signature"] ?? req.headers["x-payment"];
         if (config.mode === "sim" && url.searchParams.get("sim") === "1" && req.method === "POST") {
           await engine.recordSale(c, product.id, product.priceUsdc, "0xdemo000000000000000000000000000000buyer", null, true);
-          return json(res, 200, { ok: true, sim: true, deliverable: product.deliverableUrl });
+          return json(res, 200, { ok: true, sim: true, deliverable: engine.files.link(c, product, `sim-${Date.now()}`) });
         }
         if (!sig || Array.isArray(sig)) {
           const ch = challenge(req402, resource, "payment required");
@@ -289,7 +298,19 @@ export function serve(engine: Engine) {
         const account = engine.vault.account(c.id);
         const tx = await settlePayment(payment, salesWallet(account) as never, sales as never, account);
         await engine.recordSale(c, product.id, BigInt(payment.payload.authorization.value), v.payer, tx, false);
-        return json(res, 200, { ok: true, tx, deliverable: product.deliverableUrl }, { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network: req402.network, payer: v.payer }) });
+        return json(res, 200, { ok: true, tx, deliverable: engine.files.link(c, product, tx) }, { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network: req402.network, payer: v.payer }) });
+      }
+
+      // A bought product: signed per sale, valid for a week.
+      if (seg[0] === "download" && seg[1] && seg[2] && seg[3] && seg[4]) {
+        const c = engine.get(seg[1]);
+        const product = c?.products.find((x) => x.id === seg[2]);
+        const ref = url.searchParams.get("ref") ?? "";
+        if (!c || !product || !engine.files.check(product.id, seg[3], seg[4], ref)) return json(res, 403, { error: "This download link is invalid or has expired." });
+        const text = engine.files.read(product);
+        if (text === null) return json(res, 404, { error: "not packaged yet" });
+        res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8", "Content-Disposition": `attachment; filename="${c.slug}-${product.id}.md"`, "Cache-Control": "private, no-store" });
+        return res.end(text);
       }
 
       // Sim deliveries: the page and files the simulated swarm "built".
@@ -301,7 +322,7 @@ export function serve(engine: Engine) {
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         return res.end(engine.sim.site(c));
       }
-      if (seg[0] === "files" && seg[1] && seg[2]) {
+      if (seg[0] === "files" && seg[1] && seg[2] && config.mode === "sim") {
         const text = engine.sim.file(seg[1], seg[2]);
         if (text === null) return json(res, 404, { error: "no such file" });
         res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8" });

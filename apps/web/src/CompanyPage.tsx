@@ -164,7 +164,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
                 <tbody>
                   {c.products.map((p) => (
                     <tr key={p.id}>
-                      <td><b>{p.name}</b><div className="dim" style={{ fontSize: 12.5 }}>{p.pitch}</div>{p.deliverableUrl && <a className="faint mono" style={{ fontSize: 11 }} href={p.deliverableUrl} target="_blank" rel="noreferrer">deliverable ↗</a>}</td>
+                      <td><b>{p.name}</b><div className="dim" style={{ fontSize: 12.5 }}>{p.pitch}</div>{p.status === "live" && <a className="faint mono" style={{ fontSize: 11 }} href={`/api/companies/${c.id}/products/${p.id}/download`} target="_blank" rel="noreferrer">what buyers get ↗</a>}{p.deliverableUrl && <a className="faint mono" style={{ fontSize: 11, marginLeft: 12 }} href={p.deliverableUrl} target="_blank" rel="noreferrer">swarm source ↗</a>}</td>
                       <td><span className={`pill ${p.status}`}>{p.status}</span></td>
                       <td className="r">{usd(fromUsdc(p.priceUsdc))}</td>
                       <td className="r">{p.sales}</td>
