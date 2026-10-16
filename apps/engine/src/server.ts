@@ -10,6 +10,7 @@ import type { Engine } from "./engine.js";
 import { handleMcp } from "./mcp.js";
 import { isAdmin, saveSetup, setupState } from "./admin.js";
 import { buybacks, checkLaunch, holderStatus, launchBody, launchState, recordBuyback, recordLaunch, tokenOn, type TokenSpec } from "./token.js";
+import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
 import { usdc } from "@nightshift/core";
 import { getAddress } from "viem";
 
@@ -177,6 +178,23 @@ export function serve(engine: Engine) {
         }
         if (p === "/api/admin/test-alert" && req.method === "POST") {
           return json(res, 200, { ok: await engine.alert("Test alert from /setup. Alerts work.", `test-${Date.now()}`) });
+        }
+        if (p === "/api/admin/orders" && req.method === "GET") {
+          return json(res, 200, { catalog: CATALOG.map(({ body: _b, ...c }) => c), orders: orders() });
+        }
+        if (p === "/api/admin/orders/check" && req.method === "POST") {
+          const want = String((await body(req)).id ?? "");
+          const c = CATALOG.find((x) => x.id === want);
+          if (!c) return json(res, 404, { error: "unknown order" });
+          return json(res, 200, { body: c.body, actionId: c.actionId, check: await checkOrder(c) });
+        }
+        if (p === "/api/admin/orders/paid" && req.method === "POST") {
+          const b = await body(req);
+          const c = CATALOG.find((x) => x.id === String(b.id ?? ""));
+          if (!c || !/^0x[0-9a-fA-F]{64}$/.test(String(b.tx ?? ""))) return json(res, 400, { error: "need a known order and a transaction hash" });
+          const o = recordOrder(c, String(b.tx));
+          void engine.alert(`🛠 ${c.title} ordered from IMD: https://etherscan.io/tx/${o.tx}`, `order-${o.tx}`);
+          return json(res, 200, { ok: true, orders: orders() });
         }
         if (p === "/api/admin/test-all" && req.method === "POST") {
           return json(res, 200, { ok: true, result: await engine.testAll() });

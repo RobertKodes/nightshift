@@ -28,6 +28,7 @@ import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
+import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { buyCard, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
 import { type Button, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands } from "./social.js";
@@ -85,6 +86,13 @@ export class Engine {
     }
     setInterval(() => void this.#followTokenLaunch(), 60_000);
     setInterval(() => void houseTick().catch((e) => console.error("house", e)), 60_000);
+    // Work bought from IMD with the operator's wallet (e.g. the NFT collection): every stage to Telegram.
+    setInterval(() => void followOrders().then((changed) => {
+      for (const o of changed) {
+        const lines = [`🛠 ${o.title}: ${o.stage}`, ...(o.addresses ?? []).map((a) => `${a.name ?? a.role}: ${a.address}`), ...(o.repoUrl ? [o.repoUrl] : [])];
+        void this.alert(lines.join("\n"), `order-${o.tx}-${o.stage}`);
+      }
+    }).catch((e) => console.error("orders", e)), 60_000);
     // The daily report, at 08:00 UTC.
     let reported = "";
     setInterval(() => {

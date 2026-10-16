@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { TokenLaunch } from "./TokenLaunch";
+import { ImdOrders } from "./ImdOrders";
 
 type Check = { id: string; label: string; state: "ok" | "warn" | "block"; detail: string };
 type State = {
@@ -156,6 +157,11 @@ export function SetupPage() {
       <section className="card">
         <div className="card-h"><h3>Launch the NIGHTSHIFT token</h3><span className="faint" style={{ fontSize: 12 }}>through IMD · paid from your wallet</span></div>
         <TokenLaunch call={call} token={token} />
+      </section>
+
+      <section className="card">
+        <div className="card-h"><h3>Order from IMD</h3><span className="faint" style={{ fontSize: 12 }}>ready-made swarm work · paid from your wallet</span></div>
+        <ImdOrders call={call} token={token} />
       </section>
 
       {GROUPS.map((g) => (
