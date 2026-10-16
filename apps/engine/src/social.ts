@@ -50,3 +50,25 @@ export async function telegram(token: string, chatId: string, text: string): Pro
     return r.ok;
   } catch { return false; }
 }
+
+/** Admin commands over Telegram: long-polls the bot and answers only the listed user ids. */
+export function telegramCommands(token: string, admins: string[], handle: (cmd: string, args: string[]) => Promise<string>): void {
+  let offset = 0;
+  const loop = async (): Promise<void> => {
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates?timeout=25&offset=${offset}`, { signal: AbortSignal.timeout(35000) });
+      const j = (await r.json()) as { result?: { update_id: number; message?: { chat: { id: number }; from?: { id: number }; text?: string } }[] };
+      for (const u of j.result ?? []) {
+        offset = u.update_id + 1;
+        const m = u.message;
+        if (!m?.text?.startsWith("/")) continue;
+        const [raw, ...args] = m.text.trim().split(/\s+/);
+        const cmd = raw!.slice(1).split("@")[0]!.toLowerCase();
+        const reply = admins.includes(String(m.from?.id)) ? await handle(cmd, args).catch((e) => `Error: ${(e as Error).message}`) : "Not allowed.";
+        await telegram(token, String(m.chat.id), reply);
+      }
+    } catch { await new Promise((r) => setTimeout(r, 5000)); }
+    setTimeout(() => void loop(), 500);
+  };
+  void loop();
+}

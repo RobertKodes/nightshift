@@ -50,7 +50,8 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
   ] },
   { title: "Alerts", note: "A Telegram bot tells you when something breaks in live mode. Create one with @BotFather; get your chat id from @userinfobot.", fields: [
     { k: "TELEGRAM_BOT_TOKEN", label: "Bot token", secret: true },
-    { k: "TELEGRAM_CHAT_ID", label: "Chat id", hint: "123456789" },
+    { k: "TELEGRAM_CHAT_ID", label: "Alert chats (comma separated)", hint: "-100…, 123456789" },
+    { k: "TELEGRAM_ADMIN_IDS", label: "Admins who may send commands (user ids)", hint: "123456789" },
   ] },
   { title: "Platform token", note: "Optional. Holders pay no platform fee and are featured in the market. Fees buy the token back.", fields: [
     { k: "TOKEN_ADDRESS", label: "Token address (Ethereum)", hint: "0x…" },

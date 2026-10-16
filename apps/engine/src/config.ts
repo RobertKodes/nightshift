@@ -34,7 +34,10 @@ export const config = {
   platformTreasury: (env.PLATFORM_TREASURY ?? "") as `0x${string}` | "",
   /** Operator alerts: a Telegram bot token and the chat it writes to. */
   telegramToken: env.TELEGRAM_BOT_TOKEN ?? "",
+  /** One chat id, or several separated by commas (a group and a person). */
   telegramChat: env.TELEGRAM_CHAT_ID ?? "",
+  /** Telegram user ids allowed to run admin commands (/status, /stop…). */
+  telegramAdmins: (env.TELEGRAM_ADMIN_IDS ?? "").split(",").map((x) => x.trim()).filter(Boolean),
   /**
    * The platform token (an ERC-20 on Ethereum, e.g. one launched through IMD). Holding at least
    * TOKEN_HOLDER_MIN waives the platform fee and features the owner's products in the market.

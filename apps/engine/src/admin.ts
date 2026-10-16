@@ -32,7 +32,7 @@ export async function setupState(engine: Engine) {
     ETH_RPC: config.ethRpc, SALES_CHAIN_ID: String(config.salesChainId), SALES_RPC: config.salesRpc, IMD_USD: String(config.imdUsd),
     PLATFORM_FEE_BPS: String(config.platformFeeBps), PLATFORM_TREASURY: config.platformTreasury, MAX_COMPANIES_PER_OWNER: String(config.maxCompaniesPerOwner),
     SIM_SHIFT_MINUTES: String(config.simShiftMinutes), SIM_JOB_SECONDS: String(config.simJobSeconds),
-    TELEGRAM_BOT_TOKEN: config.telegramToken ? "set" : "", TELEGRAM_CHAT_ID: config.telegramChat,
+    TELEGRAM_BOT_TOKEN: config.telegramToken ? "set" : "", TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","),
     TOKEN_ADDRESS: config.token.address, TOKEN_SYMBOL: config.token.symbol, TOKEN_HOLDER_MIN: String(config.token.holderMin), TOKEN_BUY_URL: config.token.buyUrl,
   };
   const shown: Record<string, string> = {};

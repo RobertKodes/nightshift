@@ -28,7 +28,7 @@ import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
-import { blueskyPost, blueskySession, telegram } from "./social.js";
+import { blueskyPost, blueskySession, telegram, telegramCommands } from "./social.js";
 import { holderStatus, holdsCached } from "./token.js";
 
 export type EngineEvent = { type: "task" | "journal" | "company" | "sale"; companyId: string; payload: unknown; at: number };
@@ -64,10 +64,44 @@ export class Engine {
     await this.store.load();
     setInterval(() => void this.#tick().catch((e) => console.error("tick", e)), 4000);
     setInterval(() => void this.store.flush(), 3000);
+    void this.alert(`Engine started in ${config.mode.toUpperCase()} mode · ${config.publicUrl}`, "start");
+    if (config.telegramToken && config.telegramAdmins.length) telegramCommands(config.telegramToken, config.telegramAdmins, (cmd, args) => this.#command(cmd, args));
     if (!config.imdUsdPinned) {
       void this.#refreshImdPrice();
       setInterval(() => void this.#refreshImdPrice(), 10 * 60_000);
     }
+  }
+
+  /** What the operator can do from Telegram. */
+  async #command(cmd: string, args: string[]): Promise<string> {
+    const all = [...this.store.companies.values()];
+    const find = (s?: string) => all.find((c) => c.slug === s || c.id === s);
+    if (cmd === "status") {
+      const live = all.reduce((a, c) => a + c.products.filter((p) => p.status === "live").length, 0);
+      const h = await this.reads.health().catch(() => null);
+      return `Mode: ${config.mode.toUpperCase()}
+Companies: ${all.length} (${all.filter((c) => c.status === "active").length} active)
+Products live: ${live}
+IMD swarm: ${h?.connectedDaemons ?? "?"} agents
+IMD price: $${config.imdUsd.toFixed(2)}
+${config.publicUrl}`;
+    }
+    if (cmd === "companies") {
+      if (!all.length) return "No companies yet.";
+      const lines = await Promise.all(all.slice(0, 30).map(async (c) => `${c.status === "active" ? "●" : "○"} ${c.slug} · shift ${c.cycle} · $${fromUsdc(await this.withdrawable(c)).toFixed(2)} · ${c.products.filter((p) => p.status === "live").length} products`));
+      return lines.join("\n");
+    }
+    if (cmd === "pause" || cmd === "resume") {
+      const c = find(args[0]);
+      if (!c) return `Usage: /${cmd} <slug>`;
+      this.setStatus(c, cmd === "pause" ? "paused" : "active");
+      return `${c.slug} ${cmd === "pause" ? "paused" : "resumed"}.`;
+    }
+    if (cmd === "stop") {
+      for (const c of all) if (c.status === "active") this.setStatus(c, "paused");
+      return `Paused all ${all.length} companies. Nothing spends until you /resume them.`;
+    }
+    return "Commands:\n/status — mode, companies, swarm\n/companies — every company\n/pause <slug> · /resume <slug>\n/stop — pause every company now";
   }
 
   /** The IMD price from its deepest Ethereum pool on DexScreener; keeps the last good value on failure. */
@@ -238,6 +272,7 @@ export class Engine {
   async recordSale(c: Company, productId: string, amount: bigint, payer: string, tx: string | null, sim: boolean): Promise<void> {
     const p = c.products.find((x) => x.id === productId);
     if (!p) return;
+    if (!sim) void this.alert(`💰 ${c.name} sold ${p.name} for $${fromUsdc(amount).toFixed(2)}${tx ? ` · tx ${tx}` : ""}`, `sale-${tx ?? Date.now()}`);
     p.sales += 1;
     p.revenueUsdc += amount;
     const m = this.store.metricsOf(c.id);
@@ -299,7 +334,8 @@ export class Engine {
     const last = this.#lastAlert.get(topic) ?? 0;
     if (Date.now() - last < 60_000) return false;
     this.#lastAlert.set(topic, Date.now());
-    return telegram(config.telegramToken, config.telegramChat, `NIGHTSHIFT · ${text}`);
+    const sent = await Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => telegram(config.telegramToken, id, `NIGHTSHIFT · ${text}`)));
+    return sent.some(Boolean);
   }
 
   /** Checks the app password with Bluesky before keeping it. */
