@@ -98,3 +98,39 @@ export function SiteFooter() {
     </footer>
   );
 }
+
+const FROG_LINES = [
+  "gm. Your company shipped while you slept.",
+  "The swarm doesn't sleep. Neither do I.",
+  "Wen product? Already shipped, fren.",
+  "One sentence in. One company out.",
+  "I dig, the swarm builds, you withdraw.",
+  "Every $SHIFT trade goes through IMD. Ribbit.",
+  "Hard budget. I can't overspend even if I wanted to.",
+  "Night shift report: 0 complaints, 1 frog.",
+];
+
+/** IMD's frog, working the night shift in the corner of every page. Click him. */
+export function NightFrog() {
+  const [say, setSay] = useState<string | null>(null);
+  const [hidden, setHidden] = useState(() => { try { return sessionStorage.getItem("ns_frog") === "off"; } catch { return false; } });
+  const [hop, setHop] = useState(0);
+  if (hidden) return null;
+  const poke = () => {
+    setHop((h) => h + 1);
+    setSay((cur) => { const pool = FROG_LINES.filter((l) => l !== cur); return pool[Math.floor(Math.random() * pool.length)]!; });
+  };
+  return (
+    <div className="ns-frog" aria-live="polite">
+      {say && (
+        <div className="ns-frog-say">
+          <p>{say}</p>
+          <div><a href="https://imd.fun" target="_blank" rel="noreferrer">Meet the swarm ↗</a><button onClick={() => { setHidden(true); try { sessionStorage.setItem("ns_frog", "off"); } catch { /* private */ } }}>hide frog</button></div>
+        </div>
+      )}
+      <button key={hop} className={`ns-frog-btn${hop ? " hop" : ""}`} onClick={poke} aria-label="The night shift frog">
+        <img src="/art/frog/frog-coin.webp" alt="" width="72" height="72" />
+      </button>
+    </div>
+  );
+}

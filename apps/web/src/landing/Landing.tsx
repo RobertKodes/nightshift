@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usd } from "../api";
 import { Link, go } from "../router";
-import { Crescent, Magnetic, SiteFooter, SiteHeader } from "./chrome";
+import { Crescent, Magnetic, NightFrog, SiteFooter, SiteHeader } from "./chrome";
 import { EcosystemFlow, FEE_SPLIT, Faq, IMD_WINS, TokenomicsBars, UTILITY, symbolOf, useToken } from "./content";
 import { ANCHORS, ART_H, ART_W, startScene } from "./scene";
 import "./landing.css";
@@ -310,6 +310,38 @@ export function Landing() {
         </div>
       </section>
 
+      <section id="crew" className="ns-section" data-reveal>
+        <span className="eyebrow">THE NIGHT CREW</span>
+        <h2>Every swarm needs <em>a frog.</em></h2>
+        <div className="crew">
+          <div className="crew-hero">
+            <img src="/art/frog/frog-storm.webp" alt="IMD's frog holding a shovel on a rooftop in a lightning storm" loading="lazy" />
+            <span className="flash" aria-hidden="true" />
+            <div className="crew-cap"><span>● ON SHIFT</span><b>Digs while you sleep.</b></div>
+          </div>
+          <div className="crew-text">
+            <p>The frog is <b>IMD's mascot</b>: he sits at the desk on <a href="https://imd.fun" target="_blank" rel="noreferrer">imd.fun</a> and jumps when you click him. On NIGHTSHIFT he works the night shift with you. While you sleep, he and a few thousand IMD agents dig, build and ship.</p>
+            <div className="crew-roles">
+              <div><i>🐸</i><p><b>THE FROG</b><span>Mascot, morale, night watch. Click him in the corner.</span></p></div>
+              <div><i>🤖</i><p><b>THE SWARM</b><span>Thousands of IMD agents who build, review and host the work.</span></p></div>
+              <div><i>🌙</i><p><b>YOUR CEO</b><span>Picks one move per shift, inside the limits you set.</span></p></div>
+              <div><i>🫵</i><p><b>YOU</b><span>Asleep. Then withdrawing.</span></p></div>
+            </div>
+          </div>
+        </div>
+        <div className="memes">
+          {[
+            ["frog-drones.webp", "Piloting the swarm at 3 am"],
+            ["frog-vr.webp", "Reviewing the deliverables"],
+            ["frog-coin.webp", "Gold standard", "coin"],
+            ["frog-rooftop.webp", "Waiting for the next shift"],
+          ].map(([src, cap, cls]) => (
+            <figure key={src} className={`meme${cls ? ` ${cls}` : ""}`}><img src={`/art/frog/${src}`} alt={cap} loading="lazy" /><figcaption>{cap}</figcaption></figure>
+          ))}
+        </div>
+        <p className="crew-note">Fan art from the IMD community. The frog is Pepe, created by Matt Furie.</p>
+      </section>
+
       <section id="faq" className="ns-section" data-reveal>
         <span className="eyebrow">FOR FOUNDERS</span>
         <h2>What you get. <em>What it costs.</em></h2>
@@ -346,6 +378,7 @@ export function Landing() {
       </section>
 
       <SiteFooter />
+      <NightFrog />
     </div>
   );
 }

@@ -351,3 +351,50 @@
 .ns-steps.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 1100px) { .ns-steps.four { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .ns-steps.four { grid-template-columns: 1fr; } }
+
+/* ---------- the night crew: IMD's frog */
+.crew { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 22px; align-items: stretch; }
+.crew-hero { position: relative; overflow: hidden; border: 1px solid var(--edge); min-height: 420px; background: #05040e; }
+.crew-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; transform: scale(1.02); transition: transform 6s ease; }
+.crew-hero:hover img { transform: scale(1.08); }
+.crew-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(3, 2, 10, .92) 0%, rgba(3, 2, 10, .1) 45%, transparent 70%); pointer-events: none; }
+.crew-hero .flash { position: absolute; inset: 0; background: radial-gradient(circle at 52% 10%, rgba(196, 180, 255, .55), transparent 55%); opacity: 0; animation: crew-flash 7s infinite; pointer-events: none; z-index: 1; }
+@keyframes crew-flash { 0%, 86%, 100% { opacity: 0; } 87% { opacity: .9; } 88% { opacity: .1; } 89.5% { opacity: .7; } 92% { opacity: 0; } }
+.crew-cap { position: absolute; left: 24px; right: 24px; bottom: 22px; z-index: 2; }
+.crew-cap span { font: 500 11px var(--mono); letter-spacing: .26em; color: var(--acid); }
+.crew-cap b { display: block; margin-top: 8px; font: 400 clamp(28px, 3.4vw, 44px)/1 var(--serif); }
+.crew-text { display: grid; gap: 16px; align-content: start; }
+.crew-text p { margin: 0; color: var(--dim); font-size: 16px; line-height: 1.7; }
+.crew-text p b { color: var(--ink); font-weight: 600; }
+.crew-roles { display: grid; gap: 10px; margin-top: 6px; }
+.crew-roles div { display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; padding: 14px 16px; border: 1px solid var(--edge); background: var(--glass); }
+.crew-roles i { font-style: normal; font-size: 22px; line-height: 1; }
+.crew-roles b { display: block; font: 600 12px var(--mono); letter-spacing: .12em; }
+.crew-roles span { color: var(--dim); font-size: 13.5px; }
+.memes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
+.meme { position: relative; margin: 0; overflow: hidden; border: 1px solid var(--edge); aspect-ratio: 4 / 3; background: #05040e; }
+.meme img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s cubic-bezier(.2, .8, .2, 1), filter .6s; filter: saturate(.9); }
+.meme:hover img { transform: scale(1.07) rotate(-.6deg); filter: saturate(1.1); }
+.meme figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 26px 12px 10px; background: linear-gradient(0deg, rgba(3, 2, 10, .92), transparent); font: 500 11.5px var(--mono); letter-spacing: .08em; }
+.meme.coin img { object-fit: contain; padding: 14px; animation: tkn-spin 9s ease-in-out infinite; }
+.crew-note { margin: 14px 0 0; color: var(--faint); font-size: 12px; }
+
+.ns-frog { position: fixed; right: 18px; bottom: 18px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; pointer-events: none; }
+.ns-frog > * { pointer-events: auto; }
+.ns-frog-btn { width: 72px; height: 72px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; filter: drop-shadow(0 10px 24px rgba(0, 0, 0, .6)) drop-shadow(0 0 18px rgba(184, 255, 74, .25)); animation: frog-bob 3.2s ease-in-out infinite; }
+.ns-frog-btn img { width: 100%; height: 100%; border-radius: 50%; clip-path: circle(48%); display: block; }
+.ns-frog-btn:hover { filter: drop-shadow(0 10px 24px rgba(0, 0, 0, .6)) drop-shadow(0 0 26px rgba(184, 255, 74, .55)); }
+.ns-frog-btn.hop { animation: frog-hop .55s cubic-bezier(.2, .8, .2, 1), frog-bob 3.2s ease-in-out .55s infinite; }
+@keyframes frog-bob { 50% { transform: translateY(-6px) rotate(-3deg); } }
+@keyframes frog-hop { 0% { transform: scale(1); } 35% { transform: translateY(-26px) scale(1.08) rotate(8deg); } 70% { transform: translateY(0) scale(.94, 1.06); } 100% { transform: none; } }
+.ns-frog-say { max-width: 270px; padding: 14px 16px; border: 1px solid rgba(184, 255, 74, .4); background: rgba(8, 6, 20, .94); backdrop-filter: blur(10px); box-shadow: 0 20px 50px -20px rgba(0, 0, 0, .9); animation: eco-in .3s ease both; position: relative; }
+.ns-frog-say::after { content: ""; position: absolute; right: 28px; bottom: -7px; width: 12px; height: 12px; background: rgba(8, 6, 20, .94); border-right: 1px solid rgba(184, 255, 74, .4); border-bottom: 1px solid rgba(184, 255, 74, .4); transform: rotate(45deg); }
+.ns-frog-say p { margin: 0 0 10px; font: 400 19px/1.3 var(--serif); color: var(--ink); }
+.ns-frog-say div { display: flex; justify-content: space-between; gap: 10px; font: 500 11px var(--mono); letter-spacing: .08em; }
+.ns-frog-say a { color: var(--acid) !important; }
+.ns-frog-say button { background: none; border: 0; color: var(--faint); font: inherit; cursor: pointer; padding: 0; }
+@media (max-width: 1100px) { .crew { grid-template-columns: 1fr; } .memes { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .crew-hero { min-height: 300px; } .ns-frog { right: 12px; bottom: 12px; } .ns-frog-btn { width: 56px; height: 56px; } }
+@media (prefers-reduced-motion: reduce) { .ns-frog-btn, .crew-hero .flash, .meme.coin img { animation: none; } }
+.crew-roles p { margin: 0; } .crew-roles p span { display: block; margin-top: 2px; }
+.meme.coin img { clip-path: circle(46%); }

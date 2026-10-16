@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { type Health, api } from "./api";
 import { CompanyPage } from "./CompanyPage";
 import { Home } from "./Home";
-import { SiteFooter, SiteHeader } from "./landing/chrome";
+import { NightFrog, SiteFooter, SiteHeader } from "./landing/chrome";
 import { Landing } from "./landing/Landing";
 import { McpPage } from "./McpPage";
 import { PublicPage } from "./PublicPage";
@@ -39,6 +39,7 @@ function App() {
       <SiteHeader active={active} />
       <main>{page}</main>
       <SiteFooter />
+      <NightFrog />
     </div>
   );
 }
