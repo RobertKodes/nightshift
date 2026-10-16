@@ -157,7 +157,8 @@ async function scanBluesky(st: State): Promise<void> {
   const d = (await r.json()) as { feed?: { post: { uri: string; author: { handle: string }; record: { text?: string } }; reason?: unknown }[] };
   const posts = (d.feed ?? []).filter((f) => !f.reason && f.post.author.handle === config.blueskyHandle.replace(/^@/, ""));
   const latest = posts[0];
-  if (!latest) return;
+  // an empty account: its first post is new, so remember that we have seen nothing yet
+  if (!latest) { st.bskySeen ??= "none"; return; }
   if (!st.bskySeen) { st.bskySeen = latest.post.uri; return; }
   const fresh = [];
   for (const f of posts) { if (f.post.uri === st.bskySeen) break; fresh.push(f); }
