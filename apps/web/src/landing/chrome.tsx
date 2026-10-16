@@ -48,7 +48,7 @@ export function useSwarm() {
   return s;
 }
 
-const DOCS = "https://github.com/RobertKodes/nightshift#readme";
+const DOCS = "/guide";
 export const X_URL = "https://x.com/nightshiftidm";
 export const TELEGRAM_URL = "https://t.me/getnightshift";
 /** The developer. */
@@ -112,12 +112,11 @@ export function SiteFooter() {
         <a href={X_URL} target="_blank" rel="noreferrer">X</a>
         <a href={TELEGRAM_URL} target="_blank" rel="noreferrer">TELEGRAM</a>
         <a href={BLUESKY_URL} target="_blank" rel="noreferrer">BLUESKY</a>
-        <a href="https://github.com/RobertKodes/nightshift" target="_blank" rel="noreferrer">GITHUB</a>
         <Link to="/market">MARKET</Link>
         <Link to="/token">TOKEN</Link>
         <Link to="/guide">GUIDE</Link>
         <Link to="/mcp">MCP</Link>
-        <a href={DOCS} target="_blank" rel="noreferrer">DOCS</a>
+        <Link to={DOCS}>DOCS</Link>
         <Link to="/terms">TERMS</Link>
       </nav>
       <span className="built">BUILT BY <a href={DEV_X_URL} target="_blank" rel="noreferrer" title="The developer behind NIGHTSHIFT">@PROBERT_MIHAI</a>. POWERED BY AI.</span>
