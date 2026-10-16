@@ -43,7 +43,7 @@ By default it runs in **simulation**. The swarm, the buyers and a 20 IMD startin
 | `NIGHTSHIFT_SECRET` | generated | Encrypts every company's wallet key (AES-256-GCM). **Set it before holding real funds** |
 | `PUBLIC_URL` | `http://localhost:8787` | Used in buy links and site links |
 | `SALES_CHAIN_ID` | `84532` | `8453` for Base mainnet, `84532` for Base Sepolia |
-| `IMD_USD` | `6.34` | IMD price used for budgets |
+| `IMD_USD` | `6.87` | IMD price used for budgets |
 | `SIM_SHIFT_MINUTES` / `SIM_JOB_SECONDS` | `2` / `40` | Demo pacing |
 
 In live mode, each company wallet needs IMD and a little ETH on Ethereum (for the one-time Permit2 approval). To settle sales it also needs a little gas on the sales chain.

@@ -8,6 +8,7 @@ import { balances, sales, salesWallet } from "./chain.js";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { handleMcp } from "./mcp.js";
+import { isAdmin, saveSetup, setupState } from "./admin.js";
 import { usdc } from "@nightshift/core";
 import { getAddress } from "viem";
 
@@ -141,6 +142,24 @@ export function serve(engine: Engine) {
     const seg = p.split("/").filter(Boolean);
     try {
       if (p === "/api/health") return json(res, 200, { ok: true, mode: config.mode, llm: Boolean(engine.llm), model: config.model, imdUsd: config.imdUsd, salesChainId: config.salesChainId, requireAuth: config.requireAuth, platformFeeBps: config.platformTreasury ? config.platformFeeBps : 0 });
+
+      // ---- the operator's setup dashboard (/setup), behind the admin token
+      if (p.startsWith("/api/admin/")) {
+        if (limited(req, "admin", 60, 60_000)) return json(res, 429, { error: "slow down" });
+        if (!isAdmin(req)) return json(res, 401, { error: "wrong admin token" });
+        if (p === "/api/admin/setup" && req.method === "GET") return json(res, 200, await setupState(engine));
+        if (p === "/api/admin/setup" && req.method === "POST") {
+          const err = saveSetup(await body(req));
+          return err ? json(res, 400, { error: err }) : json(res, 200, await setupState(engine));
+        }
+        if (p === "/api/admin/restart" && req.method === "POST") {
+          if (process.env.NIGHTSHIFT_SUPERVISED !== "1") return json(res, 409, { error: "Not running under a supervisor; restart the process yourself to apply." });
+          json(res, 200, { ok: true });
+          setTimeout(() => { void engine.store.flush().finally(() => process.exit(0)); }, 400);
+          return;
+        }
+        return json(res, 404, { error: "not found" });
+      }
 
       const owner = engine.auth.owner(req);
 

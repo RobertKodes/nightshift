@@ -1,6 +1,8 @@
 import { resolve } from "node:path";
+import { readSettings } from "./settings.js";
 
-const env = process.env;
+/** The environment, overridden by what the operator saved on /setup. */
+const env: Record<string, string | undefined> = { ...process.env, ...readSettings() };
 const num = (v: string | undefined, d: number) => (v !== undefined && v !== "" && !Number.isNaN(Number(v)) ? Number(v) : d);
 
 export const config = {
@@ -14,7 +16,7 @@ export const config = {
   openrouterKey: env.OPENROUTER_API_KEY ?? "",
   model: env.NIGHTSHIFT_MODEL ?? "anthropic/claude-sonnet-5.5",
   /** USD per IMD, for budgets. Live price feeds can replace it. */
-  imdUsd: num(env.IMD_USD, 6.34),
+  imdUsd: num(env.IMD_USD, 6.87),
   ethRpc: env.ETH_RPC ?? "https://ethereum-rpc.publicnode.com",
   /** Where products are sold: Base (8453) or Base Sepolia (84532). */
   salesChainId: num(env.SALES_CHAIN_ID, 84532),

@@ -9,6 +9,7 @@ import { McpPage } from "./McpPage";
 import { PublicPage } from "./PublicPage";
 import { useRoute } from "./router";
 import { SessionProvider } from "./session";
+import { SetupPage } from "./SetupPage";
 import { TermsPage } from "./TermsPage";
 import "./styles.css";
 import "./landing/landing.css";
@@ -25,6 +26,7 @@ function App() {
   if (seg[0] === "c" && seg[1]) page = <PublicPage slug={seg[1]} health={health} />;
   if (seg[0] === "mcp") page = <McpPage health={health} />;
   if (seg[0] === "terms") page = <TermsPage health={health} />;
+  if (seg[0] === "setup") page = <SetupPage />;
   const active = seg[0] === "co" ? "company" : seg[0] === "mcp" ? "mcp" : seg[0] === "terms" ? "terms" : "companies";
   return (
     <div className="ns ns-app">
