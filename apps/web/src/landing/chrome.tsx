@@ -49,6 +49,21 @@ export function useSwarm() {
 }
 
 const DOCS = "https://github.com/RobertKodes/nightshift#readme";
+export const X_URL = "https://x.com/nightshiftidm";
+export const TELEGRAM_URL = "https://t.me/getnightshift";
+
+function Socials() {
+  return (
+    <div className="ns-social">
+      <a href={X_URL} target="_blank" rel="noreferrer" aria-label="NIGHTSHIFT on X" title="Follow on X">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-6.4L6.3 22H3.2l7.3-8.3L2.8 2h6.4l4.4 5.9L18.9 2Zm-1.1 18.1h1.7L7.3 3.8H5.5l12.3 16.3Z"/></svg>
+      </a>
+      <a href={TELEGRAM_URL} target="_blank" rel="noreferrer" aria-label="NIGHTSHIFT on Telegram" title="Join the Telegram">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.7.8l-4.8-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9 8.9-8c.4-.3-.1-.5-.6-.2L6.5 13.2 1.8 11.7c-1-.3-1-1 .2-1.5L20.6 3c.9-.3 1.6.2 1.3 1.3Z"/></svg>
+      </a>
+    </div>
+  );
+}
 
 export function SiteHeader({ active, home = false }: { active: "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "guide"; home?: boolean }) {
   const swarm = useSwarm();
@@ -77,6 +92,7 @@ export function SiteHeader({ active, home = false }: { active: "home" | "compani
       ) : swarm?.mode === "live" ? (
         <button className="ns-acct" onClick={signIn} disabled={busy} title={error ?? "Sign in with your wallet"}>{busy ? "CHECK WALLET…" : "SIGN IN"}</button>
       ) : null}
+      <Socials />
       <Magnetic className="ns-cta sm" onClick={() => go("/launch")} href="/launch">LAUNCH A COMPANY <span className="arr">→</span></Magnetic>
     </header>
   );
@@ -87,6 +103,8 @@ export function SiteFooter() {
     <footer className="ns-foot">
       <Link to="/" className="ns-logo"><Crescent size={26} /><span>NIGHTSHIFT</span><small>AUTONOMOUS COMPANIES<br />FOR A BRIGHTER TOMORROW</small></Link>
       <nav>
+        <a href={X_URL} target="_blank" rel="noreferrer">X</a>
+        <a href={TELEGRAM_URL} target="_blank" rel="noreferrer">TELEGRAM</a>
         <a href="https://github.com/RobertKodes/nightshift" target="_blank" rel="noreferrer">GITHUB</a>
         <Link to="/market">MARKET</Link>
         <Link to="/token">TOKEN</Link>

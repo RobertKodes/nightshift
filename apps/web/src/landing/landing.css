@@ -208,7 +208,7 @@
 .final h2 { margin: 0; }
 .final .note { margin: 0; color: var(--faint); font: 500 11px var(--mono); letter-spacing: .1em; }
 .ns-foot { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; margin: 40px clamp(20px, 3.4vw, 56px) 0; padding: 28px 0 40px; border-top: 1px solid rgba(164, 139, 255, .14); }
-.ns-foot nav { display: flex; gap: 32px; font: 500 11px var(--mono); letter-spacing: .2em; color: var(--dim); }
+.ns-foot nav { display: flex; flex-wrap: wrap; gap: 32px; font: 500 11px var(--mono); letter-spacing: .2em; color: var(--dim); }
 .ns-foot nav a:hover { color: var(--ink); }
 .ns-foot .built { font: 500 10px var(--mono); letter-spacing: .2em; color: var(--faint); }
 
@@ -251,6 +251,10 @@
 
 /* ------------------------------------------------------------ header extras + the app shell (every other page) */
 .ns-mode { font: 500 9.5px var(--mono); letter-spacing: .16em; color: #ffcf6b; border: 1px solid rgba(255, 207, 107, .4); padding: 5px 8px; white-space: nowrap; }
+.ns-social { display: flex; gap: 6px; }
+.ns-social a { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--edge); color: var(--dim); transition: color .2s, border-color .2s; }
+.ns-social a:hover { color: var(--ink); border-color: var(--ink); }
+@media (max-width: 900px) { .ns-social { display: none; } }
 .ns-acct { height: 44px; padding: 0 14px; background: transparent; border: 1px solid var(--edge); color: var(--ink); font: 500 11px var(--mono); letter-spacing: .12em; cursor: pointer; white-space: nowrap; }
 .ns-acct:hover { border-color: var(--uv-hi); background: rgba(124, 92, 255, .1); }
 .ns-app { min-height: 100vh; display: flex; flex-direction: column; }
