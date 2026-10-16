@@ -28,8 +28,9 @@ import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
-import { blueskyPost, blueskySession, telegram, telegramCommands } from "./social.js";
-import { holderStatus, holdsCached } from "./token.js";
+import { type Button, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands } from "./social.js";
+import { followLaunch, holderStatus, holdsCached, launchState } from "./token.js";
+import { writeSettings } from "./settings.js";
 
 export type EngineEvent = { type: "task" | "journal" | "company" | "sale"; companyId: string; payload: unknown; at: number };
 const DAY = 24 * 3600_000;
@@ -66,42 +67,131 @@ export class Engine {
     setInterval(() => void this.store.flush(), 3000);
     void this.alert(`Engine started in ${config.mode.toUpperCase()} mode · ${config.publicUrl}`, "start");
     if (config.telegramToken && config.telegramAdmins.length) telegramCommands(config.telegramToken, config.telegramAdmins, (cmd, args) => this.#command(cmd, args));
+    setInterval(() => void this.#followTokenLaunch(), 60_000);
+    // The daily report, at 08:00 UTC.
+    let reported = "";
+    setInterval(() => {
+      const d = new Date();
+      const day = d.toISOString().slice(0, 10);
+      if (d.getUTCHours() !== 8 || reported === day || !config.telegramToken) return;
+      reported = day;
+      void this.#report().then((t) => Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => telegram(config.telegramToken, id, t))));
+    }, 60_000);
     if (!config.imdUsdPinned) {
       void this.#refreshImdPrice();
       setInterval(() => void this.#refreshImdPrice(), 10 * 60_000);
     }
   }
 
-  /** What the operator can do from Telegram. */
-  async #command(cmd: string, args: string[]): Promise<string> {
+  /** What the operator can do from Telegram: cards with buttons. */
+  async #command(cmd: string, args: string[]): Promise<Reply> {
     const all = [...this.store.companies.values()];
     const find = (s?: string) => all.find((c) => c.slug === s || c.id === s);
+    const menu: Button[][] = [
+      [{ text: "📊 Status", data: "/status" }, { text: "🏢 Companies", data: "/companies" }],
+      [{ text: "🛒 Market", data: "/market" }, { text: "🪙 Token", data: "/token" }],
+      [{ text: "📰 Report", data: "/report" }, { text: "🌐 Open site", url: config.publicUrl }],
+      [{ text: "🛑 Emergency stop", data: "/stop" }],
+    ];
+    const back: Button[][] = [[{ text: "← Menu", data: "/menu" }, { text: "🔄 Refresh", data: `/${cmd}` }]];
+    const money = (n: number) => `$${n.toFixed(2)}`;
+    if (cmd === "start" || cmd === "menu" || cmd === "help") {
+      return { text: `🌙 <b>NIGHTSHIFT control room</b>\n<i>Autonomous AI companies that build with the IMD swarm.</i>\n\nMode: <b>${config.mode === "live" ? "🟢 LIVE" : "🧪 SIMULATION"}</b>\n\n/status · /companies · /market · /token · /report\n/pause &lt;slug&gt; · /resume &lt;slug&gt; · /stop`, buttons: menu };
+    }
     if (cmd === "status") {
-      const live = all.reduce((a, c) => a + c.products.filter((p) => p.status === "live").length, 0);
       const h = await this.reads.health().catch(() => null);
-      return `Mode: ${config.mode.toUpperCase()}
-Companies: ${all.length} (${all.filter((c) => c.status === "active").length} active)
-Products live: ${live}
-IMD swarm: ${h?.connectedDaemons ?? "?"} agents
-IMD price: $${config.imdUsd.toFixed(2)}
-${config.publicUrl}`;
+      const live = all.reduce((a, c) => a + c.products.filter((p) => p.status === "live").length, 0);
+      const waiting = all.reduce((a, c) => a + c.tasks.filter((t) => t.status === "awaiting_approval").length, 0);
+      const working = all.filter((c) => c.tasks.some((t) => ["checking", "ordering", "building"].includes(t.status))).length;
+      const lines = [
+        "📊 <b>Status</b>", "",
+        `<b>Mode</b> · ${config.mode === "live" ? "🟢 LIVE" : "🧪 simulation"}`,
+        `<b>Companies</b> · ${all.length} (${all.filter((c) => c.status === "active").length} active, ${working} working now)`,
+        `<b>Products</b> · ${live} on sale`,
+        `<b>Waiting for you</b> · ${waiting} purchase${waiting === 1 ? "" : "s"}`,
+        `<b>Swarm</b> · ${h?.connectedDaemons?.toLocaleString() ?? "?"} IMD agents online`,
+        `<b>IMD</b> · $${config.imdUsd.toFixed(2)}`,
+        ...(config.token.address ? [`<b>Token</b> · $${esc(config.token.symbol)} live`] : []),
+        "", `<a href="${config.publicUrl}">${esc(config.publicUrl.replace(/^https?:\/\//, ""))}</a>`,
+      ];
+      return { text: lines.join("\n"), buttons: back };
     }
     if (cmd === "companies") {
-      if (!all.length) return "No companies yet.";
-      const lines = await Promise.all(all.slice(0, 30).map(async (c) => `${c.status === "active" ? "●" : "○"} ${c.slug} · shift ${c.cycle} · $${fromUsdc(await this.withdrawable(c)).toFixed(2)} · ${c.products.filter((p) => p.status === "live").length} products`));
-      return lines.join("\n");
+      if (!all.length) return { text: "🏢 <b>Companies</b>\n\nNone yet.", buttons: back };
+      const rows = await Promise.all(all.slice(0, 20).map(async (c) => {
+        const w = fromUsdc(await this.withdrawable(c));
+        const busy = c.tasks.find((t) => ["checking", "ordering", "building"].includes(t.status));
+        return `${c.status === "active" ? "🟢" : "⏸"} <b>${esc(c.name)}</b> <code>${esc(c.slug)}</code>\n   shift ${c.cycle} · ${money(w)} · ${c.products.filter((p) => p.status === "live").length} products${busy ? `\n   ⚙️ ${esc(busy.title)}` : ""}`;
+      }));
+      const btns: Button[][] = all.slice(0, 6).map((c) => [{ text: `${c.status === "active" ? "⏸ Pause" : "▶️ Resume"} ${c.name}`, data: `/${c.status === "active" ? "pause" : "resume"} ${c.slug}` }]);
+      return { text: `🏢 <b>Companies</b> (${all.length})\n\n${rows.join("\n\n")}`, buttons: [...btns, ...back] };
     }
+    if (cmd === "market") {
+      const items = this.market().slice(0, 10);
+      const body = items.length ? items.map((p) => `• <b>${esc(p.name)}</b> · ${money(p.priceUsd)} · ${p.sales} sold${p.featured ? " ⭐" : ""}\n   by ${esc(p.company)}`).join("\n") : "Nothing on sale yet.";
+      return { text: `🛒 <b>Market</b>\n\n${body}`, buttons: [[{ text: "Open the market", url: `${config.publicUrl}/market` }], ...back] };
+    }
+    if (cmd === "token") {
+      const l = launchState();
+      const t = config.token;
+      const body = t.address
+        ? `<b>$${esc(t.symbol)}</b> is live\n<code>${t.address}</code>\nHolders of ${t.holderMin.toLocaleString()}+ pay no platform fee and are featured.`
+        : l && !l.error ? `Launching <b>$${esc(l.symbol)}</b>…\n${esc(l.stage)}` : "Not launched yet. Launch it from /setup.";
+      const btns: Button[][] = t.address
+        ? [[{ text: "Etherscan", url: `https://etherscan.io/token/${t.address}` }, ...(t.buyUrl ? [{ text: "Buy", url: t.buyUrl }] : [])]]
+        : [[{ text: "Open /setup", url: `${config.publicUrl}/setup` }]];
+      return { text: `🪙 <b>Token</b>\n\n${body}`, buttons: [...btns, ...back] };
+    }
+    if (cmd === "report") return { text: await this.#report(), buttons: back };
     if (cmd === "pause" || cmd === "resume") {
       const c = find(args[0]);
-      if (!c) return `Usage: /${cmd} <slug>`;
+      if (!c) return { text: `Usage: /${cmd} &lt;slug&gt;`, buttons: back };
       this.setStatus(c, cmd === "pause" ? "paused" : "active");
-      return `${c.slug} ${cmd === "pause" ? "paused" : "resumed"}.`;
+      return this.#command("companies", []);
     }
-    if (cmd === "stop") {
+    if (cmd === "stop") return { text: "🛑 <b>Pause every company?</b>\nNothing will spend until you resume them.", buttons: [[{ text: "Yes, stop everything", data: "/stopnow" }, { text: "Cancel", data: "/menu" }]] };
+    if (cmd === "stopnow") {
       for (const c of all) if (c.status === "active") this.setStatus(c, "paused");
-      return `Paused all ${all.length} companies. Nothing spends until you /resume them.`;
+      return { text: `🛑 <b>Stopped.</b> ${all.length} companies paused.`, buttons: [[{ text: "▶️ Resume all", data: "/resumeall" }], ...back] };
     }
-    return "Commands:\n/status — mode, companies, swarm\n/companies — every company\n/pause <slug> · /resume <slug>\n/stop — pause every company now";
+    if (cmd === "resumeall") {
+      for (const c of all) if (c.status === "paused") this.setStatus(c, "active");
+      return { text: `▶️ <b>Resumed</b> ${all.length} companies.`, buttons: back };
+    }
+    return this.#command("menu", []);
+  }
+
+  /** The last 24 hours, for the daily message and /report. */
+  async #report(): Promise<string> {
+    const since = Date.now() - 24 * 3600_000;
+    const all = [...this.store.companies.values()];
+    let revenue = 0;
+    let sales = 0;
+    for (const c of all) for (const s of this.store.metricsOf(c.id).sales) if (s.at >= since) { revenue += Number(s.usdc) / 1e6; sales++; }
+    const shipped = all.flatMap((c) => c.journal.filter((j) => j.at >= since && j.kind === "result").map((j) => `• ${esc(c.name)}: ${esc(j.text.replace(/^\[sim\] /, "").slice(0, 120))}`)).slice(0, 8);
+    const warnings = all.reduce((a, c) => a + c.journal.filter((j) => j.at >= since && j.kind === "warning").length, 0);
+    return [
+      `📰 <b>Last 24 hours</b>${config.mode === "sim" ? " <i>(simulation)</i>" : ""}`, "",
+      `💰 ${sales} sale${sales === 1 ? "" : "s"} · $${revenue.toFixed(2)}`,
+      `🏢 ${all.length} companies`,
+      `⚠️ ${warnings} warning${warnings === 1 ? "" : "s"}`, "",
+      shipped.length ? `<b>Shipped</b>\n${shipped.join("\n")}` : "Nothing shipped.",
+    ].join("\n");
+  }
+
+  /** While the platform token is being launched through IMD, follow it and switch it on when live. */
+  async #followTokenLaunch(): Promise<void> {
+    const before = launchState();
+    if (!before || before.done) return;
+    const l = await followLaunch();
+    if (l && l.stage !== before.stage) void this.alert(`🪙 ${l.symbol} launch: ${l.stage}`, `launch-${l.stage}`);
+    if (l?.token && !config.token.address) {
+      const buyUrl = `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7&outputCurrency=${l.token}`;
+      writeSettings({ TOKEN_ADDRESS: l.token, TOKEN_SYMBOL: l.symbol, TOKEN_BUY_URL: buyUrl });
+      Object.assign(config.token, { address: l.token as `0x${string}`, symbol: l.symbol, buyUrl });
+      void this.alert(`🚀 $${l.symbol} is live: ${l.token}
+${config.publicUrl}/token`, "launch-live");
+    }
   }
 
   /** The IMD price from its deepest Ethereum pool on DexScreener; keeps the last good value on failure. */
@@ -334,7 +424,7 @@ ${config.publicUrl}`;
     const last = this.#lastAlert.get(topic) ?? 0;
     if (Date.now() - last < 60_000) return false;
     this.#lastAlert.set(topic, Date.now());
-    const sent = await Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => telegram(config.telegramToken, id, `NIGHTSHIFT · ${text}`)));
+    const sent = await Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => telegram(config.telegramToken, id, `🌙 <b>NIGHTSHIFT</b>\n${esc(text)}`)));
     return sent.some(Boolean);
   }
 
