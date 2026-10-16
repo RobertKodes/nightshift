@@ -54,6 +54,20 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "TELEGRAM_CHAT_ID", label: "Alert chats (comma separated)", hint: "-100…, 123456789" },
     { k: "TELEGRAM_ADMIN_IDS", label: "Admins who may send commands (user ids)", hint: "123456789" },
   ] },
+  { title: "Community", note: "Announcements (buys, X raids, launches, milestones) go to the public chat; alerts stay in the alert chats above. Share an X post to the bot, or send /raid <link>, to raid it.", fields: [
+    { k: "TELEGRAM_COMMUNITY", label: "Public announcement chat", hint: "-100… or @group" },
+    { k: "BUYBOT_MIN_USD", label: "Smallest buy to post (USD)", hint: "0" },
+    { k: "BUYBOT_EMOJI_USD", label: "Dollars per 🌙 in a buy", hint: "10" },
+    { k: "BUYBOT_MEDIA", label: "Custom buy GIF/MP4 URL (optional)", hint: "https://…/buy.mp4" },
+    { k: "X_URL", label: "X profile", hint: "https://x.com/…" },
+    { k: "TELEGRAM_URL", label: "Telegram link", hint: "https://t.me/…" },
+  ] },
+  { title: "Bluesky (project account)", note: "Posts a promo a day, the platform's news and, in live mode, company drafts. Use an app password, never the account password.", fields: [
+    { k: "BLUESKY_HANDLE", label: "Handle", hint: "nightshifttech.bsky.social" },
+    { k: "BLUESKY_APP_PASSWORD", label: "App password", secret: true },
+    { k: "BLUESKY_DAILY_MAX", label: "Most posts a day", hint: "10" },
+    { k: "BLUESKY_GAP_MINUTES", label: "Minutes between posts", hint: "45" },
+  ] },
   { title: "Platform token", note: "Optional. Holders pay no platform fee and are featured in the market. Fees buy the token back.", fields: [
     { k: "TOKEN_ADDRESS", label: "Token address (Ethereum)", hint: "0x…" },
     { k: "TOKEN_SYMBOL", label: "Symbol", hint: "OCTO" },

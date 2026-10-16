@@ -28,6 +28,7 @@ import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
+import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { buyCard, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
 import { type Button, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands } from "./social.js";
 import { followLaunch, holderStatus, holdsCached, launchState } from "./token.js";
@@ -83,6 +84,7 @@ export class Engine {
       startCommunity();
     }
     setInterval(() => void this.#followTokenLaunch(), 60_000);
+    setInterval(() => void houseTick().catch((e) => console.error("house", e)), 60_000);
     // The daily report, at 08:00 UTC.
     let reported = "";
     setInterval(() => {
@@ -164,6 +166,15 @@ export class Engine {
       const ok = await raid(url.split("?")[0]!, args.filter((a) => a !== url).join(" "));
       return { text: ok ? "🚨 Raid posted in the community." : `⚠️ Could not post to ${esc(config.telegramCommunity)}. Add the bot to the group (as admin in a channel).`, buttons: back };
     }
+    if (cmd === "post") {
+      const text = args.join(" ").trim();
+      if (!text) return { text: "Usage: /post &lt;text&gt;\nPosts on the project's Bluesky now; the community chat hears about it by itself.", buttons: back };
+      return { text: `🦋 Posted: ${esc(await houseNow(text))}`, buttons: back };
+    }
+    if (cmd === "bluesky") {
+      const h = houseStatus();
+      return { text: `🦋 <b>Bluesky</b> @${esc(h.handle)}\n${h.on ? "🟢 connected" : "⚪ no app password"} · ${h.today} posts today · ${h.queued} queued${h.last ? `\nLast: ${esc(h.last.url)}` : ""}`, buttons: back };
+    }
     if (cmd === "testall") return { text: await this.testAll(), buttons: back };
     if (cmd === "testbuy") {
       const usdv = Number(args[0]) > 0 ? Number(args[0]) : 420;
@@ -222,6 +233,7 @@ export class Engine {
 <code>${l.token}</code>
 
 Paired with IMD on Ethereum. Every trade pays the IMD swarm.`, [[{ text: `🟢 Buy $${l.symbol}`, url: buyUrl }], [{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch");
+      housePost(`🚀 $${l.symbol} is live on Ethereum, paired with IMD.\n\n${l.token}\n\nHolders pay no platform fee on NIGHTSHIFT. ${config.publicUrl}/token`, "token-live");
       void this.alert(`🚀 $${l.symbol} is live: ${l.token}
 ${config.publicUrl}/token`, "launch-live");
     }
@@ -354,6 +366,7 @@ ${config.publicUrl}/token`, "launch-live");
     }
     note(c, this.#deps(c), "plan", `Founded ${c.name}. Mission: ${c.mission} Audience: ${c.audience}.`);
     this.#emit(id, "company", null);
+    if (config.mode === "live") housePost(`🌙 A new company just started on NIGHTSHIFT: ${c.name}.\n\n${c.mission}\n\nThe IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `company-${id}`);
     return c;
   }
 
@@ -399,6 +412,7 @@ ${config.publicUrl}/token`, "launch-live");
 
 ${esc(c.name)} sold <b>${esc(p.name)}</b> for $${fromUsdc(amount).toFixed(2)}.
 Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See the market", url: `${config.publicUrl}/market` }]], "sale");
+    if (!sim) housePost(`💰 ${c.name} just made a sale: ${p.name}, $${fromUsdc(amount).toFixed(2)}. Built by the IMD swarm, sold while its owner slept. ${config.publicUrl}/market`, `sale-${tx ?? Date.now()}`);
     if (!sim) void this.alert(`💰 ${c.name} sold ${p.name} for $${fromUsdc(amount).toFixed(2)}${tx ? ` · tx ${tx}` : ""}`, `sale-${tx ?? Date.now()}`);
     p.sales += 1;
     p.revenueUsdc += amount;
@@ -548,6 +562,10 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
       if (config.mode === "live" && c.social?.bluesky?.auto) {
         const i = c.marketing.findIndex((m) => m.status === "drafted");
         if (i >= 0) await this.publishPost(c, i).catch(() => {});
+      } else if (config.mode === "live" && config.blueskyCompanyPosts && houseOn() && !c.social?.bluesky && c.status === "active") {
+        // No account of its own: the draft goes out on the project account, paced with the rest.
+        const m = c.marketing.find((x) => x.status === "drafted");
+        if (m) { housePost(`${m.text}\n\n— ${c.name}, a NIGHTSHIFT company`, `mkt-${c.id}-${m.at}`); Object.assign(m, { status: "posted", channel: "bluesky:project" }); this.#emit(c.id, "company", null); }
       }
       if (c.owner) void holderStatus(c.owner);
       for (const p of c.products) {

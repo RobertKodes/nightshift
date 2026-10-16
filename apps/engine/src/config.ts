@@ -66,6 +66,14 @@ export const config = {
   xUrl: env.X_URL ?? "https://x.com/nightshiftidm",
   telegramUrl: env.TELEGRAM_URL ?? "https://t.me/getnightshift",
   blueskyHandle: (env.BLUESKY_HANDLE ?? "nightshifttech.bsky.social").replace(/^@/, ""),
+  /** The project account's app password (Bluesky → Settings → Privacy and security → App passwords). */
+  blueskyAppPassword: env.BLUESKY_APP_PASSWORD ?? "",
+  /** One promo a day (after 15:00 UTC), and at most BLUESKY_DAILY_MAX posts, BLUESKY_GAP_MINUTES apart. */
+  blueskyPromo: (env.BLUESKY_PROMO ?? "1") === "1",
+  blueskyDailyMax: num(env.BLUESKY_DAILY_MAX, 10),
+  blueskyGapMinutes: num(env.BLUESKY_GAP_MINUTES, 45),
+  /** In live mode, companies without their own account post their drafts on the project account. */
+  blueskyCompanyPosts: (env.BLUESKY_COMPANY_POSTS ?? "1") === "1",
   /** Companies one wallet may run at once. */
   maxCompaniesPerOwner: num(env.MAX_COMPANIES_PER_OWNER, 5),
 };

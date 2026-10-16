@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { erc20Abi, parseAbiItem } from "viem";
 import { eth } from "./chain.js";
 import { config } from "./config.js";
+import { housePost } from "./house.js";
 import { type Button, esc, telegram, telegramMedia, tgCall } from "./social.js";
 
 /**
@@ -217,6 +218,7 @@ export function startCommunity(): void {
         if (m && st.milestone === undefined) st.milestone = hit ?? 0;
         else if (m && hit && hit > (st.milestone ?? 0)) {
           await toCommunity(`🏆 <b>$${esc(config.token.symbol)} just crossed ${usd(hit)} market cap!</b>\n\nThe night shift keeps building 🌙🐸`, [[{ text: "📊 Chart", url: m.chart }]], "milestone");
+          housePost(`🏆 $${config.token.symbol} just crossed ${usd(hit)} market cap. The night shift keeps building. ${config.publicUrl}/token`, `milestone-${hit}`);
           st.milestone = hit;
         }
       }

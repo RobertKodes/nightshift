@@ -13,11 +13,12 @@ export const EDITABLE = [
   "SIM_SHIFT_MINUTES", "SIM_JOB_SECONDS",
   "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS",
   "TELEGRAM_COMMUNITY", "BUYBOT_MIN_USD", "BUYBOT_EMOJI_USD", "BUYBOT_MEDIA", "RAID_PIN", "BOT_ANIMATIONS", "X_URL", "TELEGRAM_URL", "BLUESKY_HANDLE",
+  "BLUESKY_APP_PASSWORD", "BLUESKY_PROMO", "BLUESKY_DAILY_MAX", "BLUESKY_GAP_MINUTES", "BLUESKY_COMPANY_POSTS",
   "TOKEN_ADDRESS", "TOKEN_SYMBOL", "TOKEN_HOLDER_MIN", "TOKEN_BUY_URL",
 ] as const;
 export type SettingKey = (typeof EDITABLE)[number];
 /** Shown as set / not set, never sent back to the browser. */
-export const SECRET_KEYS = new Set<SettingKey>(["OPENROUTER_API_KEY", "TELEGRAM_BOT_TOKEN"]);
+export const SECRET_KEYS = new Set<SettingKey>(["OPENROUTER_API_KEY", "TELEGRAM_BOT_TOKEN", "BLUESKY_APP_PASSWORD"]);
 
 const dataDir = resolve(process.env.DATA_DIR ?? "data");
 const file = join(dataDir, "settings.json");

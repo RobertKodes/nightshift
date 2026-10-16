@@ -22,8 +22,23 @@ export async function blueskySession(handle: string, appPassword: string): Promi
 }
 
 /** Posts text (max 300 characters on Bluesky), with its links made clickable. Returns the post's URL. */
-export async function blueskyPost(handle: string, appPassword: string, text: string): Promise<string> {
+export type LinkCard = { uri: string; title: string; description: string; thumb?: string };
+export async function blueskyPost(handle: string, appPassword: string, text: string, card?: LinkCard): Promise<string> {
   const s = await blueskySession(handle, appPassword);
+  let embed: unknown;
+  if (card) {
+    let thumb: unknown;
+    if (card.thumb) {
+      try {
+        const img = await fetch(card.thumb, { signal: AbortSignal.timeout(10000) });
+        if (img.ok) {
+          const up = await fetch(`${PDS}/com.atproto.repo.uploadBlob`, { method: "POST", headers: { "Content-Type": img.headers.get("content-type") ?? "image/jpeg", Authorization: `Bearer ${s.jwt}` }, body: Buffer.from(await img.arrayBuffer()), signal: AbortSignal.timeout(20000) });
+          if (up.ok) thumb = ((await up.json()) as { blob: unknown }).blob;
+        }
+      } catch { /* the card works without a picture */ }
+    }
+    embed = { $type: "app.bsky.embed.external", external: { uri: card.uri, title: card.title, description: card.description, ...(thumb ? { thumb } : {}) } };
+  }
   const t = text.length > 300 ? `${text.slice(0, 297)}…` : text;
   const enc = new TextEncoder();
   const facets = [...t.matchAll(/https?:\/\/[^\s)]+/g)].map((m) => {
@@ -33,7 +48,7 @@ export async function blueskyPost(handle: string, appPassword: string, text: str
   const r = await xrpc<{ uri: string }>("com.atproto.repo.createRecord", {
     repo: s.did,
     collection: "app.bsky.feed.post",
-    record: { $type: "app.bsky.feed.post", text: t, createdAt: new Date().toISOString(), ...(facets.length ? { facets } : {}) },
+    record: { $type: "app.bsky.feed.post", text: t, createdAt: new Date().toISOString(), ...(facets.length ? { facets } : {}), ...(embed ? { embed } : {}) },
   }, s.jwt);
   return `https://bsky.app/profile/${s.handle}/post/${r.uri.split("/").pop()}`;
 }
@@ -99,6 +114,8 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "raid", description: "Raid an X post: /raid <link> [note]" },
     { command: "testbuy", description: "Send a sample buy card to the community" },
     { command: "testall", description: "Send every alert and announcement, marked TEST" },
+    { command: "post", description: "Post on the project Bluesky: /post <text>" },
+    { command: "bluesky", description: "Bluesky account status" },
     { command: "stop", description: "Pause every company now" },
     { command: "help", description: "All commands" },
     ...open,
