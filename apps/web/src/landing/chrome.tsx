@@ -51,6 +51,7 @@ export function useSwarm() {
 const DOCS = "https://github.com/RobertKodes/nightshift#readme";
 export const X_URL = "https://x.com/nightshiftidm";
 export const TELEGRAM_URL = "https://t.me/getnightshift";
+export const BLUESKY_URL = "https://bsky.app/profile/nightshifttech.bsky.social";
 
 function Socials() {
   return (
@@ -60,6 +61,9 @@ function Socials() {
       </a>
       <a href={TELEGRAM_URL} target="_blank" rel="noreferrer" aria-label="NIGHTSHIFT on Telegram" title="Join the Telegram">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.7.8l-4.8-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9 8.9-8c.4-.3-.1-.5-.6-.2L6.5 13.2 1.8 11.7c-1-.3-1-1 .2-1.5L20.6 3c.9-.3 1.6.2 1.3 1.3Z"/></svg>
+      </a>
+      <a href={BLUESKY_URL} target="_blank" rel="noreferrer" aria-label="NIGHTSHIFT on Bluesky" title="Follow on Bluesky">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M5.2 3.6C7.7 5.5 10.4 9.3 11.4 11.3c1-2 3.7-5.8 6.2-7.7 1.8-1.4 4.8-2.4 4.8 1 0 .7-.4 5.7-.6 6.5-.8 2.8-3.7 3.5-6.2 3.1 4.4.8 5.6 3.3 3.1 5.8-4.6 4.8-6.7-1.2-7.2-2.8l-.1-.3-.1.3c-.5 1.6-2.6 7.6-7.2 2.8-2.5-2.5-1.3-5 3.1-5.8-2.5.4-5.4-.3-6.2-3.1C.8 10.3.4 5.3.4 4.6c0-3.4 3-2.4 4.8-1Z"/></svg>
       </a>
     </div>
   );
@@ -105,6 +109,7 @@ export function SiteFooter() {
       <nav>
         <a href={X_URL} target="_blank" rel="noreferrer">X</a>
         <a href={TELEGRAM_URL} target="_blank" rel="noreferrer">TELEGRAM</a>
+        <a href={BLUESKY_URL} target="_blank" rel="noreferrer">BLUESKY</a>
         <a href="https://github.com/RobertKodes/nightshift" target="_blank" rel="noreferrer">GITHUB</a>
         <Link to="/market">MARKET</Link>
         <Link to="/token">TOKEN</Link>
