@@ -211,6 +211,8 @@
 .ns-foot nav { display: flex; flex-wrap: wrap; gap: 32px; font: 500 11px var(--mono); letter-spacing: .2em; color: var(--dim); }
 .ns-foot nav a:hover { color: var(--ink); }
 .ns-foot .built { font: 500 10px var(--mono); letter-spacing: .2em; color: var(--faint); }
+.ns-foot .built a { color: var(--moon, var(--ink)); border-bottom: 1px solid currentColor; }
+.ns-foot .built a:hover { color: var(--ink); }
 
 /* ------------------------------------------------------------ responsive */
 @media (max-width: 1640px), (max-height: 960px) {

@@ -187,7 +187,7 @@ export function welcome(names: string[]): { text: string; buttons: Button[][] } 
 /** Commands anyone in the community may use. Null when the command is not a public one. */
 export async function publicCommand(cmd: string): Promise<{ text: string; buttons?: Button[][] } | null> {
   const sym = esc(config.token.symbol);
-  const links: Button[][] = [[{ text: "🌐 Website", url: config.publicUrl }, { text: "𝕏 X", url: config.xUrl }], [{ text: "💬 Telegram", url: config.telegramUrl }, { text: "🦋 Bluesky", url: `https://bsky.app/profile/${config.blueskyHandle}` }]];
+  const links: Button[][] = [[{ text: "🌐 Website", url: config.publicUrl }, { text: "𝕏 X", url: config.xUrl }], [{ text: "💬 Telegram", url: config.telegramUrl }, { text: "🦋 Bluesky", url: `https://bsky.app/profile/${config.blueskyHandle}` }], [{ text: "👨‍💻 Developer · @probert_mihai", url: "https://x.com/probert_mihai" }]];
   if (cmd === "links" || cmd === "site") return { text: "🌙 <b>NIGHTSHIFT links</b>\nOnly trust these.", buttons: links };
   if (cmd === "ca" || cmd === "contract") {
     return config.token.address

@@ -51,6 +51,8 @@ export function useSwarm() {
 const DOCS = "https://github.com/RobertKodes/nightshift#readme";
 export const X_URL = "https://x.com/nightshiftidm";
 export const TELEGRAM_URL = "https://t.me/getnightshift";
+/** The developer. */
+export const DEV_X_URL = "https://x.com/probert_mihai";
 export const BLUESKY_URL = "https://bsky.app/profile/nightshifttech.bsky.social";
 
 function Socials() {
@@ -118,7 +120,7 @@ export function SiteFooter() {
         <a href={DOCS} target="_blank" rel="noreferrer">DOCS</a>
         <Link to="/terms">TERMS</Link>
       </nav>
-      <span className="built">BUILT BY HUMANS. POWERED BY AI.</span>
+      <span className="built">BUILT BY <a href={DEV_X_URL} target="_blank" rel="noreferrer" title="The developer behind NIGHTSHIFT">@PROBERT_MIHAI</a>. POWERED BY AI.</span>
     </footer>
   );
 }
