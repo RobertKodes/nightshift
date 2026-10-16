@@ -398,3 +398,20 @@
 @media (prefers-reduced-motion: reduce) { .ns-frog-btn, .crew-hero .flash, .meme.coin img { animation: none; } }
 .crew-roles p { margin: 0; } .crew-roles p span { display: block; margin-top: 2px; }
 .meme.coin img { clip-path: circle(46%); }
+
+/* ---------- the frog astronaut drifting past the megastructure */
+.frognaut-wrap { position: absolute; left: 64vw; top: calc(34px + 30vw); width: clamp(96px, 8.6vw, 170px); z-index: 6; pointer-events: none; animation: fn-drift 14s ease-in-out infinite; }
+.frognaut { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; pointer-events: auto; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .65)) drop-shadow(0 0 22px rgba(124, 92, 255, .45)); }
+.frognaut svg { display: block; width: 100%; height: auto; overflow: visible; animation: fn-tumble 9s ease-in-out infinite; transform-origin: 50% 45%; }
+.frognaut:hover { filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .65)) drop-shadow(0 0 30px rgba(184, 255, 74, .5)); }
+.frognaut.spin svg { animation: fn-flip 1.1s cubic-bezier(.2, .8, .2, 1), fn-tumble 9s ease-in-out 1.1s infinite; }
+.fn-flame { animation: fn-flame .18s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 50% 0; }
+.fn-blink { animation: ns-pulse 1.6s infinite; }
+.frognaut-say { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 10px; width: 230px; padding: 12px 14px; border: 1px solid rgba(184, 255, 74, .45); background: rgba(8, 6, 20, .92); backdrop-filter: blur(8px); font: 400 17px/1.3 var(--serif); color: var(--ink); text-align: center; pointer-events: auto; animation: eco-in .3s ease both; }
+.frognaut-say::before { content: "📡 FROG-1 · "; font: 500 10px var(--mono); letter-spacing: .14em; color: var(--acid); display: block; margin-bottom: 4px; }
+@keyframes fn-drift { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-1.2vw, -1.4vw); } 50% { transform: translate(.6vw, -2.4vw); } 75% { transform: translate(1.4vw, -.8vw); } }
+@keyframes fn-tumble { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(9deg) translateY(-4px); } }
+@keyframes fn-flip { from { transform: rotate(-10deg) scale(1); } 50% { transform: rotate(190deg) scale(1.15); } to { transform: rotate(350deg) scale(1); } }
+@keyframes fn-flame { from { opacity: .75; transform: scaleY(.85); } to { opacity: 1; transform: scaleY(1.12); } }
+@media (max-width: 1100px) { .frognaut-wrap { left: auto; right: 6vw; top: 120px; width: 92px; } }
+@media (prefers-reduced-motion: reduce) { .frognaut-wrap, .frognaut svg, .fn-flame { animation: none; } }

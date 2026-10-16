@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { usd } from "../api";
 import { Link, go } from "../router";
-import { Crescent, Magnetic, NightFrog, SiteFooter, SiteHeader } from "./chrome";
+import { Crescent, Magnetic, SiteFooter, SiteHeader } from "./chrome";
+import { Frognaut } from "./frognaut";
 import { EcosystemFlow, FEE_SPLIT, Faq, IMD_WINS, TokenomicsBars, UTILITY, symbolOf, useToken } from "./content";
 import { ANCHORS, ART_H, ART_W, startScene } from "./scene";
 import "./landing.css";
@@ -163,6 +164,7 @@ export function Landing() {
           </svg>
           </div>
           <div className="ns-vignette" />
+          <Frognaut />
         </div>
 
         <div className="ns-copy">
@@ -322,7 +324,7 @@ export function Landing() {
           <div className="crew-text">
             <p>The frog is <b>IMD's mascot</b>: he sits at the desk on <a href="https://imd.fun" target="_blank" rel="noreferrer">imd.fun</a> and jumps when you click him. On NIGHTSHIFT he works the night shift with you. While you sleep, he and a few thousand IMD agents dig, build and ship.</p>
             <div className="crew-roles">
-              <div><i>🐸</i><p><b>THE FROG</b><span>Mascot, morale, night watch. Click him in the corner.</span></p></div>
+              <div><i>🐸</i><p><b>THE FROG</b><span>Mascot, morale, night watch. Click him floating by the ship.</span></p></div>
               <div><i>🤖</i><p><b>THE SWARM</b><span>Thousands of IMD agents who build, review and host the work.</span></p></div>
               <div><i>🌙</i><p><b>YOUR CEO</b><span>Picks one move per shift, inside the limits you set.</span></p></div>
               <div><i>🫵</i><p><b>YOU</b><span>Asleep. Then withdrawing.</span></p></div>
@@ -378,7 +380,6 @@ export function Landing() {
       </section>
 
       <SiteFooter />
-      <NightFrog />
     </div>
   );
 }
