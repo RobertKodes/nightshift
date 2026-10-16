@@ -15,7 +15,10 @@ export interface CompanyFull {
   id: string; slug: string; name: string; idea: string; mission: string; audience: string; createdAt: number;
   wallet: string; policy: Policy; status: "active" | "paused"; cycle: number; nextShiftAt: number | null;
   site: { url: string; jobId: string } | null; products: ProductView[]; tasks: TaskView[]; journal: JournalView[];
-  marketing: { at: number; channel: string; text: string; status: string }[];
+  marketing: { at: number; channel: string; text: string; status: string; url?: string; error?: string }[];
+  social?: { bluesky?: { handle: string; auto: boolean } };
+  holder: { symbol: string; holds: boolean; balance: number; min: number } | null;
+  platformFeeBps: number;
   stats: { visits7d: number; sales7d: number; revenue7dUsd: number };
   pnl: { revenueUsd: number; spentImd: number; spentUsd: number; profitUsd: number; imdBalance: number };
   recentSales: { at: number; productId: string; usdc: string; payer: string; tx: string | null; sim: boolean }[];
@@ -60,6 +63,9 @@ export const api = {
   publicCompany: (slug: string) => req<PublicCompany>("GET", `/api/public/${slug}`),
   create: (idea: string, policy: Partial<Policy>) => req<{ id: string; slug: string }>("POST", "/api/companies", { idea, policy }),
   shift: (id: string) => req("POST", `/api/companies/${id}/shift`),
+  connectBluesky: (id: string, handle: string, appPassword: string, auto: boolean) => req<{ handle: string }>("POST", `/api/companies/${id}/social`, { handle, appPassword, auto }),
+  disconnectBluesky: (id: string) => req("POST", `/api/companies/${id}/social/disconnect`),
+  publishPost: (id: string, i: number) => req<{ url: string }>("POST", `/api/companies/${id}/posts/${i}/publish`),
   pause: (id: string) => req("POST", `/api/companies/${id}/pause`),
   resume: (id: string) => req("POST", `/api/companies/${id}/resume`),
   policy: (id: string, p: Partial<Policy>) => req<Policy>("POST", `/api/companies/${id}/policy`, p),

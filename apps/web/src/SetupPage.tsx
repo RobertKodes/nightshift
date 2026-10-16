@@ -48,6 +48,16 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "OPENROUTER_API_KEY", label: "OpenRouter API key", secret: true },
     { k: "NIGHTSHIFT_MODEL", label: "Model", hint: "anthropic/claude-sonnet-5.5" },
   ] },
+  { title: "Alerts", note: "A Telegram bot tells you when something breaks in live mode. Create one with @BotFather; get your chat id from @userinfobot.", fields: [
+    { k: "TELEGRAM_BOT_TOKEN", label: "Bot token", secret: true },
+    { k: "TELEGRAM_CHAT_ID", label: "Chat id", hint: "123456789" },
+  ] },
+  { title: "Platform token", note: "Optional. Holders pay no platform fee and are featured in the market. Fees buy the token back.", fields: [
+    { k: "TOKEN_ADDRESS", label: "Token address (Ethereum)", hint: "0x…" },
+    { k: "TOKEN_SYMBOL", label: "Symbol", hint: "OCTO" },
+    { k: "TOKEN_HOLDER_MIN", label: "Holder minimum (tokens)", hint: "10000" },
+    { k: "TOKEN_BUY_URL", label: "Where to buy it", hint: "https://app.uniswap.org/…" },
+  ] },
   { title: "Simulation pacing", fields: [
     { k: "SIM_SHIFT_MINUTES", label: "Minutes between shifts", hint: "2" },
     { k: "SIM_JOB_SECONDS", label: "Seconds per swarm job", hint: "40" },
@@ -149,6 +159,14 @@ export function SetupPage() {
         </section>
       ))}
 
+      <section className="card">
+        <div className="card-h"><h3>Tools</h3></div>
+        <div className="card-b setup-tools">
+          <button className="btn" disabled={busy} onClick={async () => { try { const r = await call(token, "test-alert", {}); setMsg(r.ok ? "Test alert sent. Check Telegram." : "Not sent: set the bot token and chat id, Save and restart, then try again."); } catch (e) { setMsg((e as Error).message); } }}>Send a test alert</button>
+          <BuybackForm token={token} onDone={setMsg} />
+        </div>
+      </section>
+
       <div className="setup-bar">
         {msg && <span>{msg}</span>}
         {s.pending && <span className="warn">Saved settings differ from what is running.</span>}
@@ -156,5 +174,24 @@ export function SetupPage() {
         <button className="btn primary" disabled={busy} onClick={() => save(form, true)}>Save and restart</button>
       </div>
     </div>
+  );
+}
+
+/** Publishes a buyback on /token: the tx, what it cost and how many tokens it bought. */
+function BuybackForm({ token, onDone }: { token: string; onDone: (m: string) => void }) {
+  const [f, setF] = useState({ tx: "", usd: "", amount: "", note: "" });
+  return (
+    <form className="setup-buyback" onSubmit={async (e) => {
+      e.preventDefault();
+      try { await call(token, "buyback", { tx: f.tx.trim(), usd: Number(f.usd), amount: Number(f.amount), note: f.note }); setF({ tx: "", usd: "", amount: "", note: "" }); onDone("Buyback published on /token."); }
+      catch (err) { onDone((err as Error).message); }
+    }}>
+      <b>Record a buyback</b>
+      <input className="field" placeholder="tx hash 0x…" value={f.tx} onChange={(e) => setF({ ...f, tx: e.target.value })} />
+      <input className="field" placeholder="USD spent" value={f.usd} onChange={(e) => setF({ ...f, usd: e.target.value })} />
+      <input className="field" placeholder="tokens bought" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+      <input className="field" placeholder="note (optional)" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} />
+      <button className="btn" disabled={!f.tx}>Publish</button>
+    </form>
   );
 }

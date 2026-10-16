@@ -11,10 +11,12 @@ export const EDITABLE = [
   "ETH_RPC", "SALES_CHAIN_ID", "SALES_RPC", "IMD_USD",
   "PLATFORM_FEE_BPS", "PLATFORM_TREASURY", "MAX_COMPANIES_PER_OWNER",
   "SIM_SHIFT_MINUTES", "SIM_JOB_SECONDS",
+  "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
+  "TOKEN_ADDRESS", "TOKEN_SYMBOL", "TOKEN_HOLDER_MIN", "TOKEN_BUY_URL",
 ] as const;
 export type SettingKey = (typeof EDITABLE)[number];
 /** Shown as set / not set, never sent back to the browser. */
-export const SECRET_KEYS = new Set<SettingKey>(["OPENROUTER_API_KEY"]);
+export const SECRET_KEYS = new Set<SettingKey>(["OPENROUTER_API_KEY", "TELEGRAM_BOT_TOKEN"]);
 
 const dataDir = resolve(process.env.DATA_DIR ?? "data");
 const file = join(dataDir, "settings.json");

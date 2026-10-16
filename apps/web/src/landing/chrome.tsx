@@ -49,7 +49,7 @@ export function useSwarm() {
 
 const DOCS = "https://github.com/RobertKodes/nightshift#readme";
 
-export function SiteHeader({ active, home = false }: { active: "home" | "companies" | "mcp" | "terms" | "company" | "market"; home?: boolean }) {
+export function SiteHeader({ active, home = false }: { active: "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token"; home?: boolean }) {
   const swarm = useSwarm();
   const { address, signIn, signOut, busy, error } = useSession();
   // On the landing the section links scroll; elsewhere they lead back to it.
@@ -88,6 +88,7 @@ export function SiteFooter() {
       <nav>
         <a href="https://github.com/RobertKodes/nightshift" target="_blank" rel="noreferrer">GITHUB</a>
         <Link to="/market">MARKET</Link>
+        <Link to="/token">TOKEN</Link>
         <Link to="/mcp">MCP</Link>
         <a href={DOCS} target="_blank" rel="noreferrer">DOCS</a>
         <Link to="/terms">TERMS</Link>

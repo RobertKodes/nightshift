@@ -32,10 +32,13 @@ export async function setupState(engine: Engine) {
     ETH_RPC: config.ethRpc, SALES_CHAIN_ID: String(config.salesChainId), SALES_RPC: config.salesRpc, IMD_USD: String(config.imdUsd),
     PLATFORM_FEE_BPS: String(config.platformFeeBps), PLATFORM_TREASURY: config.platformTreasury, MAX_COMPANIES_PER_OWNER: String(config.maxCompaniesPerOwner),
     SIM_SHIFT_MINUTES: String(config.simShiftMinutes), SIM_JOB_SECONDS: String(config.simJobSeconds),
+    TELEGRAM_BOT_TOKEN: config.telegramToken ? "set" : "", TELEGRAM_CHAT_ID: config.telegramChat,
+    TOKEN_ADDRESS: config.token.address, TOKEN_SYMBOL: config.token.symbol, TOKEN_HOLDER_MIN: String(config.token.holderMin), TOKEN_BUY_URL: config.token.buyUrl,
   };
   const shown: Record<string, string> = {};
   for (const k of EDITABLE) shown[k] = SECRET_KEYS.has(k) ? (saved[k] ? "set" : "") : (saved[k] ?? "");
-  const pending = EDITABLE.some((k) => (saved[k] ?? "") !== "" && !SECRET_KEYS.has(k) && saved[k] !== running[k]) || Boolean(saved.OPENROUTER_API_KEY) !== Boolean(config.openrouterKey);
+  const pending = EDITABLE.some((k) => (saved[k] ?? "") !== "" && !SECRET_KEYS.has(k) && saved[k] !== running[k])
+    || Boolean(saved.OPENROUTER_API_KEY) !== Boolean(config.openrouterKey) || Boolean(saved.TELEGRAM_BOT_TOKEN) !== Boolean(config.telegramToken);
 
   const [eth, base, swarm, or] = await Promise.all([
     rpcChain(config.ethRpc),
@@ -62,6 +65,8 @@ export async function setupState(engine: Engine) {
       detail: config.platformFeeBps > 0 ? `${config.platformFeeBps / 100}% to ${config.platformTreasury || "missing treasury"}` : "None" },
     { id: "price", label: "IMD price for budgets", state: config.imdUsdPinned || Date.now() - config.imdUsdAt < 30 * 60_000 ? "ok" : "warn",
       detail: config.imdUsdPinned ? `Pinned at $${config.imdUsd} by IMD_USD` : config.imdUsdAt ? `$${config.imdUsd.toFixed(2)} from DexScreener, ${Math.round((Date.now() - config.imdUsdAt) / 60_000)} min ago` : `No market price yet; using $${config.imdUsd}` },
+    { id: "alerts", label: "Alerts", state: config.telegramToken && config.telegramChat ? "ok" : "warn", detail: config.telegramToken && config.telegramChat ? "Telegram: warnings in live mode reach you" : "No Telegram bot: nobody hears when something breaks" },
+    { id: "token", label: "Platform token", state: "ok", detail: config.token.address ? `${config.token.symbol} at ${config.token.address}; holders of ${config.token.holderMin}+ pay no fee` : "Not set. Optional; see /token" },
     { id: "mode", label: "Mode", state: live ? "ok" : "warn", detail: live ? "LIVE: real IMD orders and real sales" : "Simulation: nothing leaves the server" },
   ];
   return {
@@ -87,8 +92,10 @@ export function saveSetup(patch: Record<string, unknown>): string | null {
   }
   const t = v("PLATFORM_TREASURY");
   if (t && !isAddress(t)) return "PLATFORM_TREASURY must be an address";
+  const ta = v("TOKEN_ADDRESS");
+  if (ta && !isAddress(ta)) return "TOKEN_ADDRESS must be an address";
   // A masked secret coming back unchanged means "keep it".
-  if (patch.OPENROUTER_API_KEY === "set") delete patch.OPENROUTER_API_KEY;
+  for (const k of SECRET_KEYS) if (patch[k] === "set") delete patch[k];
   writeSettings(patch);
   return null;
 }

@@ -9,6 +9,7 @@ import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { handleMcp } from "./mcp.js";
 import { isAdmin, saveSetup, setupState } from "./admin.js";
+import { buybacks, holderStatus, recordBuyback, tokenOn } from "./token.js";
 import { usdc } from "@nightshift/core";
 import { getAddress } from "viem";
 
@@ -59,6 +60,8 @@ async function full(engine: Engine, c: Company) {
       imdBalance: fromImd(imd),
     },
     recentSales: m.sales.slice(-20).reverse(),
+    holder: tokenOn() ? { symbol: config.token.symbol, ...(await holderStatus(c.owner)), min: config.token.holderMin } : null,
+    platformFeeBps: config.platformTreasury ? config.platformFeeBps : 0,
     series: series(m.visits, m.sales.map((s) => ({ at: s.at, usd: Number(s.usdc) / 1e6 }))),
   };
 }
@@ -152,6 +155,16 @@ export function serve(engine: Engine) {
           const err = saveSetup(await body(req));
           return err ? json(res, 400, { error: err }) : json(res, 200, await setupState(engine));
         }
+        if (p === "/api/admin/buyback" && req.method === "POST") {
+          const b = await body(req);
+          const tx = String(b.tx ?? "");
+          if (!/^0x[0-9a-fA-F]{64}$/.test(tx)) return json(res, 400, { error: "tx must be a transaction hash" });
+          recordBuyback({ at: Date.now(), tx, usd: Number(b.usd) || 0, amount: Number(b.amount) || 0, note: b.note ? String(b.note).slice(0, 200) : undefined });
+          return json(res, 200, { ok: true, buybacks: buybacks() });
+        }
+        if (p === "/api/admin/test-alert" && req.method === "POST") {
+          return json(res, 200, { ok: await engine.alert("Test alert from /setup. Alerts work.", `test-${Date.now()}`) });
+        }
         if (p === "/api/admin/restart" && req.method === "POST") {
           if (process.env.NIGHTSHIFT_SUPERVISED !== "1") return json(res, 409, { error: "Not running under a supervisor; restart the process yourself to apply." });
           json(res, 200, { ok: true });
@@ -165,6 +178,15 @@ export function serve(engine: Engine) {
 
       // ---- the landing page's live numbers: real where they can be, labelled where simulated
       if (p === "/api/landing") return json(res, 200, await landing(engine));
+      if (p === "/api/token") {
+        const fees = await engine.ledger.balance("ext:platform", "USDC");
+        const bb = buybacks();
+        return json(res, 200, {
+          on: tokenOn(), symbol: config.token.symbol, address: config.token.address || null, buyUrl: config.token.buyUrl || null, holderMin: config.token.holderMin,
+          platformFeeBps: config.platformTreasury ? config.platformFeeBps : 0, feesCollectedUsd: fromUsdc(fees),
+          bought: { usd: bb.reduce((a, b) => a + b.usd, 0), amount: bb.reduce((a, b) => a + b.amount, 0) }, buybacks: bb.slice(0, 50), mode: config.mode,
+        });
+      }
       if (p === "/api/market") return json(res, 200, { mode: config.mode, chainId: config.salesChainId, products: engine.market(url.searchParams.get("q") ?? "") });
 
       // ---- sign-in with a wallet
@@ -246,6 +268,12 @@ export function serve(engine: Engine) {
           const b = await balances(c.wallet);
           return json(res, 200, { address: c.wallet, mode: "live", eth: b.eth, imd: b.imd, usdc: b.usdc, saleGas: b.saleGas });
         }
+        if (action === "products" && seg[4] && seg[5] === "download") {
+          const product = c.products.find((x) => x.id === seg[4]);
+          if (!product || !engine.files.has(product)) return json(res, 409, { error: "Not packaged yet." });
+          res.writeHead(302, { Location: engine.files.link(c, product, `owner-${Date.now()}`, 1) });
+          return res.end();
+        }
         if (req.method !== "POST") return json(res, 405, { error: "method" });
         if (action === "shift") { await engine.shiftNow(c, true); return json(res, 200, { ok: true }); }
         if (action === "policy") { engine.setPolicy(c, (await body(req)) as never); return json(res, 200, c.policy); }
@@ -256,11 +284,14 @@ export function serve(engine: Engine) {
           const r = await engine.withdraw(c, getAddress(to), typeof b.amountUsd === "number" ? usdc(b.amountUsd) : undefined);
           return json(res, 200, { ok: true, sentUsd: fromUsdc(r.sent), feeUsd: fromUsdc(r.fee), txs: r.txs });
         }
-        if (action === "products" && seg[4] && seg[5] === "download") {
-          const product = c.products.find((x) => x.id === seg[4]);
-          if (!product || !engine.files.has(product)) return json(res, 409, { error: "Not packaged yet." });
-          res.writeHead(302, { Location: engine.files.link(c, product, `owner-${Date.now()}`, 1) });
-          return res.end();
+        if (action === "social" && !seg[4]) {
+          const b = await body(req);
+          const handle = await engine.connectBluesky(c, String(b.handle ?? ""), String(b.appPassword ?? ""), Boolean(b.auto));
+          return json(res, 200, { ok: true, handle });
+        }
+        if (action === "social" && seg[4] === "disconnect") { engine.disconnectBluesky(c); return json(res, 200, { ok: true }); }
+        if (action === "posts" && seg[4] && seg[5] === "publish") {
+          return json(res, 200, { ok: true, url: await engine.publishPost(c, Number(seg[4])) });
         }
         if (action === "pause") { engine.setStatus(c, "paused"); return json(res, 200, { ok: true }); }
         if (action === "resume") { engine.setStatus(c, "active"); return json(res, 200, { ok: true }); }

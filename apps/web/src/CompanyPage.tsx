@@ -215,17 +215,51 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
                 if (!confirm(`Withdraw ${usd(c.withdrawableUsd)} of revenue to ${address ?? "your wallet"}?${health?.platformFeeBps ? ` A ${(health.platformFeeBps / 100).toFixed(2)}% platform fee applies.` : ""}`)) return;
                 void act(() => api.withdraw(c.id));
               }}>Withdraw revenue</button>
+              {c.holder && <div className={c.holder.holds ? "good" : "dim"} style={{ fontSize: 13 }}>{c.holder.holds ? `${c.holder.symbol} holder: no platform fee, products featured in the market.` : `Hold ${c.holder.min.toLocaleString()} ${c.holder.symbol} to pay no platform fee and get featured (you hold ${c.holder.balance.toLocaleString()}).`}</div>}
               <div className="dim" style={{ fontSize: 13 }}>Revenue lands here in USDC. IMD for the swarm is paid from here. {health?.mode === "sim" ? "In simulation it starts with 20 simulated IMD." : "Fund it with IMD and a little ETH for the one-time Permit2 approval."}</div>
             </div>
           </div>
-          {c.marketing.length > 0 && (
-            <div className="card">
-              <div className="card-h"><h3>Posts</h3></div>
-              <ul className="journal">{[...c.marketing].reverse().map((m, i) => <li key={i}><span className="when">{ago(m.at)}</span><span>{m.text} <span className="pill">{m.status}</span></span></li>)}</ul>
-            </div>
-          )}
+          <PostsCard c={c} busy={busy} act={act} />
         </div>
       </div>
     </>
+  );
+}
+
+/** Where the company talks to people: drafts, and the owner's Bluesky account that posts them. */
+function PostsCard({ c, busy, act }: { c: CompanyFull; busy: boolean; act: (f: () => Promise<unknown>) => Promise<void> }) {
+  const [handle, setHandle] = useState("");
+  const [pw, setPw] = useState("");
+  const [auto, setAuto] = useState(true);
+  const b = c.social?.bluesky;
+  const posts = c.marketing.map((m, i) => ({ m, i })).reverse();
+  return (
+    <div className="card">
+      <div className="card-h"><h3>Posts</h3>{b ? <span className="pill live">@{b.handle}</span> : <span className="faint" style={{ fontSize: 12 }}>not connected</span>}</div>
+      {b ? (
+        <div className="card-b dim" style={{ fontSize: 13, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+          <span>{b.auto ? "New posts go out on their own in live mode." : "Each post waits for you to send it."}</span>
+          <button className="btn ghost" disabled={busy} onClick={() => void act(() => api.disconnectBluesky(c.id))}>Disconnect</button>
+        </div>
+      ) : (
+        <form className="card-b social-form" onSubmit={(e) => { e.preventDefault(); void act(() => api.connectBluesky(c.id, handle, pw, auto).then(() => { setPw(""); })); }}>
+          <span className="dim" style={{ fontSize: 13 }}>Connect a Bluesky account so the company can tell people it exists. Use an <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noreferrer">app password</a>, not your real one.</span>
+          <input className="field" placeholder="you.bsky.social" value={handle} onChange={(e) => setHandle(e.target.value)} />
+          <input className="field" type="password" placeholder="xxxx-xxxx-xxxx-xxxx" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <label className="dim" style={{ fontSize: 13 }}><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Post on its own (live mode only)</label>
+          <button className="btn" disabled={busy || !handle || !pw}>Connect Bluesky</button>
+        </form>
+      )}
+      {posts.length > 0 && (
+        <ul className="journal">{posts.map(({ m, i }) => (
+          <li key={i}><span className="when">{ago(m.at)}</span><span>{m.text}{" "}
+            <span className={`pill ${m.status === "posted" ? "done" : m.status === "failed" ? "failed" : ""}`}>{m.status}</span>
+            {m.url && <> <a className="mono faint" style={{ fontSize: 11 }} href={m.url} target="_blank" rel="noreferrer">view ↗</a></>}
+            {m.status !== "posted" && b && <> <button className="btn ghost sm-btn" disabled={busy} onClick={() => void act(() => api.publishPost(c.id, i))}>Post now</button></>}
+            {m.error && <div className="bad" style={{ fontSize: 12 }}>{m.error}</div>}
+          </span></li>
+        ))}</ul>
+      )}
+    </div>
   );
 }

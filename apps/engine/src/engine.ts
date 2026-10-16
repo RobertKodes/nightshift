@@ -28,6 +28,8 @@ import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
+import { blueskyPost, blueskySession, telegram } from "./social.js";
+import { holderStatus, holdsCached } from "./token.js";
 
 export type EngineEvent = { type: "task" | "journal" | "company" | "sale"; companyId: string; payload: unknown; at: number };
 const DAY = 24 * 3600_000;
@@ -88,6 +90,10 @@ export class Engine {
 
   #emit(companyId: string, type: EngineEvent["type"], payload: unknown): void {
     this.store.markDirty();
+    if (type === "journal" && config.mode === "live" && (payload as { kind?: string }).kind === "warning") {
+      const c = this.store.companies.get(companyId);
+      void this.alert(`${c?.name ?? companyId}: ${(payload as { text: string }).text}`, companyId);
+    }
     const e = { type, companyId, payload, at: Date.now() };
     for (const l of this.#listeners) l(e);
   }
@@ -258,7 +264,8 @@ export class Engine {
     const available = await this.withdrawable(c);
     const total = amount ?? available;
     if (total <= 0n || total > available) throw new Error(`Nothing to withdraw, or more than the $${fromUsdc(available).toFixed(2)} available.`);
-    const fee = config.platformTreasury ? (total * BigInt(config.platformFeeBps)) / 10_000n : 0n;
+    const holder = (await holderStatus(c.owner)).holds;
+    const fee = config.platformTreasury && !holder ? (total * BigInt(config.platformFeeBps)) / 10_000n : 0n;
     const sent = total - fee;
     const txs: string[] = [];
     if (config.mode === "live") {
@@ -285,18 +292,63 @@ export class Engine {
     return { sent, fee, txs };
   }
 
+  readonly #lastAlert = new Map<string, number>();
+  /** Tells the operator on Telegram, at most once a minute per topic. */
+  async alert(text: string, topic = "engine"): Promise<boolean> {
+    if (!config.telegramToken || !config.telegramChat) return false;
+    const last = this.#lastAlert.get(topic) ?? 0;
+    if (Date.now() - last < 60_000) return false;
+    this.#lastAlert.set(topic, Date.now());
+    return telegram(config.telegramToken, config.telegramChat, `NIGHTSHIFT · ${text}`);
+  }
+
+  /** Checks the app password with Bluesky before keeping it. */
+  async connectBluesky(c: Company, handle: string, appPassword: string, auto: boolean): Promise<string> {
+    const s = await blueskySession(handle, appPassword);
+    this.vault.putSecret(`bsky:${c.id}`, appPassword);
+    c.social = { ...c.social, bluesky: { handle: s.handle, auto } };
+    note(c, this.#deps(c), "note", `Connected Bluesky @${s.handle}${auto ? "; posts go out on their own in live mode" : "; posts wait for you"}.`);
+    this.#emit(c.id, "company", null);
+    return s.handle;
+  }
+  disconnectBluesky(c: Company): void {
+    this.vault.putSecret(`bsky:${c.id}`, null);
+    if (c.social) delete c.social.bluesky;
+    this.#emit(c.id, "company", null);
+  }
+  async publishPost(c: Company, index: number): Promise<string> {
+    const m = c.marketing[index];
+    const b = c.social?.bluesky;
+    const pw = this.vault.getSecret(`bsky:${c.id}`);
+    if (!m) throw new Error("no such post");
+    if (m.status === "posted") return m.url ?? "";
+    if (!b || !pw) throw new Error("Connect a Bluesky account first.");
+    try {
+      const url = await blueskyPost(b.handle, pw, m.text);
+      Object.assign(m, { status: "posted", url, channel: "bluesky", error: undefined });
+      note(c, this.#deps(c), "result", `Posted on Bluesky: ${url}`);
+      return url;
+    } catch (e) {
+      Object.assign(m, { status: "failed", error: (e as Error).message });
+      note(c, this.#deps(c), "warning", `Bluesky post failed: ${(e as Error).message}`);
+      throw e;
+    } finally {
+      this.#emit(c.id, "company", null);
+    }
+  }
+
   /** Every product on sale across all companies: the public catalog for people and agents. */
-  market(q = ""): { company: string; slug: string; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; buyUrl: string; page: string }[] {
+  market(q = ""): { company: string; slug: string; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; featured: boolean; buyUrl: string; page: string }[] {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return [...this.store.companies.values()]
       .flatMap((c) => c.products.filter((p) => p.status === "live" && this.files.has(p)).map((p) => ({
         company: c.name, slug: c.slug, id: p.id, name: p.name, kind: p.kind, pitch: p.pitch,
-        priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales,
+        priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, featured: holdsCached(c.owner),
         buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, page: `${config.publicUrl}/c/${c.slug}#${p.id}`,
         text: `${c.name} ${c.mission} ${c.audience} ${p.name} ${p.pitch}`.toLowerCase(),
       })))
       .filter((x) => words.every((w) => x.text.includes(w)))
-      .sort((a, b) => b.sales - a.sales)
+      .sort((a, b) => Number(b.featured) - Number(a.featured) || b.sales - a.sales)
       .map(({ text: _t, ...x }) => x);
   }
 
@@ -307,6 +359,11 @@ export class Engine {
       if (c.status === "active" && c.policy.autopilot && c.nextShiftAt && now >= c.nextShiftAt && !this.#busy.has(c.id)) {
         await this.shiftNow(c).catch((e) => console.error("shift", c.slug, e));
       }
+      if (config.mode === "live" && c.social?.bluesky?.auto) {
+        const i = c.marketing.findIndex((m) => m.status === "drafted");
+        if (i >= 0) await this.publishPost(c, i).catch(() => {});
+      }
+      if (c.owner) void holderStatus(c.owner);
       for (const p of c.products) {
         if (p.status !== "live" || this.files.has(p)) continue;
         const t = c.tasks.find((x) => x.id === p.taskId);

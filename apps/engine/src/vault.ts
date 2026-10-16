@@ -43,6 +43,26 @@ export class Vault {
     return privateKeyToAccount(pk).address;
   }
 
+  /** Any other secret (an app password, a bot token), encrypted like the wallet keys. */
+  putSecret(name: string, value: string | null): void {
+    const k = `secret:${name}`;
+    if (value === null) delete this.#entries[k];
+    else {
+      const iv = randomBytes(12);
+      const c = createCipheriv("aes-256-gcm", this.#key, iv);
+      const data = Buffer.concat([c.update(value, "utf8"), c.final()]);
+      this.#entries[k] = { iv: iv.toString("hex"), tag: c.getAuthTag().toString("hex"), data: data.toString("hex") };
+    }
+    writeFileSync(this.#file, JSON.stringify(this.#entries, null, 2), { mode: 0o600 });
+  }
+  getSecret(name: string): string | null {
+    const e = this.#entries[`secret:${name}`];
+    if (!e) return null;
+    const d = createDecipheriv("aes-256-gcm", this.#key, Buffer.from(e.iv, "hex"));
+    d.setAuthTag(Buffer.from(e.tag, "hex"));
+    return Buffer.concat([d.update(Buffer.from(e.data, "hex")), d.final()]).toString("utf8");
+  }
+
   account(id: string) {
     const e = this.#entries[id];
     if (!e) throw new Error(`no wallet for ${id}`);

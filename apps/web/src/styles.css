@@ -216,3 +216,10 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 @media (max-width: 600px) { .setup-grid { grid-template-columns: 1fr; } .setup-live { flex-direction: column; align-items: stretch; } }
 .got { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 16px 0; border-color: rgba(94, 230, 168, .4); }
 .market .products { margin: 0; }
+.social-form { display: grid; gap: 10px; }
+.sm-btn { height: 26px; padding: 0 10px; font-size: 12px; }
+.setup-tools { display: grid; gap: 16px; }
+.setup-tools > .btn { justify-self: start; }
+.setup-buyback { display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr auto; gap: 8px; align-items: center; }
+.setup-buyback b { grid-column: 1 / -1; font-size: 13px; }
+@media (max-width: 700px) { .setup-buyback { grid-template-columns: 1fr; } }

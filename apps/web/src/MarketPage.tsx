@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "./router";
 
-type Item = { company: string; slug: string; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; buyUrl: string; page: string };
+type Item = { company: string; slug: string; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; featured: boolean; buyUrl: string; page: string };
 
 /** One place where everything the companies make is on sale, for people and for AI agents. */
 export function MarketPage() {
@@ -26,7 +26,7 @@ export function MarketPage() {
         <div className="grid products">
           {items.map((p) => (
             <div key={`${p.slug}/${p.id}`} className="card product">
-              <span className="pill">{p.kind}</span>
+              <span className="pill">{p.kind}{p.featured ? " · featured" : ""}</span>
               <h4>{p.name}</h4>
               <p>{p.pitch}</p>
               <div className="buy-row">

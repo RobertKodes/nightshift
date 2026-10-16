@@ -32,6 +32,20 @@ export const config = {
   /** Platform fee on revenue, taken when the owner withdraws. 0 = none. */
   platformFeeBps: num(env.PLATFORM_FEE_BPS, 0),
   platformTreasury: (env.PLATFORM_TREASURY ?? "") as `0x${string}` | "",
+  /** Operator alerts: a Telegram bot token and the chat it writes to. */
+  telegramToken: env.TELEGRAM_BOT_TOKEN ?? "",
+  telegramChat: env.TELEGRAM_CHAT_ID ?? "",
+  /**
+   * The platform token (an ERC-20 on Ethereum, e.g. one launched through IMD). Holding at least
+   * TOKEN_HOLDER_MIN waives the platform fee and features the owner's products in the market.
+   * Off while TOKEN_ADDRESS is empty.
+   */
+  token: {
+    address: (env.TOKEN_ADDRESS ?? "") as `0x${string}` | "",
+    symbol: env.TOKEN_SYMBOL ?? "TOKEN",
+    holderMin: num(env.TOKEN_HOLDER_MIN, 0),
+    buyUrl: env.TOKEN_BUY_URL ?? "",
+  },
   /** Companies one wallet may run at once. */
   maxCompaniesPerOwner: num(env.MAX_COMPANIES_PER_OWNER, 5),
 };

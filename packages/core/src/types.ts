@@ -91,7 +91,9 @@ export interface Company {
   products: Product[];
   tasks: Task[];
   journal: JournalEntry[];
-  marketing: { at: number; channel: string; text: string; status: "drafted" | "posted" }[];
+  marketing: { at: number; channel: string; text: string; status: "drafted" | "posted" | "failed"; url?: string; error?: string }[];
+  /** Where the company posts. The password lives in the vault, never here. */
+  social?: { bluesky?: { handle: string; auto: boolean } };
 }
 
 export const USDC_DECIMALS = 6;
