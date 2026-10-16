@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { chooseWallet } from "./wallet";
 import { createWalletClient, custom, getAddress } from "viem";
 import { api } from "./api";
 
@@ -15,10 +16,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async () => {
     setError(null);
-    const eth = (window as unknown as { ethereum?: unknown }).ethereum;
-    if (!eth) { setError("No wallet found. Install MetaMask or Rabby."); return; }
     setBusy(true);
     try {
+      const eth = await chooseWallet({ ask: true });
       const wallet = createWalletClient({ transport: custom(eth as never) });
       const [acct] = await wallet.requestAddresses();
       if (!acct) throw new Error("No account selected");

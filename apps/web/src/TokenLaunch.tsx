@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { chooseWallet } from "./wallet";
 import { type Hex, createPublicClient, createWalletClient, custom, erc20Abi, http, parseAbi, stringToHex } from "viem";
 import { mainnet } from "viem/chains";
 
@@ -38,8 +39,7 @@ export function TokenLaunch({ call, token }: { call: (token: string, path: strin
     if (!res) return;
     setErr(null);
     try {
-      const eth = (window as unknown as { ethereum?: unknown }).ethereum;
-      if (!eth) throw new Error("No wallet in this browser. Install MetaMask or Rabby.");
+      const eth = await chooseWallet({ ask: true });
       const wallet = createWalletClient({ chain: mainnet, transport: custom(eth as never) });
       setStep("Connect your wallet…");
       const [me] = await wallet.requestAddresses();

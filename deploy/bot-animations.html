@@ -46,6 +46,8 @@ h2 { position:absolute; left:44px; top:340px; font: italic 400 34px 'Instrument 
 @keyframes siren { 0%,100% { opacity:0 } 50% { opacity:1 } }
 .fx.glyph i { color:var(--acc); font-family:Inter; font-weight:800; text-shadow:0 0 12px var(--acc); }
 .vig { position:absolute; inset:0; box-shadow: inset 0 0 120px #000; }
+.logo { position:absolute; right:30px; top:22px; width:206px; height:206px; border-radius:50%; animation: float 4s ease-in-out infinite; filter: drop-shadow(0 0 26px color-mix(in srgb, var(--acc) 75%, transparent)); display:none; }
+.withlogo .moon { display:none; } .withlogo .logo { display:block; }
 </style></head>
 <body><div class="stage" id="s">
   <div class="stars" id="stars"></div>
@@ -53,6 +55,7 @@ h2 { position:absolute; left:44px; top:340px; font: italic 400 34px 'Instrument 
   <div id="extra"></div>
   <div class="halo"></div><div class="halo b"></div>
   <svg class="moon" viewBox="0 0 100 100"><defs><linearGradient id="m" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f0ff"/><stop offset=".45" stop-color="#c4b4ff"/><stop offset="1" stop-color="#6d4dff"/></linearGradient><mask id="c"><rect width="100" height="100" fill="#fff"/><circle cx="64" cy="38" r="36" fill="#000"/></mask></defs><circle cx="50" cy="50" r="42" fill="url(#m)" mask="url(#c)"/></svg>
+  <img class="logo" src="shift-logo.png" alt="">
   <div class="fx" id="fx"></div>
   <div class="brand"><svg viewBox="0 0 100 100"><mask id="c2"><rect width="100" height="100" fill="#fff"/><circle cx="64" cy="38" r="36" fill="#000"/></mask><circle cx="50" cy="50" r="42" fill="#C4B4FF" mask="url(#c2)"/></svg>NIGHTSHIFT</div>
   <div class="tag" id="tag"><b></b><span></span></div>
@@ -89,5 +92,6 @@ const extra = document.getElementById("extra");
 if (S.bars) { const b = document.createElement("div"); b.className = "bars"; for (let i = 0; i < 7; i++) { const s = document.createElement("span"); s.style.height = 50 + i * 15 + "px"; s.style.animationDelay = -(i * 0.18) + "s"; b.append(s); } extra.append(b); }
 if (S.siren) extra.innerHTML += '<div class="siren"></div><div class="siren b"></div>';
 if (S.scan) extra.innerHTML += '<div class="scan"></div>';
+if (["buy","whale","launch","milestone"].includes(K)) document.getElementById("s").classList.add("withlogo");
 window.seek = (t) => document.getAnimations().forEach((a) => { a.pause(); a.currentTime = t; });
 </script></body></html>

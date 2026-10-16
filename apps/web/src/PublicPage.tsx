@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { chooseWallet } from "./wallet";
 import { type Hex, createWalletClient, custom } from "viem";
 import { type Health, type PublicCompany, api, events, short, usd } from "./api";
 
@@ -6,8 +7,7 @@ interface Requirement { network: string; asset: `0x${string}`; amount: string; p
 
 /** Pays an x402 link from the visitor's own wallet: sign a USDC authorization, send it, get the product. */
 async function buyWithWallet(buyUrl: string): Promise<{ deliverable: string | null; tx: string }> {
-  const eth = (window as unknown as { ethereum?: unknown }).ethereum;
-  if (!eth) throw new Error("No wallet found. Install MetaMask or Rabby.");
+  const eth = await chooseWallet();
   const challenge = await fetch(buyUrl);
   if (challenge.status !== 402) throw new Error(((await challenge.json().catch(() => ({}))) as { error?: string }).error ?? `unexpected ${challenge.status}`);
   const ch = (await challenge.json()) as { accepts: Requirement[] };
