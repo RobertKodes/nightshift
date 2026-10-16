@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { TokenLaunch } from "./TokenLaunch";
 import { ImdOrders } from "./ImdOrders";
+import { FrogsAdmin } from "./FrogsAdmin";
 
 type Check = { id: string; label: string; state: "ok" | "warn" | "block"; detail: string };
 type State = {
@@ -74,6 +75,8 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "TOKEN_SYMBOL", label: "Symbol", hint: "OCTO" },
     { k: "TOKEN_HOLDER_MIN", label: "Holder minimum (tokens)", hint: "10000" },
     { k: "TOKEN_BUY_URL", label: "Where to buy it", hint: "https://app.uniswap.org/…" },
+    { k: "NFT_ADDRESS", label: "NIGHT FROGS contract (fills itself in)", hint: "0x…" },
+    { k: "NFT_EXTRA_SLOTS", label: "Extra company slots per frog holder", hint: "2" },
   ] },
   { title: "Simulation pacing", fields: [
     { k: "SIM_SHIFT_MINUTES", label: "Minutes between shifts", hint: "2" },
@@ -162,6 +165,11 @@ export function SetupPage() {
       <section className="card">
         <div className="card-h"><h3>Order from IMD</h3><span className="faint" style={{ fontSize: 12 }}>ready-made swarm work · paid from your wallet</span></div>
         <ImdOrders call={call} token={token} />
+      </section>
+
+      <section className="card">
+        <div className="card-h"><h3>NIGHT FROGS</h3><span className="faint" style={{ fontSize: 12 }}>Chainlink VRF and reveal · from the owner wallet</span></div>
+        <FrogsAdmin />
       </section>
 
       {GROUPS.map((g) => (

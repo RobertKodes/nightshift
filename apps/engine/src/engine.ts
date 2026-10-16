@@ -28,6 +28,7 @@ import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
+import { frogCached, frogCount, frogsOn, newMints } from "./frogs.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { buyCard, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
@@ -91,8 +92,24 @@ export class Engine {
       for (const o of changed) {
         const lines = [`🛠 ${o.title}: ${o.stage}`, ...(o.addresses ?? []).map((a) => `${a.name ?? a.role}: ${a.address}`), ...(o.repoUrl ? [o.repoUrl] : [])];
         void this.alert(lines.join("\n"), `order-${o.tx}-${o.stage}`);
+        // The NFT collection is live: switch its page, perks and mint alerts on.
+        const frogs = o.id === "night-frogs" && o.done && !o.error ? o.addresses?.find((a) => /nightfrogs/i.test(`${a.name ?? ""}`)) ?? o.addresses?.find((a) => a.role === "token") : undefined;
+        if (frogs && !config.nft.address) {
+          writeSettings({ NFT_ADDRESS: frogs.address });
+          config.nft.address = frogs.address as `0x${string}`;
+          void toCommunity(`🐸🌙 <b>NIGHT FROGS ARE LIVE</b>\n\n500 fully onchain frogs, built by the IMD swarm.\nMint only in IMD: 2 IMD each, <b>half of it burned forever</b>.\n\n<code>${frogs.address}</code>`, [[{ text: "🐸 Mint a frog", url: `${config.publicUrl}/frogs` }]], "frog");
+          housePost(`🐸 NIGHT FROGS are live: 500 fully onchain frogs built by the IMD swarm. Mint only in IMD, 2 IMD each, half burned forever. ${config.publicUrl}/frogs`, "frogs-live");
+        }
       }
     }).catch((e) => console.error("orders", e)), 60_000);
+    // Every frog minted, to the community chat.
+    setInterval(() => void newMints().then(async (mints) => {
+      for (const m of mints) {
+        const ids = m.quantity > 1 ? `#${m.first}–#${m.first + m.quantity - 1}` : `#${m.first}`;
+        const genesis = m.first <= 77 ? " · <b>GENESIS</b>" : "";
+        await toCommunity(`🐸 <b>NIGHT FROG${m.quantity > 1 ? "S" : ""} MINTED</b> ${ids}${genesis}\n\n👤 <a href="https://etherscan.io/address/${m.payer}">${m.payer.slice(0, 6)}…${m.payer.slice(-4)}</a>\n💵 ${m.paid.toFixed(2)} IMD · 🔥 ${(m.paid / 2).toFixed(2)} IMD burned\n\n<a href="https://etherscan.io/tx/${m.tx}">TX</a>`, [[{ text: "🐸 Mint yours", url: `${config.publicUrl}/frogs` }]], "frog");
+      }
+    }).catch((e) => console.error("frogs", e)), 30_000);
     // The daily report, at 08:00 UTC.
     let reported = "";
     setInterval(() => {
@@ -348,7 +365,9 @@ ${config.publicUrl}/token`, "launch-live");
   async create(idea: string, policy: Partial<Policy> = {}, owner: string | null = null): Promise<Company> {
     if (owner) {
       const mine = [...this.store.companies.values()].filter((x) => x.owner === owner.toLowerCase()).length;
-      if (mine >= config.maxCompaniesPerOwner) throw new Error(`One wallet can run ${config.maxCompaniesPerOwner} companies at once.`);
+      // NIGHT FROGS holders may run a few more companies.
+      const cap = config.maxCompaniesPerOwner + ((await frogCount(owner)) > 0 ? config.nft.extraSlots : 0);
+      if (mine >= cap) throw new Error(`One wallet can run ${cap} companies at once.${frogsOn() && cap === config.maxCompaniesPerOwner ? ` Holding a NIGHT FROG adds ${config.nft.extraSlots}.` : ""}`);
     }
     const clean = idea.trim();
     if (clean.length < 12) throw new Error("Describe the idea in a sentence: what it sells and to whom.");
@@ -448,7 +467,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     const available = await this.withdrawable(c);
     const total = amount ?? available;
     if (total <= 0n || total > available) throw new Error(`Nothing to withdraw, or more than the $${fromUsdc(available).toFixed(2)} available.`);
-    const holder = (await holderStatus(c.owner)).holds;
+    const holder = (await holderStatus(c.owner)).holds || (await frogCount(c.owner)) > 0;
     const fee = config.platformTreasury && !holder ? (total * BigInt(config.platformFeeBps)) / 10_000n : 0n;
     const sent = total - fee;
     const txs: string[] = [];
@@ -551,7 +570,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     return [...this.store.companies.values()]
       .flatMap((c) => c.products.filter((p) => p.status === "live" && this.files.has(p)).map((p) => ({
         company: c.name, slug: c.slug, id: p.id, name: p.name, kind: p.kind, pitch: p.pitch,
-        priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, featured: holdsCached(c.owner),
+        priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, featured: holdsCached(c.owner) || frogCached(c.owner),
         buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, page: `${config.publicUrl}/c/${c.slug}#${p.id}`,
         text: `${c.name} ${c.mission} ${c.audience} ${p.name} ${p.pitch}`.toLowerCase(),
       })))
@@ -575,7 +594,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
         const m = c.marketing.find((x) => x.status === "drafted");
         if (m) { housePost(`${m.text}\n\n— ${c.name}, a NIGHTSHIFT company`, `mkt-${c.id}-${m.at}`); Object.assign(m, { status: "posted", channel: "bluesky:project" }); this.#emit(c.id, "company", null); }
       }
-      if (c.owner) void holderStatus(c.owner);
+      if (c.owner) { void holderStatus(c.owner); void frogCount(c.owner); }
       for (const p of c.products) {
         if (p.status !== "live" || this.files.has(p)) continue;
         const t = c.tasks.find((x) => x.id === p.taskId);

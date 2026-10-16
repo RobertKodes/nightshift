@@ -71,7 +71,7 @@ function Socials() {
   );
 }
 
-export function SiteHeader({ active, home = false }: { active: "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "guide"; home?: boolean }) {
+export function SiteHeader({ active, home = false }: { active: "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "guide"; home?: boolean }) {
   const swarm = useSwarm();
   const { address, signIn, signOut, busy, error } = useSession();
   // On the landing the section links scroll; elsewhere they lead back to it.
@@ -83,6 +83,7 @@ export function SiteHeader({ active, home = false }: { active: "home" | "compani
         <Link to="/" className={active === "home" ? "on" : ""}>Home</Link>
         <a href={hash("mission")}>Mission</a>
         <Link to="/token" className={active === "token" ? "on" : ""}>Token</Link>
+        <Link to="/frogs" className={active === "frogs" ? "on" : ""}>Frogs</Link>
         <Link to="/companies" className={active === "companies" || active === "company" ? "on" : ""}>Companies</Link>
         <Link to="/market" className={active === "market" ? "on" : ""}>Market</Link>
         <Link to="/mcp" className={active === "mcp" ? "on" : ""}>MCP</Link>
@@ -114,6 +115,7 @@ export function SiteFooter() {
         <a href={BLUESKY_URL} target="_blank" rel="noreferrer">BLUESKY</a>
         <Link to="/market">MARKET</Link>
         <Link to="/token">TOKEN</Link>
+        <Link to="/frogs">FROGS</Link>
         <Link to="/guide">GUIDE</Link>
         <Link to="/mcp">MCP</Link>
         <Link to={DOCS}>DOCS</Link>

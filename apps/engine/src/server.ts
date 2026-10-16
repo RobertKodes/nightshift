@@ -11,6 +11,7 @@ import { handleMcp } from "./mcp.js";
 import { isAdmin, saveSetup, setupState } from "./admin.js";
 import { buybacks, checkLaunch, holderStatus, launchBody, launchState, recordBuyback, recordLaunch, tokenOn, type TokenSpec } from "./token.js";
 import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
+import { frogStats, frogsOn } from "./frogs.js";
 import { usdc } from "@nightshift/core";
 import { getAddress } from "viem";
 
@@ -212,6 +213,13 @@ export function serve(engine: Engine) {
 
       // ---- the landing page's live numbers: real where they can be, labelled where simulated
       if (p === "/api/landing") return json(res, 200, await landing(engine));
+      if (p === "/api/frogs") {
+        const order = orders().find((o) => o.id === "night-frogs");
+        return json(res, 200, {
+          on: frogsOn(), address: config.nft.address || null, stats: await frogStats(), extraSlots: config.nft.extraSlots,
+          order: order ? { stage: order.stage, done: Boolean(order.done), error: order.error ?? null, jobId: order.jobId ?? null } : null,
+        });
+      }
       if (p === "/api/token") {
         const fees = await engine.ledger.balance("ext:platform", "USDC");
         const bb = buybacks();

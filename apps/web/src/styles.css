@@ -254,3 +254,23 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 .token-specs b { font-size: 14px; }
 .tkn-util.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 700px) { .token-specs, .tkn-util.two, .guide-grid { grid-template-columns: 1fr; } .guide-step { grid-template-columns: 1fr; } }
+
+/* NIGHT FROGS */
+.frogs-page .tkn-coin { font-size: 26px; display: grid; place-items: center; }
+.frogs-meter { height: 10px; border: 1px solid var(--edge); background: rgba(3, 2, 10, .6); overflow: hidden; }
+.frogs-meter i { display: block; height: 100%; background: linear-gradient(90deg, #7c5cff, #b8ff4a); }
+.frogs-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.frogs-nums b { display: block; font: 600 22px var(--mono); color: var(--ink); }
+.frogs-nums span { font: 500 11px var(--mono); letter-spacing: .14em; color: var(--faint); text-transform: uppercase; }
+.frogs-buy { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.frogs-qty { display: flex; align-items: center; gap: 12px; }
+.frogs-qty b { font: 600 20px var(--mono); min-width: 28px; text-align: center; }
+.frogs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin: 14px 0 8px; }
+.frogs-grid figure { margin: 0; border: 1px solid var(--edge); background: rgba(3, 2, 10, .5); }
+.frogs-grid img { display: block; width: 100%; height: auto; aspect-ratio: 1; }
+.frogs-grid figcaption { padding: 6px 8px; font: 500 11px var(--mono); color: var(--dim); }
+.frogs-util { display: grid; gap: 10px; padding-left: 18px; }
+.frogs-traits { display: grid; gap: 8px; }
+.frogs-traits div { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 10px 12px; border: 1px solid var(--edge); background: rgba(3, 2, 10, .4); font-size: 14px; }
+.frogs-traits b { font: 600 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--moon, #c4b4ff); }
+@media (max-width: 560px) { .frogs-nums { grid-template-columns: 1fr; } .frogs-traits div { grid-template-columns: 1fr; gap: 4px; } }

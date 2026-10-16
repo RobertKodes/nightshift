@@ -74,6 +74,11 @@ export const config = {
   blueskyGapMinutes: num(env.BLUESKY_GAP_MINUTES, 45),
   /** In live mode, companies without their own account post their drafts on the project account. */
   blueskyCompanyPosts: (env.BLUESKY_COMPANY_POSTS ?? "1") === "1",
+  /** NIGHT FROGS (ERC-721 on Ethereum). Holders get the token holders' perks plus extra company slots. */
+  nft: {
+    address: (env.NFT_ADDRESS ?? "") as `0x${string}` | "",
+    extraSlots: num(env.NFT_EXTRA_SLOTS, 2),
+  },
   /** Companies one wallet may run at once. */
   maxCompaniesPerOwner: num(env.MAX_COMPANIES_PER_OWNER, 5),
 };

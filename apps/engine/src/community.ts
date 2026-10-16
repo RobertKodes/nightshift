@@ -105,8 +105,8 @@ async function scanBuys(st: State): Promise<Buy[]> {
 }
 
 /** The branded loop for a kind of message (served from the site's /bot folder). */
-export type Anim = "buy" | "whale" | "raid" | "launch" | "sale" | "milestone" | "welcome" | "post" | "alert" | "report";
-export const anim = (k: Anim): string => (!config.botAnimations ? "" : (k === "buy" || k === "whale") && config.buyMedia ? config.buyMedia : `${config.publicUrl}/bot/${k}.mp4`);
+export type Anim = "buy" | "whale" | "raid" | "launch" | "sale" | "milestone" | "welcome" | "post" | "alert" | "report" | "frog";
+export const anim = (k: Anim): string => (!config.botAnimations ? "" : k === "frog" ? `${config.publicUrl}/frogs/mint.jpg` : (k === "buy" || k === "whale") && config.buyMedia ? config.buyMedia : `${config.publicUrl}/bot/${k}.mp4`);
 
 /** Sends a card with its animation on top; long texts go as a plain message. */
 export async function sendCard(chat: string, kind: Anim, text: string, buttons?: Button[][]): Promise<boolean> {
