@@ -159,7 +159,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
           <div className="card">
             <div className="card-h"><h3>Products</h3><span className="faint mono" style={{ fontSize: 11 }}>sold through x402 · USDC</span></div>
             {c.products.length === 0 ? <div className="empty">The first product is on the way.</div> : (
-              <table>
+              <table className="t-products">
                 <thead><tr><th>Product</th><th>Status</th><th className="r">Price</th><th className="r">Sales</th><th className="r">Revenue</th></tr></thead>
                 <tbody>
                   {c.products.map((p) => (
@@ -178,7 +178,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
 
           <div className="card">
             <div className="card-h"><h3>Every shift</h3></div>
-            <table>
+            <table className="t-shifts">
               <thead><tr><th>#</th><th>Move</th><th>Status</th><th className="r">Cost</th></tr></thead>
               <tbody>
                 {[...c.tasks].reverse().slice(0, 20).map((t) => (

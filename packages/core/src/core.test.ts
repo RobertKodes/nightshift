@@ -109,5 +109,10 @@ describe("the saver inside a company", () => {
     expect(t2?.status).toBe("building");
     const t3 = await runShift(c, d2); // same playbook move, same body
     expect(t3).toBeNull(); // still building: no second purchase
+    t2!.status = "done";
+    const n = c.tasks.length;
+    expect(await runShift(c, d2)).toBeNull(); // identical order after delivery: no task, rest a day
+    expect(c.tasks.length).toBe(n);
+    expect(c.restUntil).toBeGreaterThan(now.t);
   });
 });

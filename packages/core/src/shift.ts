@@ -65,6 +65,19 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
     }
   }
   decision ??= heuristicDecision(c, stats);
+  const order = imdOrder(c, decision, d.buyBase(c));
+  // The saver: never buy the same body twice. An identical order is not a move, so it leaves no
+  // task behind; the company rests for a day instead of asking again every shift.
+  if (order) {
+    const hash = inputHash(order.action, order.input);
+    const twin = c.tasks.find((x) => x.imd && !["failed", "rejected"].includes(x.status) && inputHash(x.imd.action, x.imd.input) === hash);
+    if (twin) {
+      c.cycle -= 1;
+      c.restUntil = now(d) + 24 * 60 * 60 * 1000;
+      note(c, d, "note", `Saver: "${decision.title}" was already bought in shift ${twin.cycle}. Nothing new worth paying for; resting for a day, or until you run a shift.`);
+      return null;
+    }
+  }
   note(c, d, "decision", `Shift ${c.cycle}: ${decision.title}. ${decision.why}${by === "playbook" ? "" : ` (${by})`}`);
 
   const t: Task = {
@@ -86,20 +99,11 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
   c.tasks.push(t);
   if (c.tasks.length > 300) c.tasks.splice(0, c.tasks.length - 300);
 
-  const order = imdOrder(c, decision, d.buyBase(c));
   if (!order) {
     doInHouse(c, t, decision, d);
     return t;
   }
 
-  // The saver: never buy the same body twice, and reuse public research instead of paying for it.
-  const hash = inputHash(order.action, order.input);
-  const twin = c.tasks.find((x) => x !== t && x.imd && !["failed", "rejected"].includes(x.status) && inputHash(x.imd.action, x.imd.input) === hash);
-  if (twin) {
-    touch(c, t, d, { status: "failed", error: `already bought in shift ${twin.cycle}; not paying twice` });
-    note(c, d, "note", `Saver: "${t.title}" is identical to shift ${twin.cycle}'s order. Skipped, nothing spent.`);
-    return t;
-  }
   if (decision.kind === "research" && d.findExisting) {
     const hit = await d.findExisting(keywords(`${decision.brief} ${c.idea}`)).catch(() => null);
     if (hit) {

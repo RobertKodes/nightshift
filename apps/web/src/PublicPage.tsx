@@ -86,17 +86,17 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
             <span className="pill">{p.kind}</span>
             <h4>{p.name}</h4>
             <p>{p.pitch}</p>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div className="buy-row">
               <span className="price">{usd(p.priceUsd)}</span>
               <button className="btn primary" onClick={() => buy(p)}>{health?.mode === "sim" ? "Buy (demo)" : "Buy with USDC"}</button>
             </div>
-            <span className="faint mono" style={{ fontSize: 11 }}>agents: GET {p.buyUrl.replace(/^https?:\/\//, "")} → x402</span>
+            <span className="faint mono buy-agents">agents: GET {p.buyUrl.replace(/^https?:\/\//, "")} → x402</span>
           </div>
         ))}
       </div>
       <div className="card">
         <div className="card-h"><h3>What it did, shift by shift</h3><span className="faint mono" style={{ fontSize: 11 }}>wallet {short(c.wallet)}</span></div>
-        <table><tbody>{c.shifts.map((s, i) => <tr key={i}><td className="mono faint">{s.cycle}</td><td>{s.title}</td><td><span className={`pill ${s.status}`}>{s.status.replace(/_/g, " ")}</span></td></tr>)}</tbody></table>
+        <table><tbody>{c.shifts.filter((s) => s.status !== "failed" && s.status !== "rejected").map((s, i) => <tr key={i}><td className="mono faint">{s.cycle}</td><td>{s.title}</td><td><span className={`pill ${s.status}`}>{s.status.replace(/_/g, " ")}</span></td></tr>)}</tbody></table>
       </div>
       {toast && <div className="toast">{toast}</div>}
     </div>
