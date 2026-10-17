@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { TokenLaunch } from "./TokenLaunch";
 import { ImdOrders } from "./ImdOrders";
 import { FrogsAdmin } from "./FrogsAdmin";
+import { AfterLaunch } from "./AfterLaunch";
 
 type Check = { id: string; label: string; state: "ok" | "warn" | "block"; detail: string };
 type State = {
@@ -160,6 +161,11 @@ export function SetupPage() {
       <section className="card">
         <div className="card-h"><h3>Launch the NIGHTSHIFT token</h3><span className="faint" style={{ fontSize: 12 }}>through IMD · paid from your wallet</span></div>
         <TokenLaunch call={call} token={token} />
+      </section>
+
+      <section className="card">
+        <div className="card-h"><h3>After launch: keeper and frog rewards</h3><span className="faint" style={{ fontSize: 12 }}>daily split and IMD burn · weekly NIGHT FROGS roots</span></div>
+        <AfterLaunch call={call} token={token} />
       </section>
 
       <section className="card">

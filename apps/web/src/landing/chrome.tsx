@@ -78,13 +78,14 @@ export const UTILITIES: { to: string; label: string; note: string; soon?: boolea
   { to: "/tokenomics", label: "Tokenomics", note: "Supply, fees, wallets and every rule" },
   { to: "/frogs", label: "NIGHT FROGS", note: "The collection and its rewards" },
   { to: "/swap", label: "Swap", note: "Buy and sell $SHIFT for ETH, from its pool" },
+  { to: "/stake", label: "Stake", note: "Lock $SHIFT, earn from every sell" },
   { to: "/launchpad", label: "Launchpad", note: "Launch a token with the IMD swarm", soon: true },
   { to: "/games", label: "Game Room", note: "PvP games in $SHIFT and IMD", soon: true },
   { to: "/impact", label: "IMD Impact", note: "What NIGHTSHIFT gives the IMD network" },
   { to: "/mcp", label: "MCP for agents", note: "Let AI agents use NIGHTSHIFT" },
 ];
-export type Active = "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide" | "tokenomics" | "games" | "impact" | "launchpad";
-const UTIL_KEYS: Active[] = ["token", "tokenomics", "frogs", "swap", "launchpad", "games", "impact", "mcp"];
+export type Active = "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide" | "tokenomics" | "games" | "impact" | "launchpad" | "stake";
+const UTIL_KEYS: Active[] = ["token", "tokenomics", "frogs", "swap", "stake", "launchpad", "games", "impact", "mcp"];
 
 /** The Utilities menu: opens on hover or focus on desktop, on tap on touch screens. */
 function UtilitiesMenu({ active }: { active: Active }) {

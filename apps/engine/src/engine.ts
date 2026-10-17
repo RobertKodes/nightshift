@@ -23,6 +23,8 @@ import { Auth } from "./auth.js";
 import { LlmClient } from "@nightshift/llm";
 import { balances, ensurePermit2, eth, ethWallet, sales, salesWallet } from "./chain.js";
 import { findPool } from "./v4.js";
+import { type KeeperRun, runKeeper } from "./keeper.js";
+import { buildEpoch } from "./frogpot.js";
 import { IMD_MAINNET } from "@nightshift/imd";
 import { config } from "./config.js";
 import { simulateTraffic } from "./market.js";
@@ -91,6 +93,15 @@ export class Engine {
       startCommunity();
     }
     setInterval(() => void this.#followTokenLaunch(), 60_000);
+    // After launch: the keeper splits fees and burns IMD daily at 03:00 UTC; the frog list is built on Mondays.
+    let kept = "", built = "";
+    setInterval(() => {
+      const l = launchState();
+      if (!l?.open || !l.contracts?.splitter) return;
+      const d = new Date(), day = d.toISOString().slice(0, 10);
+      if (d.getUTCHours() === 3 && kept !== day) { kept = day; void this.keeperRun(); }
+      if (d.getUTCDay() === 1 && d.getUTCHours() === 0 && built !== day) { built = day; void this.frogEpoch(); }
+    }, 60_000);
     setInterval(() => void houseTick().catch((e) => console.error("house", e)), 60_000);
     // Work bought from IMD with the operator's wallet (e.g. the NFT collection): every stage to Telegram.
     setInterval(() => void followOrders().then((changed) => {
@@ -330,6 +341,24 @@ export class Engine {
 Trading is open to everyone on Ethereum, paired with ETH.
 Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT and IMD).`, [[{ text: `🌙 Buy on NIGHTSHIFT`, url: `${config.publicUrl}/swap` }, { text: "🦄 Uniswap", url: buyUrl(before.token) }], [{ text: "📊 Chart", url: `https://dexscreener.com/ethereum/${before.token}` }, { text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch");
     void this.adminCard(`🚀 <b>$${esc(before.symbol)} is public.</b> The main group was told.`, [[{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch-live");
+  }
+
+  lastKeeper: KeeperRun | null = null;
+  /** One keeper run, told to the admins. */
+  async keeperRun(): Promise<KeeperRun> {
+    const l = launchState();
+    const r = await runKeeper(this.vault, l?.contracts ?? {}).catch((e) => ({ at: Date.now(), did: [], skipped: [], error: (e as Error).message }));
+    this.lastKeeper = r;
+    void this.adminCard(`🧹 <b>Keeper run</b>\n${r.error ? `⚠️ ${esc(r.error)}` : ""}${r.did.map((x) => `✅ ${esc(x)}`).join("\n")}${r.skipped.length ? `\n${r.skipped.map((x) => `· ${esc(x)}`).join("\n")}` : ""}`, [[{ text: "⚙️ Setup", url: `${config.publicUrl}/setup` }]], `keeper-${r.at}`, r.error ? "alert" : "report");
+    return r;
+  }
+
+  /** This week's NIGHT FROGS list; the dev wallet posts its root from /setup. */
+  async frogEpoch() {
+    const l = launchState();
+    const e = await buildEpoch(l?.contracts ?? {}, l?.scanFrom ?? 0).catch((err) => { void this.alert(`Frog epoch failed: ${(err as Error).message}`, "frog-epoch"); return null; });
+    if (e) void this.adminCard(`🐸 <b>NIGHT FROGS epoch ${e.epoch} is ready</b>\n${e.wallets} wallets · ${e.tokens.map((t) => `${(Number(t.total) / 1e18).toFixed(4)} ${t.symbol}`).join(" + ")}\n\nPost its root from the dev wallet so holders can claim.`, [[{ text: "⚙️ Post it in Setup", url: `${config.publicUrl}/setup` }]], `epoch-${e.epoch}`, "report");
+    return e;
   }
 
   /** The contract address, privately, to the launch chats (LAUNCH_NOTIFY). */

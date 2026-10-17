@@ -14,6 +14,7 @@ import { MarketPage } from "./MarketPage";
 import { TokenPage } from "./TokenPage";
 import { FrogsPage } from "./FrogsPage";
 import { SwapPage } from "./SwapPage";
+import { StakePage } from "./StakePage";
 import { ImpactPage } from "./ImpactPage";
 import { GuidePage } from "./GuidePage";
 import { TermsPage } from "./TermsPage";
@@ -40,12 +41,13 @@ function App() {
   if (seg[0] === "token") page = <TokenPage />;
   if (seg[0] === "frogs") page = <FrogsPage />;
   if (seg[0] === "swap") page = <SwapPage />;
+  if (seg[0] === "stake") page = <StakePage />;
   if (seg[0] === "impact") page = <ImpactPage />;
   if (seg[0] === "guide") page = <GuidePage />;
   if (seg[0] === "tokenomics") page = <TokenomicsPage />;
   if (seg[0] === "games") page = <GameRoomPage />;
   if (seg[0] === "launchpad") page = <LaunchpadPage />;
-  const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "guide", "tokenomics", "games", "impact", "launchpad"];
+  const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "stake", "guide", "tokenomics", "games", "impact", "launchpad"];
   const active: Active = seg[0] === "co" ? "company" : named.includes(seg[0] as Active) ? (seg[0] as Active) : "companies";
   return (
     <div className="ns ns-app">

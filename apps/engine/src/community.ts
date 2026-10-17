@@ -51,7 +51,7 @@ export function buyCard(b: Buy): { text: string; buttons: Button[][] } {
   return { text, buttons: [
     [{ text: `🌙 Buy on NIGHTSHIFT`, url: `${config.publicUrl}/swap` }, { text: "🦄 Uniswap", url: buy }],
     [{ text: "📊 Chart", url: market?.chart || `https://dexscreener.com/ethereum/${config.token.address}` }, { text: "🧾 Etherscan", url: `https://etherscan.io/tx/${b.tx}` }],
-    [{ text: "🪙 Tokenomics", url: `${config.publicUrl}/tokenomics` }, { text: "🔒 Stake", url: `${config.publicUrl}/token` }],
+    [{ text: "🪙 Tokenomics", url: `${config.publicUrl}/tokenomics` }, { text: "🔒 Stake", url: `${config.publicUrl}/stake` }],
   ] };
 }
 

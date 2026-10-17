@@ -1,4 +1,4 @@
-import { encodeFunctionData, erc20Abi, parseAbi, parseEther } from "viem";
+import { encodeFunctionData, erc20Abi, parseAbi, parseEther, toFunctionSelector } from "viem";
 import { eth } from "./chain.js";
 import { DEAD, DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR, TREASURY_WALLET } from "./shift-launch.js";
 import { type PoolKey, V4, findPool, quoteArgs, quoterAbi, routerAbi, swapCall } from "./v4.js";
@@ -72,6 +72,13 @@ export async function verifyShift(c: Record<string, string>): Promise<Check[]> {
     add("Rewards owner is your dev wallet", owner?.toLowerCase() === DEV_WALLET, String(owner));
     add("Rewards pays NIGHT FROGS holders", has(rcode, FROGS));
   }
+
+  // Every function the site, the keeper and /setup call is really there (selectors in the code).
+  const missing = (code: string, sigs: string[]) => sigs.filter((x) => !code.includes(toFunctionSelector(x).slice(2)));
+  const sm = missing(scode, ["distribute(address)", "burnReserve(address,uint256,uint256)", "setKeeper(address)", "reserve(address)"]);
+  add("Splitter has distribute, burnReserve, setKeeper, reserve", scode.length > 2 && sm.length === 0, sm.join(", ") || "all found");
+  const rm = missing(rcode, ["stake(uint256,uint256)", "withdraw(uint256)", "getReward()", "balanceOf(address)", "earned(address,address)", "postRoot(uint256,bytes32,address,uint256)", "claimFrogs(uint256,address,uint256,bytes32[])"]);
+  add("Rewards has stake, withdraw, claim, earned, postRoot, claimFrogs", rcode.length > 2 && rm.length === 0, rm.join(", ") || "all found");
   return out;
 }
 

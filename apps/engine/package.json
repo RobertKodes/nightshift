@@ -10,14 +10,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@nightshift/core": "workspace:*",
     "@nightshift/imd": "workspace:*",
     "@nightshift/ledger": "workspace:*",
     "@nightshift/llm": "workspace:*",
     "@nightshift/x402": "workspace:*",
-    "viem": "^2.21.54",
+    "@openzeppelin/merkle-tree": "1.0.8",
     "imd-mcp": "github:RobertKodes/imd-mcp#15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f",
-    "@modelcontextprotocol/sdk": "1.32.1",
+    "viem": "^2.21.54",
     "zod": "^3.25.76"
   }
 }

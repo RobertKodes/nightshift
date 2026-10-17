@@ -6,6 +6,8 @@ import { fromImd, fromUsdc } from "@nightshift/core";
 import { type PaymentPayload, USDC, challenge, decodeHeader, encodeHeader, requirement, settlePayment, verifyPayment } from "@nightshift/x402";
 import { balances, eth, sales, salesWallet } from "./chain.js";
 import { findPool } from "./v4.js";
+import { keeperAccount } from "./keeper.js";
+import { claimsOf, epochs, markPosted } from "./frogpot.js";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { handleMcp } from "./mcp.js";
@@ -233,6 +235,19 @@ export function serve(engine: Engine) {
           void engine.alert(`🛠 ${c.title} ordered from IMD: https://etherscan.io/tx/${o.tx}`, `order-${o.tx}`);
           return json(res, 200, { ok: true, orders: orders() });
         }
+        if (p === "/api/admin/keeper" && req.method === "GET") {
+          const a = keeperAccount(engine.vault).address;
+          return json(res, 200, { address: a, eth: (await eth.getBalance({ address: a }).catch(() => 0n)).toString(), last: engine.lastKeeper });
+        }
+        if (p === "/api/admin/keeper/run" && req.method === "POST") return json(res, 200, await engine.keeperRun());
+        if (p === "/api/admin/frogpot" && req.method === "GET") return json(res, 200, { epochs: epochs() });
+        if (p === "/api/admin/frogpot/build" && req.method === "POST") return json(res, 200, { epoch: await engine.frogEpoch() });
+        if (p === "/api/admin/frogpot/posted" && req.method === "POST") {
+          const b = await body(req);
+          if (!/^0x[0-9a-fA-F]{64}$/.test(String(b.tx))) return json(res, 400, { error: "tx must be a transaction hash" });
+          markPosted(Number(b.epoch), String(b.token), String(b.tx));
+          return json(res, 200, { ok: true });
+        }
         if (p === "/api/admin/test-all" && req.method === "POST") {
           return json(res, 200, { ok: true, result: await engine.testAll() });
         }
@@ -253,6 +268,11 @@ export function serve(engine: Engine) {
       if (p === "/api/frogs/staking") {
         const w = new URL(req.url ?? "/", config.publicUrl).searchParams.get("wallet") ?? "";
         return json(res, 200, { board: stakingBoard(20), me: /^0x[0-9a-fA-F]{40}$/.test(w) ? stakingOf(w) : null });
+      }
+      if (p === "/api/frogs/claims") {
+        const a = url.searchParams.get("address") ?? "";
+        if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return json(res, 400, { error: "address" });
+        return json(res, 200, { claims: claimsOf(a), rewards: launchState()?.contracts?.rewards ?? null });
       }
       if (p === "/api/frogs") {
         const order = orders().find((o) => o.id === "night-frogs");
