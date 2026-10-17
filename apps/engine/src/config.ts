@@ -39,8 +39,8 @@ export const config = {
   platformTreasury: (env.PLATFORM_TREASURY || TREASURY_WALLET) as `0x${string}` | "",
   /** The dev wallet's part of every platform fee: 20%, the one rule. The rest goes to the treasury. */
   platformDev: (env.PLATFORM_DEV || DEV_WALLET) as `0x${string}`,
-  /** Telegram chats that get the contract address privately at deploy and at the first buy. */
-  launchNotify: env.LAUNCH_NOTIFY ?? "<admin id>",
+  /** Telegram chats that get the contract address privately at deploy and at the first buy. Kept only in the server settings, never in the code. */
+  launchNotify: env.LAUNCH_NOTIFY ?? "",
   /** Operator alerts: a Telegram bot token and the chat it writes to. */
   telegramToken: env.TELEGRAM_BOT_TOKEN ?? "",
   /** One chat id, or several separated by commas (a group and a person). */
