@@ -33,7 +33,8 @@ import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { buyCard, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
 import { type Button, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands } from "./social.js";
-import { followLaunch, holderStatus, holdsCached, launchState } from "./token.js";
+import { followLaunch, followOpen, holderStatus, holdsCached, launchState, saveVerification } from "./token.js";
+import { verifyShift } from "./shift-verify.js";
 import { writeSettings } from "./settings.js";
 
 export type EngineEvent = { type: "task" | "journal" | "company" | "sale"; companyId: string; payload: unknown; at: number };
@@ -277,21 +278,35 @@ export class Engine {
   /** While the platform token is being launched through IMD, follow it and switch it on when live. */
   async #followTokenLaunch(): Promise<void> {
     const before = launchState();
-    if (!before || before.done) return;
-    const l = await followLaunch();
-    if (l && l.stage !== before.stage) void this.alert(`🪙 ${l.symbol} launch: ${l.stage}`, `launch-${l.stage}`);
-    if (l?.token && !config.token.address) {
-      const buyUrl = `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7&outputCurrency=${l.token}`;
+    if (!before || before.open || before.error) return;
+    if (!before.done) {
+      const l = await followLaunch();
+      if (l && l.stage !== before.stage) void this.alert(`🪙 ${l.symbol} launch: ${l.stage}`, `launch-${l.stage}`);
+      // Deployed: check it against what we asked for, privately, before anyone can buy.
+      if (l?.done && l.contracts) {
+        const checks = await verifyShift(l.contracts).catch((e) => [{ label: "Verification could not run", ok: false, detail: (e as Error).message }]);
+        saveVerification(checks);
+        const ok = checks.every((c) => c.ok);
+        void this.alert(`${ok ? "✅" : "❌"} <b>$${esc(l.symbol)} deployed. Checked against our spec:</b>\n\n${checks.map((c) => `${c.ok ? "✅" : "❌"} ${esc(c.label)}${c.ok ? "" : ` (${esc(c.detail)})`}`).join("\n")}\n\n${ok
+          ? `Everything matches. Trading is closed until <b>0x3322…4D69</b> buys. When it buys, the token goes public by itself.`
+          : `<b>Do NOT buy from 0x3322…4D69.</b> Trading stays closed, nobody can lose money. Open /setup and tell Claude.`}`, "launch-verified");
+      }
+      return;
+    }
+    // Deployed and checked: wait for the first buyer, then go public.
+    const l = await followOpen();
+    if (l?.open && l.token && !config.token.address) {
+      const buyUrl = `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=NATIVE&outputCurrency=${l.token}`;
       writeSettings({ TOKEN_ADDRESS: l.token, TOKEN_SYMBOL: l.symbol, TOKEN_BUY_URL: buyUrl });
       Object.assign(config.token, { address: l.token as `0x${string}`, symbol: l.symbol, buyUrl });
       void toCommunity(`🚀🌙 <b>$${esc(l.symbol)} IS LIVE</b>
 
 <code>${l.token}</code>
 
-Paired with IMD on Ethereum. Every trade pays the IMD swarm.`, [[{ text: `🟢 Buy $${l.symbol}`, url: buyUrl }], [{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch");
-      housePost(`🚀 $${l.symbol} is live on Ethereum, paired with IMD.\n\n${l.token}\n\nHolders pay no platform fee on NIGHTSHIFT. ${config.publicUrl}/token`, "token-live");
-      void this.alert(`🚀 $${l.symbol} is live: ${l.token}
-${config.publicUrl}/token`, "launch-live");
+Trading is open to everyone on Ethereum, paired with ETH.
+Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT and IMD).`, [[{ text: `🟢 Buy $${l.symbol}`, url: buyUrl }], [{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch");
+      housePost(`🚀 $${l.symbol} is live on Ethereum.\n\n${l.token}\n\nEvery sell feeds stakers, NIGHT FROGS holders and burns SHIFT and IMD. ${config.publicUrl}/token`, "token-live");
+      void this.alert(`🚀 $${l.symbol} is public: the first buy landed (${l.openTx}).\n${config.publicUrl}/token`, "launch-live");
     }
   }
 
@@ -560,7 +575,8 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     const b1 = buy(180); await say("Buy", toCommunity(b1.text, b1.buttons, "buy"));
     const b2 = buy(3200); await say("Whale buy", toCommunity(b2.text, b2.buttons, "whale"));
     await say("X raid", raid(`${config.xUrl}/status/1846000000000000000`, "TEST: this is how a raid looks"));
-    await say("Token launch", toCommunity(`${T}🚀🌙 <b>$${esc(sym)} IS LIVE</b>\n\n<code>0x0000…TEST</code>\n\nPaired with IMD on Ethereum. Every trade pays the IMD swarm.`, [[{ text: `🟢 Buy $${sym}`, url: `${config.publicUrl}/token` }]], "launch"));
+    await say("Token launch", toCommunity(`${T}🚀🌙 <b>$${esc(sym)} IS LIVE</b>\n\n<code>0x0000…TEST</code>\n\nTrading is open to everyone on Ethereum, paired with ETH.
+Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT and IMD).`, [[{ text: `🟢 Buy $${sym}`, url: `${config.publicUrl}/token` }]], "launch"));
     await say("Company sale", toCommunity(`${T}💰 <b>A NIGHTSHIFT company just made a sale</b>\n\nLetsBuild sold <b>Market report</b> for $9.00.\nBuilt by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See the market", url: `${config.publicUrl}/market` }]], "sale"));
     await say("Milestone", toCommunity(`${T}🏆 <b>$${esc(sym)} just crossed $25.0K market cap!</b>\n\nThe night shift keeps building 🌙🐸`, [[{ text: "📊 Chart", url: `${config.publicUrl}/token` }]], "milestone"));
     const w = welcome(["Test Frog"]); await say("Welcome", toCommunity(`${T}${w.text}`, w.buttons, "welcome"));

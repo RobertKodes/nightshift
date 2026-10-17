@@ -4,6 +4,8 @@ import { erc20Abi, parseAbiItem } from "viem";
 import { eth } from "./chain.js";
 import { config } from "./config.js";
 import { housePost } from "./house.js";
+import { DEAD, DEV_WALLET, IMD_BURN_EXECUTOR } from "./shift-launch.js";
+import { IMD_TOKEN, launchState } from "./token.js";
 import { type Button, esc, telegram, telegramMedia, tgCall } from "./social.js";
 
 /**
@@ -17,7 +19,7 @@ const V4_POOL_MANAGER = "0x000000000004444c5dc75cb358380d2e3de08a90";
 const MILESTONES = [10e3, 25e3, 50e3, 100e3, 250e3, 500e3, 1e6, 2.5e6, 5e6, 10e6, 25e6, 50e6, 100e6];
 
 type Market = { priceUsd: number; mcap: number; liquidity: number; pools: string[]; chart: string; at: number };
-type State = { lastBlock?: number; milestone?: number; bskySeen?: string; buys?: number };
+type State = { lastBlock?: number; milestone?: number; bskySeen?: string; buys?: number; eventsBlock?: number; burnedShift?: number; burnedImd?: number };
 
 const file = () => join(config.dataDir, "community.json");
 const load = (): State => { try { return existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : {}; } catch { return {}; } };
@@ -83,7 +85,9 @@ async function scanBuys(st: State): Promise<Buy[]> {
   const logs = await eth.getLogs({ address: config.token.address as `0x${string}`, event: TRANSFER, args: { from: m.pools as `0x${string}`[] }, fromBlock: BigInt(from), toBlock: BigInt(head) });
   st.lastBlock = head;
   const byTx = new Map<string, { value: bigint; block: bigint }>();
+  const ours = new Set(Object.values(launchState()?.contracts ?? {}).map((a) => a.toLowerCase()));
   for (const l of logs) {
+    if (ours.has(String(l.args.to).toLowerCase())) continue; // the hook's fee, not a buy
     const k = l.transactionHash!;
     const cur = byTx.get(k) ?? { value: 0n, block: l.blockNumber! };
     cur.value += l.args.value ?? 0n;
@@ -102,6 +106,68 @@ async function scanBuys(st: State): Promise<Buy[]> {
     buys.push({ usd: value$, imd: config.imdUsd ? value$ / config.imdUsd : 0, tokens, buyer, tx, newHolder: before === 0, position: before > 0 ? (tokens / before) * 100 : 0, mcap: m.mcap, liquidity: m.liquidity });
   }
   return buys;
+}
+
+const STAKED = parseAbiItem("event Staked(address indexed account, uint256 amount, uint256 unlockAt)");
+const tok = (v: bigint) => Number(v / 10n ** 12n) / 1e6;
+
+/**
+ * Stakes and burns, from the chain: the dev's stake is announced as the dev's, with its lock;
+ * burns are SHIFT sent to 0x…dEaD and IMD sent to IMD's BurnExecutor by our fee splitter.
+ */
+async function scanShiftEvents(st: State): Promise<void> {
+  const l = launchState();
+  const c = l?.contracts;
+  if (!l?.open || !c?.token) return;
+  const head = Number(await eth.getBlockNumber());
+  if (!st.eventsBlock) { st.eventsBlock = head; return; }
+  const from = Math.max(st.eventsBlock + 1, head - 300);
+  if (from > head) return;
+  const range = { fromBlock: BigInt(from), toBlock: BigInt(head) };
+  const sym = esc(config.token.symbol);
+  if (c.rewards) {
+    for (const s of await eth.getLogs({ address: c.rewards as `0x${string}`, event: STAKED, ...range }).catch(() => [])) {
+      const who = String(s.args.account).toLowerCase();
+      const amount = tok(s.args.amount ?? 0n);
+      const block = await eth.getBlock({ blockNumber: s.blockNumber! }).catch(() => null);
+      const months = block && s.args.unlockAt ? Math.round((Number(s.args.unlockAt) - Number(block.timestamp)) / (30.44 * 86400)) : 0;
+      const lock = months >= 1 ? ` for <b>${months} month${months === 1 ? "" : "s"}</b>` : "";
+      const tx = `<a href="https://etherscan.io/tx/${s.transactionHash}">TX</a>`;
+      if (who === DEV_WALLET) {
+        await toCommunity(`👨‍💻 <b>Developer just staked ${num(amount)} $${sym}</b>${lock}
+
+Locked in the staking contract, earning from the same 5% sell fee as everyone.
+
+${tx}`, [[{ text: "🔒 Stake too", url: `${config.publicUrl}/token` }]], "milestone");
+        housePost(`👨‍💻 Developer just staked ${num(amount)} $${config.token.symbol}${months >= 1 ? ` for ${months} months` : ""}. ${config.publicUrl}/token`, `dev-stake-${s.transactionHash}`);
+      } else if (amount * (market?.priceUsd ?? 0) >= config.buyMinUsd) {
+        await toCommunity(`🔒 <b>New stake: ${num(amount)} $${sym}</b>${lock}
+👤 <a href="https://etherscan.io/address/${who}">${short(who)}</a>
+
+${tx}`, [[{ text: "🔒 Stake", url: `${config.publicUrl}/token` }]], "milestone");
+      }
+    }
+  }
+  if (c.splitter) {
+    const burns: [string, string, string, "burnedShift" | "burnedImd"][] = [[c.token, DEAD, `$${sym}`, "burnedShift"], [IMD_TOKEN, IMD_BURN_EXECUTOR, "IMD", "burnedImd"]];
+    for (const [address, to, label, key] of burns) {
+      // IMD bought for the burn may reach the BurnExecutor straight from the swap: count a transfer
+      // when our splitter took part in the same transaction.
+      for (const b of await eth.getLogs({ address: address as `0x${string}`, event: TRANSFER, args: { to: to as `0x${string}` }, ...range }).catch(() => [])) {
+        const r = await eth.getTransactionReceipt({ hash: b.transactionHash! }).catch(() => null);
+        if (!r?.logs.some((x) => x.address.toLowerCase() === c.splitter!.toLowerCase()) && String(b.args.from).toLowerCase() !== c.splitter!.toLowerCase()) continue;
+        const amount = tok(b.args.value ?? 0n);
+        st[key] = (st[key] ?? 0) + amount;
+        await toCommunity(`🔥 <b>${num(amount)} ${label} burned</b>
+
+From the 5% sell fee: 20% of every fee is burned.
+Burned so far: <b>${num(st.burnedShift ?? 0)} $${sym}</b> · <b>${num(st.burnedImd ?? 0)} IMD</b>
+
+<a href="https://etherscan.io/tx/${b.transactionHash}">TX</a>`, [[{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "milestone");
+      }
+    }
+  }
+  st.eventsBlock = head;
 }
 
 /** The branded loop for a kind of message (served from the site's /bot folder). */
@@ -223,6 +289,7 @@ export function startCommunity(): void {
           st.milestone = hit;
         }
       }
+      await scanShiftEvents(st).catch((e) => console.error("shift events", (e as Error).message));
       await scanBluesky(st).catch(() => undefined);
     } catch (e) { console.error("community", (e as Error).message); }
     save(st);

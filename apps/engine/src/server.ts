@@ -9,7 +9,9 @@ import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { handleMcp } from "./mcp.js";
 import { isAdmin, saveSetup, setupState } from "./admin.js";
-import { buybacks, checkLaunch, holderStatus, launchBody, launchState, recordBuyback, recordLaunch, tokenOn, type TokenSpec } from "./token.js";
+import { buybacks, checkLaunch, holderStatus, launchBody, launchState, recordBuyback, recordLaunch, saveVerification, tokenOn, verification } from "./token.js";
+import { verifyShift } from "./shift-verify.js";
+import { DEV_WALLET, FIRST_BUYER } from "./shift-launch.js";
 import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
 import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
 import { impact } from "./impact.js";
@@ -186,10 +188,15 @@ export function serve(engine: Engine) {
           return json(res, 200, { ok: true, buybacks: buybacks() });
         }
         if (p === "/api/admin/token/check" && req.method === "POST") {
-          const t = (await body(req)) as unknown as TokenSpec;
-          if (!t.name || !/^[A-Z0-9]{2,11}$/.test(t.symbol ?? "") || !(t.supply >= 1000) || !(t.poolBps >= 1000 && t.poolBps <= 9000) || !(t.capImd >= 250 && t.capImd <= 250000)) return json(res, 400, { error: "Name, a 2–11 letter symbol, supply ≥ 1,000, pool share 10–90% and an opening cap of 250–250,000 IMD." });
-          if (t.poolBps < 9000 && !/^0x[0-9a-fA-F]{40}$/.test(t.remainderTo ?? "")) return json(res, 400, { error: "Below 90% in the pool, say which wallet receives the rest." });
-          return json(res, 200, { body: launchBody(t), check: await checkLaunch(t) });
+          // The launch is fixed (shift-launch.ts): nothing to type, only IMD's free check.
+          return json(res, 200, { body: launchBody(), check: await checkLaunch(), dev: DEV_WALLET, firstBuyer: FIRST_BUYER });
+        }
+        if (p === "/api/admin/token/verify" && req.method === "POST") {
+          const l = launchState();
+          if (!l?.contracts) return json(res, 400, { error: "Nothing deployed yet." });
+          const checks = await verifyShift(l.contracts);
+          saveVerification(checks);
+          return json(res, 200, { checks });
         }
         if (p === "/api/admin/token/launched" && req.method === "POST") {
           const b = await body(req);
@@ -253,7 +260,7 @@ export function serve(engine: Engine) {
           on: tokenOn(), symbol: config.token.symbol, address: config.token.address || null, buyUrl: config.token.buyUrl || null, holderMin: config.token.holderMin,
           platformFeeBps: config.platformTreasury ? config.platformFeeBps : 0, feesCollectedUsd: fromUsdc(fees),
           bought: { usd: bb.reduce((a, b) => a + b.usd, 0), amount: bb.reduce((a, b) => a + b.amount, 0) }, buybacks: bb.slice(0, 50), mode: config.mode,
-          launch: launchState(),
+          launch: launchState(), verification: verification(),
         });
       }
       if (p === "/api/market") return json(res, 200, { mode: config.mode, chainId: config.salesChainId, products: engine.market(url.searchParams.get("q") ?? "") });

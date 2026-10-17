@@ -224,6 +224,18 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 .setup-buyback b { grid-column: 1 / -1; font-size: 13px; }
 @media (max-width: 700px) { .setup-buyback { grid-template-columns: 1fr; } }
 .token-launch { display: grid; gap: 14px; }
+.ls-what { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.ls-what ul { margin: 8px 0 0; padding-left: 18px; color: var(--dim); font-size: 14px; display: grid; gap: 6px; }
+.ls-what ul b { color: var(--text); }
+.ls-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ls-step { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); }
+.ls-step > div { display: grid; gap: 6px; font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.ls-step.next { opacity: .5; }
+.ls-step.now { border-color: var(--text); }
+.ls-n { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 600; border: 1px solid var(--line); }
+.ls-step.done .ls-n { background: var(--good); color: #04110b; border-color: var(--good); }
+.ls-act { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.ls-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 13px; }
 .token-facts { margin: 0; padding-left: 18px; color: var(--dim); font-size: 13px; display: grid; gap: 4px; }
 .token-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .token-check { font-size: 13.5px; } .token-check ol, .token-check ul { margin: 6px 0 0; padding-left: 20px; color: var(--dim); }

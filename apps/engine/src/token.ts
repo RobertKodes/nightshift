@@ -1,8 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { erc20Abi } from "viem";
+import { erc20Abi, parseAbiItem } from "viem";
 import { eth } from "./chain.js";
 import { config } from "./config.js";
+import { FIRST_BUYER, SHIFT_LAUNCH } from "./shift-launch.js";
 
 /**
  * The platform token's utility inside NIGHTSHIFT, all of it checkable onchain:
@@ -42,34 +43,37 @@ export const holdsCached = (owner: string | null) => (owner ? holderCache.get(ow
  * Intake: approve, then request); the server only records the transaction and follows the launch
  * until IMD reports the token address, then switches the token features on.
  */
-export type TokenSpec = { name: string; symbol: string; supply: number; poolBps: number; capImd: number; remainderTo?: string };
 export const IMD_TOKEN = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
 export const INTAKE = "0xa43e6f75ee006411f79ac1c84120606c2330de82";
 
-export function launchBody(t: TokenSpec): Record<string, unknown> {
-  const economics: Record<string, unknown> = { poolBps: t.poolBps, initialMarketCapWei: (BigInt(Math.round(t.capImd)) * 10n ** 18n).toString() };
-  if (t.poolBps < 9000 && t.remainderTo) economics.remainderTo = t.remainderTo.toLowerCase();
-  return {
-    objective: `Launch a plain ERC-20 named ${t.name} with the symbol ${t.symbol}, ${t.supply.toLocaleString("en-US")} supply and 18 decimals. Fixed supply: no owner, no mint, no transfer fee, no blocklist. It is the platform token of NIGHTSHIFT (autonomous AI companies that buy their work from the IMD swarm).`,
-    onchain: "custom_token",
-    chainId: 1,
-    pairWith: "imd",
-    economics,
-  };
-}
+/** The one launch body (see shift-launch.ts): a v4 hook with the first-buyer gate and the 5% sell fee. */
+export const launchBody = (): Record<string, unknown> => SHIFT_LAUNCH;
 
-export async function checkLaunch(t: TokenSpec): Promise<unknown> {
-  const r = await fetch("https://api.imd.fun/requests/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "launch.open", input: launchBody(t) }), signal: AbortSignal.timeout(60_000) });
+export async function checkLaunch(): Promise<unknown> {
+  const r = await fetch("https://api.imd.fun/requests/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "launch.open", input: launchBody() }), signal: AbortSignal.timeout(60_000) });
   return r.json();
 }
 
-export type LaunchState = { tx: string; at: number; symbol: string; stage: string; jobId?: string; launchId?: string; token?: string; done?: boolean; error?: string };
+/**
+ * `contracts` are the deployed addresses by role (token, hook, splitter, rewards). `open` turns
+ * true once the first buyer has bought: only then is the token switched on and announced.
+ */
+export type LaunchState = {
+  tx: string; at: number; symbol: string; stage: string; jobId?: string; launchId?: string; token?: string; done?: boolean; error?: string;
+  contracts?: Record<string, string>; open?: boolean; openTx?: string; scanFrom?: number;
+};
 export function launchState(): LaunchState | null {
   try { return existsSync(file()) ? (JSON.parse(readFileSync(file(), "utf8")).launch ?? null) : null; } catch { return null; }
 }
 function saveToken(patch: Record<string, unknown>) {
   const cur = existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : {};
   writeFileSync(file(), JSON.stringify({ ...cur, ...patch }, null, 2));
+}
+/** The last check of the deployed contracts against our spec (shift-verify.ts). */
+export type Verification = { at: number; checks: { label: string; ok: boolean; detail: string }[] };
+export function saveVerification(checks: Verification["checks"]) { saveToken({ verification: { at: Date.now(), checks } }); }
+export function verification(): Verification | null {
+  try { return existsSync(file()) ? (JSON.parse(readFileSync(file(), "utf8")).verification ?? null) : null; } catch { return null; }
 }
 export function recordLaunch(tx: string, symbol: string) { saveToken({ launch: { tx, at: Date.now(), symbol, stage: "Waiting for IMD to see the transaction" } }); }
 
@@ -95,17 +99,56 @@ export async function followLaunch(): Promise<LaunchState | null> {
       if (j?.state === "failed" || j?.state === "cancelled") Object.assign(l, { stage: `The swarm job ${j.state}`, error: j.state, done: true });
     }
     if (l.launchId) {
-      const L = await get(`/launches/${l.launchId}`) as { status?: string; artifacts?: { role: string; address: string }[] } | null;
-      const token = L?.artifacts?.find((a) => a.role === "token")?.address;
-      l.stage = L?.status === "live" ? "Live" : `Deploying (${L?.status ?? "…"})`;
-      if (L?.status === "live" && token) Object.assign(l, { token, done: true });
+      const L = await get(`/launches/${l.launchId}`) as { status?: string; artifacts?: { role: string; address: string; name?: string; contract?: string }[] } | null;
+      const arts = L?.artifacts ?? [];
+      const token = arts.find((a) => a.role === "token")?.address;
+      const named = (re: RegExp) => arts.find((a) => re.test(`${a.name ?? ""} ${a.contract ?? ""} ${a.role}`))?.address;
+      l.stage = L?.status === "live" ? `Deployed. Waiting for the first buy by ${FIRST_BUYER.slice(0, 6)}…${FIRST_BUYER.slice(-4)}` : `Deploying (${L?.status ?? "…"})`;
+      if (L?.status === "live" && token) {
+        const contracts: Record<string, string> = { token };
+        for (const [k, re] of [["hook", /hook/i], ["splitter", /split/i], ["rewards", /reward|stak/i]] as const) { const a = named(re); if (a) contracts[k] = a; }
+        Object.assign(l, { token, contracts, done: true, scanFrom: Number(await eth.getBlockNumber()) - 50 });
+      }
     }
   } catch (e) { l.stage = `${l.stage} (retrying: ${(e as Error).message.slice(0, 60)})`; }
   saveToken({ launch: l });
   return l;
 }
 
-export type Buyback = { at: number; tx: string; usd: number; amount: number; note?: string };
+const TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
+
+/**
+ * After deploy, trading stays closed until the first buyer buys. That buy is a transfer of the
+ * token out of the v4 pool manager to the first buyer: read from the chain, not from the hook's
+ * ABI, so it works whatever the swarm named things.
+ */
+export async function followOpen(): Promise<LaunchState | null> {
+  const l = launchState();
+  if (!l?.done || !l.token || l.open || l.error) return l;
+  try {
+    const head = Number(await eth.getBlockNumber());
+    let from = l.scanFrom ?? head - 50;
+    while (from <= head) {
+      const to = Math.min(head, from + 900);
+      // Out of the pool manager, or through a router, but always in a transaction the first buyer sent.
+      const logs = await eth.getLogs({ address: l.token as `0x${string}`, event: TRANSFER, args: { to: FIRST_BUYER }, fromBlock: BigInt(from), toBlock: BigInt(to) });
+      for (const log of logs) {
+        const t = await eth.getTransaction({ hash: log.transactionHash! }).catch(() => null);
+        if (t?.from.toLowerCase() === FIRST_BUYER) {
+          Object.assign(l, { open: true, openTx: log.transactionHash, stage: "Live: trading is open to everyone" });
+          break;
+        }
+      }
+      if (l.open) break;
+      from = to + 1;
+    }
+    if (!l.open) l.scanFrom = head - 5;
+  } catch (e) { l.stage = `${l.stage.split(" (retrying")[0]} (retrying: ${(e as Error).message.slice(0, 60)})`; }
+  saveToken({ launch: l });
+  return l;
+}
+
+export type Buyback ={ at: number; tx: string; usd: number; amount: number; note?: string };
 const file = () => join(config.dataDir, "token.json");
 export function buybacks(): Buyback[] {
   try { return existsSync(file()) ? (JSON.parse(readFileSync(file(), "utf8")).buybacks ?? []) : []; } catch { return []; }

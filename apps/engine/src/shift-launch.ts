@@ -1,0 +1,25 @@
+/**
+ * The $SHIFT launch, fixed: checked with IMD (0 blockers, 2026-10-17). One body, so the owner
+ * cannot get a field wrong. Edit it only together with a new free check at IMD.
+ */
+export const DEV_WALLET = "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5";
+export const FIRST_BUYER = "0x3322e6dd06ade8377f1f1bcb766f6133d7b64d69";
+export const TREASURY_WALLET = FIRST_BUYER;
+export const IMD_BURN_EXECUTOR = "0xe29386719c155b6847ad5a4e97c6674f10ffc750";
+export const DEAD = "0x000000000000000000000000000000000000dead";
+
+export const SHIFT_LAUNCH: Record<string, unknown> = {
+  "objective": "Launch NIGHTSHIFT (SHIFT), the platform token of NIGHTSHIFT, with a Uniswap v4 hook on its SHIFT/ETH pool and two more contracts: FeeSplitter and ShiftRewards.\n\n1. NightshiftHook, launch gate: until the address 0x3322e6dd06ade8377f1f1bcb766f6133d7b64d69 has made one buy, only that address can swap. That buy has no minimum and no maximum. Right after it, trading opens to everyone forever: `bool public tradingOpen` becomes true and `event TradingOpened(address firstBuyer, uint256 shiftOut)` is emitted. Nobody can open it in any other way, and nobody can ever close it.\n\n2. NightshiftHook, sell fee: on every sell (SHIFT in, ETH out) the hook takes 5% in total: 2.5% of the SHIFT input and 2.5% of the ETH output, both sent to FeeSplitter, with `event FeeTaken(address indexed seller, uint256 shiftFee, uint256 ethFee)`. Buys pay no hook fee. The owner can lower either part, never raise either above 2.5%, and change nothing else in the hook.\n\n3. FeeSplitter: one fixed rule for every token it receives (ETH, SHIFT, IMD or any ERC-20): 40% to ShiftRewards, 20% to the dev wallet 0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5, 20% to the treasury wallet 0x3322e6dd06ade8377f1f1bcb766f6133d7b64d69, 20% burned. Burned means: SHIFT is sent to 0x000000000000000000000000000000000000dEaD; IMD (0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7) is sent to IMD's BurnExecutor 0xe29386719c155b6847ad5a4e97c6674f10ffc750; ETH and any other token are kept in a burn reserve. `distribute(address token)` (address(0) for ETH) can be called by anyone and emits `event Distributed(address indexed token, uint256 rewards, uint256 dev, uint256 treasury, uint256 burned)`. `burnReserve(address token, uint256 amountIn, uint256 minImdOut)` can be called only by a keeper address the owner sets: it swaps that much of the reserve to IMD on Uniswap, requires at least minImdOut, and sends all the bought IMD straight to the BurnExecutor in the same call, emitting `event ImdBurned(address indexed token, uint256 amountIn, uint256 imdOut)`. The split, the dev, treasury and burn addresses are fixed forever; the owner can only change the keeper.\n\n4. ShiftRewards: `stake(uint256 amount, uint256 lockDays)` with lockDays from 0 to 730; a locked stake cannot be withdrawn before its unlock time; `withdraw(uint256 amount)` takes unlocked stake back at any time; `getReward()` pays what was earned. Rewards are pro rata to the amount staked and the time staked, Synthetix StakingRewards style with several reward tokens (ETH and SHIFT at least): the more you stake, the more you earn. Events: `Staked(address indexed account, uint256 amount, uint256 unlockAt)`, `Withdrawn(address indexed account, uint256 amount)`, `RewardPaid(address indexed account, address indexed token, uint256 amount)`. Of every reward it receives, half streams to SHIFT stakers over 7 days and half goes to a NIGHT FROGS holders pot (collection 0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c), paid by epoch: the owner calls `postRoot(uint256 epoch, bytes32 root, address token, uint256 total)`, which reserves that total from the pot and never more than the pot holds; a wallet calls `claimFrogs(uint256 epoch, address token, uint256 amount, bytes32[] proof)` with an OpenZeppelin StandardMerkleTree leaf keccak256(bytes.concat(keccak256(abi.encode(epoch, account, token, amount)))), once per epoch and token; what is not claimed after 30 days goes back to the pot. The owner can also add SHIFT for stakers from outside with `notifyRewardAmount(address token, uint256 amount, uint256 duration)`. The owner can post roots and add rewards, and cannot take staked SHIFT or rewards already earned.\n\nThe token itself is plain: no mint, no blocklist, no transfer fee, no pause. Owner roles go to the dev wallet. No backend signer.",
+  "references": [
+    "uniswap-v4-hooks",
+    "uniswap-v4-security"
+  ],
+  "onchain": "univ4_hook",
+  "chainId": 1,
+  "pairWith": "eth",
+  "owner": "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5",
+  "economics": {
+    "poolBps": 8889,
+    "remainderTo": "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5"
+  }
+};

@@ -7,35 +7,45 @@ import { mainnet } from "viem/chains";
 const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
 const INTAKE = "0xa43e6f75ee006411f79ac1c84120606c2330de82";
 const PRICE = 500000000000000000n; // 0.5 IMD
+const DEV = "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5";
+const FIRST = "0x3322e6dd06ade8377f1f1bcb766f6133d7b64d69";
 const intakeAbi = parseAbi(["function request(bytes32 action, bytes body, (address target, bytes4 selector) callback, address asset, uint256 amount) returns (bytes32)"]);
 const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
-type Check = { blockers?: { code?: string; message?: string }[]; plan?: { title: string }[]; facts?: { id: string; label: string; state: string }[]; error?: string };
-type Launch = { tx: string; stage: string; token?: string; done?: boolean; error?: string; symbol: string } | null;
+type Check = { blockers?: { code?: string; detail?: string; message?: string }[]; plan?: { title: string }[]; error?: string };
+type Launch = { tx: string; stage: string; token?: string; done?: boolean; open?: boolean; error?: string; symbol: string; contracts?: Record<string, string> } | null;
+type Verify = { label: string; ok: boolean; detail: string }[];
+
+/** One step of the launch: done, current or still to come. */
+function Step({ n, state, title, children }: { n: number; state: "done" | "now" | "next"; title: string; children?: React.ReactNode }) {
+  return (
+    <li className={`ls-step ${state}`}>
+      <span className="ls-n">{state === "done" ? "✓" : n}</span>
+      <div><b>{title}</b>{state !== "next" && children}</div>
+    </li>
+  );
+}
 
 /**
- * Launches the NIGHTSHIFT token through IMD from the operator's own wallet: IMD's free check,
- * then approve 0.5 IMD and one Intake request on Ethereum. No key ever touches the server.
+ * Launches $SHIFT exactly as agreed (the body is fixed on the server): IMD's free check runs by
+ * itself, the dev wallet pays 0.5 IMD, then the page follows the swarm, checks the deployed
+ * contracts against the spec, and waits for the first buyer. Nothing to type.
  */
 export function TokenLaunch({ call, token }: { call: (token: string, path: string, body?: unknown) => Promise<any>; token: string }) {
-  const [f, setF] = useState({ name: "NIGHTSHIFT", symbol: "SHIFT", supply: "1000000000", pool: "90", cap: "2500", remainderTo: "" });
   const [res, setRes] = useState<{ body: unknown; check: Check } | null>(null);
-  const [step, setStep] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [launch, setLaunch] = useState<Launch>(null);
-  const [tokenOn, setTokenOn] = useState(false);
+  const [checks, setChecks] = useState<Verify | null>(null);
   const usd = useImdUsd();
 
-  const refresh = () => fetch("/api/token").then((r) => r.json()).then((d) => { setLaunch(d.launch); setTokenOn(d.on); }).catch(() => {});
-  useEffect(() => { void refresh(); const t = setInterval(refresh, 20_000); return () => clearInterval(t); }, []);
+  const refresh = () => fetch("/api/token").then((r) => r.json()).then((d) => { setLaunch(d.launch); setChecks(d.verification?.checks ?? null); }).catch(() => {});
+  useEffect(() => { void refresh(); const t = setInterval(refresh, 15_000); return () => clearInterval(t); }, []);
+  useEffect(() => { call(token, "token/check").then(setRes).catch((e) => setErr((e as Error).message)); }, [token]);
 
-  const spec = () => ({ name: f.name.trim(), symbol: f.symbol.trim().toUpperCase(), supply: Number(f.supply), poolBps: Math.round(Number(f.pool) * 100), capImd: Number(f.cap), remainderTo: f.remainderTo.trim() || undefined });
-  const check = async () => {
-    setErr(null); setRes(null); setStep("Asking IMD (free)…");
-    try { setRes(await call(token, "token/check", spec())); } catch (e) { setErr((e as Error).message); } finally { setStep(null); }
-  };
   const blockers = res?.check?.blockers ?? [];
-  const ok = res && !res.check.error && blockers.length === 0;
+  const accepted = Boolean(res && !res.check.error && blockers.length === 0);
 
   const pay = async () => {
     if (!res) return;
@@ -43,74 +53,90 @@ export function TokenLaunch({ call, token }: { call: (token: string, path: strin
     try {
       const eth = await chooseWallet({ ask: true });
       const wallet = createWalletClient({ chain: mainnet, transport: custom(eth as never) });
-      setStep("Connect your wallet…");
+      setBusy("Connect your dev wallet…");
       const [me] = await wallet.requestAddresses();
       if (!me) throw new Error("No account.");
-      await wallet.switchChain({ id: 1 }).catch(() => { throw new Error("Switch your wallet to Ethereum mainnet."); });
+      if (me.toLowerCase() !== DEV) throw new Error(`This is ${short(me)}. Switch to your dev wallet ${short(DEV)}: it pays, so it gets the 1% trading fee.`);
+      await wallet.switchChain({ id: 1 }).catch(() => { throw new Error("Switch your wallet to Ethereum."); });
       const bal = await rpc.readContract({ address: IMD, abi: erc20Abi, functionName: "balanceOf", args: [me] });
-      if (bal < PRICE) throw new Error(`This wallet has ${(Number(bal) / 1e18).toFixed(3)} IMD; the launch costs 0.5 IMD plus ETH for gas.`);
+      if (bal < PRICE) throw new Error(`Your dev wallet has ${(Number(bal) / 1e18).toFixed(3)} IMD. It needs 0.5 IMD, plus a little ETH for gas.`);
       const allowance = await rpc.readContract({ address: IMD, abi: erc20Abi, functionName: "allowance", args: [me, INTAKE] });
       if (allowance < PRICE) {
-        setStep("1/2 · Approve 0.5 IMD for IMD's Intake (confirm in your wallet)…");
+        setBusy("Signature 1 of 2: allow IMD to take 0.5 IMD…");
         const a = await wallet.writeContract({ account: me, address: IMD, abi: erc20Abi, functionName: "approve", args: [INTAKE, PRICE] });
-        setStep("1/2 · Waiting for the approval to confirm…");
+        setBusy("Waiting for signature 1 to confirm…");
         await rpc.waitForTransactionReceipt({ hash: a });
       }
-      setStep("2/2 · Pay 0.5 IMD and send the launch (confirm in your wallet)…");
+      setBusy("Signature 2 of 2: pay 0.5 IMD and send the launch…");
       const tx = await wallet.writeContract({
         account: me, address: INTAKE, abi: intakeAbi, functionName: "request",
         args: [stringToHex("launch.open@launch-1", { size: 32 }), stringToHex(JSON.stringify(res.body)), { target: "0x0000000000000000000000000000000000000000", selector: "0x00000000" }, IMD, PRICE],
       });
-      setStep("2/2 · Waiting for the transaction to confirm…");
+      setBusy("Waiting for signature 2 to confirm…");
       const r = await rpc.waitForTransactionReceipt({ hash: tx as Hex });
       if (r.status !== "success") throw new Error(`The transaction reverted: ${tx}`);
-      await call(token, "token/launched", { tx, symbol: spec().symbol });
-      setStep(null);
+      await call(token, "token/launched", { tx, symbol: "SHIFT" });
+      setBusy(null);
       void refresh();
-    } catch (e) { setStep(null); setErr((e as Error).message.split("\n")[0] ?? "failed"); }
+    } catch (e) { setBusy(null); setErr((e as Error).message.split("\n")[0] ?? "failed"); }
   };
 
-  if (tokenOn) return <div className="card-b good">The token is live and switched on. See <a href="/token">/token</a>.</div>;
-  if (launch && !launch.error) {
-    return (
-      <div className="card-b launch-live">
-        <div className="launch-stage"><i className="pulse" /><b>${launch.symbol}</b><span>{launch.stage}</span></div>
-        <a className="mono faint" href={`https://etherscan.io/tx/${launch.tx}`} target="_blank" rel="noreferrer">payment tx {launch.tx.slice(0, 12)}…</a>
-        <span className="dim" style={{ fontSize: 13 }}>The swarm builds, tests and audits the token, then IMD deploys it with its IMD pool. When it is live, this site switches the token features on by itself and Telegram tells you.</span>
-      </div>
-    );
-  }
+  const recheck = async () => {
+    setBusy("Checking the contracts on Ethereum…");
+    try { setChecks((await call(token, "token/verify")).checks); } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
+  };
+
+  const paid = Boolean(launch && !launch.error);
+  const deployed = Boolean(paid && launch?.done);
+  const allOk = Boolean(checks?.length && checks.every((c) => c.ok));
+  const live = Boolean(launch?.open);
+  const s = (done: boolean, now: boolean) => (done ? "done" : now ? "now" : "next") as "done" | "now" | "next";
+
   return (
     <div className="card-b token-launch">
-      {launch?.error && <div className="bad">The last launch did not go through: {launch.stage}</div>}
-      <div className="setup-grid">
-        <label><span>Name</span><input className="field" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
-        <label><span>Symbol</span><input className="field" value={f.symbol} onChange={(e) => setF({ ...f, symbol: e.target.value.toUpperCase() })} /></label>
-        <label><span>Total supply</span><input className="field" value={f.supply} onChange={(e) => setF({ ...f, supply: e.target.value.replace(/\D/g, "") })} /></label>
-        <label><span>Opening market cap (IMD, 250–250,000)</span><input className="field" value={f.cap} onChange={(e) => setF({ ...f, cap: e.target.value.replace(/[^\d.]/g, "") })} /></label>
-        <label><span>Share of supply in the pool (%, 10–90)</span><input className="field" value={f.pool} onChange={(e) => setF({ ...f, pool: e.target.value.replace(/[^\d.]/g, "") })} /></label>
-        <label><span>Wallet for the rest {Number(f.pool) < 90 ? "(required)" : "(none at 90%)"}</span><input className="field" placeholder="0x…" disabled={Number(f.pool) >= 90} value={f.remainderTo} onChange={(e) => setF({ ...f, remainderTo: e.target.value })} /></label>
+      <div className="ls-what">
+        <b>What launches</b>
+        <ul>
+          <li><b>1,000,000,000 $SHIFT</b> on Ethereum, paired with ETH: 80% in the pool, <b>10% to your dev wallet</b> {short(DEV)}, 10% to the IMD swarm.</li>
+          <li><b>Only {short(FIRST)} can buy first.</b> Right after its buy, trading opens to everyone, for good.</li>
+          <li><b>Every sell pays 5%</b>: 40% rewards (stakers and NIGHT FROGS), 20% you, 20% treasury {short(FIRST)}, 20% burned (SHIFT, and IMD at IMD's BurnExecutor).</li>
+          <li>You own every contract. IMD only deploys it. Costs 0.5 IMD{usd ? ` (${inUsd(0.5, usd)})` : ""} plus gas.</li>
+        </ul>
       </div>
-      <ul className="token-facts">
-        <li>Ethereum mainnet, paired with IMD. 10% of the supply goes to the IMD swarm, always.</li>
-        <li>Every trade pays 1.25%: <b>1% to the wallet that pays for the launch</b>, 0.25% to IMD.</li>
-        <li>Costs 0.5 IMD{usd ? ` (${inUsd(0.5, usd)})` : ""} plus gas, from your wallet. No refunds once sent, so it is checked first.</li>
-      </ul>
-      <div className="token-actions">
-        <button className="btn" disabled={Boolean(step)} onClick={check}>Check with IMD (free)</button>
-        <button className="btn primary" disabled={!ok || Boolean(step)} onClick={pay}>Launch ${spec().symbol} · 0.5 IMD</button>
-      </div>
-      {step && <div className="launch-stage"><i className="pulse" /><span>{step}</span></div>}
-      {err && <div className="bad">{err}</div>}
-      {res && (
-        <div className="token-check">
-          {res.check.error ? <span className="bad">{res.check.error}</span> : blockers.length ? (
-            <><b className="bad">IMD would refuse this:</b><ul>{blockers.map((b, i) => <li key={i}>{b.message ?? b.code}</li>)}</ul></>
-          ) : (
-            <><b className="good">IMD accepts it. What happens after you pay:</b><ol>{(res.check.plan ?? []).map((p, i) => <li key={i}>{p.title}</li>)}</ol></>
+
+      <ol className="ls-steps">
+        <Step n={1} state={s(accepted, !res)} title="IMD accepts the launch (free check)">
+          {!res ? <span className="dim">Asking IMD…</span> : res.check.error ? <span className="bad">{res.check.error}</span>
+            : blockers.length ? <span className="bad">IMD would refuse it: {blockers.map((b) => b.detail ?? b.message ?? b.code).join("; ")}</span>
+            : <span className="dim">Accepted. The swarm will: {(res.check.plan ?? []).map((p) => p.title.toLowerCase()).join(", ")}.</span>}
+        </Step>
+        <Step n={2} state={s(paid, accepted && !paid)} title="Pay from your dev wallet (2 signatures)">
+          {!paid && (
+            <div className="ls-act">
+              <button className="btn primary" disabled={!accepted || Boolean(busy)} onClick={pay}>Launch $SHIFT · 0.5 IMD</button>
+              {launch?.error && <span className="bad">The last launch did not go through: {launch.stage}</span>}
+            </div>
           )}
-        </div>
-      )}
+          {paid && <a className="mono faint" href={`https://etherscan.io/tx/${launch!.tx}`} target="_blank" rel="noreferrer">paid · {short(launch!.tx)}</a>}
+        </Step>
+        <Step n={3} state={s(deployed, paid && !deployed)} title="The swarm builds, tests, audits and deploys">
+          <span className="dim">{launch?.stage}</span>
+        </Step>
+        <Step n={4} state={s(deployed && allOk, deployed && !allOk)} title="We check the contracts against what we asked for">
+          {checks && <ul className="ls-checks">{checks.map((c, i) => <li key={i} className={c.ok ? "good" : "bad"}>{c.ok ? "✓" : "✗"} {c.label}{!c.ok && c.detail ? ` (${c.detail})` : ""}</li>)}</ul>}
+          {deployed && <button className="btn" disabled={Boolean(busy)} onClick={recheck}>Check again</button>}
+          {deployed && checks && !allOk && <b className="bad">Do not buy. Trading stays closed, so nobody can lose money. Tell Claude.</b>}
+        </Step>
+        <Step n={5} state={s(live, deployed && allOk && !live)} title={`The first buy, from ${short(FIRST)}`}>
+          {!live && allOk && launch?.token && (
+            <span>Everything matches. Buy from {short(FIRST)} on <a href={`https://app.uniswap.org/swap?chain=mainnet&inputCurrency=NATIVE&outputCurrency=${launch.token}`} target="_blank" rel="noreferrer">Uniswap</a>, any amount. The moment it lands, the token goes public.</span>
+          )}
+        </Step>
+        <Step n={6} state={s(live, false)} title="Live: announced on Telegram, Bluesky and the site" />
+      </ol>
+
+      {busy && <div className="launch-stage"><i className="pulse" /><span>{busy}</span></div>}
+      {err && <div className="bad">{err}</div>}
     </div>
   );
 }
