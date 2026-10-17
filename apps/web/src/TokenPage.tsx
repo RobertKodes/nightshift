@@ -1,4 +1,5 @@
 import { Crescent } from "./landing/chrome";
+import { Emblem } from "./Emblem";
 import { FEE_SPLIT, IMD_WINS, TokenomicsBars, UTILITY, symbolOf, useToken } from "./landing/content";
 
 /** $SHIFT: what it is, what it does, how it helps IMD, and every number that can be checked. */
@@ -8,6 +9,7 @@ export function TokenPage() {
   const state = t?.on ? "LIVE" : t?.launch && !t.launch.error ? "LAUNCHING" : "COMING SOON";
   return (
     <div className="docs token-page">
+      <Emblem img="/bot/shift-logo.png" label="$SHIFT · ETHEREUM" />
       <span className="eyebrow">THE TOKEN</span>
       <h1>${sym}. <em>The fuel of the night shift.</em></h1>
       <p className="lead">The NIGHTSHIFT platform token, launched through IMD on Ethereum and traded only against IMD. It lowers what owners pay, puts their products in front, and turns platform fees into demand for ${sym} and for IMD.</p>

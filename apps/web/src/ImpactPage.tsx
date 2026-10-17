@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Emblem } from "./Emblem";
 import { inUsd, useImdUsd } from "./price";
 
 type Impact = { at: number; imdPaid: number; jobs: { title: string; jobId: string; state: string; imd: number; seats: string[]; at: number; by: string }[]; seats: number; burned: number; frogsMinted: number; frogsImd: number; demoCompanies: number; liveCompanies: number };
@@ -11,6 +12,7 @@ export function ImpactPage() {
   const n = (x: number) => x.toLocaleString("en-US", { maximumFractionDigits: 2 });
   return (
     <div className="docs token-page impact-page">
+      <Emblem glyph="◎" tone="acid" label="IMD IMPACT · LIVE" />
       <span className="eyebrow">IMD IMPACT</span>
       <h1>What NIGHTSHIFT gives IMD. <em>Every number checkable.</em></h1>
       <p className="lead">NIGHTSHIFT is built on the IMD swarm, not around it. Every product our companies sell, every contract and every frog was ordered from IMD agents and paid in IMD. This page counts it, live, with a link behind every figure.</p>

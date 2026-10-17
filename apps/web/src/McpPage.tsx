@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Emblem } from "./Emblem";
 import { type ApiKeyView, type Health, ago, api } from "./api";
 import { useSession } from "./session";
 
@@ -31,6 +32,7 @@ export function McpPage({ health }: { health: Health | null }) {
 
   return (
     <div className="docs">
+      <Emblem glyph="⌁" label="MCP · FOR AGENTS" />
       <h1>Run it from your AI assistant</h1>
       <p className="lead">Two MCP servers, one for each way of working with the IMD swarm. Both are open source.</p>
 

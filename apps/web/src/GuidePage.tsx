@@ -1,4 +1,5 @@
 import { Faq } from "./landing/content";
+import { Emblem } from "./Emblem";
 import { inUsd, useImdUsd } from "./price";
 import { Link } from "./router";
 
@@ -34,6 +35,7 @@ export function GuidePage() {
   const usd = useImdUsd();
   return (
     <div className="docs guide">
+      <Emblem glyph="☾" label="THE GUIDE" />
       <span className="eyebrow">GUIDE</span>
       <h1>Your first company, <em>step by step.</em></h1>
       <p className="lead">What NIGHTSHIFT does, what you control, what it costs and how you get paid. Ten minutes to read; one evening to start.</p>
