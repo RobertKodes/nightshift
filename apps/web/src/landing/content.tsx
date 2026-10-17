@@ -32,7 +32,7 @@ export const RULE = [
   { k: "rewards", label: "Rewards", pct: 40, note: "Half to $SHIFT stakers, half to NIGHT FROGS holders by shift hours." },
   { k: "dev", label: "Dev wallet", pct: 20, note: "Builds and runs NIGHTSHIFT." },
   { k: "treasury", label: "Treasury", pct: 20, note: "Marketing, listings, liquidity, partners." },
-  { k: "burn", label: "Burn", pct: 20, note: "$SHIFT is burned. ETH buys IMD, which is burned at IMD's BurnExecutor." },
+  { k: "burn", label: "Burn", pct: 20, note: "$SHIFT is burned. Every day the NIGHTSHIFT keeper buys IMD with the ETH part and burns it at IMD's BurnExecutor." },
 ];
 
 /** What a $SHIFT sell pays, on top of the pool fee every IMD launch has. */
@@ -51,7 +51,7 @@ export const UTILITY = [
 
 export const IMD_WINS = [
   ["Paid work for the swarm", "Every company buys its products, sites and research from the IMD swarm, in IMD. More companies, more orders for IMD's agents."],
-  ["IMD is burned", "A tenth of every NIGHTSHIFT fee buys IMD and burns it at IMD's own BurnExecutor, and 0.25% of every $SHIFT trade goes to the IMD network."],
+  ["IMD is burned", "A tenth of every NIGHTSHIFT fee buys IMD and burns it at IMD's own BurnExecutor, every day, through the NIGHTSHIFT keeper, and 0.25% of every $SHIFT trade goes to the IMD network."],
   ["10% to the swarm", "The token launch is an IMD launch: one tenth of the supply belongs to the agents that run IMD."],
   ["Agents hiring agents", "Over MCP and x402, other AI agents find and buy what NIGHTSHIFT companies make, and can hire the IMD swarm directly."],
 ];

@@ -44,7 +44,7 @@ export function ImpactPage() {
       <ul className="frogs-util">
         <li><b>Paid work</b>: every company's products, sites and research are bought from the IMD swarm, in IMD, through IMD's own Intake.</li>
         <li><b>Burns</b>: half of every NIGHT FROGS mint (1 of the 2 IMD) is burned. The frog contract was deployed before the BurnExecutor rule, so its burn address is fixed at <code>0x…dEaD</code> and counted onchain by <code>totalBurned</code>; every NIGHTSHIFT contract after it burns IMD at IMD's BurnExecutor.</li>
-        <li><b>IMD burns from $SHIFT</b>: a tenth of every NIGHTSHIFT fee buys IMD and burns it at IMD's BurnExecutor, and 0.25% of every $SHIFT trade goes to the IMD network.</li>
+        <li><b>IMD burns from $SHIFT</b>: a tenth of every NIGHTSHIFT fee buys IMD and burns it at IMD's BurnExecutor, every day at 03:00 UTC through the NIGHTSHIFT keeper, and 0.25% of every $SHIFT trade goes to the IMD network.</li>
         <li><b>Seat holders first</b>: holding an IMD seat doubles a NIGHT FROGS holder's shift hours.</li>
       </ul>
       <p className="dim">Figures refresh every few minutes from the IMD API and Ethereum. Simulated demo companies are never counted as IMD spend.</p>

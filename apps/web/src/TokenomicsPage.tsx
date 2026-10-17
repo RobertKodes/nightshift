@@ -52,6 +52,9 @@ export function TokenomicsPage() {
       <p>Every fee NIGHTSHIFT takes, from any product and in any currency (ETH, ${sym}, IMD or USDC), is split the same way. The contract that splits it has the four destinations hard-coded.</p>
       <RuleBar />
 
+      <h3 className="guide-h3">How the burn runs: the NIGHTSHIFT keeper</h3>
+      <p>Every day at 03:00 UTC the NIGHTSHIFT keeper calls the fee splitter. First it splits what came in by the rule above. Then it takes the ETH burn reserve, buys IMD with it on Uniswap and sends that IMD straight to IMD's BurnExecutor, in the same transaction, with a minimum price so it cannot be sold short. $SHIFT is burned to 0x…dEaD directly. The keeper only pays gas: it cannot take or redirect a cent, because every destination is fixed in the splitter's code. Each burn is announced in the community with its transaction.</p>
+
       <h2 id="sell" className="guide-h2">What a sell pays</h2>
       <p>Buying ${sym} pays only the pool fee. Selling pays the pool fee and a 5% sell fee, taken half in ${sym} and half in ETH. Worked example, selling $1,000 of ${sym}:</p>
       <div className="frogs-traits">

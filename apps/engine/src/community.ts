@@ -164,7 +164,9 @@ ${tx}`, [[{ text: "🔒 Stake", url: `${config.publicUrl}/token` }]], "milestone
         st[key] = (st[key] ?? 0) + amount;
         await toCommunity(`🔥 <b>${num(amount)} ${label} burned</b>
 
-From the 5% sell fee: 20% of every fee is burned.
+${label === "IMD"
+  ? "The NIGHTSHIFT keeper bought it with the sell-fee burn reserve and sent it straight to IMD's BurnExecutor."
+  : `Sent to 0x…dEaD from the sell fee.`} 20% of every NIGHTSHIFT fee is burned.
 Burned so far: <b>${num(st.burnedShift ?? 0)} $${sym}</b> · <b>${num(st.burnedImd ?? 0)} IMD</b>
 
 <a href="https://etherscan.io/tx/${b.transactionHash}">TX</a>`, [[{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "milestone");
