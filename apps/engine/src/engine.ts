@@ -1,3 +1,5 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   type Company,
@@ -24,7 +26,7 @@ import { LlmClient } from "@nightshift/llm";
 import { balances, ensurePermit2, eth, ethWallet, sales, salesWallet } from "./chain.js";
 import { V4, findPool } from "./v4.js";
 import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
-import { judge, muteMinutes, strike, track } from "./moderation.js";
+import { forgive, judge, muteMinutes, strike, track } from "./moderation.js";
 import { type Facts, allowed, answer, spend, worthAsking } from "./assistant.js";
 import { type KeeperRun, runKeeper } from "./keeper.js";
 import { buildEpoch } from "./frogpot.js";
@@ -39,7 +41,7 @@ import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnn
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { type Anim, burnTotals, buyCard, chats, marketSnapshot, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
-import { type Button, type GroupMessage, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands, tgCall } from "./social.js";
+import { type Button, type CommandContext, type GroupMessage, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands, tgCall } from "./social.js";
 import { IMD_TOKEN, followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { writeSettings } from "./settings.js";
@@ -83,7 +85,7 @@ export class Engine {
     if (config.telegramToken && config.moderation) void this.#guardRights();
     if (config.telegramToken) {
       telegramCommands(config.telegramToken, config.telegramAdmins, {
-        admin: (cmd, args) => this.#command(cmd, args),
+        admin: (cmd, args, ctx) => this.#command(cmd, args, ctx),
         open: (cmd) => publicCommand(cmd),
         guard: async (m) => { const removed = await this.#guard(m); if (!removed) void this.#ask(m).catch(() => {}); return removed; },
         ask: (m) => this.#ask(m),
@@ -179,7 +181,8 @@ export class Engine {
   }
 
   /** What the operator can do from Telegram: cards with buttons. */
-  async #command(cmd: string, args: string[]): Promise<Reply> {
+  async #command(cmd: string, args: string[], ctx?: CommandContext): Promise<Reply> {
+    if (cmd === "unmute" || cmd === "mute") return this.#muteCommand(cmd, args, ctx);
     const all = [...this.store.companies.values()];
     const find = (s?: string) => all.find((c) => c.slug === s || c.id === s);
     const menu: Button[][] = [
@@ -425,9 +428,47 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     };
   }
 
+  /** @username → Telegram id, learned from group messages, so /unmute @user works. */
+  readonly #people = new Map<string, string>(((): [string, string][] => { try { return Object.entries(JSON.parse(readFileSync(join(config.dataDir, "people.json"), "utf8"))); } catch { return []; } })());
+  #learn(name: string, id: string): void {
+    if (!name.startsWith("@") || this.#people.get(name.toLowerCase()) === id) return;
+    this.#people.set(name.toLowerCase(), id);
+    try { writeFileSync(join(config.dataDir, "people.json"), JSON.stringify(Object.fromEntries(this.#people))); } catch { /* best effort */ }
+  }
+
+  /** /unmute and /mute: by reply, by @username (anyone who wrote in the group) or by numeric id. */
+  async #muteCommand(cmd: "unmute" | "mute", args: string[], ctx?: CommandContext): Promise<Reply> {
+    const token = config.telegramToken;
+    if (!token) return { text: "No bot token." };
+    const arg = args[0] ?? "";
+    const id = ctx?.replyTo?.id ?? (/^\d+$/.test(arg) ? arg : this.#people.get(arg.toLowerCase().replace(/^@?/, "@")));
+    const who = ctx?.replyTo?.name ?? arg;
+    if (!id) return { text: `Who? Reply to their message with /${cmd}, or /${cmd} @username (they must have written in the group since the bot started), or /${cmd} <user id>.` };
+    const groups = ctx?.group ? [ctx.chat] : chats();
+    const results: string[] = [];
+    for (const chat of groups) {
+      let ok: unknown;
+      if (cmd === "unmute") {
+        // Back to the group's own default rights.
+        const g = await tgCall<{ permissions?: Record<string, boolean> }>(token, "getChat", { chat_id: chat });
+        const permissions = g?.permissions ?? { can_send_messages: true, can_send_audios: true, can_send_documents: true, can_send_photos: true, can_send_videos: true, can_send_video_notes: true, can_send_voice_notes: true, can_send_polls: true, can_send_other_messages: true, can_add_web_page_previews: true };
+        ok = await tgCall(token, "restrictChatMember", { chat_id: chat, user_id: Number(id), permissions, use_independent_chat_permissions: true });
+      } else {
+        const minutes = Math.max(1, Math.min(60 * 24 * 30, Number(ctx?.replyTo ? args[0] : args[1]) || 60));
+        ok = await tgCall(token, "restrictChatMember", { chat_id: chat, user_id: Number(id), until_date: Math.floor(Date.now() / 1000) + minutes * 60,
+          permissions: { can_send_messages: false, can_send_audios: false, can_send_documents: false, can_send_photos: false, can_send_videos: false, can_send_video_notes: false, can_send_voice_notes: false, can_send_polls: false, can_send_other_messages: false, can_add_web_page_previews: false } });
+        if (ok) results.push(`for ${minutes >= 1440 ? `${Math.round(minutes / 1440)}d` : minutes >= 60 ? `${Math.round(minutes / 60)}h` : `${minutes} min`}`);
+      }
+      if (!ok) return { text: `⚠️ Telegram refused. Is the bot an admin with "Ban users" in ${chat}?` };
+    }
+    if (cmd === "unmute") forgive(id);
+    return { text: cmd === "unmute" ? `🔊 ${esc(who)} can talk again. Their strikes are cleared.` : `🔇 ${esc(who)} muted ${results[0] ?? ""}.` };
+  }
+
   readonly #groupAdmins = new Map<string, { at: number; ids: Set<string> }>();
   /** Scams, spam and FUD in the public group: removed, the sender warned or muted, the admins told. */
   async #guard(m: GroupMessage): Promise<boolean> {
+    this.#learn(m.name, m.user);
     if (!config.moderation || !config.telegramToken) return false;
     const ours = chats().map((c) => c.toLowerCase());
     if (!ours.includes(m.chat) && !(m.chatUsername && ours.includes(`@${m.chatUsername.toLowerCase()}`))) return false;
