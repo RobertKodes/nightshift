@@ -503,6 +503,18 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
   async approve(c: Company, taskId: string): Promise<void> { await approve(c, taskId, this.#deps(c)); }
   reject(c: Company, taskId: string): void { reject(c, taskId, this.#deps(c)); }
 
+  /** The owner's price for a product, in USD; the CEO will not change it afterwards. */
+  setPrice(c: Company, productId: string, priceUsd: number): void {
+    const p = c.products.find((x) => x.id === productId);
+    if (!p) throw new Error("no such product");
+    if (!(priceUsd >= 0.5 && priceUsd <= 10_000)) throw new Error("Price is between $0.50 and $10,000.");
+    const before = Number(p.priceUsdc) / 1e6;
+    p.priceUsdc = BigInt(Math.round(priceUsd * 100)) * 10_000n;
+    p.priceByOwner = true;
+    note(c, this.#deps(c), "note", `${p.name}: price set by the owner, $${before.toFixed(2)} → $${(Number(p.priceUsdc) / 1e6).toFixed(2)}.`);
+    this.#emit(c.id, "company", null);
+  }
+
   setPolicy(c: Company, p: Partial<Policy>): void {
     c.policy = validatePolicy({ ...c.policy, ...p });
     delete c.restUntil; // new limits: worth trying again

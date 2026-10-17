@@ -397,3 +397,11 @@ table.plain.addr td:first-child { width: 34%; color: var(--dim); }
 table.plain.addr a { overflow-wrap: anywhere; font-size: 12.5px; }
 @media (max-width: 900px) { .rule-legend { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .rule-legend { grid-template-columns: 1fr; } table.plain.addr td:first-child { width: auto; } table.plain.addr tr { display: grid; } table.plain.addr td { border-bottom: 0; padding: 4px 0; } table.plain.addr tr { border-bottom: 1px solid var(--line); padding: 8px 0; } }
+
+/* Owner-set product prices */
+.price-edit { background: none; border: 1px dashed var(--line-2); color: inherit; font: inherit; padding: 2px 6px; cursor: pointer; }
+.price-edit:hover { border-color: var(--text); }
+.price-form { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.price-form .field { width: 90px; padding: 4px 6px; }
+.fund-manual { font-size: 13px; display: grid; gap: 4px; }
+.fund-manual code { overflow-wrap: anywhere; }

@@ -31,7 +31,7 @@ export interface CompanyStats {
 const KINDS: TaskKind[] = ["research", "build_product", "build_site", "improve_site", "marketing", "reprice", "retire_product"];
 
 function summary(c: Company, s: CompanyStats): string {
-  const products = c.products.map((p) => `- [${p.id}] ${p.name} (${p.kind}, $${fromUsdc(p.priceUsdc).toFixed(2)}, ${p.status}, ${p.sales} sales, $${fromUsdc(p.revenueUsdc).toFixed(2)})`).join("\n") || "- none yet";
+  const products = c.products.map((p) => `- [${p.id}] ${p.name} (${p.kind}, $${fromUsdc(p.priceUsdc).toFixed(2)}${p.priceByOwner ? " set by the owner, never reprice it" : ""}, ${p.status}, ${p.sales} sales, $${fromUsdc(p.revenueUsdc).toFixed(2)})`).join("\n") || "- none yet";
   const recent = c.tasks.slice(-8).map((t) => `- shift ${t.cycle}: ${t.kind} "${t.title}" → ${t.status}${t.error ? ` (${t.error})` : ""}`).join("\n") || "- nothing yet";
   return `Company: ${c.name}
 Idea: ${c.idea}
@@ -99,7 +99,7 @@ export function heuristicDecision(c: Company, s: CompanyStats): Decision {
       product: { name: `${best.name} — Advanced`, kind: "template", pitch: "The next step, with templates you can copy.", priceUsd: Math.max(15, fromUsdc(best.priceUsdc) * 2) },
     };
   }
-  const stale = live.find((p) => p.sales === 0 && Date.now() - p.createdAt > 5 * 24 * 60 * 60 * 1000);
+  const stale = live.find((p) => !p.priceByOwner && p.sales === 0 && Date.now() - p.createdAt > 5 * 24 * 60 * 60 * 1000);
   if (stale) {
     return { kind: "reprice", title: `Cut the price of ${stale.name}`, why: "Five days without a sale.", brief: "", productId: stale.id, priceUsd: Math.max(3, Math.round(fromUsdc(stale.priceUsdc) * 0.6)) };
   }

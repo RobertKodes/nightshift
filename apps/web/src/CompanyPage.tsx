@@ -10,6 +10,24 @@ const KIND_LABEL: Record<string, string> = {
   research: "Research", build_product: "New product", build_site: "Website", improve_site: "Site change", marketing: "Marketing", reprice: "Pricing", retire_product: "Retire",
 };
 
+/** The owner's price for a product: click, type, Enter. The CEO keeps it from then on. */
+function PriceCell({ id, productId, usdc, byOwner, onSaved }: { id: string; productId: string; usdc: string; byOwner: boolean; onSaved: () => void }) {
+  const [edit, setEdit] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const save = async () => {
+    const v = Number(edit);
+    try { await api.price(id, productId, v); setEdit(null); setErr(null); onSaved(); } catch (e) { setErr((e as Error).message); }
+  };
+  if (edit === null) return <button className="price-edit" title={byOwner ? "Your price. Click to change it" : "Set your own price"} onClick={() => setEdit(String(fromUsdc(usdc)))}>{usd(fromUsdc(usdc))} <span className="faint">✎</span></button>;
+  return (
+    <form className="price-form" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+      <span>$</span><input className="field" type="number" min="0.5" max="10000" step="0.01" value={edit} onChange={(e) => setEdit(e.target.value)} autoFocus onKeyDown={(e) => { if (e.key === "Escape") setEdit(null); }} />
+      <button className="btn" type="submit">Save</button>
+      {err && <span className="bad" style={{ fontSize: 12 }}>{err}</span>}
+    </form>
+  );
+}
+
 function Chart({ points }: { points: { t: number; visits: number; revenue: number }[] }) {
   const W = 600;
   const H = 150;
@@ -170,7 +188,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
                     <tr key={p.id}>
                       <td><b>{p.name}</b><div className="dim" style={{ fontSize: 12.5 }}>{p.pitch}</div>{p.status === "live" && <a className="faint mono" style={{ fontSize: 11 }} href={`/api/companies/${c.id}/products/${p.id}/download`} target="_blank" rel="noreferrer">what buyers get ↗</a>}{p.deliverableUrl && <a className="faint mono" style={{ fontSize: 11, marginLeft: 12 }} href={p.deliverableUrl} target="_blank" rel="noreferrer">swarm source ↗</a>}</td>
                       <td><span className={`pill ${p.status}`}>{p.status}</span></td>
-                      <td className="r">{usd(fromUsdc(p.priceUsdc))}</td>
+                      <td className="r">{c.isOwner && p.status !== "retired" ? <PriceCell id={c.id} productId={p.id} usdc={p.priceUsdc} byOwner={Boolean(p.priceByOwner)} onSaved={load} /> : usd(fromUsdc(p.priceUsdc))}</td>
                       <td className="r">{p.sales}</td>
                       <td className="r good">{usd(fromUsdc(p.revenueUsdc))}</td>
                     </tr>

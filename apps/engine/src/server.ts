@@ -368,6 +368,10 @@ export function serve(engine: Engine) {
           if (limited(req, `shift:${c.id}`, 1, 60_000) || limited(req, `shift-owner:${owner ?? "anon"}`, 10, 3600_000)) return json(res, 429, { error: "One shift a minute per company, ten an hour per wallet." });
           await engine.shiftNow(c, true); return json(res, 200, { ok: true });
         }
+        if (action === "products" && seg[4] && seg[5] === "price" && req.method === "POST") {
+          try { engine.setPrice(c, seg[4], Number((await body(req)).priceUsd)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          return json(res, 200, { ok: true });
+        }
         if (action === "policy") { engine.setPolicy(c, (await body(req)) as never); return json(res, 200, c.policy); }
         if (action === "withdraw") {
           const b = await body(req);

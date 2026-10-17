@@ -81,6 +81,13 @@ export function FundCard({ id, wallet, onFunded }: { id: string; wallet: `0x${st
       <div className="card-b" style={{ display: "grid", gap: 8 }}>
         <button className="btn primary" disabled={Boolean(step)} onClick={() => void fund()}>{step ?? "Fund from my wallet"}</button>
         {err && <span className="bad" style={{ fontSize: 13 }}>{err}</span>}
+        <details className="fund-manual">
+          <summary>Or send it yourself from your wallet</summary>
+          <span>Send to the company wallet, on Ethereum: IMD and ETH. On Base: a little ETH.</span>
+          <code>{wallet}</code>
+          <button className="btn" type="button" onClick={() => void navigator.clipboard?.writeText(wallet)}>Copy address</button>
+          <span className="dim">This page sees the funds within a minute either way.</span>
+        </details>
         <span className="dim" style={{ fontSize: 13 }}>Only what is missing is asked for, one confirmation each. The money goes to the company's own wallet {wallet.slice(0, 6)}…{wallet.slice(-4)}, which pays the IMD swarm and receives the sales.</span>
       </div>
     </div>

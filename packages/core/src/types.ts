@@ -9,6 +9,8 @@ export interface Product {
   pitch: string;
   /** USDC base units (6 decimals). */
   priceUsdc: bigint;
+  /** The owner set this price: the CEO keeps it. */
+  priceByOwner?: boolean;
   status: "building" | "live" | "retired";
   /** Where the buyer gets it after paying: the swarm's delivered file or hosted tool. */
   deliverableUrl: string | null;

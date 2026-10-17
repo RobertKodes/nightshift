@@ -279,7 +279,10 @@ function doInHouse(c: Company, t: Task, decision: Decision, d: ShiftDeps): void 
     note(c, d, "result", `Drafted a post: "${text}"`);
   } else if (decision.kind === "reprice") {
     const p = c.products.find((x) => x.id === decision.productId);
-    if (p && decision.priceUsd) {
+    if (p?.priceByOwner) {
+      touch(c, t, d, { status: "done", result: { note: "price set by the owner; kept" } });
+      note(c, d, "note", `${p.name}: the owner set its price, so it stays at $${(Number(p.priceUsdc) / 1e6).toFixed(2)}.`);
+    } else if (p && decision.priceUsd) {
       const before = Number(p.priceUsdc) / 1e6;
       p.priceUsdc = usdc(decision.priceUsd);
       touch(c, t, d, { status: "done", result: { note: `$${before.toFixed(2)} → $${decision.priceUsd.toFixed(2)}` } });

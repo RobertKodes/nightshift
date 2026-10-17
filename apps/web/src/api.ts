@@ -7,7 +7,7 @@ export interface TaskView {
   result: { siteUrl?: string | null; files?: Record<string, string>; note?: string } | null;
   createdAt: number; updatedAt: number;
 }
-export interface ProductView { id: string; name: string; kind: string; pitch: string; priceUsdc: string; status: string; deliverableUrl: string | null; sales: number; revenueUsdc: string; createdAt: number }
+export interface ProductView { id: string; name: string; kind: string; pitch: string; priceUsdc: string; priceByOwner?: boolean; status: string; deliverableUrl: string | null; sales: number; revenueUsdc: string; createdAt: number }
 export interface JournalView { at: number; cycle: number; kind: string; text: string }
 export interface Policy { dailyBudgetUsd: number; approvalOverUsd: number; autopilot: boolean; shiftMinutes: number }
 
@@ -68,6 +68,7 @@ export const api = {
   publishPost: (id: string, i: number) => req<{ url: string }>("POST", `/api/companies/${id}/posts/${i}/publish`),
   pause: (id: string) => req("POST", `/api/companies/${id}/pause`),
   resume: (id: string) => req("POST", `/api/companies/${id}/resume`),
+  price: (id: string, product: string, priceUsd: number) => req("POST", `/api/companies/${id}/products/${product}/price`, { priceUsd }),
   policy: (id: string, p: Partial<Policy>) => req<Policy>("POST", `/api/companies/${id}/policy`, p),
   approve: (id: string, task: string) => req("POST", `/api/companies/${id}/tasks/${task}/approve`),
   reject: (id: string, task: string) => req("POST", `/api/companies/${id}/tasks/${task}/reject`),
