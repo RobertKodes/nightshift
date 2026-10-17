@@ -93,6 +93,11 @@ export function FrogsPage() {
         </div>
         {info?.on ? (
           <>
+            <div className="frogs-countdown">
+              {s?.revealed ? <><b>🌅 Revealed</b><span>every frog has its traits</span></>
+                : left > 0 ? <><b>{left}</b><span>frogs until the reveal · when the 500th is minted, one Chainlink draw wakes the whole crew</span></>
+                : <><b>🌙 Sold out</b><span>the reveal is next</span></>}
+            </div>
             <div className="frogs-meter"><i style={{ width: `${(minted / 500) * 100}%` }} /></div>
             <div className="frogs-nums">
               <div><b>{minted}</b><span>of 500 minted</span></div>

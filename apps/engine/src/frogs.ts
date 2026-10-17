@@ -52,10 +52,16 @@ export async function frogStats() {
 }
 
 /** New mints since the last look, for the community chat. */
-type State = { lastBlock?: number };
+type State = { lastBlock?: number; milestone?: number; revealAnnounced?: boolean };
 const file = () => join(config.dataDir, "frogs.json");
 const load = (): State => { try { return existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : {}; } catch { return {}; } };
 const st = load();
+const saveSt = () => writeFileSync(file(), JSON.stringify(st));
+/** The countdown milestone last announced (every 50 frogs) and whether the reveal was announced. */
+export const milestoneSeen = () => st.milestone ?? 0;
+export const setMilestone = (n: number) => { st.milestone = n; saveSt(); };
+export const revealAnnounced = () => Boolean(st.revealAnnounced);
+export const markRevealAnnounced = () => { st.revealAnnounced = true; saveSt(); };
 export async function newMints(): Promise<{ payer: string; first: number; quantity: number; paid: number; tx: string }[]> {
   if (!frogsOn()) return [];
   const head = Number(await eth.getBlockNumber());

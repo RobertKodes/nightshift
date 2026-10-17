@@ -28,7 +28,7 @@ import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
-import { accrueStaking, frogCached, frogCount, frogsOn, newMints, stakingBoard } from "./frogs.js";
+import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { buyCard, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
@@ -119,11 +119,28 @@ export class Engine {
     // Every frog minted, to the community chat.
     setInterval(() => void newMints().then(async (mints) => {
       for (const m of mints) {
-        const ids = m.quantity > 1 ? `#${m.first}–#${m.first + m.quantity - 1}` : `#${m.first}`;
+        const last = m.first + m.quantity - 1;
+        const left = Math.max(0, 500 - last);
+        const ids = m.quantity > 1 ? `#${m.first}–#${last}` : `#${m.first}`;
         const genesis = m.first <= 77 ? " · <b>GENESIS</b>" : "";
-        await toCommunity(`🐸 <b>NIGHT FROG${m.quantity > 1 ? "S" : ""} MINTED</b> ${ids}${genesis}\n\n👤 <a href="https://etherscan.io/address/${m.payer}">${m.payer.slice(0, 6)}…${m.payer.slice(-4)}</a>\n💵 ${m.paid.toFixed(2)} IMD · 🔥 ${(m.paid / 2).toFixed(2)} IMD burned\n\n<a href="https://etherscan.io/tx/${m.tx}">TX</a>`, [[{ text: "🐸 Mint yours", url: `${config.publicUrl}/frogs` }]], "frog");
+        await toCommunity(`🐸 <b>NIGHT FROG${m.quantity > 1 ? "S" : ""} MINTED</b> ${ids}${genesis}\n\n👤 <a href="https://etherscan.io/address/${m.payer}">${m.payer.slice(0, 6)}…${m.payer.slice(-4)}</a>\n💵 ${m.paid.toFixed(2)} IMD · 🔥 ${(m.paid / 2).toFixed(2)} IMD burned\n🌙 <b>${last}/500</b> · ${left ? `${left} until the reveal` : "SOLD OUT"}\n\n<a href="https://etherscan.io/tx/${m.tx}">TX</a>`, [[{ text: "🐸 Mint yours", url: `${config.publicUrl}/frogs` }]], "frog");
+        // the countdown: every 50 frogs, and the sellout
+        const step = Math.floor(last / 50) * 50;
+        if (step > 0 && step > milestoneSeen()) {
+          setMilestone(step);
+          await toCommunity(step >= 500
+            ? `🌙🐸 <b>SOLD OUT · ALL 500 NIGHT FROGS ARE MINTED</b>\n\nThe night shift is complete. The reveal is next: one Chainlink VRF draw gives every frog its traits at once. Nobody can pick or reroll them.\n\nStay close, the crew wakes up soon.`
+            : `🌙 <b>${step}/500 NIGHT FROGS MINTED</b>\n\n<b>${500 - step} frogs until the reveal.</b>\nWhen the 500th frog is minted, one Chainlink VRF draw wakes the whole crew at once: every frog gets its traits, nobody can pick or reroll them.\n\n🔥 ${step} IMD burned so far.`, [[{ text: "🐸 Mint before the reveal", url: `${config.publicUrl}/frogs` }]], "frog");
+        }
       }
     }).catch((e) => console.error("frogs", e)), 30_000);
+    // The reveal itself: announce once, when the contract reads revealed.
+    setInterval(() => void frogStats().then(async (s) => {
+      if (!s?.revealed || revealAnnounced()) return;
+      markRevealAnnounced();
+      await toCommunity(`🌅🐸 <b>THE NIGHT SHIFT HAS WOKEN UP</b>\n\nAll 500 NIGHT FROGS are revealed. Chainlink drew the randomness, every frog now has its traits, fully onchain.\n\nCheck yours in your wallet or on OpenSea. Who got the crown? 👑`, [[{ text: "🐸 See the crew", url: `${config.publicUrl}/frogs` }]], "frog");
+      housePost(`🌅 All 500 NIGHT FROGS are revealed: one Chainlink VRF draw gave every frog its traits, fully onchain. ${config.publicUrl}/frogs`, "frogs-revealed");
+    }).catch(() => {}), 60_000);
     // The daily report, at 08:00 UTC.
     let reported = "";
     setInterval(() => {
