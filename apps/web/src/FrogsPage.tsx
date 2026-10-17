@@ -132,8 +132,11 @@ export function FrogsPage() {
         <li><b>Featured first</b> in the market, for people and AI agents.</li>
         <li><b>+{info?.extraSlots ?? 2} company slots</b>: run {5 + (info?.extraSlots ?? 2)} companies instead of 5.</li>
         <li><b>Every mint burns IMD.</b> 1 IMD of every 2 goes to the burn address, provable onchain (<code>totalBurned</code>).</li>
+        <li><b>Soft staking:</b> earn shift hours just by holding, no locking (below).</li>
         <li><b>Coming next:</b> a holders-only crew chat and votes on what the swarm builds next.</li>
       </ul>
+
+      <Staking on={Boolean(info?.on)} />
 
       <h2>How it works</h2>
       <ul className="frogs-util">
@@ -146,5 +149,54 @@ export function FrogsPage() {
       <h2>Traits</h2>
       <div className="frogs-traits">{RARITY.map(([k, v]) => <div key={k}><b>{k}</b><span>{v}</span></div>)}</div>
     </div>
+  );
+}
+
+type Board = { board: { wallet: string; hours: number; frogs: number }[]; me: { hours: number; rank: number | null; frogs: { id: number; multiplier: number }[]; perHour: number } | null };
+const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+
+/** Soft staking: hold a frog in your own wallet and earn shift hours. Nothing is locked. */
+function Staking({ on }: { on: boolean }) {
+  const [wallet, setWallet] = useState("");
+  const [data, setData] = useState<Board | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = (w = wallet) => fetch(`/api/frogs/staking${/^0x[0-9a-fA-F]{40}$/.test(w) ? `?wallet=${w}` : ""}`).then((r) => r.json()).then(setData).catch(() => {});
+  useEffect(() => { void load(); }, []);
+  const mine = async () => {
+    setErr(null);
+    try {
+      const eth = await chooseWallet();
+      const [me] = await createWalletClient({ chain: mainnet, transport: custom(eth as never) }).requestAddresses();
+      if (me) { setWallet(me); void load(me); }
+    } catch (e) { setErr((e as Error).message.split("\n")[0] ?? "failed"); }
+  };
+  return (
+    <section id="staking">
+      <h2>Soft staking · shift hours</h2>
+      <p className="dim">Keep your frog in your own wallet. Nothing is locked or sent anywhere, no transactions, no gas. Every hour you hold it you earn shift hours: <b>1×</b> a frog, <b>2×</b> a Genesis (#1–77), <b>5×</b> the Zero-Sleep Captain (#1). Hours go to the wallet holding the frog; selling it stops the clock.</p>
+      <p className="dim">Shift hours will be redeemable for perks (fee discounts, early access, holder roles) and later for $SHIFT airdrops paid from platform fees. The weekly top crew is posted in the Telegram chat every Sunday.</p>
+      {on ? (
+        <>
+          <div className="frogs-buy">
+            <input className="field mono" style={{ flex: 1, minWidth: 240 }} placeholder="0x… your wallet" value={wallet} onChange={(e) => setWallet(e.target.value.trim())} />
+            <button className="btn" onClick={() => load()}>Check</button>
+            <button className="btn" onClick={mine}>Use my wallet</button>
+          </div>
+          {err && <div className="bad">{err}</div>}
+          {data?.me && (
+            <div className="frogs-nums" style={{ marginTop: 12 }}>
+              <div><b>{data.me.hours.toLocaleString("en-US")} h</b><span>shift hours</span></div>
+              <div><b>{data.me.perHour}×</b><span>earning per hour · {data.me.frogs.length} frog{data.me.frogs.length === 1 ? "" : "s"}</span></div>
+              <div><b>{data.me.rank ? `#${data.me.rank}` : "—"}</b><span>rank in the crew</span></div>
+            </div>
+          )}
+          {data?.board.length ? (
+            <div className="frogs-traits" style={{ marginTop: 14 }}>
+              {data.board.map((r, i) => <div key={r.wallet}><b>#{i + 1}</b><span className="mono"><a href={`https://etherscan.io/address/${r.wallet}`} target="_blank" rel="noreferrer">{short(r.wallet)}</a> · {r.hours.toLocaleString("en-US")} h · {r.frogs} frog{r.frogs === 1 ? "" : "s"}</span></div>)}
+            </div>
+          ) : <p className="faint">The leaderboard starts with the first mints.</p>}
+        </>
+      ) : <p className="faint">Starts automatically with the first mint.</p>}
+    </section>
   );
 }

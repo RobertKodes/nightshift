@@ -11,7 +11,7 @@ import { handleMcp } from "./mcp.js";
 import { isAdmin, saveSetup, setupState } from "./admin.js";
 import { buybacks, checkLaunch, holderStatus, launchBody, launchState, recordBuyback, recordLaunch, tokenOn, type TokenSpec } from "./token.js";
 import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
-import { frogStats, frogsOn } from "./frogs.js";
+import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
 import { usdc } from "@nightshift/core";
 import { getAddress } from "viem";
 
@@ -213,6 +213,10 @@ export function serve(engine: Engine) {
 
       // ---- the landing page's live numbers: real where they can be, labelled where simulated
       if (p === "/api/landing") return json(res, 200, await landing(engine));
+      if (p === "/api/frogs/staking") {
+        const w = new URL(req.url ?? "/", config.publicUrl).searchParams.get("wallet") ?? "";
+        return json(res, 200, { board: stakingBoard(20), me: /^0x[0-9a-fA-F]{40}$/.test(w) ? stakingOf(w) : null });
+      }
       if (p === "/api/frogs") {
         const order = orders().find((o) => o.id === "night-frogs");
         return json(res, 200, {

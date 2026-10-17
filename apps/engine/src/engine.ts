@@ -28,7 +28,7 @@ import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
-import { frogCached, frogCount, frogsOn, newMints } from "./frogs.js";
+import { accrueStaking, frogCached, frogCount, frogsOn, newMints, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { buyCard, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
@@ -102,6 +102,20 @@ export class Engine {
         }
       }
     }).catch((e) => console.error("orders", e)), 60_000);
+    // Soft staking: credit shift hours every hour; the week's top holders on Sunday 18:00 UTC.
+    setInterval(() => void accrueStaking().catch((e) => console.error("staking", e)), 3_600_000);
+    void accrueStaking().catch(() => {});
+    let boardWeek = "";
+    setInterval(() => {
+      const d = new Date();
+      const week = `${d.getUTCFullYear()}-${Math.floor(d.getTime() / 604_800_000)}`;
+      if (!frogsOn() || d.getUTCDay() !== 0 || d.getUTCHours() !== 18 || boardWeek === week) return;
+      boardWeek = week;
+      const top = stakingBoard(5);
+      if (!top.length) return;
+      const medal = ["🥇", "🥈", "🥉", "4.", "5."];
+      void toCommunity(`🐸⏱ <b>NIGHT SHIFT HOURS · top of the crew</b>\n\n${top.map((t, i) => `${medal[i]} <a href="https://etherscan.io/address/${t.wallet}">${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}</a> · ${t.hours.toLocaleString("en-US")} h · ${t.frogs} frog${t.frogs === 1 ? "" : "s"}`).join("\n")}\n\nHold a frog, earn hours. Genesis 2×, #1 5×. No locking, no gas.`, [[{ text: "⏱ My shift hours", url: `${config.publicUrl}/frogs#staking` }]], "frog");
+    }, 60_000);
     // Every frog minted, to the community chat.
     setInterval(() => void newMints().then(async (mints) => {
       for (const m of mints) {
