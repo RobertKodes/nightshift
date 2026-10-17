@@ -285,3 +285,10 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 .swap-leg i { font: 600 14px var(--mono); font-style: normal; color: var(--ink); }
 .swap-flip { text-align: center; color: var(--faint); }
 .swap-box .ns-cta { justify-self: stretch; justify-content: center; cursor: not-allowed; }
+
+/* IMD Impact */
+.impact-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 10px 0 6px; }
+.impact-nums div { padding: 16px; border: 1px solid var(--edge); background: rgba(3, 2, 10, .5); }
+.impact-nums b { display: block; font: 600 22px var(--mono); color: var(--ink); }
+.impact-nums span { font: 500 11px var(--mono); letter-spacing: .1em; color: var(--faint); text-transform: uppercase; }
+@media (max-width: 760px) { .impact-nums { grid-template-columns: 1fr; } }

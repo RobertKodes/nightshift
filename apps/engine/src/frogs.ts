@@ -73,12 +73,15 @@ export async function newMints(): Promise<{ payer: string; first: number; quanti
  * each minted frog and credits that wallet "shift hours": 1 an hour, 2 for a Genesis frog
  * (#1–77), 5 for #1. The hours belong to the wallet; selling a frog stops its accrual.
  */
-type Staking = { at: number; wallets: Record<string, number>; holders: Record<string, string> };
+type Staking = { at: number; wallets: Record<string, number>; holders: Record<string, string>; seat?: Record<string, boolean> };
 const sFile = () => join(config.dataDir, "staking.json");
 const loadStaking = (): Staking => { try { return existsSync(sFile()) ? JSON.parse(readFileSync(sFile(), "utf8")) : { at: 0, wallets: {}, holders: {} }; } catch { return { at: 0, wallets: {}, holders: {} }; } };
 const staking = loadStaking();
 export const multiplier = (id: number) => (id === 1 ? 5 : id <= 77 ? 2 : 1);
 const OWNER_OF = parseAbi(["function ownerOf(uint256) view returns (address)"]);
+/** IMD's own seats (the identity.md NFT): holding one as well doubles a wallet's shift hours. */
+export const IMD_SEATS = "0x0000ec93127baa929e58e97dd0095a2bfb38ec1d";
+export const SEAT_BOOST = 2;
 
 export async function accrueStaking(): Promise<void> {
   if (!frogsOn()) return;
@@ -88,11 +91,14 @@ export async function accrueStaking(): Promise<void> {
   const res = await eth.multicall({ contracts: Array.from({ length: minted }, (_, i) => ({ address: addr(), abi: OWNER_OF, functionName: "ownerOf" as const, args: [BigInt(i + 1)] })), allowFailure: true });
   // credit the time since the last look (at most a day, so an outage never mints a windfall)
   const hours = staking.at ? Math.min(24, (now - staking.at) / 3_600_000) : 0;
+  const owners = [...new Set(res.filter((r) => r.status === "success").map((r) => String(r.result).toLowerCase()))];
+  const seats = await eth.multicall({ contracts: owners.map((o) => ({ address: IMD_SEATS as `0x${string}`, abi: FROGS_ABI, functionName: "balanceOf" as const, args: [o as `0x${string}`] })), allowFailure: true });
+  staking.seat = Object.fromEntries(owners.map((o, i) => [o, seats[i]?.status === "success" && Number(seats[i]!.result) > 0]));
   res.forEach((r, i) => {
     if (r.status !== "success") return;
     const id = i + 1;
     const owner = String(r.result).toLowerCase();
-    if (staking.holders[id] === owner && hours > 0) staking.wallets[owner] = (staking.wallets[owner] ?? 0) + hours * multiplier(id);
+    if (staking.holders[id] === owner && hours > 0) staking.wallets[owner] = (staking.wallets[owner] ?? 0) + hours * multiplier(id) * (staking.seat?.[owner] ? SEAT_BOOST : 1);
     staking.holders[id] = owner;
   });
   staking.at = now;
@@ -106,10 +112,11 @@ export function stakingBoard(limit = 20): { wallet: string; hours: number; frogs
     .sort((a, b) => b.hours - a.hours).slice(0, limit);
 }
 
-export function stakingOf(wallet: string): { hours: number; rank: number | null; frogs: { id: number; multiplier: number }[]; perHour: number } {
+export function stakingOf(wallet: string): { hours: number; rank: number | null; frogs: { id: number; multiplier: number }[]; perHour: number; imdSeat: boolean } {
   const w = wallet.toLowerCase();
   const all = Object.entries(staking.wallets).sort((a, b) => b[1] - a[1]);
   const idx = all.findIndex(([k]) => k === w);
   const frogs = Object.entries(staking.holders).filter(([, o]) => o === w).map(([id]) => ({ id: Number(id), multiplier: multiplier(Number(id)) }));
-  return { hours: Math.floor(staking.wallets[w] ?? 0), rank: idx >= 0 ? idx + 1 : null, frogs, perHour: frogs.reduce((a, f) => a + f.multiplier, 0) };
+  const seat = Boolean(staking.seat?.[w]);
+  return { hours: Math.floor(staking.wallets[w] ?? 0), rank: idx >= 0 ? idx + 1 : null, frogs, perHour: frogs.reduce((a, f) => a + f.multiplier, 0) * (seat ? SEAT_BOOST : 1), imdSeat: seat };
 }

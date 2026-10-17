@@ -154,7 +154,7 @@ export function FrogsPage() {
   );
 }
 
-type Board = { board: { wallet: string; hours: number; frogs: number }[]; me: { hours: number; rank: number | null; frogs: { id: number; multiplier: number }[]; perHour: number } | null };
+type Board = { board: { wallet: string; hours: number; frogs: number }[]; me: { hours: number; rank: number | null; frogs: { id: number; multiplier: number }[]; perHour: number; imdSeat?: boolean } | null };
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 /** Soft staking: hold a frog in your own wallet and earn shift hours. Nothing is locked. */
@@ -175,7 +175,7 @@ function Staking({ on }: { on: boolean }) {
   return (
     <section id="staking">
       <h2>Soft staking · shift hours</h2>
-      <p className="dim">Keep your frog in your own wallet. Nothing is locked or sent anywhere, no transactions, no gas. Every hour you hold it you earn shift hours: <b>1×</b> a frog, <b>2×</b> a Genesis (#1–77), <b>5×</b> the Zero-Sleep Captain (#1). Hours go to the wallet holding the frog; selling it stops the clock.</p>
+      <p className="dim">Keep your frog in your own wallet. Nothing is locked or sent anywhere, no transactions, no gas. Every hour you hold it you earn shift hours: <b>1×</b> a frog, <b>2×</b> a Genesis (#1–77), <b>5×</b> the Zero-Sleep Captain (#1). Holding an <b>IMD seat</b> as well doubles it all. Hours go to the wallet holding the frog; selling it stops the clock.</p>
       <p className="dim">Shift hours will be redeemable for perks (fee discounts, early access, holder roles) and later for $SHIFT airdrops paid from platform fees. The weekly top crew is posted in the Telegram chat every Sunday.</p>
       {on ? (
         <>
@@ -188,7 +188,7 @@ function Staking({ on }: { on: boolean }) {
           {data?.me && (
             <div className="frogs-nums" style={{ marginTop: 12 }}>
               <div><b>{data.me.hours.toLocaleString("en-US")} h</b><span>shift hours</span></div>
-              <div><b>{data.me.perHour}×</b><span>earning per hour · {data.me.frogs.length} frog{data.me.frogs.length === 1 ? "" : "s"}</span></div>
+              <div><b>{data.me.perHour}×</b><span>earning per hour · {data.me.frogs.length} frog{data.me.frogs.length === 1 ? "" : "s"}{data.me.imdSeat ? " · IMD seat 2×" : ""}</span></div>
               <div><b>{data.me.rank ? `#${data.me.rank}` : "—"}</b><span>rank in the crew</span></div>
             </div>
           )}

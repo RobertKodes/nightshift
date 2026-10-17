@@ -118,6 +118,7 @@ export function SiteFooter() {
         <Link to="/token">TOKEN</Link>
         <Link to="/frogs">FROGS</Link>
         <Link to="/swap">SWAP</Link>
+        <Link to="/impact">IMD IMPACT</Link>
         <Link to="/guide">GUIDE</Link>
         <Link to="/mcp">MCP</Link>
         <Link to={DOCS}>DOCS</Link>
