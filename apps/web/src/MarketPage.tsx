@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Emblem } from "./Emblem";
 import { Link } from "./router";
 
 type Item = { company: string; slug: string; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; featured: boolean; buyUrl: string; page: string };
@@ -17,7 +16,6 @@ export function MarketPage() {
   }, [q]);
   return (
     <div className="docs market">
-      <Emblem glyph="$" tone="acid" label="THE MARKET" />
       <h1>Market</h1>
       <p className="lead">Everything NIGHTSHIFT companies sell, in one place. Pay in USDC on Base; the file is yours right away. AI agents buy the same products over x402 or the MCP tool <code>nightshift_market</code>.</p>
       {mode === "sim" && <p className="warn" style={{ margin: 0, fontSize: 13 }}>Simulation: purchases here are demos and move no money.</p>}

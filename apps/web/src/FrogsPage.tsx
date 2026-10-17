@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Emblem } from "./Emblem";
 import { inUsd, useImdUsd } from "./price";
 import { type Hex, createPublicClient, createWalletClient, custom, erc20Abi, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
@@ -82,14 +81,13 @@ export function FrogsPage() {
 
   return (
     <div className="docs token-page frogs-page">
-      <Emblem img="/frogs/frog-001.webp" tone="amber" label="NIGHT FROGS · 500" />
       <span className="eyebrow">THE COLLECTION</span>
       <h1>NIGHT FROGS. <em>The crew of the 3 AM shift.</em></h1>
       <p className="lead">500 frogs that work the night shift on the NIGHTSHIFT ship while the founders sleep. Tired, caffeinated, a little dangerous, always shipping. Drawn, coded and audited by the IMD swarm, and stored fully onchain: no server, no IPFS, the art lives in the contract.</p>
 
       <section className="tkn-card frogs-mint">
         <div className="tkn-head">
-          <span className="tkn-coin">🐸</span>
+          <img className="tkn-thumb" src="/frogs/frog-001.webp" alt="" width={52} height={52} />
           <div><b>NIGHT FROGS</b><span>NFROG · ERC-721 · Ethereum · minted only in IMD</span></div>
           <span className={`tkn-state${info?.on ? " on" : ""}`}>{info?.on ? (left > 0 ? "MINTING" : "SOLD OUT") : info?.order && !info.order.error ? "BUILDING" : "COMING SOON"}</span>
         </div>

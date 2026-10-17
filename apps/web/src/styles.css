@@ -332,32 +332,14 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
   .ns-app .docs h1 { max-width: none; }
 }
 
-/* ---------- hero emblem: a turning coin with orbits, halo and sparks */
-.emblem { --s: 260px; --c1: #7c5cff; --c2: #c4b4ff; position: absolute; top: 70px; right: 2%; width: var(--s); height: var(--s); perspective: 900px; z-index: 1; pointer-events: none; }
-.emblem.em-acid { --c1: #6fb51a; --c2: #b8ff4a; }
-.emblem.em-amber { --c1: #ff9a3d; --c2: #ffc46b; }
-.em-halo { position: absolute; inset: -18%; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--c1) 55%, transparent) 0%, transparent 62%); filter: blur(10px); animation: em-breathe 4s ease-in-out infinite; }
-@keyframes em-breathe { 50% { transform: scale(1.12); opacity: .75; } }
-.em-ring { position: absolute; inset: -6%; border-radius: 50%; border: 1px dashed color-mix(in srgb, var(--c2) 55%, transparent); transform: rotateX(72deg); animation: em-orbit 14s linear infinite; }
-.em-ring.r2 { inset: -20%; border-style: solid; border-color: color-mix(in srgb, var(--c1) 40%, transparent); transform: rotateX(72deg) rotateY(18deg); animation-duration: 22s; animation-direction: reverse; }
-.em-ring i { position: absolute; top: -5px; left: 50%; width: 10px; height: 10px; border-radius: 50%; background: var(--c2); box-shadow: 0 0 14px var(--c2), 0 0 30px var(--c1); }
-@keyframes em-orbit { to { transform: rotateX(72deg) rotateZ(360deg); } }
-.em-ring.r2 { animation-name: em-orbit2; }
-@keyframes em-orbit2 { to { transform: rotateX(72deg) rotateY(18deg) rotateZ(-360deg); } }
-.em-coin { position: absolute; inset: 12%; transform-style: preserve-3d; animation: em-spin 9s cubic-bezier(.45, .05, .55, .95) infinite; }
-@keyframes em-spin { 0% { transform: rotateY(0) rotateX(8deg); } 50% { transform: rotateY(180deg) rotateX(-6deg); } 100% { transform: rotateY(360deg) rotateX(8deg); } }
-.em-face, .em-layer { position: absolute; inset: 0; border-radius: 50%; }
-.em-layer { background: linear-gradient(135deg, var(--c2), var(--c1) 45%, #1a1036); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .15); }
-.em-face { overflow: hidden; display: grid; place-items: center; backface-visibility: hidden; background: radial-gradient(circle at 35% 30%, #2a1a6e, #0b0720 70%); box-shadow: 0 0 0 5px color-mix(in srgb, var(--c2) 80%, #fff), 0 0 0 9px var(--c1), 0 0 60px var(--c1), inset 0 0 40px rgba(0, 0, 0, .55); }
-.em-face.front { transform: translateZ(10px); }
-.em-face.back { transform: rotateY(180deg) translateZ(10px); }
-.em-face img { width: 100%; height: 100%; object-fit: cover; }
-.em-face::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, .45) 48%, transparent 60%); background-size: 250% 100%; animation: em-glint 4.5s ease-in-out infinite; mix-blend-mode: screen; }
-@keyframes em-glint { 0%, 30% { background-position: 150% 0; } 60%, 100% { background-position: -60% 0; } }
-.em-glyph { font: 400 calc(var(--s) * .38)/1 var(--serif); color: var(--c2); text-shadow: 0 0 30px var(--c1); }
-.em-spark { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px var(--c2); animation: em-spark 3.2s ease-in-out infinite; animation-delay: calc(var(--i) * -0.46s); }
-@keyframes em-spark { 0% { transform: rotate(calc(var(--i) * 51deg)) translateX(calc(var(--s) * .3)) scale(.4); opacity: 0; } 30% { opacity: 1; } 100% { transform: rotate(calc(var(--i) * 51deg + 40deg)) translateX(calc(var(--s) * .62)) scale(1); opacity: 0; } }
-.em-label { position: absolute; left: 50%; bottom: -46px; transform: translateX(-50%); white-space: nowrap; padding: 6px 12px; border: 1px solid rgba(164, 139, 255, .35); background: rgba(10, 8, 22, .72); font: 500 10.5px var(--mono); letter-spacing: .28em; color: var(--c2); }
-@media (prefers-reduced-motion: reduce) { .emblem * { animation: none !important; } }
-@media (max-width: 1080px) { .emblem { --s: 170px; top: 40px; right: 0; opacity: .9; } .em-label { display: none; } }
-@media (max-width: 640px) { .emblem { --s: 110px; top: 24px; } }
+/* Sub pages stay sober: no glows, no neon. */
+.ns-app .docs .tkn-card, .ns-app .docs > .card, .ns-app .docs > section > .card { box-shadow: 0 24px 60px -40px rgba(0, 0, 0, .9); }
+.ns-app .docs .tkn-card::before { box-shadow: none; }
+.ns-app .docs h1 { text-shadow: none; }
+.ns-app .docs h1 em { background: none; color: #a48bff; }
+.ns-app .docs > .eyebrow::before { box-shadow: none; }
+.frogs-countdown { background: rgba(3, 2, 10, .55); border-color: rgba(164, 139, 255, .28); }
+.frogs-countdown b { text-shadow: none; }
+.ns-app .docs .frogs-grid figure:hover { transform: translateY(-3px); box-shadow: none; border-color: rgba(164, 139, 255, .5); }
+.ns-app .docs .frogs-util li:hover { transform: none; box-shadow: none; }
+.tkn-thumb { width: 52px; height: 52px; border-radius: 10px; border: 1px solid rgba(164, 139, 255, .35); object-fit: cover; }

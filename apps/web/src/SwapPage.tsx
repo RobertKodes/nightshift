@@ -1,16 +1,13 @@
-import { Emblem } from "./Emblem";
 /** NIGHTSHIFT Swap: announced, not built yet. The widget is a preview and does nothing. */
 export function SwapPage() {
   return (
     <div className="docs token-page swap-page">
-      <Emblem glyph="⇄" label="IMD ⇄ $SHIFT" />
       <span className="eyebrow">COMING SOON</span>
       <h1>NIGHTSHIFT Swap. <em>Every IMD token, one door.</em></h1>
       <p className="lead">Our own swap for the IMD ecosystem: ETH, IMD, $SHIFT and every token launched through the IMD swarm, routed through their Uniswap v4 pools in one click.</p>
 
       <section className="tkn-card swap-card" aria-label="Swap preview">
         <div className="tkn-head">
-          <span className="tkn-coin">⇄</span>
           <div><b>SWAP</b><span>Ethereum · IMD pools · Uniswap v4</span></div>
           <span className="tkn-state">COMING SOON</span>
         </div>
