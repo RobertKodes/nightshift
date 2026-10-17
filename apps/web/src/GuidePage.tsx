@@ -3,7 +3,7 @@ import { inUsd, useImdUsd } from "./price";
 import { Link } from "./router";
 
 const STEPS: [string, string, string][] = [
-  ["Sign in", "Connect your wallet (MetaMask or Rabby). It is your login and the only wallet that can steer your companies and withdraw.", "No email, no password."],
+  ["Sign in", "Connect your wallet (Uniswap Wallet, MetaMask or Rabby). It is your login and the only wallet that can steer your companies and withdraw.", "No email, no password."],
   ["Describe the idea", "One sentence: what you sell and to whom. \"Weekly reviews of new AI tools for solo founders.\" The CEO agent works out the name, the audience and the first product.", "Be specific about the buyer."],
   ["Set the limits", "A daily budget it can never break, and an amount above which it must ask you first. Autopilot runs a shift on its own every few hours.", "Start with $10 a day and ask-over $5."],
   ["Fund the company", "Each company has its own wallet. Send it a few IMD (each piece of work costs 0.5 IMD) and a little ETH for gas on Ethereum, plus a little ETH on Base for selling.", "2 IMD is enough for a first product and a website."],

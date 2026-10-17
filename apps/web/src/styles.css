@@ -356,3 +356,8 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 .ns-app .docs .tkn-thumb { border-radius: 10px; border: 1px solid var(--s-line); }
 .ns-app .docs .icon { display: inline-block; vertical-align: -3px; }
 @media (max-width: 760px) { .ns-app .docs { padding-top: 32px; } .ns-app .docs .frogs-util { grid-template-columns: 1fr; } }
+.ns-app .docs .guide-n { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; background: var(--s-acc-bg); color: #cdbfff; font: 600 13px/1 Inter, sans-serif; letter-spacing: 0; }
+.ns-app .docs .guide-tip { font: 500 13.5px/1.5 Inter, sans-serif; letter-spacing: 0; color: var(--s-ok); }
+.ns-app .docs .guide-step b, .ns-app .docs .guide-step h3, .ns-app .docs .guide-step strong { font-family: Inter, sans-serif; }
+.ns-app .docs table td { font-family: Inter, sans-serif; }
+.ns-app .docs .tkn-state, .ns-app .docs .pill { font-family: Inter, sans-serif !important; letter-spacing: 0 !important; }
