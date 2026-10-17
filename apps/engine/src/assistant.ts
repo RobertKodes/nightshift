@@ -75,7 +75,7 @@ export type Facts = Record<string, unknown>;
 
 export async function answer(llm: LlmClient, model: string, question: string, facts: Facts): Promise<string | null> {
   const r = await llm.chat({
-    model, temperature: 0.2, maxTokens: 500,
+    model, temperature: 0.5, maxTokens: 500,
     messages: [{ role: "system", content: `${SYSTEM}\n\nFACTS (live, ${new Date().toISOString()}):\n${JSON.stringify(facts)}` }, { role: "user", content: question.slice(0, 600) }],
   });
   const text = (r.message.content ?? "").trim().replace(/^["']|["']$/g, "");
@@ -87,7 +87,6 @@ export async function answer(llm: LlmClient, model: string, question: string, fa
 const asked = new Map<string, number>();
 const hour: number[] = [];
 let day = { key: "", n: 0 };
-const cache = new Map<string, { at: number; text: string | null }>();
 
 export function allowed(user: string, now = Date.now()): boolean {
   if (now - (asked.get(user) ?? 0) < 120_000) return false;
@@ -99,6 +98,3 @@ export function allowed(user: string, now = Date.now()): boolean {
 }
 export function spend(user: string, now = Date.now()): void { asked.set(user, now); hour.push(now); day.n += 1; }
 
-/** The same question within 10 minutes gets the same answer, without asking the model again. */
-export const cached = (q: string) => { const c = cache.get(q.toLowerCase().replace(/\W+/g, " ").trim()); return c && Date.now() - c.at < 600_000 ? c : null; };
-export const remember = (q: string, text: string | null) => cache.set(q.toLowerCase().replace(/\W+/g, " ").trim(), { at: Date.now(), text });

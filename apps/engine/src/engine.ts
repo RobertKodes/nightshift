@@ -25,7 +25,7 @@ import { balances, ensurePermit2, eth, ethWallet, sales, salesWallet } from "./c
 import { V4, findPool } from "./v4.js";
 import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
 import { judge, muteMinutes, strike, track } from "./moderation.js";
-import { type Facts, allowed, answer, cached, remember, spend, worthAsking } from "./assistant.js";
+import { type Facts, allowed, answer, spend, worthAsking } from "./assistant.js";
 import { type KeeperRun, runKeeper } from "./keeper.js";
 import { buildEpoch } from "./frogpot.js";
 import { IMD_MAINNET } from "@nightshift/imd";
@@ -389,14 +389,9 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     if (this.#botName === null) this.#botName = (await tgCall<{ username: string }>(token, "getMe", {}))?.username?.toLowerCase() ?? "";
     const toBot = Boolean(m.private || m.replyToBot || (this.#botName && m.text.toLowerCase().includes(`@${this.#botName}`)));
     if (!worthAsking(m.text, toBot)) return;
-    const hit = cached(m.text);
-    if (!hit && !allowed(m.user)) return;
-    let text = hit?.text ?? null;
-    if (!hit) {
-      spend(m.user);
-      text = await answer(this.llm, config.model, m.text.replace(new RegExp(`@${this.#botName}`, "ig"), "").trim(), await this.#facts()).catch(() => null);
-      remember(m.text, text);
-    }
+    if (!allowed(m.user)) return;
+    spend(m.user);
+    const text = await answer(this.llm, config.model, m.text.replace(new RegExp(`@${this.#botName}`, "ig"), "").trim(), await this.#facts()).catch(() => null);
     if (!text) return;
     await tgCall(token, "sendMessage", { chat_id: m.chat, text, reply_parameters: { message_id: m.messageId, allow_sending_without_reply: true }, disable_web_page_preview: true });
   }
@@ -420,7 +415,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       fees: "Buys pay only the 1.25% pool fee (1% to the launch payer, the dev wallet; 0.25% to the IMD network). Sells also pay 5% (2.5% in SHIFT, 2.5% in ETH), which can only go down, never up.",
       oneRule: "Every NIGHTSHIFT fee is split the same way, hard-coded: 40% rewards (half to SHIFT stakers, half to NIGHT FROGS holders), 20% dev wallet, 20% treasury, 20% burned. SHIFT is burned to 0x...dEaD; every day at 03:00 UTC the NIGHTSHIFT keeper buys IMD with the ETH part and burns it at IMD's BurnExecutor 0xe29386719c155b6847ad5a4e97c6674f10ffc750. The keeper only pays gas and cannot move funds anywhere else.",
       burnedSoFar: { shift: burns.shift, imd: burns.imd },
-      staking: `At ${u}/stake: stake SHIFT with a lock from 0 to 730 days (24 months). Half of all rewards stream to stakers over 7 days in ETH and SHIFT; more stake and longer lock earn more. Locked stake cannot be withdrawn early by anyone. Claim rewards any time.`,
+      staking: `At ${u}/stake: stake SHIFT with a lock from 0 to 730 days (24 months). Stakers share 20% of every NIGHTSHIFT fee (half of the 40% rewards part; the other half goes to NIGHT FROGS holders), streamed over 7 days in ETH and SHIFT. More stake and a longer lock earn a bigger share. Locked stake cannot be withdrawn early by anyone, the owner included. Rewards can be claimed any time; unlocked stake can be withdrawn any time.`,
       nightFrogs: { about: "500 fully onchain NIGHT FROGS on Ethereum, minted only in IMD (2 IMD each, half burned). Holders get the frog half of rewards weekly by shift hours: #1 6x, #2-25 3x, #26-77 2x, the rest 1x; holding an IMD seat doubles it. Claim at /frogs.", minted: frogs?.minted ?? null, contract: config.nft.address || null },
       companies: { live: companies.length, costPerSwarmJob: "0.5 IMD", platformFee: `${config.platformFeeBps / 100}% of withdrawals; 0% for SHIFT and NIGHT FROGS holders`, start: `${u} (sign in with a wallet, press Launch a company)` },
       imdPriceUsd: config.imdUsd,

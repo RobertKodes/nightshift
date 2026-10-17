@@ -142,9 +142,11 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
         const isAdmin = admins.includes(from);
         if (!chat) continue;
         // The community guard sees every group message from someone who is not an operator.
-        if (m && h.guard && !isAdmin && (m.chat.type === "group" || m.chat.type === "supergroup") && m.from && !m.from.is_bot) {
+        if (m && (m.chat.type === "group" || m.chat.type === "supergroup") && m.from && !m.from.is_bot) {
           const name = m.from.username ? `@${m.from.username}` : (m.from.first_name ?? "someone");
-          if (await h.guard({ chat, chatUsername: m.chat.username, messageId: m.message_id, user: String(m.from.id), name, text: m.text ?? m.caption ?? "", replyToBot: Boolean(m.reply_to_message?.from?.is_bot) }).catch(() => false)) continue;
+          const gm: GroupMessage = { chat, chatUsername: m.chat.username, messageId: m.message_id, user: String(m.from.id), name, text: m.text ?? m.caption ?? "", replyToBot: Boolean(m.reply_to_message?.from?.is_bot) };
+          if (!isAdmin && h.guard) { if (await h.guard(gm).catch(() => false)) continue; }
+          else if (isAdmin && h.ask && !gm.text.startsWith("/")) void h.ask(gm).catch(() => {});
         }
         const people = (m?.new_chat_members ?? []).filter((x) => !x.is_bot).map((x) => x.first_name);
         if (people.length && h.joined) { h.joined(chat, people); continue; }
