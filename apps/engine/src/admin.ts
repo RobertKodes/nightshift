@@ -90,6 +90,9 @@ export function saveSetup(patch: Record<string, unknown>): string | null {
     const x = v(k);
     if (x && (Number.isNaN(Number(x)) || Number(x) < 0)) return `${k} must be a positive number`;
   }
+  const fee = v("PLATFORM_FEE_BPS");
+  if (fee && Number(fee) > 1000) return "PLATFORM_FEE_BPS is at most 1000 (10%)";
+  for (const k of ["ETH_RPC", "SALES_RPC"]) { const r = v(k); if (r && !/^https:\/\/[^\s/]+/.test(r)) return `${k} must be an https:// URL`; }
   const t = v("PLATFORM_TREASURY");
   if (t && !isAddress(t)) return "PLATFORM_TREASURY must be an address";
   const ta = v("TOKEN_ADDRESS");

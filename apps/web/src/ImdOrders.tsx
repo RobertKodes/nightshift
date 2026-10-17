@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { safeHref } from "./safe";
 import { chooseWallet } from "./wallet";
 import { type Hex, createPublicClient, createWalletClient, custom, erc20Abi, http, parseAbi, stringToHex } from "viem";
 import { mainnet } from "viem/chains";
@@ -74,7 +75,7 @@ export function ImdOrders({ call, token }: { call: (token: string, path: string,
           <div className="launch-stage">{!o.done && <i className="pulse" />}<b>{o.title}</b><span className={o.error ? "bad" : o.done ? "good" : ""}>{o.stage}</span></div>
           <a className="mono faint" href={`https://etherscan.io/tx/${o.tx}`} target="_blank" rel="noreferrer">payment tx {o.tx.slice(0, 12)}…</a>
           {o.jobId && <a className="mono faint" href={`https://explorer.imd.fun/jobs/${o.jobId}`} target="_blank" rel="noreferrer"> · job {o.jobId.slice(0, 8)}…</a>}
-          {o.repoUrl && <a className="mono faint" href={o.repoUrl} target="_blank" rel="noreferrer"> · code</a>}
+          {o.repoUrl && <a className="mono faint" href={safeHref(o.repoUrl)} target="_blank" rel="noreferrer"> · code</a>}
           {o.addresses?.map((a) => <div key={a.address} className="mono" style={{ fontSize: 12 }}>{a.name ?? a.role}: <a href={`https://etherscan.io/address/${a.address}`} target="_blank" rel="noreferrer">{a.address}</a></div>)}
         </div>
       ))}

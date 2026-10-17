@@ -15,8 +15,8 @@ type State = {
 };
 
 const KEY = "ns_admin";
-const read = () => { try { return localStorage.getItem(KEY) ?? ""; } catch { return ""; } };
-const keep = (t: string) => { try { t ? localStorage.setItem(KEY, t) : localStorage.removeItem(KEY); } catch { /* private window */ } };
+const read = () => { try { localStorage.removeItem(KEY); return sessionStorage.getItem(KEY) ?? ""; } catch { return ""; } };
+const keep = (t: string) => { try { t ? sessionStorage.setItem(KEY, t) : sessionStorage.removeItem(KEY); } catch { /* private window */ } };
 
 async function call(token: string, path: string, body?: unknown) {
   const r = await fetch(`/api/admin/${path}`, {

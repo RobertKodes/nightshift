@@ -3,7 +3,7 @@ import { type IncomingMessage, type ServerResponse, createServer } from "node:ht
 import { extname, join, normalize } from "node:path";
 import type { Company } from "@nightshift/core";
 import { fromImd, fromUsdc } from "@nightshift/core";
-import { type PaymentPayload, challenge, decodeHeader, encodeHeader, requirement, settlePayment, verifyPayment } from "@nightshift/x402";
+import { type PaymentPayload, USDC, challenge, decodeHeader, encodeHeader, requirement, settlePayment, verifyPayment } from "@nightshift/x402";
 import { balances, sales, salesWallet } from "./chain.js";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
@@ -14,12 +14,28 @@ import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
 import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
 import { impact } from "./impact.js";
 import { usdc } from "@nightshift/core";
-import { getAddress } from "viem";
+import { erc20Abi, getAddress } from "viem";
 
-/** A small fixed-window limiter per IP and route. */
+/** The caller's IP. X-Forwarded-For is trusted only when the request comes from the local proxy. */
+function clientIp(req: IncomingMessage): string {
+  const peer = (req.socket.remoteAddress ?? "?").replace(/^::ffff:/, "");
+  const fromProxy = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$)/.test(peer);
+  const fwd = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim();
+  return fromProxy && fwd ? fwd : peer;
+}
+
+/** Open live-event streams, per IP and in all. */
+const streams = new Map<string, number>();
+let streamsTotal = 0;
+
+/** Payments being settled, one chain per company. */
+const settling = new Map<string, Promise<unknown>>();
+
+/** A small fixed-window limiter per IP and route; expired windows are swept. */
 const hits = new Map<string, { n: number; reset: number }>();
+setInterval(() => { const now = Date.now(); for (const [k, h] of hits) if (h.reset < now) hits.delete(k); }, 60_000).unref();
 function limited(req: IncomingMessage, key: string, max: number, windowMs: number): boolean {
-  const ip = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "?";
+  const ip = clientIp(req);
   const k = `${key}:${ip}`;
   const now = Date.now();
   const h = hits.get(k);
@@ -155,7 +171,11 @@ export function serve(engine: Engine) {
         if (!isAdmin(req)) return json(res, 401, { error: "wrong admin token" });
         if (p === "/api/admin/setup" && req.method === "GET") return json(res, 200, await setupState(engine));
         if (p === "/api/admin/setup" && req.method === "POST") {
-          const err = saveSetup(await body(req));
+          const patch = await body(req);
+          const err = saveSetup(patch);
+          // Settings that move money or trust are announced, so a leaked admin token cannot act quietly.
+          const touched = ["NIGHTSHIFT_MODE", "PLATFORM_TREASURY", "PLATFORM_FEE_BPS", "ETH_RPC", "SALES_RPC", "SALES_CHAIN_ID", "TOKEN_ADDRESS", "NFT_ADDRESS", "REQUIRE_AUTH"].filter((k) => k in patch);
+          if (!err && touched.length) void engine.alert(`⚠️ /setup changed: ${touched.join(", ")}. If this was not you, rotate the admin token now.`, `setup-${Date.now()}`);
           return err ? json(res, 400, { error: err }) : json(res, 200, await setupState(engine));
         }
         if (p === "/api/admin/buyback" && req.method === "POST") {
@@ -253,7 +273,7 @@ export function serve(engine: Engine) {
         return json(res, 200, { token, address: getAddress(String(b.address)) }, { "Set-Cookie": `ns_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure}` });
       }
       if (p === "/api/auth/me") return json(res, 200, { address: owner, requireAuth: config.requireAuth });
-      if (p === "/api/auth/logout" && req.method === "POST") return json(res, 200, { ok: true }, { "Set-Cookie": "ns_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" });
+      if (p === "/api/auth/logout" && req.method === "POST") { engine.auth.revoke(req); return json(res, 200, { ok: true }, { "Set-Cookie": "ns_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" }); }
 
       // ---- API keys for the MCP endpoint
       if (seg[0] === "api" && seg[1] === "keys") {
@@ -267,12 +287,19 @@ export function serve(engine: Engine) {
       // A browser opening /mcp wants the page about it, not the protocol endpoint.
       const wantsPage = req.method === "GET" && (req.headers.accept ?? "").includes("text/html");
       if (p === "/mcp" && !wantsPage) {
+        // agents call often, but not without limit: per caller and per key
+        const key = (req.headers.authorization ?? "").slice(-16) || "anon";
+        if (limited(req, "mcp", 120, 60_000) || limited(req, `mcp-key:${key}`, 240, 60_000)) return json(res, 429, { error: "slow down" });
         const b = req.method === "POST" ? await body(req) : undefined;
         return await handleMcp(engine, req, res, b);
       }
 
       // Live events: every task step, journal line and sale, as it happens.
       if (p === "/api/events") {
+        const ipKey = clientIp(req);
+        if ((streams.get(ipKey) ?? 0) >= 6 || streamsTotal >= 2000) return json(res, 429, { error: "too many live connections" });
+        streams.set(ipKey, (streams.get(ipKey) ?? 0) + 1); streamsTotal++;
+        req.on("close", () => { const n = (streams.get(ipKey) ?? 1) - 1; if (n > 0) streams.set(ipKey, n); else streams.delete(ipKey); streamsTotal--; });
         res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
         res.write(": ok\n\n");
         const only = url.searchParams.get("company");
@@ -281,7 +308,7 @@ export function serve(engine: Engine) {
           if (only && e.companyId !== only) return;
           // Other people's companies only say "something changed"; their tasks and log stay private.
           const c = engine.store.companies.get(e.companyId);
-          const ev = config.requireAuth && c?.owner !== viewer ? { type: "company", companyId: e.companyId, payload: null, at: e.at } : e;
+          const ev = config.requireAuth && (!viewer || c?.owner !== viewer) ? { type: "company", companyId: e.companyId, payload: null, at: e.at } : e;
           res.write(`data: ${JSON.stringify(ev, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}\n\n`);
         });
         const ping = setInterval(() => res.write(": ping\n\n"), 20_000);
@@ -310,7 +337,7 @@ export function serve(engine: Engine) {
         if (!c) return json(res, 404, { error: "no such company" });
         const action = seg[3];
         // The owner's view and every control are the owner's alone once sign-in is on.
-        if (config.requireAuth && c.owner !== owner) return json(res, owner ? 403 : 401, { error: owner ? "This company belongs to another wallet." : "Sign in as the owner." });
+        if (config.requireAuth && (!owner || c.owner !== owner)) return json(res, owner ? 403 : 401, { error: owner ? "This company belongs to another wallet." : "Sign in as the owner." });
         if (!action && req.method === "GET") return json(res, 200, { ...(await full(engine, c)), withdrawableUsd: fromUsdc(await engine.withdrawable(c)), isOwner: owner !== null && c.owner === owner });
         if (action === "wallet") {
           if (config.mode === "sim") return json(res, 200, { address: c.wallet, mode: "sim" });
@@ -324,12 +351,17 @@ export function serve(engine: Engine) {
           return res.end();
         }
         if (req.method !== "POST") return json(res, 405, { error: "method" });
-        if (action === "shift") { await engine.shiftNow(c, true); return json(res, 200, { ok: true }); }
+        if (action === "shift") {
+          if (limited(req, `shift:${c.id}`, 1, 60_000) || limited(req, `shift-owner:${owner ?? "anon"}`, 10, 3600_000)) return json(res, 429, { error: "One shift a minute per company, ten an hour per wallet." });
+          await engine.shiftNow(c, true); return json(res, 200, { ok: true });
+        }
         if (action === "policy") { engine.setPolicy(c, (await body(req)) as never); return json(res, 200, c.policy); }
         if (action === "withdraw") {
           const b = await body(req);
-          const to = (owner ?? (typeof b.to === "string" ? b.to : null)) as `0x${string}` | null;
-          if (!to || !/^0x[0-9a-fA-F]{40}$/.test(to)) return json(res, 400, { error: "Sign in, or give a destination address." });
+          if (limited(req, `withdraw:${c.id}`, 3, 60_000)) return json(res, 429, { error: "slow down" });
+          // Live money only ever goes to the company's signed-in owner.
+          const to = (config.mode === "live" ? (owner && c.owner === owner ? owner : null) : (owner ?? (typeof b.to === "string" ? b.to : null))) as `0x${string}` | null;
+          if (!to || !/^0x[0-9a-fA-F]{40}$/.test(to)) return json(res, 400, { error: config.mode === "live" ? "Only the company's owner, signed in, can withdraw." : "Sign in, or give a destination address." });
           const r = await engine.withdraw(c, getAddress(to), typeof b.amountUsd === "number" ? usdc(b.amountUsd) : undefined);
           return json(res, 200, { ok: true, sentUsd: fromUsdc(r.sent), feeUsd: fromUsdc(r.fee), txs: r.txs });
         }
@@ -375,8 +407,17 @@ export function serve(engine: Engine) {
         const v = await verifyPayment(payment, req402);
         if (!v.ok) return json(res, 402, challenge(req402, resource, v.reason), { "PAYMENT-REQUIRED": encodeHeader(challenge(req402, resource, v.reason)) });
         if (config.mode === "sim") return json(res, 400, { error: "sim mode does not settle real payments" });
+        // Settling costs the company gas: limit it per caller and per payer, check the payer can
+        // actually pay, and settle one payment at a time per company.
+        if (limited(req, "settle", 6, 60_000) || limited(req, `settle-payer:${v.payer.toLowerCase()}`, 3, 60_000)) return json(res, 429, { error: "Too many payments at once; try again in a minute." });
+        const value = BigInt(payment.payload.authorization.value);
+        const bal = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [v.payer as `0x${string}`] }).catch(() => 0n);
+        if (bal < value) return json(res, 402, challenge(req402, resource, "insufficient USDC balance"), { "PAYMENT-REQUIRED": encodeHeader(challenge(req402, resource, "insufficient USDC balance")) });
         const account = engine.vault.account(c.id);
-        const tx = await settlePayment(payment, salesWallet(account) as never, sales as never, account);
+        const prev = settling.get(c.id) ?? Promise.resolve();
+        const run = prev.catch(() => {}).then(() => settlePayment(payment, salesWallet(account) as never, sales as never, account));
+        settling.set(c.id, run.catch(() => {}));
+        const tx = await run;
         await engine.recordSale(c, product.id, BigInt(payment.payload.authorization.value), v.payer, tx, false);
         return json(res, 200, { ok: true, tx, deliverable: engine.files.link(c, product, tx) }, { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network: req402.network, payer: v.payer }) });
       }
@@ -398,7 +439,8 @@ export function serve(engine: Engine) {
         const id = engine.sim.sites.get(seg[1]) ?? [...engine.store.companies.values()].find((x) => x.site?.jobId === seg[1] || x.tasks.some((t) => t.imd?.jobId === seg[1]))?.id;
         const c = id ? engine.store.companies.get(id) : undefined;
         if (!c) return json(res, 404, { error: "no such site" });
-        engine.store.metricsOf(c.id).visits.push(Date.now());
+        // one visit per visitor per 10 minutes, and a bounded history
+        if (!limited(req, `visit:${c.id}`, 1, 600_000)) { const v = engine.store.metricsOf(c.id).visits; v.push(Date.now()); if (v.length > 5000) v.splice(0, v.length - 5000); }
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         return res.end(engine.sim.site(c));
       }
@@ -413,7 +455,10 @@ export function serve(engine: Engine) {
       return json(res, 404, { error: "not found" });
     } catch (err) {
       console.error(err);
-      return json(res, 400, { error: (err as Error).message });
+      // Our own errors are written for people; library errors (RPC URLs, versions, stacks) are not shown.
+      const msg = String((err as Error).message ?? "").split("\n")[0] ?? "";
+      const raw = msg.length > 220 || /viem|Version:|https?:\/\/|Request Arguments|Details:|ECONN|ETIMEDOUT/i.test(msg);
+      return json(res, 400, { error: raw || !msg ? "Something went wrong. Try again in a moment." : msg });
     }
   });
   server.listen(config.port, () => console.log(`NIGHTSHIFT engine on ${config.publicUrl} (${config.mode} mode${engine.llm ? `, CEO model ${config.model}` : ", playbook CEO: set OPENROUTER_API_KEY for the model"})`));

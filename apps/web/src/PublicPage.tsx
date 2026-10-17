@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { safeHref } from "./safe";
 import { chooseWallet } from "./wallet";
 import { type Hex, createWalletClient, custom } from "viem";
 import { type Health, type PublicCompany, api, events, short, usd } from "./api";
@@ -12,6 +13,10 @@ async function buyWithWallet(buyUrl: string): Promise<{ deliverable: string | nu
   if (challenge.status !== 402) throw new Error(((await challenge.json().catch(() => ({}))) as { error?: string }).error ?? `unexpected ${challenge.status}`);
   const ch = (await challenge.json()) as { accepts: Requirement[] };
   const req = ch.accepts[0]!;
+  // Sign only a USDC payment on Base (or Base Sepolia in the demo), whatever the server asks for.
+  const USDC_BY_NETWORK: Record<string, string> = { "eip155:8453": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", "eip155:84532": "0x036cbd53842c5426634e7929541ec2318f3dcf7e" };
+  if (USDC_BY_NETWORK[req.network] !== String(req.asset).toLowerCase()) throw new Error("This payment is not USDC on Base. Refusing to sign it.");
+  if (!/^0x[0-9a-fA-F]{40}$/.test(req.payTo) || BigInt(req.amount) <= 0n || BigInt(req.amount) > 500_000_000n) throw new Error("This payment request looks wrong. Refusing to sign it.");
   const chainId = Number(req.network.split(":")[1]);
   const wallet = createWalletClient({ transport: custom(eth as never) });
   const [from] = await wallet.requestAddresses();
@@ -96,7 +101,7 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
           </div>
         ))}
       </div>
-      {got && <div className="card card-b got"><b>Your download: {got.name}</b><a className="btn primary" href={got.url}>Download</a><span className="faint">The link works for 7 days. Save the file.</span></div>}
+      {got && <div className="card card-b got"><b>Your download: {got.name}</b><a className="btn primary" href={safeHref(got.url)}>Download</a><span className="faint">The link works for 7 days. Save the file.</span></div>}
       <div className="card">
         <div className="card-h"><h3>What it did, shift by shift</h3><span className="faint mono" style={{ fontSize: 11 }}>wallet {short(c.wallet)}</span></div>
         <table><tbody>{c.shifts.filter((s) => s.status !== "failed" && s.status !== "rejected").map((s, i) => <tr key={i}><td className="mono faint">{s.cycle}</td><td>{s.title}</td><td><span className={`pill ${s.status}`}>{s.status.replace(/_/g, " ")}</span></td></tr>)}</tbody></table>

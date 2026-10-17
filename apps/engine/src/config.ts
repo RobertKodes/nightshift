@@ -28,9 +28,10 @@ export const config = {
   simJobSeconds: num(env.SIM_JOB_SECONDS, 40),
   webDist: resolve(env.WEB_DIST ?? "../web/dist"),
   /** Owners sign in with their wallet. On by default in live mode; the sim demo stays open. */
-  requireAuth: env.REQUIRE_AUTH ? env.REQUIRE_AUTH === "1" : env.NIGHTSHIFT_MODE === "live",
+  // Live mode always requires sign-in: with it off anyone could steer or withdraw any company.
+  requireAuth: env.NIGHTSHIFT_MODE === "live" ? true : env.REQUIRE_AUTH ? env.REQUIRE_AUTH === "1" : false,
   /** Platform fee on revenue, taken when the owner withdraws. 0 = none. */
-  platformFeeBps: num(env.PLATFORM_FEE_BPS, 0),
+  platformFeeBps: Math.min(1000, Math.max(0, num(env.PLATFORM_FEE_BPS, 0))),
   platformTreasury: (env.PLATFORM_TREASURY ?? "") as `0x${string}` | "",
   /** Operator alerts: a Telegram bot token and the chat it writes to. */
   telegramToken: env.TELEGRAM_BOT_TOKEN ?? "",

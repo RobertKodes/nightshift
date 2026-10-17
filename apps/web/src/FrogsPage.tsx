@@ -6,6 +6,8 @@ import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
 
 const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
+/** The NIGHT FROGS contract, deployed by IMD (launch 1fc22c34). The page never approves anything else. */
+const NIGHT_FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
 const FROGS = parseAbi([
   "function mint(uint256 quantity)",
   "function price() view returns (uint256)",
@@ -46,7 +48,8 @@ export function FrogsPage() {
   const mint = async () => {
     if (!info?.address) return;
     setErr(null); setDone(null);
-    const nft = info.address as `0x${string}`;
+    if (info.address.toLowerCase() !== NIGHT_FROGS) { setErr("Contract mismatch: refusing to mint."); return; }
+    const nft = NIGHT_FROGS as `0x${string}`;
     try {
       const eth = await chooseWallet();
       const wallet = createWalletClient({ chain: mainnet, transport: custom(eth as never) });

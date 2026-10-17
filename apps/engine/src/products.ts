@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { safeFetch } from "./net.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Company, Product } from "@nightshift/core";
@@ -83,8 +84,8 @@ async function checkLinks(text: string): Promise<string> {
   if (!urls.length) return `_Sources: this file cites no links (checked ${day})._`;
   const res = await Promise.all(urls.map(async (u) => {
     try {
-      const r = await fetch(u, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(8000), headers: { "User-Agent": "NIGHTSHIFT link check" } });
-      return [u, r.status < 400] as const;
+      const r = await safeFetch(u, { method: "GET", signal: AbortSignal.timeout(8000), headers: { "User-Agent": "NIGHTSHIFT link check" } });
+      return [u, Boolean(r && r.status < 400)] as const;
     } catch { return [u, false] as const; }
   }));
   const ok = res.filter(([, v]) => v).length;
@@ -96,7 +97,7 @@ async function checkLinks(text: string): Promise<string> {
  * IMD's repo README is an index that links the real artifacts in ../files/, so those are followed.
  */
 export async function fetchDelivery(files: Record<string, string> | undefined, repoUrl: string | null | undefined): Promise<string | null> {
-  const get = async (u: string) => { const r = await fetch(u, { signal: AbortSignal.timeout(15000) }); return r.ok ? r.text() : null; };
+  const get = async (u: string) => { const r = await safeFetch(u, { signal: AbortSignal.timeout(15000) }); return r?.ok ? r.text() : null; };
   const first = Object.values(files ?? {})[0];
   if (first) return get(first);
   if (!repoUrl) return null;

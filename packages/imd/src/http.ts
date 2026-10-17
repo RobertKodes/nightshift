@@ -24,7 +24,15 @@ export interface HttpImdOptions {
   requestToken?: string;
   baseUrl?: string;
   fetch?: typeof fetch;
+  /**
+   * What a payment may be. The challenge comes from the network; it is signed only if it asks for
+   * this asset, on this network, to this recipient, for no more than this amount.
+   */
+  expect?: { network: string; asset: string; payTo: string; maxAmount: bigint };
 }
+
+/** IMD's paid entrance on Ethereum (GET /requests/capabilities, 2026-10): 0.5 IMD per action. */
+export const IMD_PAYMENT = { network: "eip155:1", asset: "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7", payTo: "0x4e0fa57bde726079356537e2f34d671e9f41adbc", maxAmount: 500000000000000000n };
 
 const JOB_STATES: Record<string, JobState> = {
   queued: "queued",
@@ -44,9 +52,11 @@ export class HttpImdPlane implements ImdPlane {
   readonly #base: string;
   readonly #fetch: typeof fetch;
   readonly #account: LocalAccount;
+  readonly #expect: { network: string; asset: string; payTo: string; maxAmount: bigint };
 
   constructor(opts: HttpImdOptions) {
     this.#account = opts.account;
+    this.#expect = opts.expect ?? IMD_PAYMENT;
     this.requestToken = opts.requestToken ?? randomBytes(32).toString("hex");
     this.#base = opts.baseUrl ?? "https://api.imd.fun";
     this.#fetch = opts.fetch ?? fetch;
@@ -106,6 +116,15 @@ export class HttpImdPlane implements ImdPlane {
     const ch = (await this.#call<Challenge>("POST", url, undefined, this.#auth(), [402])).json;
     const req = ch.accepts[0];
     if (!req) throw new ImdError("challenge without accepts", 402, null, ch);
+    // Never sign what we did not price: asset, network, recipient and amount must all match.
+    const e = this.#expect;
+    const same = (a: unknown, b: string) => String(a ?? "").toLowerCase() === b.toLowerCase();
+    const amt = (x: unknown) => { try { return BigInt(String(x)); } catch { return -1n; } };
+    const r = req as unknown as { network?: string; asset?: string; payTo?: string; amount?: string };
+    const qp = ch.quote?.payment as unknown as { network?: string; asset?: string; payTo?: string; amount?: string } | undefined;
+    const ok = qp && same(r.network, e.network) && same(qp.network, e.network) && same(r.asset, e.asset) && same(qp.asset, e.asset)
+      && same(r.payTo, e.payTo) && same(qp.payTo, e.payTo) && amt(r.amount) === amt(qp.amount) && amt(r.amount) > 0n && amt(r.amount) <= e.maxAmount;
+    if (!ok) throw new ImdError(`refused to pay: the challenge asks for ${r.amount} of ${r.asset} on ${r.network} to ${r.payTo}, not what was quoted`, 402, null, ch);
 
     // 3. The Permit2 payment. The plane parses it strictly: no extensions, `accepted` equal to the challenge.
     const client = x402Client.fromConfig({ schemes: [{ network: req.network, client: new ExactEvmScheme(this.#account as never) }] } as never);

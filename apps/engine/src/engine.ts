@@ -494,11 +494,18 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
    * Sends the company's USDC to its owner. The platform fee, when one is set, goes to the platform
    * treasury in the same withdrawal. In sim mode only the books move.
    */
+  readonly #withdrawing = new Set<string>();
+  /** One withdrawal at a time per company; the fee leaves first; perks are read fresh from the chain. */
   async withdraw(c: Company, to: `0x${string}`, amount?: bigint): Promise<{ sent: bigint; fee: bigint; txs: string[] }> {
+    if (this.#withdrawing.has(c.id)) throw new Error("A withdrawal for this company is already running.");
+    this.#withdrawing.add(c.id);
+    try { return await this.#withdraw(c, to, amount); } finally { this.#withdrawing.delete(c.id); }
+  }
+  async #withdraw(c: Company, to: `0x${string}`, amount?: bigint): Promise<{ sent: bigint; fee: bigint; txs: string[] }> {
     const available = await this.withdrawable(c);
     const total = amount ?? available;
     if (total <= 0n || total > available) throw new Error(`Nothing to withdraw, or more than the $${fromUsdc(available).toFixed(2)} available.`);
-    const holder = (await holderStatus(c.owner)).holds || (await frogCount(c.owner)) > 0;
+    const holder = (await holderStatus(c.owner, true)).holds || (await frogCount(c.owner, true)) > 0;
     const fee = config.platformTreasury && !holder ? (total * BigInt(config.platformFeeBps)) / 10_000n : 0n;
     const sent = total - fee;
     const txs: string[] = [];
@@ -512,10 +519,15 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
         if (r.status !== "success") throw new Error(`transfer reverted: ${hash}`);
         txs.push(hash);
       };
-      await send(to, sent);
       if (fee > 0n) await send(config.platformTreasury as `0x${string}`, fee);
+      try { await send(to, sent); } catch (e) {
+        // the fee already left: book it so the ledger matches the wallet, then report the failure
+        if (txs[0]) await this.ledger.post({ id: `withdraw-fee:${txs[0]}`, at: new Date(), kind: "withdrawal", memo: "platform fee (owner transfer failed)", ref: { chainTx: txs[0] }, postings: [
+          { account: `co:${c.id}:usdc`, asset: "USDC", amount: -fee }, { account: "ext:platform", asset: "USDC", amount: fee }] });
+        throw e;
+      }
     }
-    const id = txs[0] ?? randomUUID();
+    const id = txs[txs.length - 1] ?? randomUUID();
     await this.ledger.post({ id: `withdraw:${id}`, at: new Date(), kind: "withdrawal", memo: `to ${to}`, ref: txs[0] ? { chainTx: txs[0] } : undefined, postings: [
       { account: `co:${c.id}:usdc`, asset: "USDC", amount: -total },
       { account: `ext:owner:${to.toLowerCase()}`, asset: "USDC", amount: sent },

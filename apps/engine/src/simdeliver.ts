@@ -65,7 +65,7 @@ export class SimDeliveries {
   }
 
   site(c: Company): string {
-    const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]!));
+    const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
     const live = c.products.filter((p) => p.status === "live");
     const price = (u: bigint) => `$${(Number(u) / 1e6).toFixed(2)}`;
     const buy = (id: string) => `${this.publicUrl}/c/${c.slug}#${id}`;

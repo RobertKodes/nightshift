@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { safeHref } from "../safe";
 import { usd } from "../api";
 import { Link, go } from "../router";
 import { Crescent, Magnetic, SiteFooter, SiteHeader } from "./chrome";
@@ -294,7 +295,7 @@ export function Landing() {
               {FEE_SPLIT.map((x) => <div key={x.label}><b>{x.pct}%</b><span>{x.label}</span><p>{x.note}</p></div>)}
             </div>
             <div className="tkn-cta">
-              {token?.on && token.buyUrl ? <a className="ns-cta sm" href={token.buyUrl} target="_blank" rel="noreferrer">BUY ${tsym} <span className="arr">→</span></a> : <span className="ns-ghost sm">LAUNCHING SOON</span>}
+              {token?.on && token.buyUrl ? <a className="ns-cta sm" href={safeHref(token.buyUrl)} target="_blank" rel="noreferrer">BUY ${tsym} <span className="arr">→</span></a> : <span className="ns-ghost sm">LAUNCHING SOON</span>}
               <Link to="/token" className="ns-more">TOKEN DETAILS <span>→</span><i /></Link>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { type Address, type LocalAccount, createPublicClient, createWalletClient, erc20Abi, http, maxUint256 } from "viem";
+import { type Address, type LocalAccount, createPublicClient, createWalletClient, erc20Abi, http } from "viem";
 import { base, baseSepolia, mainnet } from "viem/chains";
 import { USDC } from "@nightshift/x402";
 import { IMD_MAINNET } from "@nightshift/imd";
@@ -36,9 +36,10 @@ export async function balances(addr: Address): Promise<Balances> {
 /** IMD payments go through Permit2, which needs a one-time allowance (paid in ETH gas). */
 export async function ensurePermit2(account: LocalAccount): Promise<`0x${string}` | null> {
   const allowance = await eth.readContract({ address: IMD_MAINNET, abi: erc20Abi, functionName: "allowance", args: [account.address, PERMIT2] });
-  if (allowance >= 10n ** 24n) return null;
+  // A bounded allowance (20 IMD, refilled below 2): even a bad signature cannot reach the whole wallet.
+  if (allowance >= 2n * 10n ** 18n) return null;
   const wallet = createWalletClient({ account, chain: mainnet, transport: http(config.ethRpc) });
-  const hash = await wallet.writeContract({ address: IMD_MAINNET, abi: erc20Abi, functionName: "approve", args: [PERMIT2, maxUint256] });
+  const hash = await wallet.writeContract({ address: IMD_MAINNET, abi: erc20Abi, functionName: "approve", args: [PERMIT2, 20n * 10n ** 18n] });
   await eth.waitForTransactionReceipt({ hash });
   return hash;
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { safeHref } from "./safe";
 import { type CompanyFull, type Health, type Policy, type TaskView, ago, api, events, fromUsdc, short, until, usd } from "./api";
 import { Link } from "./router";
 import { useSession } from "./session";
@@ -113,7 +114,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
         </div>
         <div className="co-actions">
           <Link to={`/c/${c.slug}`} className="btn ghost">Public page</Link>
-          {c.site && <a className="btn ghost" href={c.site.url} target="_blank" rel="noreferrer">Site ↗</a>}
+          {c.site && <a className="btn ghost" href={safeHref(c.site.url)} target="_blank" rel="noreferrer">Site ↗</a>}
           {c.status === "active"
             ? <button className="btn" disabled={busy} onClick={() => act(() => api.pause(c.id))}>Pause</button>
             : <button className="btn" disabled={busy} onClick={() => act(() => api.resume(c.id))}>Resume</button>}
@@ -254,7 +255,7 @@ function PostsCard({ c, busy, act }: { c: CompanyFull; busy: boolean; act: (f: (
         <ul className="journal">{posts.map(({ m, i }) => (
           <li key={i}><span className="when">{ago(m.at)}</span><span>{m.text}{" "}
             <span className={`pill ${m.status === "posted" ? "done" : m.status === "failed" ? "failed" : ""}`}>{m.status}</span>
-            {m.url && <> <a className="mono faint" style={{ fontSize: 11 }} href={m.url} target="_blank" rel="noreferrer">view ↗</a></>}
+            {m.url && <> <a className="mono faint" style={{ fontSize: 11 }} href={safeHref(m.url)} target="_blank" rel="noreferrer">view ↗</a></>}
             {m.status !== "posted" && b && <> <button className="btn ghost sm-btn" disabled={busy} onClick={() => void act(() => api.publishPost(c.id, i))}>Post now</button></>}
             {m.error && <div className="bad" style={{ fontSize: 12 }}>{m.error}</div>}
           </span></li>

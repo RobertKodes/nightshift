@@ -12,15 +12,18 @@ import { config } from "./config.js";
  */
 const holderCache = new Map<string, { at: number; holds: boolean; balance: number }>();
 let decimals: number | null = null;
+let decimalsFor = "";
 
 export const tokenOn = () => Boolean(config.token.address);
 
-export async function holderStatus(owner: string | null): Promise<{ holds: boolean; balance: number }> {
+/** `fresh` reads the chain now and never falls back to a cached answer (money decisions). */
+export async function holderStatus(owner: string | null, fresh = false): Promise<{ holds: boolean; balance: number }> {
   if (!tokenOn() || !owner) return { holds: false, balance: 0 };
   const k = owner.toLowerCase();
   const hit = holderCache.get(k);
-  if (hit && Date.now() - hit.at < 10 * 60_000) return hit;
+  if (!fresh && hit && Date.now() - hit.at < 10 * 60_000) return hit;
   try {
+    if (decimalsFor !== config.token.address) { decimals = null; decimalsFor = config.token.address; }
     decimals ??= Number(await eth.readContract({ address: config.token.address as `0x${string}`, abi: erc20Abi, functionName: "decimals" }));
     const raw = await eth.readContract({ address: config.token.address as `0x${string}`, abi: erc20Abi, functionName: "balanceOf", args: [owner as `0x${string}`] });
     const balance = Number(raw / 10n ** BigInt(Math.max(0, decimals - 6))) / 10 ** Math.min(6, decimals);
@@ -28,7 +31,7 @@ export async function holderStatus(owner: string | null): Promise<{ holds: boole
     holderCache.set(k, v);
     return v;
   } catch {
-    return hit ?? { holds: false, balance: 0 };
+    return fresh ? { holds: false, balance: 0 } : hit && Date.now() - hit.at < 60 * 60_000 ? hit : { holds: false, balance: 0 };
   }
 }
 /** The cached answer, for hot paths like the market listing. */

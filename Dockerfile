@@ -10,6 +10,9 @@ RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /app
 COPY --from=build /app /app
 ENV NODE_ENV=production NIGHTSHIFT_SUPERVISED=1 PORT=8787 DATA_DIR=/data WEB_DIST=/app/apps/web/dist
+# The engine runs as the unprivileged node user and owns only its data folder.
+RUN mkdir -p /data && chown node:node /data
+USER node
 VOLUME /data
 EXPOSE 8787
 WORKDIR /app/apps/engine

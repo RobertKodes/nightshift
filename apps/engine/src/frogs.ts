@@ -26,16 +26,16 @@ export const frogsOn = () => /^0x[0-9a-fA-F]{40}$/.test(config.nft.address);
 const addr = () => config.nft.address as `0x${string}`;
 
 const cache = new Map<string, { at: number; count: number }>();
-export async function frogCount(owner: string | null): Promise<number> {
+export async function frogCount(owner: string | null, fresh = false): Promise<number> {
   if (!frogsOn() || !owner) return 0;
   const k = owner.toLowerCase();
   const hit = cache.get(k);
-  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.count;
+  if (!fresh && hit && Date.now() - hit.at < 10 * 60_000) return hit.count;
   try {
     const n = Number(await eth.readContract({ address: addr(), abi: FROGS_ABI, functionName: "balanceOf", args: [owner as `0x${string}`] }));
     cache.set(k, { at: Date.now(), count: n });
     return n;
-  } catch { return hit?.count ?? 0; }
+  } catch { return fresh ? 0 : hit?.count ?? 0; }
 }
 export const frogCached = (owner: string | null) => (owner ? (cache.get(owner.toLowerCase())?.count ?? 0) > 0 : false);
 

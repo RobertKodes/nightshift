@@ -1,4 +1,5 @@
 import { Crescent } from "./landing/chrome";
+import { safeHref } from "./safe";
 import { Icon } from "./Icon";
 import { FEE_SPLIT, IMD_WINS, TokenomicsBars, UTILITY, symbolOf, useToken } from "./landing/content";
 
@@ -33,7 +34,7 @@ export function TokenPage() {
           <span>EVERY TRADE · 1.25%</span>
           {FEE_SPLIT.map((x) => <div key={x.label}><b>{x.pct}%</b><span>{x.label}</span><p>{x.note}</p></div>)}
         </div>
-        {t?.on && t.buyUrl && <a className="btn primary" href={t.buyUrl} target="_blank" rel="noreferrer">Buy ${sym} on Uniswap</a>}
+        {t?.on && t.buyUrl && <a className="btn primary" href={safeHref(t.buyUrl)} target="_blank" rel="noreferrer">Buy ${sym} on Uniswap</a>}
       </section>
 
       <h2 className="guide-h2">What holding it does</h2>

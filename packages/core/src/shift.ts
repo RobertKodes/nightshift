@@ -162,7 +162,9 @@ async function buy(c: Company, t: Task, d: ShiftDeps, approved: boolean): Promis
     }
     return;
   }
-  touch(c, t, d, { status: "ordering", activity: "quote, pay 0.5 IMD, submit" });
+  // The price is reserved against the budget before anything is signed, so a concurrent shift or
+  // approval cannot spend the same budget twice, and an order that may have been paid keeps counting.
+  touch(c, t, d, { status: "ordering", costImd: caps.price, activity: "quote, pay 0.5 IMD, submit" });
   try {
     const order = await d.imd.open(o.action as never, o.input);
     if (order.state === "refused") throw new Error(order.problems?.join("; ") || "refused");
@@ -183,9 +185,12 @@ async function buy(c: Company, t: Task, d: ShiftDeps, approved: boolean): Promis
     touch(c, t, d, { status: "building", costImd: caps.price, activity: "paid · waiting for the swarm" });
     note(c, d, "decision", `Bought from the IMD swarm for ${fromImd(caps.price)} IMD (~$${costUsd.toFixed(2)}): ${t.title}.`);
   } catch (err) {
-    touch(c, t, d, { status: "failed", error: (err as Error).message.slice(0, 300), activity: null });
+    const msg = (err as Error).message;
+    // Refused before signing (the free path, or a challenge we would not sign): nothing was paid.
+    const unpaid = /refused to pay|challenge without accepts|^refused|IMD would refuse/i.test(msg);
+    touch(c, t, d, { status: "failed", costImd: unpaid ? 0n : caps.price, error: msg.slice(0, 300), activity: null });
     dropProduct(c, t);
-    note(c, d, "warning", `The order for "${t.title}" failed: ${(err as Error).message.slice(0, 160)}`);
+    note(c, d, "warning", `The order for "${t.title}" failed: ${msg.slice(0, 160)}${unpaid ? "" : " It may have been paid, so it still counts against today's budget."}`);
   }
 }
 
