@@ -21,7 +21,9 @@ import { erc20Abi } from "viem";
 import { USDC } from "@nightshift/x402";
 import { Auth } from "./auth.js";
 import { LlmClient } from "@nightshift/llm";
-import { balances, ensurePermit2, sales, salesWallet } from "./chain.js";
+import { balances, ensurePermit2, eth, ethWallet, sales, salesWallet } from "./chain.js";
+import { findPool } from "./v4.js";
+import { IMD_MAINNET } from "@nightshift/imd";
 import { config } from "./config.js";
 import { simulateTraffic } from "./market.js";
 import { SimDeliveries } from "./simdeliver.js";
@@ -287,6 +289,8 @@ export class Engine {
       if (l && l.stage !== before.stage) void this.alert(`🪙 ${l.symbol} launch: ${l.stage}`, `launch-${l.stage}`);
       // Deployed: check it against what we asked for, privately, before anyone can buy.
       if (l?.done && l.contracts) {
+        const pool = l.contracts.hook ? await findPool(eth, l.contracts.token as `0x${string}`, l.contracts.hook as `0x${string}`).catch(() => null) : null;
+        if (pool) patchLaunch({ pool });
         const checks = await verifyShift(l.contracts).catch((e) => [{ label: "Verification could not run", ok: false, detail: (e as Error).message }]);
         saveVerification(checks);
         const ok = checks.every((c) => c.ok);
@@ -296,7 +300,7 @@ export class Engine {
         void this.launchDm(ok
           ? `🚀 <b>$${esc(l.symbol)} is deployed and checked.</b> Waiting for the treasury buy.\n\nCA: <code>${esc(t)}</code>\n\nTrading is closed to everyone except the treasury <b>0x3322…4D69</b>. Buy from that wallet, any amount: the moment it lands, trading opens.`
           : `❌ <b>$${esc(l.symbol)} is deployed, but a check failed. Do NOT buy.</b>\n\nCA: <code>${esc(t)}</code>\n\nThe admins were told what is wrong.`,
-          ok ? [[{ text: "🟢 First buy on Uniswap (treasury wallet)", url: buyUrl(t) }], [{ text: "📊 Etherscan", url: `https://etherscan.io/token/${t}` }]] : [[{ text: "📊 Etherscan", url: `https://etherscan.io/token/${t}` }]]);
+          ok ? [[{ text: "🌙 First buy on NIGHTSHIFT (treasury wallet)", url: `${config.publicUrl}/swap` }], [{ text: "🦄 Uniswap", url: buyUrl(t) }, { text: "📊 Etherscan", url: `https://etherscan.io/token/${t}` }]] : [[{ text: "📊 Etherscan", url: `https://etherscan.io/token/${t}` }]]);
       }
       return;
     }
@@ -310,7 +314,7 @@ export class Engine {
       const publicAt = Date.now() + 5 * 60_000;
       patchLaunch({ publicAt });
       void this.launchDm(`✅ <b>The treasury buy landed. $${esc(l.symbol)} is open to everyone.</b>\n\nCA: <code>${l.token}</code>\n\nThe main group is told in 5 minutes.`,
-        [[{ text: `🟢 Buy $${l.symbol}`, url: buyUrl(l.token) }], [{ text: "🧾 First buy", url: `https://etherscan.io/tx/${l.openTx}` }, { text: "📊 Etherscan", url: `https://etherscan.io/token/${l.token}` }]]);
+        [[{ text: `🌙 Buy on NIGHTSHIFT`, url: `${config.publicUrl}/swap` }, { text: "🦄 Uniswap", url: buyUrl(l.token) }], [{ text: "🧾 First buy", url: `https://etherscan.io/tx/${l.openTx}` }, { text: "📊 Etherscan", url: `https://etherscan.io/token/${l.token}` }]]);
       housePost(`🚀 $${l.symbol} is live on Ethereum.\n\n${l.token}\n\nEvery sell feeds stakers, NIGHT FROGS holders and burns SHIFT and IMD. ${config.publicUrl}/token`, "token-live");
       void this.adminCard(`✅ <b>The first buy landed.</b> Site, bot and token page now use <code>${l.token}</code>; Bluesky was told. The main group is told at ${new Date(publicAt).toISOString().slice(11, 16)} UTC.`,
         [[{ text: "🧾 First buy", url: `https://etherscan.io/tx/${l.openTx}` }, { text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch-open");
@@ -324,7 +328,7 @@ export class Engine {
 <code>${before.token}</code>
 
 Trading is open to everyone on Ethereum, paired with ETH.
-Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT and IMD).`, [[{ text: `🟢 Buy $${before.symbol}`, url: buyUrl(before.token) }], [{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch");
+Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT and IMD).`, [[{ text: `🌙 Buy on NIGHTSHIFT`, url: `${config.publicUrl}/swap` }, { text: "🦄 Uniswap", url: buyUrl(before.token) }], [{ text: "📊 Chart", url: `https://dexscreener.com/ethereum/${before.token}` }, { text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch");
     void this.adminCard(`🚀 <b>$${esc(before.symbol)} is public.</b> The main group was told.`, [[{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch-live");
   }
 
@@ -587,6 +591,55 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     ] });
     note(c, this.#deps(c), "sale", `${sim ? "[sim] " : ""}Sold ${p.name} for $${fromUsdc(amount).toFixed(2)} to ${payer.slice(0, 6)}…${payer.slice(-4)}.`);
     this.#emit(c.id, "sale", { productId, amount: amount.toString(), sim });
+  }
+
+  /**
+   * Stop everything and give it all back: the company pauses, its revenue is withdrawn (fee rules
+   * apply), then every IMD, USDC and ETH left in its wallet goes to the owner. Gas for each
+   * transfer comes out of the ETH being returned.
+   */
+  async closeOut(c: Company, to: `0x${string}`): Promise<{ txs: string[]; returned: string[] }> {
+    if (config.mode !== "live") throw new Error("Only in live mode: a simulated company holds no real funds.");
+    if (this.#busy.has(c.id) || c.tasks.some((t) => t.status === "ordering" || t.status === "checking")) throw new Error("A payment is in progress. Try again in a minute.");
+    this.setStatus(c, "paused");
+    const txs: string[] = [];
+    const returned: string[] = [];
+    if (!c.sim && (await this.withdrawable(c)) > 0n) {
+      const r = await this.withdraw(c, to);
+      txs.push(...r.txs);
+      returned.push(`$${fromUsdc(r.sent).toFixed(2)} revenue`);
+    }
+    const account = this.vault.account(c.id);
+    const b = await balances(c.wallet);
+    const sweepEth = async (client: typeof eth | typeof sales, wallet: ReturnType<typeof ethWallet> | ReturnType<typeof salesWallet>, balance: bigint, extra: bigint, label: string) => {
+      const fees = await client.estimateFeesPerGas();
+      const reserve = (21_000n * fees.maxFeePerGas * 13n) / 10n + extra;
+      if (balance <= reserve) return;
+      const hash = await (wallet.sendTransaction as (a: unknown) => Promise<`0x${string}`>)({ to, value: balance - reserve, gas: 21_000n, maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas });
+      await client.waitForTransactionReceipt({ hash });
+      txs.push(hash);
+      returned.push(`${Number(balance - reserve) / 1e18} ETH on ${label}`);
+    };
+    // Base: USDC that is not revenue (sent by hand), then the gas ETH (an L1 data fee rides on top there).
+    const sw = salesWallet(account);
+    const leftUsdc = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [c.wallet] });
+    if (leftUsdc > 0n) {
+      const hash = await sw.writeContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "transfer", args: [to, leftUsdc] });
+      await sales.waitForTransactionReceipt({ hash });
+      txs.push(hash); returned.push(`${fromUsdc(leftUsdc).toFixed(2)} USDC`);
+    }
+    await sweepEth(sales, sw, await sales.getBalance({ address: c.wallet }), 20_000_000_000_000n, "Base");
+    // Ethereum: IMD, then ETH.
+    const ew = ethWallet(account);
+    if (b.imd > 0n) {
+      const hash = await ew.writeContract({ address: IMD_MAINNET, abi: erc20Abi, functionName: "transfer", args: [to, b.imd] });
+      await eth.waitForTransactionReceipt({ hash });
+      txs.push(hash); returned.push(`${Number(b.imd) / 1e18} IMD`);
+    }
+    await sweepEth(eth, ew, await eth.getBalance({ address: c.wallet }), 0n, "Ethereum");
+    note(c, this.#deps(c), "note", `Stopped by the owner. Returned to ${to.slice(0, 6)}…${to.slice(-4)}: ${returned.join(", ") || "nothing left to return"}.`);
+    this.#emit(c.id, "company", null);
+    return { txs, returned };
   }
 
   /** Revenue the owner can take out now: what the company earned, minus what was already withdrawn. */

@@ -77,7 +77,7 @@ export const UTILITIES: { to: string; label: string; note: string; soon?: boolea
   { to: "/token", label: "$SHIFT", note: "The platform token: what it does, live" },
   { to: "/tokenomics", label: "Tokenomics", note: "Supply, fees, wallets and every rule" },
   { to: "/frogs", label: "NIGHT FROGS", note: "The collection and its rewards" },
-  { to: "/swap", label: "Swap", note: "ETH, IMD and $SHIFT in one place", soon: true },
+  { to: "/swap", label: "Swap", note: "Buy and sell $SHIFT for ETH, from its pool" },
   { to: "/launchpad", label: "Launchpad", note: "Launch a token with the IMD swarm", soon: true },
   { to: "/games", label: "Game Room", note: "PvP games in $SHIFT and IMD", soon: true },
   { to: "/impact", label: "IMD Impact", note: "What NIGHTSHIFT gives the IMD network" },

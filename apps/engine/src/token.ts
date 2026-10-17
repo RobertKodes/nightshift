@@ -63,6 +63,8 @@ export type LaunchState = {
   contracts?: Record<string, string>; open?: boolean; openTx?: string; scanFrom?: number;
   /** After the first buy: when the main group is told (5 minutes later), and whether it was. */
   publicAt?: number; announced?: boolean;
+  /** The SHIFT/ETH v4 pool key, found from the PoolManager once deployed: the site's swap uses it. */
+  pool?: import("./v4.js").PoolKey;
 };
 export function patchLaunch(p: Partial<LaunchState>) { const l = launchState(); if (l) saveToken({ launch: { ...l, ...p } }); }
 export function launchState(): LaunchState | null {

@@ -241,6 +241,10 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
                 if (!confirm(`Withdraw ${usd(c.withdrawableUsd)} of revenue to ${address ?? "your wallet"}?${health?.platformFeeBps ? ` A ${(health.platformFeeBps / 100).toFixed(2)}% platform fee applies.` : ""}`)) return;
                 void act(() => api.withdraw(c.id));
               }}>Withdraw revenue</button>
+              {health?.mode === "live" && c.isOwner && <button className="btn danger" disabled={busy} onClick={() => {
+                if (!confirm("Stop this company and send everything back to your wallet?\n\nIt pauses, withdraws its revenue (platform fee applies), then returns every IMD, USDC and ETH left in its wallet, on Ethereum and Base. Gas comes out of the ETH returned.")) return;
+                void act(async () => { const r = await api.closeOut(c.id); alert(`Returned: ${r.returned.join(", ") || "nothing was left"}.`); });
+              }}>Stop and withdraw everything</button>}
               {c.holder && <div className={c.holder.holds ? "good" : "dim"} style={{ fontSize: 13 }}>{c.holder.holds ? `${c.holder.symbol} holder: no platform fee, products featured in the market.` : `Hold ${c.holder.min.toLocaleString()} ${c.holder.symbol} to pay no platform fee and get featured (you hold ${c.holder.balance.toLocaleString()}).`}</div>}
               <div className="dim" style={{ fontSize: 13 }}>Revenue lands here in USDC. IMD for the swarm is paid from here. {health?.mode === "sim" ? "In simulation it starts with 20 simulated IMD." : "It is funded from your wallet with the Fund button: IMD and a little ETH."}</div>
             </div>

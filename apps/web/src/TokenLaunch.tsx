@@ -129,7 +129,7 @@ export function TokenLaunch({ call, token }: { call: (token: string, path: strin
         </Step>
         <Step n={5} state={s(live, deployed && allOk && !live)} title={`The first buy, from ${short(FIRST)}`}>
           {!live && allOk && launch?.token && (
-            <span>Everything matches. Buy from {short(FIRST)} on <a href={`https://app.uniswap.org/swap?chain=mainnet&inputCurrency=NATIVE&outputCurrency=${launch.token}`} target="_blank" rel="noreferrer">Uniswap</a>, any amount. The moment it lands, the token goes public.</span>
+            <span>Everything matches. Buy from {short(FIRST)} on <a href="/swap">NIGHTSHIFT Swap</a> (or <a href={`https://app.uniswap.org/swap?chain=mainnet&inputCurrency=NATIVE&outputCurrency=${launch.token}`} target="_blank" rel="noreferrer">Uniswap</a>), any amount. The moment it lands, the token goes public.</span>
           )}
         </Step>
         <Step n={6} state={s(live, false)} title="Live: announced on Telegram, Bluesky and the site" />

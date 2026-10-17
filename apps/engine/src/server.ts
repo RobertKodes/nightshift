@@ -4,12 +4,13 @@ import { extname, join, normalize } from "node:path";
 import type { Company } from "@nightshift/core";
 import { fromImd, fromUsdc } from "@nightshift/core";
 import { type PaymentPayload, USDC, challenge, decodeHeader, encodeHeader, requirement, settlePayment, verifyPayment } from "@nightshift/x402";
-import { balances, sales, salesWallet } from "./chain.js";
+import { balances, eth, sales, salesWallet } from "./chain.js";
+import { findPool } from "./v4.js";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { handleMcp } from "./mcp.js";
 import { isAdmin, saveSetup, setupState } from "./admin.js";
-import { buybacks, checkLaunch, holderStatus, launchBody, launchState, recordBuyback, recordLaunch, saveVerification, tokenOn, verification } from "./token.js";
+import { buybacks, checkLaunch, holderStatus, launchBody, launchState, patchLaunch, recordBuyback, recordLaunch, saveVerification, tokenOn, verification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { DEV_WALLET, FIRST_BUYER } from "./shift-launch.js";
 import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
@@ -194,6 +195,7 @@ export function serve(engine: Engine) {
         if (p === "/api/admin/token/verify" && req.method === "POST") {
           const l = launchState();
           if (!l?.contracts) return json(res, 400, { error: "Nothing deployed yet." });
+          if (l.contracts.hook && !l.pool) { const pool = await findPool(eth, l.contracts.token as `0x${string}`, l.contracts.hook as `0x${string}`).catch(() => null); if (pool) patchLaunch({ pool }); }
           const checks = await verifyShift(l.contracts);
           saveVerification(checks);
           return json(res, 200, { checks });
@@ -381,6 +383,11 @@ export function serve(engine: Engine) {
           if (!to || !/^0x[0-9a-fA-F]{40}$/.test(to)) return json(res, 400, { error: config.mode === "live" ? "Only the company's owner, signed in, can withdraw." : "Sign in, or give a destination address." });
           const r = await engine.withdraw(c, getAddress(to), typeof b.amountUsd === "number" ? usdc(b.amountUsd) : undefined);
           return json(res, 200, { ok: true, sentUsd: fromUsdc(r.sent), feeUsd: fromUsdc(r.fee), txs: r.txs });
+        }
+        if (action === "close" && req.method === "POST") {
+          if (limited(req, `close:${c.id}`, 2, 60_000)) return json(res, 429, { error: "slow down" });
+          if (!owner || c.owner !== owner) return json(res, 403, { error: "Only the company's owner, signed in, can stop it and take the funds back." });
+          try { return json(res, 200, { ok: true, ...(await engine.closeOut(c, getAddress(owner))) }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
         }
         if (action === "social" && !seg[4]) {
           const b = await body(req);

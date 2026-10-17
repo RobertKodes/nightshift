@@ -48,7 +48,11 @@ export function buyCard(b: Buy): { text: string; buttons: Button[][] } {
     `<a href="https://etherscan.io/tx/${b.tx}">TX</a> · <a href="${config.publicUrl}/token">Every ${esc(sym)} trade pays IMD</a>`,
   ].join("\n");
   const buy = config.token.buyUrl || `${config.publicUrl}/token`;
-  return { text, buttons: [[{ text: `🟢 Buy $${sym}`, url: buy }, { text: "📊 Chart", url: market?.chart || `https://dexscreener.com/ethereum/${config.token.address}` }], [{ text: "🌙 NIGHTSHIFT", url: config.publicUrl }]] };
+  return { text, buttons: [
+    [{ text: `🌙 Buy on NIGHTSHIFT`, url: `${config.publicUrl}/swap` }, { text: "🦄 Uniswap", url: buy }],
+    [{ text: "📊 Chart", url: market?.chart || `https://dexscreener.com/ethereum/${config.token.address}` }, { text: "🧾 Etherscan", url: `https://etherscan.io/tx/${b.tx}` }],
+    [{ text: "🪙 Tokenomics", url: `${config.publicUrl}/tokenomics` }, { text: "🔒 Stake", url: `${config.publicUrl}/token` }],
+  ] };
 }
 
 let market: Market | null = null;

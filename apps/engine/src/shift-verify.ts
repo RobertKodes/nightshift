@@ -1,6 +1,7 @@
-import { erc20Abi, parseAbi } from "viem";
+import { encodeFunctionData, erc20Abi, parseAbi, parseEther } from "viem";
 import { eth } from "./chain.js";
 import { DEAD, DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR, TREASURY_WALLET } from "./shift-launch.js";
+import { type PoolKey, V4, findPool, quoteArgs, quoterAbi, routerAbi, swapCall } from "./v4.js";
 
 /**
  * Did IMD build what we asked for? Run after deploy and before the first buyer buys: until then
@@ -48,6 +49,10 @@ export async function verifyShift(c: Record<string, string>): Promise<Check[]> {
     const owner = await eth.readContract({ address: hook, abi: OWNED, functionName: "owner" }).catch(() => null);
     add("Hook owner is your dev wallet", owner?.toLowerCase() === DEV_WALLET, String(owner));
     add("Hook names the first buyer 0x3322…4D69", has(hcode, FIRST_BUYER));
+    // The gate, tried for real without spending: simulated swaps against today's chain.
+    const pool = await findPool(eth, token, hook).catch(() => null);
+    add("SHIFT/ETH pool exists with our hook", Boolean(pool), pool ? `fee ${pool.fee}, tick spacing ${pool.tickSpacing}` : "no Initialize event found");
+    if (pool) for (const r of await simulateGate(pool)) out.push(r);
   }
 
   // The fee split: every fixed address is in the splitter's code
@@ -68,4 +73,29 @@ export async function verifyShift(c: Record<string, string>): Promise<Check[]> {
     add("Rewards pays NIGHT FROGS holders", has(rcode, FROGS));
   }
   return out;
+}
+
+const RANDOM = "0x1111111111111111111111111111111111111111";
+
+/**
+ * Before trading opens: a stranger's buy must fail, and the treasury's buy must go through the
+ * Universal Router (the same call the site and Uniswap send). Both are eth_calls with a balance
+ * override, so nothing is signed or spent.
+ */
+export async function simulateGate(pool: PoolKey): Promise<Check[]> {
+  const amt = parseEther("0.001");
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+  const buy = (from: `0x${string}`) => eth.call({
+    account: from, to: V4.router, value: amt, stateOverride: [{ address: from, balance: parseEther("1") }],
+    data: encodeFunctionData({ abi: routerAbi, functionName: "execute", args: ((s) => [s.commands, s.inputs, s.deadline] as const)(swapCall(pool, true, amt, 1n, deadline)) }),
+  }).then(() => "ok", (e: Error) => `reverted: ${e.message.split("\n")[0]!.slice(0, 100)}`);
+  const stranger = await buy(RANDOM);
+  const treasury = await buy(FIRST_BUYER as `0x${string}`);
+  const quote = await eth.simulateContract({ account: FIRST_BUYER as `0x${string}`, address: V4.quoter, abi: quoterAbi, functionName: "quoteExactInputSingle", args: quoteArgs(pool, true, amt) as never })
+    .then((r) => (r.result as readonly bigint[])[0]!, () => 0n);
+  return [
+    { label: "A stranger's buy is refused before the first buy", ok: stranger !== "ok", detail: stranger },
+    { label: "The treasury's first buy works through the Uniswap router", ok: treasury === "ok", detail: treasury },
+    { label: "The quoter prices the treasury's buy", ok: quote > 0n, detail: `0.001 ETH → ${Number(quote) / 1e18} SHIFT` },
+  ];
 }

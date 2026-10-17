@@ -289,7 +289,7 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 
 /* Swap (coming soon) */
 .swap-page .tkn-coin { font-size: 22px; display: grid; place-items: center; }
-.swap-box { display: grid; gap: 10px; opacity: .75; }
+.swap-box { display: grid; gap: 10px; }
 .swap-leg { display: grid; gap: 6px; padding: 14px; border: 1px solid var(--edge); background: rgba(3, 2, 10, .5); }
 .swap-leg span { font: 500 11px var(--mono); letter-spacing: .16em; color: var(--faint); text-transform: uppercase; }
 .swap-leg div { display: flex; justify-content: space-between; align-items: baseline; }
@@ -405,3 +405,16 @@ table.plain.addr a { overflow-wrap: anywhere; font-size: 12.5px; }
 .price-form .field { width: 90px; padding: 4px 6px; }
 .fund-manual { font-size: 13px; display: grid; gap: 4px; }
 .fund-manual code { overflow-wrap: anywhere; }
+
+/* NIGHTSHIFT Swap */
+.swap-tabs { display: flex; gap: 6px; margin: 4px 0 12px; }
+.swap-tabs button { flex: 1; padding: 10px; background: none; border: 1px solid var(--line-2); color: var(--dim); font: 600 13px var(--mono); letter-spacing: .08em; cursor: pointer; }
+.swap-tabs button.on { color: var(--text); border-color: var(--text); }
+.swap-in { width: 100%; min-width: 0; background: none; border: 0; outline: 0; color: var(--text); font: 600 26px var(--mono); }
+.swap-leg > span { display: flex; justify-content: space-between; gap: 8px; }
+.swap-max { background: none; border: 0; color: var(--dim); font: inherit; cursor: pointer; padding: 0; }
+.swap-max:hover { color: var(--text); }
+.swap-slip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--dim); }
+.swap-slip button { background: none; border: 1px solid var(--line); color: var(--dim); padding: 4px 8px; font: 12px var(--mono); cursor: pointer; }
+.swap-slip button.on { color: var(--text); border-color: var(--text); }
+.swap-links { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font: 12px var(--mono); }

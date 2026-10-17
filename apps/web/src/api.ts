@@ -66,6 +66,7 @@ export const api = {
   connectBluesky: (id: string, handle: string, appPassword: string, auto: boolean) => req<{ handle: string }>("POST", `/api/companies/${id}/social`, { handle, appPassword, auto }),
   disconnectBluesky: (id: string) => req("POST", `/api/companies/${id}/social/disconnect`),
   publishPost: (id: string, i: number) => req<{ url: string }>("POST", `/api/companies/${id}/posts/${i}/publish`),
+  closeOut: (id: string) => req<{ ok: boolean; txs: string[]; returned: string[] }>("POST", `/api/companies/${id}/close`, {}),
   pause: (id: string) => req("POST", `/api/companies/${id}/pause`),
   resume: (id: string) => req("POST", `/api/companies/${id}/resume`),
   price: (id: string, product: string, priceUsd: number) => req("POST", `/api/companies/${id}/products/${product}/price`, { priceUsd }),

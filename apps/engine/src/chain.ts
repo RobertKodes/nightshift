@@ -10,6 +10,10 @@ export const eth = createPublicClient({ chain: mainnet, transport: http(config.e
 const salesChain = config.salesChainId === 8453 ? base : baseSepolia;
 export const sales = createPublicClient({ chain: salesChain, transport: http(config.salesRpc) });
 
+export function ethWallet(account: LocalAccount) {
+  return createWalletClient({ account, chain: mainnet, transport: http(config.ethRpc) });
+}
+
 export function salesWallet(account: LocalAccount) {
   return createWalletClient({ account, chain: salesChain, transport: http(config.salesRpc) });
 }
