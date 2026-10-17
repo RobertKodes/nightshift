@@ -220,7 +220,7 @@ export function serve(engine: Engine) {
       if (p === "/api/frogs") {
         const order = orders().find((o) => o.id === "night-frogs");
         return json(res, 200, {
-          on: frogsOn(), address: config.nft.address || null, stats: await frogStats(), extraSlots: config.nft.extraSlots,
+          on: frogsOn(), address: config.nft.address || null, stats: await frogStats(), extraSlots: config.nft.extraSlots, vrfSub: config.nft.vrfSub || null,
           order: order ? { stage: order.stage, done: Boolean(order.done), error: order.error ?? null, jobId: order.jobId ?? null } : null,
         });
       }

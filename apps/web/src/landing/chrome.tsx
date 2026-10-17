@@ -49,7 +49,7 @@ export function useSwarm() {
 }
 
 const DOCS = "/guide";
-export const X_URL = "https://x.com/nightshiftidm";
+export const X_URL = "https://x.com/nightshiftimd";
 export const TELEGRAM_URL = "https://t.me/getnightshift";
 /** The developer. */
 export const DEV_X_URL = "https://x.com/probert_mihai";
@@ -71,7 +71,7 @@ function Socials() {
   );
 }
 
-export function SiteHeader({ active, home = false }: { active: "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "guide"; home?: boolean }) {
+export function SiteHeader({ active, home = false }: { active: "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide"; home?: boolean }) {
   const swarm = useSwarm();
   const { address, signIn, signOut, busy, error } = useSession();
   // On the landing the section links scroll; elsewhere they lead back to it.
@@ -84,6 +84,7 @@ export function SiteHeader({ active, home = false }: { active: "home" | "compani
         <a href={hash("mission")}>Mission</a>
         <Link to="/token" className={active === "token" ? "on" : ""}>Token</Link>
         <Link to="/frogs" className={active === "frogs" ? "on" : ""}>Frogs</Link>
+        <Link to="/swap" className={active === "swap" ? "on" : ""}>Swap<sup className="nav-soon">SOON</sup></Link>
         <Link to="/companies" className={active === "companies" || active === "company" ? "on" : ""}>Companies</Link>
         <Link to="/market" className={active === "market" ? "on" : ""}>Market</Link>
         <Link to="/mcp" className={active === "mcp" ? "on" : ""}>MCP</Link>
@@ -116,6 +117,7 @@ export function SiteFooter() {
         <Link to="/market">MARKET</Link>
         <Link to="/token">TOKEN</Link>
         <Link to="/frogs">FROGS</Link>
+        <Link to="/swap">SWAP</Link>
         <Link to="/guide">GUIDE</Link>
         <Link to="/mcp">MCP</Link>
         <Link to={DOCS}>DOCS</Link>

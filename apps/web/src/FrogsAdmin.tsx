@@ -28,6 +28,7 @@ export function FrogsAdmin() {
     const d = await fetch("/api/frogs").then((r) => r.json()).catch(() => null);
     if (!d?.address) return;
     setAddr(d.address);
+    if (d.vrfSub) setSub((s) => s || String(d.vrfSub));
     const a = d.address as `0x${string}`;
     const [s, m, rq, rv] = await Promise.all([
       rpc.readContract({ address: a, abi: ABI, functionName: "subscriptionId" }),

@@ -287,7 +287,7 @@ export function Landing() {
               <span>CONTRACT</span>
               {token?.on && token.address ? <a href={`https://etherscan.io/token/${token.address}`} target="_blank" rel="noreferrer">{token.address}</a> : <code>0x···· announced at launch</code>}
             </div>
-            {!token?.on && <p className="tkn-warn">⚠ ${tsym} is not launched. Any NIGHTSHIFT or {tsym} token trading today, on any chain, is <b>fake</b>. The only contract will appear here, on @nightshiftidm and in t.me/getnightshift.</p>}
+            {!token?.on && <p className="tkn-warn">⚠ ${tsym} is not launched. Any NIGHTSHIFT or {tsym} token trading today, on any chain, is <b>fake</b>. The only contract will appear here, on @nightshiftimd and in t.me/getnightshift.</p>}
             <TokenomicsBars />
             <div className="tkn-fees">
               <span>EVERY TRADE · 1.25%</span>

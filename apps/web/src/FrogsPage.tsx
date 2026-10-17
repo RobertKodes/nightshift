@@ -119,7 +119,7 @@ export function FrogsPage() {
             {info?.order?.jobId && <a href={`https://explorer.imd.fun/jobs/${info.order.jobId}`} target="_blank" rel="noreferrer">Follow the build on the IMD explorer →</a>}
           </div>
         )}
-        <p className="tkn-warn">Only mint through this page or the contract above. The address appears here, on @nightshiftidm and in t.me/getnightshift; anything else is fake.</p>
+        <p className="tkn-warn">Only mint through this page or the contract above. The address appears here, on @nightshiftimd and in t.me/getnightshift; anything else is fake.</p>
       </section>
 
       <h2>The crew</h2>

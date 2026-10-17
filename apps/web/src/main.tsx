@@ -13,6 +13,7 @@ import { SetupPage } from "./SetupPage";
 import { MarketPage } from "./MarketPage";
 import { TokenPage } from "./TokenPage";
 import { FrogsPage } from "./FrogsPage";
+import { SwapPage } from "./SwapPage";
 import { GuidePage } from "./GuidePage";
 import { TermsPage } from "./TermsPage";
 import "./styles.css";
@@ -34,8 +35,9 @@ function App() {
   if (seg[0] === "market") page = <MarketPage />;
   if (seg[0] === "token") page = <TokenPage />;
   if (seg[0] === "frogs") page = <FrogsPage />;
+  if (seg[0] === "swap") page = <SwapPage />;
   if (seg[0] === "guide") page = <GuidePage />;
-  const active = seg[0] === "co" ? "company" : seg[0] === "mcp" ? "mcp" : seg[0] === "terms" ? "terms" : seg[0] === "market" ? "market" : seg[0] === "token" ? "token" : seg[0] === "frogs" ? "frogs" : seg[0] === "guide" ? "guide" : "companies";
+  const active = seg[0] === "co" ? "company" : seg[0] === "mcp" ? "mcp" : seg[0] === "terms" ? "terms" : seg[0] === "market" ? "market" : seg[0] === "token" ? "token" : seg[0] === "frogs" ? "frogs" : seg[0] === "swap" ? "swap" : seg[0] === "guide" ? "guide" : "companies";
   return (
     <div className="ns ns-app">
       <SiteHeader active={active} />

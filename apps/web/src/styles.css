@@ -274,3 +274,14 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 .frogs-traits div { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 10px 12px; border: 1px solid var(--edge); background: rgba(3, 2, 10, .4); font-size: 14px; }
 .frogs-traits b { font: 600 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--moon, #c4b4ff); }
 @media (max-width: 560px) { .frogs-grid { grid-template-columns: repeat(2, 1fr); } .frogs-nums { grid-template-columns: 1fr; } .frogs-traits div { grid-template-columns: 1fr; gap: 4px; } }
+
+/* Swap (coming soon) */
+.swap-page .tkn-coin { font-size: 22px; display: grid; place-items: center; }
+.swap-box { display: grid; gap: 10px; opacity: .75; }
+.swap-leg { display: grid; gap: 6px; padding: 14px; border: 1px solid var(--edge); background: rgba(3, 2, 10, .5); }
+.swap-leg span { font: 500 11px var(--mono); letter-spacing: .16em; color: var(--faint); text-transform: uppercase; }
+.swap-leg div { display: flex; justify-content: space-between; align-items: baseline; }
+.swap-leg b { font: 500 28px var(--mono); color: var(--dim); }
+.swap-leg i { font: 600 14px var(--mono); font-style: normal; color: var(--ink); }
+.swap-flip { text-align: center; color: var(--faint); }
+.swap-box .ns-cta { justify-self: stretch; justify-content: center; cursor: not-allowed; }

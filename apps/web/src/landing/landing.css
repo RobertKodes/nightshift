@@ -36,6 +36,7 @@
 .ns-nav { display: flex; gap: clamp(14px, 2.4vw, 38px); margin: 0 auto; }
 .ns-nav a { position: relative; font: 500 11.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); padding: 6px 0; transition: color .25s; }
 .ns-nav a:hover, .ns-nav a.on { color: var(--ink); }
+.nav-soon { margin-left: 4px; padding: 1px 4px; font: 600 8px var(--mono); letter-spacing: .1em; color: #03020a; background: #ffc46b; vertical-align: top; }
 .ns-nav a.on::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 4px; height: 4px; border-radius: 50%; background: var(--uv-hi); box-shadow: 0 0 10px var(--uv); transform: translateX(-50%); }
 .ns-status { display: flex; align-items: center; gap: 12px; padding: 9px 16px; border: 1px solid var(--edge); background: var(--glass); backdrop-filter: blur(12px); font: 500 10px/1.5 var(--mono); letter-spacing: .14em; color: var(--acid); }
 .ns-status b { color: var(--ink); font-weight: 600; }

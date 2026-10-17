@@ -87,6 +87,6 @@ Tests: `pnpm -r test` (28 tests) covers:
   Do a first live run with a small budget and a fresh wallet.
 - **Posting to X and email are drafts only** for now.
 
-Built by [@probert_mihai](https://x.com/probert_mihai). Site: [getnightshift.tech](https://getnightshift.tech) · [X](https://x.com/nightshiftidm) · [Telegram](https://t.me/getnightshift) · [Bluesky](https://bsky.app/profile/nightshifttech.bsky.social)
+Built by [@probert_mihai](https://x.com/probert_mihai). Site: [getnightshift.tech](https://getnightshift.tech) · [X](https://x.com/nightshiftimd) · [Telegram](https://t.me/getnightshift) · [Bluesky](https://bsky.app/profile/nightshifttech.bsky.social)
 
 MIT licensed. `@x402/*` are Apache-2.0 dependencies.
