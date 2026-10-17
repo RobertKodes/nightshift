@@ -274,7 +274,10 @@ export function startCommunity(): void {
   const st = load();
   const tick = async () => {
     try {
-      if (config.token.address) {
+      // Launch day: nothing about the token reaches the group before the main "IS LIVE" post.
+      const l = launchState();
+      const quiet = Boolean(l && !l.announced);
+      if (config.token.address && !quiet) {
         for (const b of await scanBuys(st)) {
           const c = buyCard(b);
           await toCommunity(c.text, c.buttons, b.usd >= 2500 ? "whale" : "buy");
@@ -289,7 +292,7 @@ export function startCommunity(): void {
           st.milestone = hit;
         }
       }
-      await scanShiftEvents(st).catch((e) => console.error("shift events", (e as Error).message));
+      if (!quiet) await scanShiftEvents(st).catch((e) => console.error("shift events", (e as Error).message));
       await scanBluesky(st).catch(() => undefined);
     } catch (e) { console.error("community", (e as Error).message); }
     save(st);
