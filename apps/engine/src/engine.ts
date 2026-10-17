@@ -22,7 +22,9 @@ import { USDC } from "@nightshift/x402";
 import { Auth } from "./auth.js";
 import { LlmClient } from "@nightshift/llm";
 import { balances, ensurePermit2, eth, ethWallet, sales, salesWallet } from "./chain.js";
-import { findPool } from "./v4.js";
+import { V4, findPool } from "./v4.js";
+import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
+import { judge, muteMinutes, strike, track } from "./moderation.js";
 import { type KeeperRun, runKeeper } from "./keeper.js";
 import { buildEpoch } from "./frogpot.js";
 import { IMD_MAINNET } from "@nightshift/imd";
@@ -35,9 +37,9 @@ import { ProductFiles, fetchDelivery } from "./products.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
-import { type Anim, buyCard, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
-import { type Button, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands } from "./social.js";
-import { followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
+import { type Anim, buyCard, chats, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
+import { type Button, type GroupMessage, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands, tgCall } from "./social.js";
+import { IMD_TOKEN, followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { writeSettings } from "./settings.js";
 
@@ -77,10 +79,12 @@ export class Engine {
     setInterval(() => void this.#tick().catch((e) => console.error("tick", e)), 4000);
     setInterval(() => void this.store.flush(), 3000);
     void this.alert(`Engine started in ${config.mode.toUpperCase()} mode · ${config.publicUrl}`, "start");
+    if (config.telegramToken && config.moderation) void this.#guardRights();
     if (config.telegramToken) {
       telegramCommands(config.telegramToken, config.telegramAdmins, {
         admin: (cmd, args) => this.#command(cmd, args),
         open: (cmd) => publicCommand(cmd),
+        guard: (m) => this.#guard(m),
         // Share an X post to the bot and it raids it in the community chat.
         adminText: async (text) => {
           const url = text.match(/https?:\/\/(?:x|twitter)\.com\/\S+\/status\/\d+\S*/)?.[0];
@@ -359,6 +363,61 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     const e = await buildEpoch(l?.contracts ?? {}, l?.scanFrom ?? 0).catch((err) => { void this.alert(`Frog epoch failed: ${(err as Error).message}`, "frog-epoch"); return null; });
     if (e) void this.adminCard(`🐸 <b>NIGHT FROGS epoch ${e.epoch} is ready</b>\n${e.wallets} wallets · ${e.tokens.map((t) => `${(Number(t.total) / 1e18).toFixed(4)} ${t.symbol}`).join(" + ")}\n\nPost its root from the dev wallet so holders can claim.`, [[{ text: "⚙️ Post it in Setup", url: `${config.publicUrl}/setup` }]], `epoch-${e.epoch}`, "report");
     return e;
+  }
+
+  /** The guard needs the bot to be a group admin that may delete messages and restrict members. */
+  async #guardRights(): Promise<void> {
+    const token = config.telegramToken!;
+    const me = await tgCall<{ id: number }>(token, "getMe", {});
+    if (!me) return;
+    for (const c of chats()) {
+      const r = await tgCall<{ status: string; can_delete_messages?: boolean; can_restrict_members?: boolean }>(token, "getChatMember", { chat_id: c, user_id: me.id });
+      const ok = r?.status === "creator" || (r?.status === "administrator" && r.can_delete_messages && r.can_restrict_members);
+      if (!ok) void this.alert(`🛡 The guard cannot act in ${c}: make the bot an admin there with "Delete messages" and "Ban users" (now: ${r?.status ?? "unknown"}).`, `guard-rights-${c}`);
+    }
+  }
+
+  readonly #groupAdmins = new Map<string, { at: number; ids: Set<string> }>();
+  /** Scams, spam and FUD in the public group: removed, the sender warned or muted, the admins told. */
+  async #guard(m: GroupMessage): Promise<boolean> {
+    if (!config.moderation || !config.telegramToken) return false;
+    const ours = chats().map((c) => c.toLowerCase());
+    if (!ours.includes(m.chat) && !(m.chatUsername && ours.includes(`@${m.chatUsername.toLowerCase()}`))) return false;
+    // Group admins are never touched (the list is read from Telegram every 10 minutes).
+    let a = this.#groupAdmins.get(m.chat);
+    if (!a || Date.now() - a.at > 600_000) {
+      const r = await tgCall<{ user: { id: number } }[]>(config.telegramToken, "getChatAdministrators", { chat_id: m.chat });
+      a = { at: Date.now(), ids: new Set((r ?? []).map((x) => String(x.user.id))) };
+      this.#groupAdmins.set(m.chat, a);
+    }
+    if (a.ids.has(m.user)) return false;
+    const l = launchState();
+    const known = [config.token.address, ...Object.values(l?.contracts ?? {}), DEV_WALLET, FIRST_BUYER, IMD_TOKEN, IMD_BURN_EXECUTOR, config.nft.address, V4.router, V4.poolManager]
+      .filter(Boolean).map((x) => String(x).toLowerCase());
+    const tgs = ["t.me/getnightshift", ...[config.telegramUrl, ...chats()].filter(Boolean).map((x) => x.toLowerCase().replace(/^https?:\/\//, "").replace(/^@/, "t.me/"))];
+    const t = track(m.user, m.text);
+    const v = judge(m.text, { ourAddresses: known, ourTelegram: tgs });
+    const level = v?.level ?? (t.flood ? "flood" : t.repeat ? "spam" : null);
+    if (!level) return false;
+    const reason = v?.reason ?? (t.flood ? "flooding the chat" : "the same message again and again");
+    const token = config.telegramToken;
+    await tgCall(token, "deleteMessage", { chat_id: m.chat, message_id: m.messageId });
+    const strikes = strike(m.user);
+    const minutes = muteMinutes(level, strikes);
+    if (minutes > 0) {
+      await tgCall(token, "restrictChatMember", { chat_id: m.chat, user_id: Number(m.user), until_date: Math.floor(Date.now() / 1000) + minutes * 60,
+        permissions: { can_send_messages: false, can_send_audios: false, can_send_documents: false, can_send_photos: false, can_send_videos: false, can_send_video_notes: false, can_send_voice_notes: false, can_send_polls: false, can_send_other_messages: false, can_add_web_page_previews: false } });
+    }
+    const span = minutes >= 1440 ? "24h" : minutes >= 60 ? "1h" : `${minutes} min`;
+    const notice = level === "scam"
+      ? `🚫 Removed a scam message from ${esc(m.name)} (muted ${span}).\n\nAdmins never DM first. Never share your seed phrase or connect your wallet to a link from chat. The only contract address is on <a href="${config.publicUrl}/token">getnightshift.tech</a>.`
+      : level === "fud"
+        ? `⚠️ ${esc(m.name)}, that message was removed${minutes ? ` and you are muted ${span}` : ""}. Want proof instead of rumours? Every contract, wallet and fee is on <a href="${config.publicUrl}/tokenomics">getnightshift.tech/tokenomics</a>, checked on chain.`
+        : `🔇 ${esc(m.name)} ${minutes ? `muted ${span}` : "warned"}: ${esc(reason)}.`;
+    const sent = await tgCall<{ message_id: number }>(token, "sendMessage", { chat_id: m.chat, text: notice, parse_mode: "HTML", disable_web_page_preview: true });
+    if (sent?.message_id) setTimeout(() => void tgCall(token, "deleteMessage", { chat_id: m.chat, message_id: sent.message_id }), 60_000);
+    void this.alert(`🛡 Guard: ${level} from ${m.name} (${m.user}), strike ${strikes}, ${minutes ? `muted ${span}` : "warned"}: ${reason}\n“${m.text.slice(0, 160)}”`, `guard-${m.user}-${strikes}`);
+    return true;
   }
 
   /** The contract address, privately, to the launch chats (LAUNCH_NOTIFY). */

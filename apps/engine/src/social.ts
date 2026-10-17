@@ -92,7 +92,10 @@ export type BotHandlers = {
   adminText?: (text: string) => Promise<Reply | null>;
   /** People joined a chat the bot is in. */
   joined?: (chat: string, names: string[]) => void;
+  /** Every group message from a non-admin, before anything else: true when it was removed. */
+  guard?: (m: GroupMessage) => Promise<boolean>;
 };
+export type GroupMessage = { chat: string; chatUsername?: string; messageId: number; user: string; name: string; text: string };
 
 /**
  * The bot: long-polls Telegram, answers public commands for anyone, operator commands and button
@@ -126,7 +129,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
   const loop = async (): Promise<void> => {
     try {
       const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates?timeout=25&offset=${offset}&allowed_updates=${encodeURIComponent('["message","callback_query"]')}`, { signal: AbortSignal.timeout(35000) });
-      const j = (await r.json()) as { result?: { update_id: number; message?: { chat: { id: number; type: string }; from?: { id: number }; text?: string; new_chat_members?: { first_name: string; is_bot?: boolean }[] }; callback_query?: { id: string; from: { id: number }; data?: string; message?: { chat: { id: number }; message_id: number } } }[] };
+      const j = (await r.json()) as { result?: { update_id: number; message?: { message_id: number; chat: { id: number; type: string; username?: string }; from?: { id: number; is_bot?: boolean; first_name?: string; username?: string }; text?: string; caption?: string; new_chat_members?: { first_name: string; is_bot?: boolean }[] }; callback_query?: { id: string; from: { id: number }; data?: string; message?: { chat: { id: number }; message_id: number } } }[] };
       for (const u of j.result ?? []) {
         offset = u.update_id + 1;
         const q = u.callback_query;
@@ -136,6 +139,11 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
         const text = q?.data ?? m?.text ?? "";
         const isAdmin = admins.includes(from);
         if (!chat) continue;
+        // The community guard sees every group message from someone who is not an operator.
+        if (m && h.guard && !isAdmin && (m.chat.type === "group" || m.chat.type === "supergroup") && m.from && !m.from.is_bot) {
+          const name = m.from.username ? `@${m.from.username}` : (m.from.first_name ?? "someone");
+          if (await h.guard({ chat, chatUsername: m.chat.username, messageId: m.message_id, user: String(m.from.id), name, text: m.text ?? m.caption ?? "" }).catch(() => false)) continue;
+        }
         const people = (m?.new_chat_members ?? []).filter((x) => !x.is_bot).map((x) => x.first_name);
         if (people.length && h.joined) { h.joined(chat, people); continue; }
         if (!text.startsWith("/")) {
