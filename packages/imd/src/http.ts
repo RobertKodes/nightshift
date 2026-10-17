@@ -128,8 +128,15 @@ export class HttpImdPlane implements ImdPlane {
     if (!ok) throw new ImdError(`refused to pay: the challenge asks for ${r.amount} of ${r.asset} on ${r.network} to ${r.payTo}, not what was quoted`, 402, null, ch);
 
     // 3. The Permit2 payment. The plane parses it strictly: no extensions, `accepted` equal to the challenge.
-    const client = x402Client.fromConfig({ schemes: [{ network: req.network, client: new ExactEvmScheme(this.#account as never) }] } as never);
-    const created = (await client.createPaymentPayload({ x402Version: 2, resource: ch.resource, accepts: [req] } as never)) as Record<string, unknown>;
+    // x402 only knows stablecoins by default: IMD is allowed here, capped at the expected amount.
+    const client = x402Client.fromConfig({
+      schemes: [{ network: req.network, client: new ExactEvmScheme(this.#account as never) }],
+      spendControls: { allowedAssets: [{ network: e.network, asset: e.asset, maxAmountPerPayment: e.maxAmount.toString() }] },
+    } as never);
+    // Nothing is signed or sent if building the payment fails, so it is reported as unpaid.
+    const created = (await client.createPaymentPayload({ x402Version: 2, resource: ch.resource, accepts: [req] } as never).catch((err: Error) => {
+      throw new ImdError(`refused to pay: the payment could not be built (${err.message.slice(0, 160)})`, 402, null);
+    })) as Record<string, unknown>;
     const { extensions: _drop, ...generated } = created;
     const payment = JSON.parse(JSON.stringify({ ...generated, accepted: req }));
 

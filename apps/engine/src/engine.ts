@@ -544,6 +544,7 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     for (const c of this.store.companies.values()) {
       for (const j of c.journal) if (j.kind === "decision") j.text = j.text.replace(/ \([\w.-]+\/[\w.:-]+\)$/, "");
       for (const t of c.tasks) {
+        if (t.status === "failed" && /rejected by spendControls/.test(t.error ?? "") && t.costImd) { t.costImd = 0n; note(c, this.#deps(c), "note", `"${t.title}" was never paid (the payment library refused IMD before signing). Its budget is back.`); }
         const paid = t.status === "ordering" && !t.imd?.orderId;
         if (t.status !== "checking" && !paid) continue;
         Object.assign(t, { status: "failed", activity: null, error: paid ? "interrupted while paying; it may have been paid, check the wallet on Etherscan" : "interrupted before payment; nothing was paid" });
