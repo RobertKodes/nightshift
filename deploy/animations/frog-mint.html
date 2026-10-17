@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--uv:#7C5CFF;--moon:#C4B4FF;--acid:#B8FF4A;--amber:#FFC46B;--red:#FF4D6D;--ink:#F2EFFF}
+*{margin:0;box-sizing:border-box}
+html,body{width:1280px;height:720px;overflow:hidden;background:#03020A}
+.st{position:relative;width:1280px;height:720px;overflow:hidden;font-family:Inter,sans-serif;color:var(--ink)}
+.a{animation-duration:6s;animation-iteration-count:infinite;animation-timing-function:linear;animation-fill-mode:both}
+.bg{position:absolute;inset:0;background:radial-gradient(60% 80% at 50% 55%,#2a1170 0%,#0c0624 55%,#03020a 100%)}
+/* the crew marching behind, out of focus */
+.belt{position:absolute;top:190px;left:0;display:flex;gap:26px;filter:blur(3px) brightness(.45) saturate(1.2);animation-name:belt}
+.belt img{width:230px;height:230px;border-radius:14px}
+@keyframes belt{from{transform:translateX(0)}to{transform:translateX(-1024px)}}
+.belt.b2{top:-40px;filter:blur(6px) brightness(.25);animation-name:belt2}
+@keyframes belt2{from{transform:translateX(-1024px)}to{transform:translateX(0)}}
+.rays{position:absolute;left:640px;top:360px;width:1600px;height:1600px;margin:-800px;background:repeating-conic-gradient(rgba(184,255,74,.13) 0 6deg,transparent 6deg 18deg);animation-name:spin;mask-image:radial-gradient(circle,#000 10%,transparent 60%)}
+@keyframes spin{to{transform:rotate(60deg)}}
+/* the minted card: drops, flips, glows */
+.card{position:absolute;left:520px;top:150px;width:240px;height:240px;border-radius:18px;overflow:hidden;z-index:4;box-shadow:0 0 0 4px #08070d,0 0 0 8px var(--acid),0 0 90px 10px rgba(184,255,74,.55);animation-name:card}
+.card img{width:100%;height:100%;display:block}
+@keyframes card{0%{opacity:0;transform:translateY(-500px) rotate(-25deg) scale(.7)}12%{opacity:1;transform:translateY(0) rotate(4deg) scale(1.08)}16%{transform:rotate(-2deg) scale(1)}20%{transform:none}78%{transform:scale(1.04)}100%{transform:scale(1.04)}}
+.shock{position:absolute;left:640px;top:270px;width:10px;height:10px;margin:-5px;border-radius:50%;border:5px solid var(--acid);animation-name:shock}
+@keyframes shock{0%,11%{opacity:0;transform:scale(1)}12%{opacity:1}30%{opacity:0;transform:scale(80)}100%{opacity:0}}
+.stamp{position:absolute;left:690px;top:120px;z-index:6;padding:8px 18px;border:5px solid var(--red);color:var(--red);font:900 44px Inter,sans-serif;letter-spacing:.04em;transform:rotate(12deg);background:rgba(3,2,10,.6);animation-name:stamp}
+@keyframes stamp{0%,18%{opacity:0;transform:rotate(12deg) scale(3)}22%{opacity:1;transform:rotate(12deg) scale(.95)}24%{transform:rotate(12deg) scale(1)}100%{opacity:1;transform:rotate(12deg) scale(1)}}
+/* burn: flames rising from the card */
+.fx{position:absolute;inset:0;z-index:3}
+.fx i{position:absolute;bottom:250px;font-size:30px;animation:rise 1.5s linear infinite}
+@keyframes rise{0%{transform:translateY(0) scale(.6);opacity:0}15%{opacity:1}100%{transform:translateY(-330px) scale(1.2);opacity:0}}
+.burn{position:absolute;left:0;right:0;top:418px;text-align:center;font:700 22px 'JetBrains Mono',monospace;letter-spacing:.3em;color:var(--amber);text-shadow:0 0 18px rgba(255,140,0,.8);animation-name:burn}
+@keyframes burn{0%,24%{opacity:0;transform:translateY(20px)}30%{opacity:1;transform:none}100%{opacity:1}}
+.h1{position:absolute;left:0;right:0;top:468px;text-align:center;font:900 92px/1 Inter,sans-serif;letter-spacing:-.03em;background:linear-gradient(100deg,#fff 0 30%,var(--acid) 45%,#fff 60%) 0 0/300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 1.5s linear infinite,hin 6s linear infinite both}
+@keyframes shine{from{background-position:100% 0}to{background-position:-50% 0}}
+@keyframes hin{0%,30%{opacity:0;transform:scale(.8)}36%{opacity:1;transform:scale(1.05)}40%{transform:scale(1)}100%{opacity:1}}
+.cta{position:absolute;left:0;right:0;top:580px;display:flex;justify-content:center;gap:16px;animation-name:cta}
+@keyframes cta{0%,44%{opacity:0;transform:translateY(30px)}50%{opacity:1;transform:none}100%{opacity:1}}
+.cta span{padding:12px 22px;font:700 20px 'JetBrains Mono',monospace;letter-spacing:.14em}
+.cta .buy{background:var(--acid);color:#03020a;box-shadow:0 0 40px rgba(184,255,74,.6);animation:pulse .75s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.07);box-shadow:0 0 70px rgba(184,255,74,.9)}}
+.cta .url{border:2px solid var(--moon);color:var(--moon)}
+.fomo{position:absolute;left:0;right:0;top:40px;text-align:center;font:700 18px 'JetBrains Mono',monospace;letter-spacing:.45em;color:var(--moon);animation-name:fomo}
+@keyframes fomo{0%,4%{opacity:0}8%{opacity:1}100%{opacity:1}}
+.fomo b{color:var(--red);animation:blink .5s steps(1) infinite}
+@keyframes blink{50%{opacity:.2}}
+.scan{position:absolute;left:0;right:0;height:110px;background:linear-gradient(transparent,rgba(63,230,255,.14),transparent);animation:scan 1.5s linear infinite}
+@keyframes scan{from{top:-110px}to{top:720px}}
+.vig{position:absolute;inset:0;box-shadow:inset 0 0 180px #000}
+.fade{position:absolute;inset:0;background:#03020a;animation-name:fade}
+@keyframes fade{0%{opacity:1}4%{opacity:0}95%{opacity:0}100%{opacity:1}}
+</style></head>
+<body><div class="st">
+  <div class="bg"></div>
+  <div class="belt b2 a" id="b2"></div>
+  <div class="belt a" id="b1"></div>
+  <div class="rays a"></div>
+  <div class="fomo a"><b>●</b> A NEW FROG JUST CLOCKED IN · THE NIGHT SHIFT IS FILLING UP</div>
+  <div class="shock a"></div>
+  <div class="fx" id="fx"></div>
+  <div class="card a"><img src="moon.svg"></div>
+  <div class="stamp a">MINTED</div>
+  <div class="burn a">🔥 1 IMD BURNED FOREVER</div>
+  <div class="h1">JOIN THE CREW</div>
+  <div class="cta a"><span class="buy">MINT · 2 IMD</span><span class="url">GETNIGHTSHIFT.TECH/FROGS</span></div>
+  <div class="scan"></div><div class="vig"></div>
+  <div class="fade a"></div>
+</div>
+<script>
+const ids=["079","083","113","500","079","083","113","500","079","083","113","500","079","083","113","500"];
+document.getElementById("b1").innerHTML=ids.map(i=>`<img src="frog-${i}.svg">`).join("");
+document.getElementById("b2").innerHTML=ids.slice().reverse().map(i=>`<img src="frog-${i}.svg">`).join("");
+let seed=5;const r=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const fx=document.getElementById("fx");
+for(let i=0;i<14;i++){const e=document.createElement("i");e.textContent="🔥";e.style.left=(560+r()*160)+"px";e.style.animationDelay=-(i/14)*1.5+"s";e.style.fontSize=20+r()*22+"px";fx.append(e);}
+window.seek=(t)=>document.getAnimations().forEach(a=>{a.pause();a.currentTime=t;});
+</script></body></html>

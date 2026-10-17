@@ -1,0 +1,89 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@600;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--uv:#7C5CFF;--moon:#C4B4FF;--acid:#B8FF4A;--amber:#FFC46B;--cyan:#3FE6FF;--ink:#F2EFFF}
+*{margin:0;box-sizing:border-box}
+html,body{width:1280px;height:720px;overflow:hidden;background:#03020A}
+.st{position:relative;width:1280px;height:720px;overflow:hidden;font-family:Inter,sans-serif;color:var(--ink)}
+/* 8 s timeline; every animation has the same duration so seek(t) is exact */
+.a{animation-duration:8s;animation-iteration-count:infinite;animation-timing-function:linear;animation-fill-mode:both}
+.bg{position:absolute;inset:-60px;background:url(megastructure-960.webp) center/cover;filter:saturate(1.3) brightness(.55);animation-name:bgz}
+@keyframes bgz{0%{transform:scale(1.15) translateX(-20px)}100%{transform:scale(1.02) translateX(20px)}}
+.tint{position:absolute;inset:0;background:radial-gradient(70% 90% at 50% 60%,rgba(124,92,255,.25),transparent 60%),linear-gradient(#03020acc,#03020a55 40%,#03020aee)}
+.stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:#fff;animation:tw 2s ease-in-out infinite}
+@keyframes tw{0%,100%{opacity:.15}50%{opacity:.95}}
+.grid{position:absolute;left:-20%;right:-20%;bottom:-120px;height:330px;transform:perspective(380px) rotateX(64deg);
+  background:linear-gradient(transparent 0 94%,rgba(124,92,255,.65) 94%) 0 0/100% 46px,linear-gradient(90deg,transparent 0 97%,rgba(63,230,255,.35) 97%) 0 0/46px 100%;
+  animation:run 1s linear infinite;mask-image:linear-gradient(transparent,#000 55%)}
+@keyframes run{to{background-position:0 46px,0 0}}
+/* opening: the clock */
+.clock{position:absolute;left:0;right:0;top:250px;text-align:center;font:700 150px 'JetBrains Mono',monospace;letter-spacing:.06em;color:var(--amber);text-shadow:0 0 40px rgba(255,196,107,.8),0 0 120px rgba(255,120,0,.5);animation-name:clock}
+@keyframes clock{0%{opacity:0;transform:scale(1.6);filter:blur(12px)}4%{opacity:1;transform:scale(1);filter:blur(0)}6%{transform:translateX(-6px)}6.5%{transform:translateX(8px)}7%{transform:none}14%{opacity:1;transform:scale(1)}18%{opacity:0;transform:scale(.6) translateY(-200px)}100%{opacity:0}}
+.hire{position:absolute;left:0;right:0;top:430px;text-align:center;font:700 22px 'JetBrains Mono',monospace;letter-spacing:.5em;color:var(--moon);animation-name:hire}
+@keyframes hire{0%,4%{opacity:0;letter-spacing:1.2em}9%{opacity:1;letter-spacing:.5em}14%{opacity:1}18%{opacity:0}100%{opacity:0}}
+/* the crew drops in */
+.crew{position:absolute;left:0;right:0;top:118px;height:420px}
+.card{position:absolute;top:0;width:250px;height:250px;border-radius:14px;overflow:hidden;box-shadow:0 0 0 3px #08070d,0 0 0 5px var(--c),0 30px 80px -10px var(--c);animation-name:drop}
+.card img{width:100%;height:100%;display:block}
+@keyframes drop{0%{opacity:0;transform:translateY(-520px) rotate(var(--r)) scale(.8)}var(--d){opacity:0}100%{opacity:1}}
+.cap{position:absolute;left:515px;top:60px;width:250px;height:250px;z-index:5;border-radius:16px;overflow:hidden;box-shadow:0 0 0 4px #08070d,0 0 0 7px #ffc46b,0 0 120px 10px rgba(255,196,107,.65);animation-name:cap}
+.cap img{width:100%;height:100%}
+@keyframes cap{0%,30%{opacity:0;transform:scale(2.4) rotate(-8deg);filter:brightness(4) blur(6px)}35%{opacity:1;transform:scale(1.18) rotate(0);filter:none}38%{transform:scale(1.32)}88%{transform:scale(1.32)}100%{opacity:1;transform:scale(1.32)}}
+.flash{position:absolute;inset:0;background:#fff;mix-blend-mode:screen;animation-name:flash}
+@keyframes flash{0%,30%{opacity:0}31%{opacity:.85}36%{opacity:0}100%{opacity:0}}
+.ring{position:absolute;left:640px;top:185px;width:10px;height:10px;margin:-5px;border-radius:50%;border:4px solid #ffc46b;animation-name:ring}
+@keyframes ring{0%,31%{opacity:0;transform:scale(1)}32%{opacity:1}50%{opacity:0;transform:scale(90)}100%{opacity:0}}
+.ring.b{border-color:var(--cyan);animation-name:ringb}
+@keyframes ringb{0%,34%{opacity:0;transform:scale(1)}35%{opacity:1}56%{opacity:0;transform:scale(110)}100%{opacity:0}}
+/* title */
+.title{position:absolute;left:0;right:0;top:505px;text-align:center;animation-name:title}
+.title h1{font:900 104px/0.9 Inter,sans-serif;letter-spacing:-.03em;background:linear-gradient(100deg,#fff 0 30%,var(--acid) 45%,#fff 60% 100%) 0 0/300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 2s linear infinite}
+@keyframes shine{from{background-position:100% 0}to{background-position:-50% 0}}
+.title p{margin-top:12px;font:700 19px 'JetBrains Mono',monospace;letter-spacing:.32em;color:var(--moon)}
+.title p b{color:var(--acid)}
+@keyframes title{0%,40%{opacity:0;transform:translateY(40px)}46%{opacity:1;transform:none}100%{opacity:1}}
+.url{position:absolute;left:0;right:0;bottom:26px;text-align:center;font:700 18px 'JetBrains Mono',monospace;letter-spacing:.4em;color:var(--ink);animation-name:url}
+@keyframes url{0%,52%{opacity:0}58%{opacity:1}100%{opacity:1}}
+.badge{position:absolute;top:26px;left:34px;display:flex;align-items:center;gap:12px;font:700 15px 'JetBrains Mono',monospace;letter-spacing:.32em;color:var(--moon);animation-name:url}
+.badge img{width:46px;height:46px;border-radius:50%;box-shadow:0 0 22px rgba(124,92,255,.8)}
+.live{position:absolute;top:34px;right:34px;font:700 14px 'JetBrains Mono',monospace;letter-spacing:.3em;color:#03020a;background:var(--acid);padding:6px 12px;animation-name:url}
+.scan{position:absolute;left:0;right:0;height:120px;background:linear-gradient(transparent,rgba(63,230,255,.16),transparent);animation:scan 2s linear infinite}
+@keyframes scan{from{top:-120px}to{top:720px}}
+.vig{position:absolute;inset:0;box-shadow:inset 0 0 200px #000}
+.fadeout{position:absolute;inset:0;background:#03020A;animation-name:fo}
+@keyframes fo{0%{opacity:1}3%{opacity:0}95%{opacity:0}100%{opacity:1}}
+</style></head>
+<body><div class="st">
+  <div class="bg a"></div><div class="tint"></div>
+  <div class="stars" id="stars"></div>
+  <div class="grid"></div>
+  <div class="clock a">03:00</div>
+  <div class="hire a">THE NIGHT SHIFT IS HIRING</div>
+  <div class="crew" id="crew"></div>
+  <div class="ring a"></div><div class="ring b a"></div>
+  <div class="cap a"><img src="frog-001.svg"></div>
+  <div class="flash a"></div>
+  <div class="title a"><h1>NIGHT FROGS</h1><p>500 ONCHAIN FROGS · MINT IN <b>IMD</b> · <b>50% BURNED</b></p></div>
+  <div class="badge a"><img src="shift-logo.png">NIGHTSHIFT</div>
+  <div class="live a">LIVE NOW</div>
+  <div class="url a">GETNIGHTSHIFT.TECH</div>
+  <div class="scan"></div><div class="vig"></div>
+  <div class="fadeout a"></div>
+</div>
+<script>
+let seed=11;const r=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const stars=document.getElementById("stars");
+for(let i=0;i<90;i++){const e=document.createElement("i");e.style.left=r()*1280+"px";e.style.top=r()*480+"px";e.style.animationDelay=-r()*2+"s";stars.append(e);}
+// six crew cards land one after another around the captain (8 s timeline, each keyframe set built per card)
+const crew=[["077",60,40,"#ffc46b",-14],["082",300,120,"#ff4d6d",9],["112",770,120,"#3fe6ff",-9],["224",1010,40,"#b05aff",14],["080",-150,250,"#b8ff4a",6],["187",1180,250,"#ff9a3d",-6]];
+const css=document.createElement("style");let k="";
+crew.forEach(([id,x,y,c,rot],i)=>{
+  const start=17+i*3, land=start+5;
+  k+=`@keyframes d${i}{0%,${start}%{opacity:0;transform:translateY(-560px) rotate(${rot*3}deg) scale(.8)}${land}%{opacity:1;transform:translateY(0) rotate(${rot}deg) scale(1)}${land+1.5}%{transform:translateY(-14px) rotate(${rot}deg)}${land+3}%{transform:translateY(0) rotate(${rot}deg)}100%{opacity:1;transform:translateY(0) rotate(${rot}deg)}}`;
+  const el=document.createElement("div");el.className="card a";el.style.cssText=`left:${x}px;top:${y}px;--c:${c};animation-name:d${i}`;el.innerHTML=`<img src="frog-${id}.svg">`;
+  document.getElementById("crew").append(el);
+});
+css.textContent=k;document.head.append(css);
+window.seek=(t)=>document.getAnimations().forEach(a=>{a.pause();a.currentTime=t;});
+</script></body></html>
