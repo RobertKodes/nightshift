@@ -112,3 +112,14 @@ describe("LlmClient", () => {
     expect(turn?.tokens).toEqual({ prompt: 1000, completion: 200 });
   });
 });
+
+describe("freeOnly", () => {
+  it("never sends a paid model, and moves past a busy free one", async () => {
+    const { fn, calls } = fakeFetch([{ status: 200, body: { error: { message: "overloaded", code: 503 } } }, ok("b/m:free")]);
+    const llm = new LlmClient({ apiKey: "k", fetch: fn, maxRetries: 0, freeOnly: true, fallbackModels: ["x/paid", "b/m:free"] });
+    const r = await llm.chat({ model: "a/m:free", messages: [{ role: "user", content: "hi" }] });
+    expect(calls.map((c) => c.model)).toEqual(["a/m:free", "b/m:free"]);
+    expect(r.servedModel).toBe("b/m:free");
+    await expect(new LlmClient({ apiKey: "k", fetch: fn, freeOnly: true }).chat({ model: "x/paid", messages: [] })).rejects.toThrow(/only free/);
+  });
+});

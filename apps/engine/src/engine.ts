@@ -44,7 +44,7 @@ export class Engine {
   readonly store = new Store(config.dataDir);
   readonly vault = new Vault(config.dataDir, config.secret);
   readonly ledger = new Ledger(this.store.ledgerStore);
-  readonly llm = config.openrouterKey ? new LlmClient({ apiKey: config.openrouterKey, appName: "NIGHTSHIFT" }) : null;
+  readonly llm = config.openrouterKey ? new LlmClient({ apiKey: config.openrouterKey, appName: "NIGHTSHIFT", fallbackModels: config.fallbackModels, freeOnly: !config.llmAllowPaid }) : null;
   readonly sim: SimDeliveries;
   /** Private, packaged copies of what each company sells. */
   readonly files: ProductFiles;

@@ -49,7 +49,7 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
   ] },
   { title: "CEO", note: "Optional. Without a key a free playbook decides.", fields: [
     { k: "OPENROUTER_API_KEY", label: "OpenRouter API key", secret: true },
-    { k: "NIGHTSHIFT_MODEL", label: "Model", hint: "anthropic/claude-sonnet-5.5" },
+    { k: "NIGHTSHIFT_MODEL", label: "Model (free only, ends in :free)", hint: "nvidia/nemotron-3-super-120b-a12b:free" },
   ] },
   { title: "Alerts", note: "A Telegram bot tells you when something breaks in live mode. Create one with @BotFather; get your chat id from @userinfobot.", fields: [
     { k: "TELEGRAM_BOT_TOKEN", label: "Bot token", secret: true },

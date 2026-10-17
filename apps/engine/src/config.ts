@@ -15,7 +15,10 @@ export const config = {
   /** Encrypts every company's wallet key at rest. Set it in production. */
   secret: env.NIGHTSHIFT_SECRET ?? "",
   openrouterKey: env.OPENROUTER_API_KEY ?? "",
-  model: env.NIGHTSHIFT_MODEL ?? "anthropic/claude-sonnet-5.5",
+  /** Free by default: OpenRouter's free models cost nothing. A paid model needs LLM_ALLOW_PAID=1. */
+  model: env.NIGHTSHIFT_MODEL || "nvidia/nemotron-3-super-120b-a12b:free",
+  fallbackModels: (env.NIGHTSHIFT_FALLBACK_MODELS || "nvidia/nemotron-3-ultra-550b-a55b:free,google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,openrouter/free").split(",").map((m) => m.trim()).filter(Boolean),
+  llmAllowPaid: env.LLM_ALLOW_PAID === "1",
   /** USD per IMD, for budgets. Follows the market every 10 minutes unless IMD_USD pins it. */
   imdUsd: num(env.IMD_USD, 6.87),
   imdUsdPinned: Boolean(env.IMD_USD),

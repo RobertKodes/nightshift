@@ -26,6 +26,10 @@ export interface LlmClientOptions {
   retryBaseMs?: number;
   /** Called whenever a call is served by a different model than requested. */
   onSwap?: (swap: ModelSwap) => void;
+  /** Tried in order when a request names no fallbacks of its own. */
+  fallbackModels?: string[];
+  /** Only free models (":free", "openrouter/free") are ever sent: a paid model id is refused locally. */
+  freeOnly?: boolean;
   appName?: string;
   appUrl?: string;
 }
@@ -37,6 +41,9 @@ interface OpenRouterResponse {
   usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
   error?: { message?: string; code?: number };
 }
+
+/** A model OpenRouter serves at no cost. */
+export const isFree = (model: string) => model.endsWith(":free") || model === "openrouter/free";
 
 /** Matches provider-dated or suffixed ids, e.g. "vendor/model" served as "vendor/model-20261001". */
 export function sameModel(requested: string, served: string): boolean {
@@ -57,7 +64,9 @@ export class LlmClient {
    * fallback, and the result says so — a swap is never silent.
    */
   async chat(req: ChatRequest): Promise<ChatResult> {
-    const candidates = [req.model, ...(req.fallbackModels ?? [])];
+    const all = [req.model, ...(req.fallbackModels ?? this.#opts.fallbackModels ?? [])];
+    const candidates = this.#opts.freeOnly ? all.filter(isFree) : all;
+    if (!candidates.length) throw new LlmError(`only free models are allowed, got ${req.model}`, null, req.model, true);
     let lastRefusal: LlmError | null = null;
 
     for (const model of candidates) {
@@ -75,7 +84,8 @@ export class LlmClient {
         }
         return result;
       } catch (err) {
-        if (err instanceof LlmError && err.refused) {
+        // a refusal, or (with fallbacks) a busy or rate-limited free model, moves to the next one
+        if (err instanceof LlmError && (err.refused || (candidates.length > 1 && err.status !== 401 && err.status !== 402))) {
           lastRefusal = err;
           continue;
         }
@@ -131,6 +141,7 @@ export class LlmClient {
     for (;;) {
       attempts++;
       const res = await this.#fetch(OPENROUTER_URL, {
+        signal: AbortSignal.timeout(90_000),
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.#opts.apiKey}`,
@@ -139,7 +150,7 @@ export class LlmClient {
           ...(this.#opts.appName ? { "X-Title": this.#opts.appName } : {}),
         },
         body: JSON.stringify(body),
-      });
+      }).catch((e: Error) => { throw new LlmError(`no answer: ${e.message}`, 504, model, false); });
 
       const retryable = res.status === 429 || res.status >= 500;
       if (retryable && attempts <= this.#opts.maxRetries) {
