@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Icon } from "./Icon";
 import { inUsd, useImdUsd } from "./price";
 
 type Impact = { at: number; imdPaid: number; jobs: { title: string; jobId: string; state: string; imd: number; seats: string[]; at: number; by: string }[]; seats: number; burned: number; frogsMinted: number; frogsImd: number; demoCompanies: number; liveCompanies: number };
@@ -19,7 +20,7 @@ export function ImpactPage() {
         <div><b>{d ? n(d.imdPaid) : "…"} IMD</b><span>paid to the IMD swarm {d && usd ? inUsd(d.imdPaid, usd) : ""}</span></div>
         <div><b>{d ? d.jobs.length : "…"}</b><span>swarm jobs ordered</span></div>
         <div><b>{d ? d.seats : "…"}</b><span>IMD agents (seats) hired</span></div>
-        <div><b>🔥 {d ? n(d.burned) : "…"} IMD</b><span>burned by NIGHT FROGS mints</span></div>
+        <div><b><Icon name="flame" size={20} /> {d ? n(d.burned) : "…"} IMD</b><span>burned by NIGHT FROGS mints</span></div>
         <div><b>{d ? d.frogsMinted : "…"}</b><span>frogs minted · {d ? n(d.frogsImd) : "…"} IMD of demand</span></div>
         <div><b>{d ? d.liveCompanies : "…"}</b><span>live companies buying from IMD{d?.demoCompanies ? ` · ${d.demoCompanies} in the demo` : ""}</span></div>
       </div>

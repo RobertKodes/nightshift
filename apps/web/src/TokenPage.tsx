@@ -1,4 +1,5 @@
 import { Crescent } from "./landing/chrome";
+import { Icon } from "./Icon";
 import { FEE_SPLIT, IMD_WINS, TokenomicsBars, UTILITY, symbolOf, useToken } from "./landing/content";
 
 /** $SHIFT: what it is, what it does, how it helps IMD, and every number that can be checked. */
@@ -23,7 +24,7 @@ export function TokenPage() {
           {t?.on && t.address ? <a href={`https://etherscan.io/token/${t.address}`} target="_blank" rel="noreferrer">{t.address}</a> : <code>0x···· published here the moment IMD deploys it</code>}
           {t?.launch && !t.on && !t.launch.error && <span className="good" style={{ letterSpacing: 0 }}>{t.launch.stage}</span>}
         </div>
-        {!t?.on && <p className="tkn-warn">⚠ ${sym} is not launched. Any NIGHTSHIFT or {sym} token trading today, on any chain, is <b>fake</b>. The only contract will appear here, on @nightshiftimd and in t.me/getnightshift.</p>}
+        {!t?.on && <p className="tkn-warn"><Icon name="alert" size={16} /> ${sym} is not launched. Any NIGHTSHIFT or {sym} token trading today, on any chain, is <b>fake</b>. The only contract will appear here, on @nightshiftimd and in t.me/getnightshift.</p>}
         <div className="token-specs">
           {[["Supply", "1,000,000,000 · fixed"], ["Decimals", "18"], ["Mint / owner", "None"], ["Transfer tax", "None"], ["Pool", "Uniswap v4 · $" + sym + " / IMD"], ["Launched by", "IMD swarm · audited by 4 agents"]].map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}
         </div>
