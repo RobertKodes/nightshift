@@ -1,0 +1,104 @@
+import type { LlmClient } from "@nightshift/llm";
+
+/**
+ * The community assistant: answers real questions about NIGHTSHIFT in the group, from live facts
+ * only. Three gates keep it quiet: a cheap text gate (a question, or about the project, or asked
+ * to the bot), then the model itself (it answers SKIP when the message is not about the project),
+ * then rate limits. It never invents numbers: anything not in the facts is "not known yet".
+ */
+/**
+ * How much a message is about the project: every word is weighed against the project's vocabulary,
+ * typos included (one letter off on longer words). Names of the project weigh most, then its
+ * features, then generic crypto words that only count next to the others.
+ */
+const VOCAB: [string, number][] = [
+  ["nightshift", 3], ["shift", 3], ["frog", 3], ["frogs", 3], ["imd", 3], ["keeper", 3], ["tokenomics", 3], ["getnightshift", 3],
+  ["stake", 2], ["staking", 2], ["staked", 2], ["unstake", 2], ["lock", 2], ["locked", 2], ["rewards", 2], ["reward", 2], ["claim", 2], ["burn", 2], ["burned", 2], ["burns", 2],
+  ["company", 2], ["companies", 2], ["swarm", 2], ["launch", 2], ["launched", 2], ["treasury", 2], ["hook", 2], ["swap", 2], ["airdrop", 2], ["presale", 2], ["seat", 2], ["genesis", 2],
+  ["contract", 1], ["address", 1], ["ca", 3], ["token", 1], ["tokens", 1], ["tax", 1], ["fee", 1], ["fees", 1], ["buy", 1], ["sell", 1], ["selling", 1], ["buying", 1],
+  ["chart", 1], ["liquidity", 1], ["lp", 1], ["price", 1], ["mcap", 1], ["supply", 1], ["audit", 1], ["audited", 1], ["wallet", 1], ["dev", 1], ["team", 1],
+  ["roadmap", 1], ["website", 1], ["site", 1], ["bot", 1], ["uniswap", 1], ["etherscan", 1], ["dexscreener", 1], ["legit", 1], ["safe", 1], ["mint", 1], ["minted", 1], ["holders", 1],
+];
+const VOCAB_MAP = new Map(VOCAB);
+const QUESTION = /\?|^(what|how|when|where|why|who|which|is|are|can|could|do|does|did|will|should|any|anyone|pls|please|explain|tell|wen)\b/i;
+const NEEDS_HELP = /\b(can'?t|cannot|not working|doesn'?t work|does not work|error|stuck|failed|fails|help|confused|lost|missing|wrong|broken|how to)\b/i;
+
+/** One letter off (insert, delete or change), for words of 5+ letters. */
+const near = (a: string, b: string) => {
+  if (Math.abs(a.length - b.length) > 1 || b.length < 5) return false;
+  let i = 0, j = 0, d = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++d > 1) return false;
+    if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+  }
+  return d + (a.length - i) + (b.length - j) <= 1;
+};
+
+export function relevance(text: string): { score: number; hits: string[] } {
+  const words = text.toLowerCase().replace(/\$/g, " ").match(/[a-z0-9]+/g) ?? [];
+  const hits: string[] = [];
+  let score = 0;
+  for (const w of new Set(words)) {
+    const exact = VOCAB_MAP.get(w);
+    const fuzzy = exact === undefined && w.length >= 5 ? VOCAB.find(([v]) => near(w, v)) : undefined;
+    const weight = exact ?? fuzzy?.[1] ?? 0;
+    if (weight) { score += weight; hits.push(fuzzy ? `${w}≈${fuzzy[0]}` : w); }
+  }
+  return { score, hits };
+}
+
+/**
+ * Worth an answer? Asked to the bot: yes. A question: if it touches the project at all (score 2+,
+ * so "is the price up?" alone is not enough but "is the shift price up?" is). Not a question but
+ * someone stuck ("can't find the staking page"): score 2+. Plain chat about the project: score 5+.
+ */
+export function worthAsking(text: string, toBot: boolean): boolean {
+  const t = text.trim();
+  if (t.length < 6 || t.length > 600 || t.startsWith("/")) return false;
+  if (toBot) return true;
+  const { score } = relevance(t);
+  if (QUESTION.test(t) || NEEDS_HELP.test(t)) return score >= 2;
+  return score >= 5;
+}
+
+const SYSTEM = `You are the NIGHTSHIFT community assistant in the project's public Telegram group.
+Answer ONLY questions about NIGHTSHIFT, $SHIFT, NIGHT FROGS, staking, the fees and burns, the companies platform, or how NIGHTSHIFT relates to IMD.
+If the message is not such a question (greetings, jokes, price predictions, other projects, general chat, insults), reply with exactly: SKIP
+Rules:
+- Use ONLY the FACTS below. If the answer is not in them, say it is not known yet and point to the most relevant link. Never invent numbers, dates, partnerships or listings.
+- Never give financial advice, price predictions or "wen moon" promises. Never ask anyone to DM or to connect a wallet anywhere but getnightshift.tech.
+- Plain English, friendly, at most 3 short sentences, then one relevant link from the facts. No hashtags, no emojis except at most one.
+- If someone asks for the contract address: give it only if the FACTS list it as live; otherwise say it is not launched yet and anything posted earlier is fake.`;
+
+export type Facts = Record<string, unknown>;
+
+export async function answer(llm: LlmClient, model: string, question: string, facts: Facts): Promise<string | null> {
+  const r = await llm.chat({
+    model, temperature: 0.2, maxTokens: 500,
+    messages: [{ role: "system", content: `${SYSTEM}\n\nFACTS (live, ${new Date().toISOString()}):\n${JSON.stringify(facts)}` }, { role: "user", content: question.slice(0, 600) }],
+  });
+  const text = (r.message.content ?? "").trim().replace(/^["']|["']$/g, "");
+  if (!text || /^skip\b/i.test(text) || text.length < 8) return null;
+  return text.slice(0, 900);
+}
+
+/** Per person, per hour and per day, so the bot answers questions without filling the chat. */
+const asked = new Map<string, number>();
+const hour: number[] = [];
+let day = { key: "", n: 0 };
+const cache = new Map<string, { at: number; text: string | null }>();
+
+export function allowed(user: string, now = Date.now()): boolean {
+  if (now - (asked.get(user) ?? 0) < 120_000) return false;
+  while (hour.length && now - hour[0]! > 3_600_000) hour.shift();
+  const k = new Date(now).toISOString().slice(0, 10);
+  if (day.key !== k) day = { key: k, n: 0 };
+  // OpenRouter free: 1,000 requests a day for the whole platform; the assistant takes at most 200 of them.
+  return hour.length < 30 && day.n < 200;
+}
+export function spend(user: string, now = Date.now()): void { asked.set(user, now); hour.push(now); day.n += 1; }
+
+/** The same question within 10 minutes gets the same answer, without asking the model again. */
+export const cached = (q: string) => { const c = cache.get(q.toLowerCase().replace(/\W+/g, " ").trim()); return c && Date.now() - c.at < 600_000 ? c : null; };
+export const remember = (q: string, text: string | null) => cache.set(q.toLowerCase().replace(/\W+/g, " ").trim(), { at: Date.now(), text });

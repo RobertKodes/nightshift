@@ -28,6 +28,9 @@ const save = (s: State) => writeFileSync(file(), JSON.stringify(s, null, 2));
 const usd = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${n.toFixed(2)}`);
 const num = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : n.toFixed(2));
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+/** Running totals of what the fee split burned, as the burn watcher counted them. */
+export const burnTotals = () => { const s = load(); return { shift: s.burnedShift ?? 0, imd: s.burnedImd ?? 0 }; };
+
 export const chats = () => config.telegramCommunity.split(",").map((x) => x.trim()).filter(Boolean);
 
 export type Buy = { usd: number; imd: number; tokens: number; buyer: string; tx: string; newHolder: boolean; position: number; mcap: number; liquidity: number; test?: boolean };

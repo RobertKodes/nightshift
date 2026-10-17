@@ -25,6 +25,7 @@ import { balances, ensurePermit2, eth, ethWallet, sales, salesWallet } from "./c
 import { V4, findPool } from "./v4.js";
 import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
 import { judge, muteMinutes, strike, track } from "./moderation.js";
+import { type Facts, allowed, answer, cached, remember, spend, worthAsking } from "./assistant.js";
 import { type KeeperRun, runKeeper } from "./keeper.js";
 import { buildEpoch } from "./frogpot.js";
 import { IMD_MAINNET } from "@nightshift/imd";
@@ -37,7 +38,7 @@ import { ProductFiles, fetchDelivery } from "./products.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
-import { type Anim, buyCard, chats, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
+import { type Anim, burnTotals, buyCard, chats, marketSnapshot, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
 import { type Button, type GroupMessage, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands, tgCall } from "./social.js";
 import { IMD_TOKEN, followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
@@ -84,7 +85,8 @@ export class Engine {
       telegramCommands(config.telegramToken, config.telegramAdmins, {
         admin: (cmd, args) => this.#command(cmd, args),
         open: (cmd) => publicCommand(cmd),
-        guard: (m) => this.#guard(m),
+        guard: async (m) => { const removed = await this.#guard(m); if (!removed) void this.#ask(m).catch(() => {}); return removed; },
+        ask: (m) => this.#ask(m),
         // Share an X post to the bot and it raids it in the community chat.
         adminText: async (text) => {
           const url = text.match(/https?:\/\/(?:x|twitter)\.com\/\S+\/status\/\d+\S*/)?.[0];
@@ -375,6 +377,57 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       const ok = r?.status === "creator" || (r?.status === "administrator" && r.can_delete_messages && r.can_restrict_members);
       if (!ok) void this.alert(`🛡 The guard cannot act in ${c}: make the bot an admin there with "Delete messages" and "Ban users" (now: ${r?.status ?? "unknown"}).`, `guard-rights-${c}`);
     }
+  }
+
+  #botName: string | null = null;
+  /** A real question about the project, answered from live facts; anything else is left alone. */
+  async #ask(m: GroupMessage): Promise<void> {
+    if (!this.llm || !config.telegramToken || !config.assistant) return;
+    const token = config.telegramToken;
+    const ours = chats().map((c) => c.toLowerCase());
+    if (!m.private && !ours.includes(m.chat) && !(m.chatUsername && ours.includes(`@${m.chatUsername.toLowerCase()}`))) return;
+    if (this.#botName === null) this.#botName = (await tgCall<{ username: string }>(token, "getMe", {}))?.username?.toLowerCase() ?? "";
+    const toBot = Boolean(m.private || m.replyToBot || (this.#botName && m.text.toLowerCase().includes(`@${this.#botName}`)));
+    if (!worthAsking(m.text, toBot)) return;
+    const hit = cached(m.text);
+    if (!hit && !allowed(m.user)) return;
+    let text = hit?.text ?? null;
+    if (!hit) {
+      spend(m.user);
+      text = await answer(this.llm, config.model, m.text.replace(new RegExp(`@${this.#botName}`, "ig"), "").trim(), await this.#facts()).catch(() => null);
+      remember(m.text, text);
+    }
+    if (!text) return;
+    await tgCall(token, "sendMessage", { chat_id: m.chat, text, reply_parameters: { message_id: m.messageId, allow_sending_without_reply: true }, disable_web_page_preview: true });
+  }
+
+  /** Everything the assistant may say, read live: token, market, burns, staking, rules, links. */
+  async #facts(): Promise<Facts> {
+    const l = launchState();
+    const live = Boolean(config.token.address && l?.announced);
+    const m = live ? await marketSnapshot().catch(() => null) : null;
+    const burns = burnTotals();
+    const companies = [...this.store.companies.values()].filter((c) => !c.sim);
+    const frogs = await frogStats().catch(() => null);
+    const u = config.publicUrl;
+    return {
+      project: "NIGHTSHIFT: an autonomous AI company platform. You give a company an idea and a budget; an AI CEO picks the next move every shift, buys the work (products, sites, research) from the IMD swarm (imd.fun), paid in IMD, sells what ships for USDC on Base, and the owner withdraws the revenue.",
+      token: live
+        ? { symbol: "$SHIFT", status: "LIVE on Ethereum", contractAddress: config.token.address, buy: `${u}/swap (or Uniswap, paired with ETH)`, chart: `https://dexscreener.com/ethereum/${config.token.address}`, priceUsd: m?.priceUsd ?? null, marketCapUsd: m?.mcap ?? null, liquidityUsd: m?.liquidity ?? null }
+        : { symbol: "$SHIFT", status: l ? "being launched through IMD, not trading yet" : "not launched yet", contractAddress: "not published yet: the only CA will be posted on getnightshift.tech, this Telegram and X after launch; anything earlier is fake" },
+      supply: "1,000,000,000 fixed, 18 decimals. No mint, no pause, no blacklist. 80% in the Uniswap v4 pool, 10% dev wallet (public), 10% to the IMD swarm. No presale, no private round, no unlock schedule.",
+      launch: "Launched through IMD's swarm: built, tested twice and audited by 4 specialist agents and a judge, deployed by IMD on Ethereum. Not audited by an outside firm. The pool opened at a 10 ETH market cap. Launch was gated: only the treasury could make the first buy, against sniper bots.",
+      fees: "Buys pay only the 1.25% pool fee (1% to the launch payer, the dev wallet; 0.25% to the IMD network). Sells also pay 5% (2.5% in SHIFT, 2.5% in ETH), which can only go down, never up.",
+      oneRule: "Every NIGHTSHIFT fee is split the same way, hard-coded: 40% rewards (half to SHIFT stakers, half to NIGHT FROGS holders), 20% dev wallet, 20% treasury, 20% burned. SHIFT is burned to 0x...dEaD; every day at 03:00 UTC the NIGHTSHIFT keeper buys IMD with the ETH part and burns it at IMD's BurnExecutor 0xe29386719c155b6847ad5a4e97c6674f10ffc750. The keeper only pays gas and cannot move funds anywhere else.",
+      burnedSoFar: { shift: burns.shift, imd: burns.imd },
+      staking: `At ${u}/stake: stake SHIFT with a lock from 0 to 730 days (24 months). Half of all rewards stream to stakers over 7 days in ETH and SHIFT; more stake and longer lock earn more. Locked stake cannot be withdrawn early by anyone. Claim rewards any time.`,
+      nightFrogs: { about: "500 fully onchain NIGHT FROGS on Ethereum, minted only in IMD (2 IMD each, half burned). Holders get the frog half of rewards weekly by shift hours: #1 6x, #2-25 3x, #26-77 2x, the rest 1x; holding an IMD seat doubles it. Claim at /frogs.", minted: frogs?.minted ?? null, contract: config.nft.address || null },
+      companies: { live: companies.length, costPerSwarmJob: "0.5 IMD", platformFee: `${config.platformFeeBps / 100}% of withdrawals; 0% for SHIFT and NIGHT FROGS holders`, start: `${u} (sign in with a wallet, press Launch a company)` },
+      imdPriceUsd: config.imdUsd,
+      links: { website: u, tokenomics: `${u}/tokenomics`, stake: `${u}/stake`, swap: `${u}/swap`, frogs: `${u}/frogs`, guide: `${u}/guide`, telegram: config.telegramUrl || "t.me/getnightshift", x: config.xUrl || null },
+      comingSoon: "Launchpad (launch tokens with the IMD swarm, SHIFT at the centre) and the Game Room (PvP games in SHIFT and IMD). No dates promised.",
+      safety: "Admins never DM first. Never share a seed phrase. The only official links are the ones above.",
+    };
   }
 
   readonly #groupAdmins = new Map<string, { at: number; ids: Set<string> }>();

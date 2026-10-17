@@ -67,6 +67,8 @@ export const config = {
   buyMinUsd: num(env.BUYBOT_MIN_USD, 0),
   /** The community guard: removes scams, spam and FUD in the public group and mutes repeat offenders. */
   moderation: env.MODERATION !== "0",
+  /** The community assistant: answers questions about the project from live facts (free models only). */
+  assistant: env.ASSISTANT !== "0",
   buyEmojiUsd: Math.max(1, num(env.BUYBOT_EMOJI_USD, 10)),
   /** A picture, GIF or MP4 URL shown on every buy. */
   buyMedia: env.BUYBOT_MEDIA ?? "",
