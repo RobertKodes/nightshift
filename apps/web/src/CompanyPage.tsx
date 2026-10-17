@@ -3,6 +3,7 @@ import { safeHref } from "./safe";
 import { type CompanyFull, type Health, type Policy, type TaskView, ago, api, events, fromUsdc, short, until, usd } from "./api";
 import { Link } from "./router";
 import { useSession } from "./session";
+import { FundCard } from "./FundCard";
 
 const ACTIVE = ["checking", "ordering", "building"];
 const KIND_LABEL: Record<string, string> = {
@@ -152,6 +153,8 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
             </div>
           )}
 
+          {health?.mode === "live" && c.isOwner && <FundCard id={c.id} wallet={c.wallet as `0x${string}`} onFunded={() => { void api.shift(c.id).catch(() => {}).then(load); }} />}
+
           <div className="card">
             <div className="card-h"><h3>Traffic and revenue</h3><span className="faint mono" style={{ fontSize: 11 }}>{c.series.bucketMs === 60_000 ? "per minute" : "per hour"} · {health?.mode === "sim" ? "simulated" : "live"}</span></div>
             <div className="card-b"><Chart points={c.series.points} /></div>
@@ -217,7 +220,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
                 void act(() => api.withdraw(c.id));
               }}>Withdraw revenue</button>
               {c.holder && <div className={c.holder.holds ? "good" : "dim"} style={{ fontSize: 13 }}>{c.holder.holds ? `${c.holder.symbol} holder: no platform fee, products featured in the market.` : `Hold ${c.holder.min.toLocaleString()} ${c.holder.symbol} to pay no platform fee and get featured (you hold ${c.holder.balance.toLocaleString()}).`}</div>}
-              <div className="dim" style={{ fontSize: 13 }}>Revenue lands here in USDC. IMD for the swarm is paid from here. {health?.mode === "sim" ? "In simulation it starts with 20 simulated IMD." : "Fund it with IMD and a little ETH for the one-time Permit2 approval."}</div>
+              <div className="dim" style={{ fontSize: 13 }}>Revenue lands here in USDC. IMD for the swarm is paid from here. {health?.mode === "sim" ? "In simulation it starts with 20 simulated IMD." : "It is funded from your wallet with the Fund button: IMD and a little ETH."}</div>
             </div>
           </div>
           <PostsCard c={c} busy={busy} act={act} />

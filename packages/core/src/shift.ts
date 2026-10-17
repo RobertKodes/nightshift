@@ -55,13 +55,12 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
   c.cycle += 1;
   const stats = d.stats(c);
   let decision: Decision | null = null;
-  let by = "playbook";
   if (d.llm) {
     try {
       const r = await llmDecision(d.llm, d.model, c, stats);
-      if (r) { decision = r.decision; by = r.servedModel; }
+      if (r) decision = r.decision;
     } catch (err) {
-      note(c, d, "warning", `The CEO model failed (${(err as Error).message.slice(0, 120)}); using the playbook this shift.`);
+      note(c, d, "warning", "The CEO could not think this shift; using the playbook.");
     }
   }
   decision ??= heuristicDecision(c, stats);
@@ -78,7 +77,7 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
       return null;
     }
   }
-  note(c, d, "decision", `Shift ${c.cycle}: ${decision.title}. ${decision.why}${by === "playbook" ? "" : ` (${by})`}`);
+  note(c, d, "decision", `Shift ${c.cycle}: ${decision.title}. ${decision.why}`);
 
   const t: Task = {
     id: randomUUID(),

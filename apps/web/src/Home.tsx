@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fundNext } from "./FundCard";
 import { type CompanyCard, type Health, api, events, until, usd } from "./api";
 import { Link, go } from "./router";
 import { useSession } from "./session";
@@ -34,6 +35,7 @@ export function Home({ health }: { health: Health | null }) {
     setErr(null);
     try {
       const r = await api.create(idea, { dailyBudgetUsd: budget, approvalOverUsd: limit });
+      fundNext(r.id);
       go(`/co/${r.id}`);
     } catch (e) {
       setErr((e as Error).message);

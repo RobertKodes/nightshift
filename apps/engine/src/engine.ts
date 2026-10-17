@@ -21,7 +21,7 @@ import { erc20Abi } from "viem";
 import { USDC } from "@nightshift/x402";
 import { Auth } from "./auth.js";
 import { LlmClient } from "@nightshift/llm";
-import { ensurePermit2, sales, salesWallet } from "./chain.js";
+import { balances, ensurePermit2, sales, salesWallet } from "./chain.js";
 import { config } from "./config.js";
 import { simulateTraffic } from "./market.js";
 import { SimDeliveries } from "./simdeliver.js";
@@ -58,6 +58,8 @@ export class Engine {
 
   constructor() {
     this.auth = new Auth(this.vault.material, this.store.apiKeys, () => this.store.markDirty());
+    // Older logs named the model behind each decision; the log keeps the decision only.
+    for (const c of this.store.companies.values()) for (const j of c.journal) if (j.kind === "decision") j.text = j.text.replace(/ \([\w.-]+\/[\w.:-]+\)$/, "");
     this.sim = new SimDeliveries(config.publicUrl, this.llm, config.model, (input) => {
       const id = typeof input === "object" && input ? this.#inputOwner.get(input) : undefined;
       return id ? this.store.companies.get(id) : undefined;
@@ -481,6 +483,15 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     if (byOwner) delete c.restUntil;
     this.#busy.add(c.id);
     try {
+      if (config.mode === "live") {
+        const b = await balances(c.wallet).catch(() => null);
+        if (b && (b.imd < 5n * 10n ** 17n || b.eth < 3n * 10n ** 14n)) {
+          const msg = "Waiting for funds: send IMD and a little ETH to the company wallet (the Fund button on this page). The first shift starts as soon as they land.";
+          if (c.journal[c.journal.length - 1]?.text !== msg) note(c, this.#deps(c), "note", msg);
+          if (c.policy.autopilot) c.nextShiftAt = Date.now() + 5 * 60_000;
+          return;
+        }
+      }
       await runShift(c, this.#deps(c));
       if (c.policy.autopilot) c.nextShiftAt = Date.now() + c.policy.shiftMinutes * 60_000;
     } finally {
