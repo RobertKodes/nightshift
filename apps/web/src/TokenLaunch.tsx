@@ -42,7 +42,7 @@ export function TokenLaunch({ call, token }: { call: (token: string, path: strin
 
   const refresh = () => fetch("/api/token").then((r) => r.json()).then((d) => { setLaunch(d.launch); setChecks(d.verification?.checks ?? null); }).catch(() => {});
   useEffect(() => { void refresh(); const t = setInterval(refresh, 15_000); return () => clearInterval(t); }, []);
-  useEffect(() => { call(token, "token/check").then(setRes).catch((e) => setErr((e as Error).message)); }, [token]);
+  useEffect(() => { call(token, "token/check", {}).then(setRes).catch((e) => setErr((e as Error).message)); }, [token]);
 
   const blockers = res?.check?.blockers ?? [];
   const accepted = Boolean(res && !res.check.error && blockers.length === 0);

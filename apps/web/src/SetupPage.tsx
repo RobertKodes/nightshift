@@ -36,16 +36,15 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "REQUIRE_AUTH", label: "Owners sign in with a wallet", options: [["", "Default (on in live)"], ["1", "Required"], ["0", "Off"]] },
     { k: "PUBLIC_URL", label: "Public address", hint: "http://63.189.109.237 now; https://your-domain later" },
   ] },
-  { title: "Selling", fields: [
+  { title: "Selling", note: "Nothing to set up on chain. Every company gets its own wallet on Base; buyers pay USDC straight to it. Go live switches to Base mainnet for you.", fields: [
     { k: "SALES_CHAIN_ID", label: "Sales chain", options: [["84532", "Base Sepolia (test USDC)"], ["8453", "Base mainnet (real USDC)"]] },
-    { k: "SALES_RPC", label: "Sales RPC", hint: "empty = public Base RPC" },
-    { k: "PLATFORM_FEE_BPS", label: "Platform fee (bps, 100 = 1%)", hint: "0" },
-    { k: "PLATFORM_TREASURY", label: "Fee goes to (address)", hint: "0x…" },
+    { k: "SALES_RPC", label: "Sales RPC (optional)", hint: "empty = public Base RPC" },
+    { k: "PLATFORM_FEE_BPS", label: "Platform fee on withdrawals (bps, 100 = 1%)", hint: "0" },
+    { k: "PLATFORM_TREASURY", label: "Fee goes to (default: treasury 0x3322…4D69)", hint: "0x…" },
     { k: "MAX_COMPANIES_PER_OWNER", label: "Companies per owner", hint: "5" },
   ] },
-  { title: "IMD", fields: [
-    { k: "ETH_RPC", label: "Ethereum RPC", hint: "https://ethereum-rpc.publicnode.com" },
-    { k: "IMD_USD", label: "IMD price in USD (for budgets)", hint: "6.87" },
+  { title: "IMD", note: "Leave empty: a free public Ethereum RPC is already used. The IMD price follows the market by itself (DexScreener, every 10 minutes).", fields: [
+    { k: "ETH_RPC", label: "Ethereum RPC (optional)", hint: "https://ethereum-rpc.publicnode.com" },
   ] },
   { title: "CEO", note: "Optional. Without a key a free playbook decides.", fields: [
     { k: "OPENROUTER_API_KEY", label: "OpenRouter API key", secret: true },

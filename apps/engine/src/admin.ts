@@ -29,7 +29,7 @@ export async function setupState(engine: Engine) {
   const running: Record<string, string> = {
     NIGHTSHIFT_MODE: config.mode, PUBLIC_URL: config.publicUrl, REQUIRE_AUTH: config.requireAuth ? "1" : "0",
     OPENROUTER_API_KEY: config.openrouterKey ? "set" : "", NIGHTSHIFT_MODEL: config.model,
-    ETH_RPC: config.ethRpc, SALES_CHAIN_ID: String(config.salesChainId), SALES_RPC: config.salesRpc, IMD_USD: String(config.imdUsd),
+    ETH_RPC: config.ethRpc, SALES_CHAIN_ID: String(config.salesChainId), SALES_RPC: config.salesRpc,
     PLATFORM_FEE_BPS: String(config.platformFeeBps), PLATFORM_TREASURY: config.platformTreasury, MAX_COMPANIES_PER_OWNER: String(config.maxCompaniesPerOwner),
     SIM_SHIFT_MINUTES: String(config.simShiftMinutes), SIM_JOB_SECONDS: String(config.simJobSeconds),
     TELEGRAM_BOT_TOKEN: config.telegramToken ? "set" : "", TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","),
@@ -64,7 +64,7 @@ export async function setupState(engine: Engine) {
     { id: "fee", label: "Platform fee", state: config.platformFeeBps > 0 && !isAddress(config.platformTreasury || "0x") ? "block" : "ok",
       detail: config.platformFeeBps > 0 ? `${config.platformFeeBps / 100}% to ${config.platformTreasury || "missing treasury"}` : "None" },
     { id: "price", label: "IMD price for budgets", state: config.imdUsdPinned || Date.now() - config.imdUsdAt < 30 * 60_000 ? "ok" : "warn",
-      detail: config.imdUsdPinned ? `Pinned at $${config.imdUsd} by IMD_USD` : config.imdUsdAt ? `$${config.imdUsd.toFixed(2)} from DexScreener, ${Math.round((Date.now() - config.imdUsdAt) / 60_000)} min ago` : `No market price yet; using $${config.imdUsd}` },
+      detail: config.imdUsdPinned ? `Pinned at $${config.imdUsd} by IMD_USD` : config.imdUsdAt ? `$${config.imdUsd.toFixed(2)} live from the market, ${Math.round((Date.now() - config.imdUsdAt) / 60_000)} min ago. Nothing to set` : "Market price not read yet; it reads itself every 10 minutes. Nothing to set" },
     { id: "alerts", label: "Alerts", state: config.telegramToken && config.telegramChat ? "ok" : "warn", detail: config.telegramToken && config.telegramChat ? "Telegram: warnings in live mode reach you" : "No Telegram bot: nobody hears when something breaks" },
     { id: "token", label: "Platform token", state: "ok", detail: config.token.address ? `${config.token.symbol} at ${config.token.address}; holders of ${config.token.holderMin}+ pay no fee` : "Not set. Optional; see /token" },
     { id: "mode", label: "Mode", state: live ? "ok" : "warn", detail: live ? "LIVE: real IMD orders and real sales" : "Simulation: nothing leaves the server" },

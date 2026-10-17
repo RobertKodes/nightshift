@@ -309,16 +309,21 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     }
   }
 
-  /** The IMD price from its deepest Ethereum pool on DexScreener; keeps the last good value on failure. */
+  /** The IMD price from its deepest Ethereum pool on DexScreener, else GeckoTerminal; keeps the last good value on failure. */
   async #refreshImdPrice(): Promise<void> {
+    const keep = (price: number) => { if (price > 0.01 && price < 10_000) { config.imdUsd = price; config.imdUsdAt = Date.now(); return true; } return false; };
     try {
       const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/0xD34a99Bc0f67aE1bbd63C660e6d0b0dd03E263B7", { signal: AbortSignal.timeout(8000) });
       const d = (await r.json()) as { pairs?: { chainId: string; baseToken: { address: string }; priceUsd?: string; liquidity?: { usd?: number } }[] };
       const best = (d.pairs ?? [])
         .filter((p) => p.chainId === "ethereum" && p.baseToken.address.toLowerCase() === "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7")
         .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
-      const price = Number(best?.priceUsd);
-      if (price > 0.01 && price < 10_000) { config.imdUsd = price; config.imdUsdAt = Date.now(); }
+      if (keep(Number(best?.priceUsd))) return;
+    } catch { /* try the next source */ }
+    try {
+      const r = await fetch("https://api.geckoterminal.com/api/v2/simple/networks/eth/token_price/0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7", { signal: AbortSignal.timeout(8000) });
+      const d = (await r.json()) as { data?: { attributes?: { token_prices?: Record<string, string> } } };
+      keep(Number(d.data?.attributes?.token_prices?.["0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7"]));
     } catch { /* keep the last price */ }
   }
 

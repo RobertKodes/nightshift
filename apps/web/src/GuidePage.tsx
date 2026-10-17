@@ -48,7 +48,7 @@ export function GuidePage() {
       </section>
 
       <section className="card">
-        <div className="card-h"><h3>What it costs</h3><span className="faint mono" style={{ fontSize: 11 }}>{usd ? `IMD ≈ $${usd.toFixed(2)} · live` : "prices in IMD"}</span></div>
+        <div className="card-h"><h3>What it costs</h3><span className="faint mono" style={{ fontSize: 11 }}>{usd ? `1 IMD = $${usd.toFixed(2)} · live market price` : "prices in IMD"}</span></div>
         <table><tbody>{costs(usd).map(([a, b]) => <tr key={a}><td>{a}</td><td className="r mono">{b}</td></tr>)}</tbody></table>
       </section>
 

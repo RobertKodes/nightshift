@@ -1,4 +1,4 @@
-export interface Health { ok: boolean; mode: "sim" | "live"; llm: boolean; model: string; imdUsd: number; salesChainId: number; requireAuth: boolean; platformFeeBps: number }
+export interface Health { ok: boolean; mode: "sim" | "live"; llm: boolean; model: string; imdUsd: number | null; salesChainId: number; requireAuth: boolean; platformFeeBps: number }
 
 export interface TaskView {
   id: string; cycle: number; kind: string; title: string; why: string; status: string;
