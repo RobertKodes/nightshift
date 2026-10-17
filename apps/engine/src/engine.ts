@@ -31,7 +31,7 @@ import { ProductFiles, fetchDelivery } from "./products.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
-import { buyCard, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
+import { type Anim, buyCard, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
 import { type Button, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands } from "./social.js";
 import { followLaunch, followOpen, holderStatus, holdsCached, launchState, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
@@ -287,9 +287,8 @@ export class Engine {
         const checks = await verifyShift(l.contracts).catch((e) => [{ label: "Verification could not run", ok: false, detail: (e as Error).message }]);
         saveVerification(checks);
         const ok = checks.every((c) => c.ok);
-        void this.alert(`${ok ? "✅" : "❌"} <b>$${esc(l.symbol)} deployed. Checked against our spec:</b>\n\n${checks.map((c) => `${c.ok ? "✅" : "❌"} ${esc(c.label)}${c.ok ? "" : ` (${esc(c.detail)})`}`).join("\n")}\n\n${ok
-          ? `Everything matches. Trading is closed until <b>0x3322…4D69</b> buys. When it buys, the token goes public by itself.`
-          : `<b>Do NOT buy from 0x3322…4D69.</b> Trading stays closed, nobody can lose money. Open /setup and tell Claude.`}`, "launch-verified");
+        const card = this.launchReadyCard(l, checks);
+        void this.adminCard(card.html, card.buttons, "launch-verified", ok ? "launch" : "alert");
       }
       return;
     }
@@ -306,7 +305,7 @@ export class Engine {
 Trading is open to everyone on Ethereum, paired with ETH.
 Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT and IMD).`, [[{ text: `🟢 Buy $${l.symbol}`, url: buyUrl }], [{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch");
       housePost(`🚀 $${l.symbol} is live on Ethereum.\n\n${l.token}\n\nEvery sell feeds stakers, NIGHT FROGS holders and burns SHIFT and IMD. ${config.publicUrl}/token`, "token-live");
-      void this.alert(`🚀 $${l.symbol} is public: the first buy landed (${l.openTx}).\n${config.publicUrl}/token`, "launch-live");
+      void this.adminCard(`🚀 <b>$${esc(l.symbol)} is public.</b> The first buy landed and the community was told.`, [[{ text: "🧾 First buy", url: `https://etherscan.io/tx/${l.openTx}` }, { text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch-live");
     }
   }
 
@@ -565,6 +564,32 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     return sent.some(Boolean);
   }
 
+  /** A card for the admin chat only: our own HTML (not escaped) with buttons. */
+  async adminCard(html: string, buttons: Button[][], topic: string, kind: Anim = "launch"): Promise<boolean> {
+    if (!config.telegramToken || !config.telegramChat) return false;
+    const last = this.#lastAlert.get(topic) ?? 0;
+    if (Date.now() - last < 60_000) return false;
+    this.#lastAlert.set(topic, Date.now());
+    const sent = await Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => sendCard(id, kind, `🌙 <b>NIGHTSHIFT · admin</b>\n${html}`, buttons)));
+    return sent.some(Boolean);
+  }
+
+  /** The private card when $SHIFT is deployed: what was checked, and one tap to make the first buy. */
+  launchReadyCard(l: { symbol: string; token?: string; launchId?: string; contracts?: Record<string, string> }, checks: { label: string; ok: boolean; detail: string }[]): { html: string; buttons: Button[][] } {
+    const ok = checks.length > 0 && checks.every((c) => c.ok);
+    const token = l.token ?? "";
+    const html = `${ok ? "✅" : "❌"} <b>$${esc(l.symbol)} is deployed. Checked against our spec:</b>\n\n${checks.map((c) => `${c.ok ? "✅" : "❌"} ${esc(c.label)}${c.ok ? "" : ` (${esc(c.detail)})`}`).join("\n")}\n\n<code>${esc(token)}</code>\n\n${ok
+      ? "<b>Everything matches.</b> Trading is closed to everyone except <b>0x3322…4D69</b>. Buy from that wallet, any amount: the moment it lands, the token goes public and the community is told."
+      : "<b>Do NOT buy from 0x3322…4D69.</b> Trading stays closed, so nobody can lose money. Open /setup and tell Claude."}`;
+    const ether = (a?: string) => `https://etherscan.io/address/${a}`;
+    const buttons: Button[][] = ok
+      ? [[{ text: "🟢 First buy on Uniswap (0x3322…4D69)", url: `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=NATIVE&outputCurrency=${token}` }],
+         [{ text: "📄 Token", url: ether(token) }, ...(l.contracts?.hook ? [{ text: "🪝 Hook", url: ether(l.contracts.hook) }] : [])],
+         [...(l.launchId ? [{ text: "🧾 IMD launch", url: `https://api.imd.fun/launches/${l.launchId}` }] : []), { text: "⚙️ Setup", url: `${config.publicUrl}/setup` }]]
+      : [[{ text: "⚙️ Open setup", url: `${config.publicUrl}/setup` }], [{ text: "📄 Token", url: ether(token) }]];
+    return { html, buttons };
+  }
+
   /** Every card the bot can send, marked TEST, to the chats they belong in. */
   async testAll(): Promise<string> {
     const T = "🧪 <b>TEST</b> · ";
@@ -572,6 +597,8 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     const shown: string[] = [];
     const say = async (what: string, p: Promise<boolean>) => { shown.push(`${(await p) ? "✅" : "❌"} ${what}`); };
     const buy = (usdv: number) => buyCard({ test: true, usd: usdv, imd: usdv / config.imdUsd, tokens: usdv / 0.0000068, buyer: "0x8f3a1c2b4d5e6f708192a3b4c5d6e7f8091a2b3c", tx: `0x${"0".repeat(64)}`, newHolder: usdv < 1000, position: 35, mcap: 2500 * config.imdUsd, liquidity: 2250 * config.imdUsd });
+    const ready = this.launchReadyCard({ symbol: sym, token: "0x000000000000000000000000000000000000dEaD", launchId: "test", contracts: { hook: "0x000000000000000000000000000000000000dEaD" } }, [{ label: "Token is NIGHTSHIFT / SHIFT", ok: true, detail: "" }, { label: "Trading is still closed (only the first buyer can buy)", ok: true, detail: "" }, { label: "Splitter burns IMD at IMD's BurnExecutor 0xe293…c750", ok: true, detail: "" }]);
+    await say("Launch ready (admin only)", this.adminCard(`${T}${ready.html}`, ready.buttons, "test-launch-ready"));
     const b1 = buy(180); await say("Buy", toCommunity(b1.text, b1.buttons, "buy"));
     const b2 = buy(3200); await say("Whale buy", toCommunity(b2.text, b2.buttons, "whale"));
     await say("X raid", raid(`${config.xUrl}/status/1846000000000000000`, "TEST: this is how a raid looks"));
