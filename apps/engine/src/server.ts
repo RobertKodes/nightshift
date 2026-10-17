@@ -205,6 +205,12 @@ export function serve(engine: Engine) {
           void engine.alert(`🪙 ${String(b.symbol)} launch paid: https://etherscan.io/tx/${String(b.tx)}`, "launch-paid");
           return json(res, 200, { ok: true, launch: launchState() });
         }
+        if (p === "/api/admin/pause-all" && req.method === "POST") {
+          // Before going live: the simulated demo companies stop, so none tries a real order from an empty wallet.
+          let n = 0;
+          for (const c of engine.store.companies.values()) if (c.status === "active") { engine.setStatus(c, "paused"); n++; }
+          return json(res, 200, { paused: n });
+        }
         if (p === "/api/admin/test-alert" && req.method === "POST") {
           return json(res, 200, { ok: await engine.alert("Test alert from /setup. Alerts work.", `test-${Date.now()}`) });
         }
