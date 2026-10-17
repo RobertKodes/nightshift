@@ -64,6 +64,7 @@ export class HttpImdPlane implements ImdPlane {
 
   async #call<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}, okStatuses = [200, 201, 202]): Promise<{ status: number; json: T; headers: Headers }> {
     const res = await this.#fetch(`${this.#base}${path}`, {
+      signal: AbortSignal.timeout(20_000),
       method,
       headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...headers },
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -168,17 +169,20 @@ export class HttpImdPlane implements ImdPlane {
     // 5. Submit. A lost response is retried with the same bytes; the plane never charges twice.
     const headers = { ...this.#auth(), "PAYMENT-SIGNATURE": encodePaymentSignatureHeader(payment) };
     let lastErr: unknown;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    let submitted = false;
+    for (let attempt = 0; attempt < 3 && !submitted; attempt++) {
       try {
         await this.#call("POST", url, { quoteSignature }, headers);
-        return this.order(orderId);
+        submitted = true;
       } catch (err) {
         lastErr = err;
         if (err instanceof ImdError && err.status !== null && err.status < 500) throw err;
         await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
       }
     }
-    throw lastErr;
+    // Signed and sent but unconfirmed: it may be paid, so the caller follows it by id.
+    if (!submitted) throw Object.assign(lastErr instanceof Error ? lastErr : new Error(String(lastErr)), { orderId });
+    return this.order(orderId).catch((): Order => ({ orderId, action: q.action as ImdAction, state: "payment_pending" }));
   }
 
   async order(orderId: string): Promise<Order> {

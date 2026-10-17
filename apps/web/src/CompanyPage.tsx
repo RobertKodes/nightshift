@@ -21,7 +21,7 @@ function PriceCell({ id, productId, usdc, byOwner, onSaved }: { id: string; prod
   if (edit === null) return <button className="price-edit" title={byOwner ? "Your price. Click to change it" : "Set your own price"} onClick={() => setEdit(String(fromUsdc(usdc)))}>{usd(fromUsdc(usdc))} <span className="faint">✎</span></button>;
   return (
     <form className="price-form" onSubmit={(e) => { e.preventDefault(); void save(); }}>
-      <span>$</span><input className="field" type="number" min="0.5" max="10000" step="0.01" value={edit} onChange={(e) => setEdit(e.target.value)} autoFocus onKeyDown={(e) => { if (e.key === "Escape") setEdit(null); }} />
+      <span>$</span><input className="field" type="number" min="0.5" max="500" step="0.01" value={edit} onChange={(e) => setEdit(e.target.value)} autoFocus onKeyDown={(e) => { if (e.key === "Escape") setEdit(null); }} />
       <button className="btn" type="submit">Save</button>
       {err && <span className="bad" style={{ fontSize: 12 }}>{err}</span>}
     </form>

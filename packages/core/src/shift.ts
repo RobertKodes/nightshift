@@ -187,6 +187,14 @@ async function buy(c: Company, t: Task, d: ShiftDeps, approved: boolean): Promis
     const msg = (err as Error).message;
     // Refused before signing (the free path, or a challenge we would not sign): nothing was paid.
     const unpaid = /refused to pay|challenge without accepts|^refused|IMD would refuse/i.test(msg);
+    const sent = (err as { orderId?: string }).orderId;
+    if (sent && !unpaid) {
+      // Sent but not confirmed: follow it like any paid order instead of buying it again.
+      o.orderId = sent;
+      touch(c, t, d, { status: "building", costImd: caps.price, activity: "sent · confirming with IMD" });
+      note(c, d, "note", `IMD did not confirm "${t.title}" in time; following the order instead of buying it again.`);
+      return;
+    }
     touch(c, t, d, { status: "failed", costImd: unpaid ? 0n : caps.price, error: msg.slice(0, 300), activity: null });
     dropProduct(c, t);
     note(c, d, "warning", `The order for "${t.title}" failed: ${msg.slice(0, 160)}${unpaid ? "" : " It may have been paid, so it still counts against today's budget."}`);
@@ -245,6 +253,12 @@ export async function advance(c: Company, d: ShiftDeps): Promise<void> {
       touch(c, t, d, { status: "done", activity: null, stepsDone: j.stepsTotal, stepsTotal: j.stepsTotal, result: { siteUrl: r.siteUrl, repoUrl: r.repoUrl, files: r.files, note: r.summary ?? undefined } });
       deliver(c, t, r, d);
     } catch (err) {
+      // An order IMD never received was never charged.
+      if (!t.imd.jobId && (err as { status?: number }).status === 404) {
+        touch(c, t, d, { status: "failed", costImd: 0n, error: "IMD has no such order; nothing was charged", activity: null });
+        dropProduct(c, t);
+        continue;
+      }
       touch(c, t, d, { activity: `retrying: ${(err as Error).message.slice(0, 80)}` });
     }
   }

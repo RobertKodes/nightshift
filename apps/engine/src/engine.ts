@@ -70,6 +70,7 @@ export class Engine {
 
   async start(): Promise<void> {
     await this.store.load();
+    if (config.mode === "live") await this.#retireSim();
     setInterval(() => void this.#tick().catch((e) => console.error("tick", e)), 4000);
     setInterval(() => void this.store.flush(), 3000);
     void this.alert(`Engine started in ${config.mode.toUpperCase()} mode · ${config.publicUrl}`, "start");
@@ -458,6 +459,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       createdAt: Date.now(), owner: owner?.toLowerCase() ?? null, wallet: this.vault.create(id), policy: p, status: "active",
       cycle: 0, nextShiftAt: p.autopilot ? Date.now() + 3000 : null,
       site: null, products: [], tasks: [], journal: [], marketing: [],
+      ...(config.mode === "sim" ? { sim: true } : {}),
     };
     this.store.companies.set(id, c);
     if (config.mode === "sim") {
@@ -469,7 +471,6 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     }
     note(c, this.#deps(c), "plan", `Founded ${c.name}. Mission: ${c.mission} Audience: ${c.audience}.`);
     this.#emit(id, "company", null);
-    if (config.mode === "live") housePost(`🌙 A new company just started on NIGHTSHIFT: ${c.name}.\n\n${c.mission}\n\nThe IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `company-${id}`);
     return c;
   }
 
@@ -485,13 +486,20 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     try {
       if (config.mode === "live") {
         const b = await balances(c.wallet).catch(() => null);
-        if (b && (b.imd < 5n * 10n ** 17n || b.eth < 3n * 10n ** 14n)) {
+        if (c.sim) return;
+        if (!b || b.imd < 5n * 10n ** 17n || b.eth < 3n * 10n ** 14n) {
           const msg = "Waiting for funds: send IMD and a little ETH to the company wallet (the Fund button on this page). The first shift starts as soon as they land.";
           if (c.journal[c.journal.length - 1]?.text !== msg) note(c, this.#deps(c), "note", msg);
           if (c.policy.autopilot) c.nextShiftAt = Date.now() + 5 * 60_000;
           return;
         }
       }
+      // Announced once it is funded, so an unfunded or spam company never reaches the project's account.
+      if (config.mode === "live" && c.cycle === 0) housePost(`🌙 A new company just started on NIGHTSHIFT: ${c.name}.
+
+${c.mission}
+
+The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `company-${c.id}`);
       await runShift(c, this.#deps(c));
       if (c.policy.autopilot) c.nextShiftAt = Date.now() + c.policy.shiftMinutes * 60_000;
     } finally {
@@ -507,7 +515,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
   setPrice(c: Company, productId: string, priceUsd: number): void {
     const p = c.products.find((x) => x.id === productId);
     if (!p) throw new Error("no such product");
-    if (!(priceUsd >= 0.5 && priceUsd <= 10_000)) throw new Error("Price is between $0.50 and $10,000.");
+    if (!(priceUsd >= 0.5 && priceUsd <= 500)) throw new Error("Price is between $0.50 and $500.");
     const before = Number(p.priceUsdc) / 1e6;
     p.priceUsdc = BigInt(Math.round(priceUsd * 100)) * 10_000n;
     p.priceByOwner = true;
@@ -528,15 +536,29 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     this.#emit(c.id, "company", null);
   }
 
+  /** Live mode: companies made in simulation stop for good: no sales, no orders, no withdrawals. */
+  async #retireSim(): Promise<void> {
+    for (const c of this.store.companies.values()) {
+      if (!c.sim && !(await this.ledger.store.get(`fund:${c.id}`))) continue;
+      c.sim = true;
+      c.status = "paused";
+      c.nextShiftAt = null;
+      for (const p of c.products) if (p.status !== "retired") p.status = "retired";
+      for (const t of c.tasks) if (["building", "ordering", "checking", "awaiting_approval"].includes(t.status)) Object.assign(t, { status: "failed", error: "simulation", activity: null });
+    }
+    this.store.markDirty();
+  }
+
   /** A sale, real (settled on chain) or simulated. Revenue lands in the company's own wallet. */
   async recordSale(c: Company, productId: string, amount: bigint, payer: string, tx: string | null, sim: boolean): Promise<void> {
     const p = c.products.find((x) => x.id === productId);
     if (!p) return;
-    if (!sim) void toCommunity(`💰 <b>A NIGHTSHIFT company just made a sale</b>
+    const pub = !sim && payer.toLowerCase() !== c.owner && fromUsdc(amount) >= Math.max(1, config.buyMinUsd);
+    if (pub) void toCommunity(`💰 <b>A NIGHTSHIFT company just made a sale</b>
 
 ${esc(c.name)} sold <b>${esc(p.name)}</b> for $${fromUsdc(amount).toFixed(2)}.
 Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See the market", url: `${config.publicUrl}/market` }]], "sale");
-    if (!sim) housePost(`💰 ${c.name} just made a sale: ${p.name}, $${fromUsdc(amount).toFixed(2)}. Built by the IMD swarm, sold while its owner slept. ${config.publicUrl}/market`, `sale-${tx ?? Date.now()}`);
+    if (pub) housePost(`💰 ${c.name} just made a sale: ${p.name}, $${fromUsdc(amount).toFixed(2)}. Built by the IMD swarm, sold while its owner slept. ${config.publicUrl}/market`, `sale-${tx ?? Date.now()}`);
     if (!sim) void this.alert(`💰 ${c.name} sold ${p.name} for $${fromUsdc(amount).toFixed(2)}${tx ? ` · tx ${tx}` : ""}`, `sale-${tx ?? Date.now()}`);
     p.sales += 1;
     p.revenueUsdc += amount;
@@ -569,6 +591,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     try { return await this.#withdraw(c, to, amount); } finally { this.#withdrawing.delete(c.id); }
   }
   async #withdraw(c: Company, to: `0x${string}`, amount?: bigint): Promise<{ sent: bigint; fee: bigint; txs: string[] }> {
+    if (c.sim && config.mode === "live") throw new Error("A simulated company has no real revenue to withdraw.");
     const available = await this.withdrawable(c);
     const total = amount ?? available;
     if (total <= 0n || total > available) throw new Error(`Nothing to withdraw, or more than the $${fromUsdc(available).toFixed(2)} available.`);
@@ -728,7 +751,13 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       .map(({ text: _t, ...x }) => x);
   }
 
+  #ticking = false;
   async #tick(): Promise<void> {
+    if (this.#ticking) return;
+    this.#ticking = true;
+    try { await this.#tickOnce(); } finally { this.#ticking = false; }
+  }
+  async #tickOnce(): Promise<void> {
     const now = Date.now();
     for (const c of this.store.companies.values()) {
       if (c.tasks.some((t) => t.status === "building")) await advance(c, this.#deps(c)).catch((e) => console.error("advance", c.slug, e));

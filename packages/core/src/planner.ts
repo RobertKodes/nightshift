@@ -114,7 +114,7 @@ export function heuristicDecision(c: Company, s: CompanyStats): Decision {
 const SYSTEM = `You are the CEO of a one-person online company that runs itself. Each shift you choose exactly ONE next move that most increases revenue within budget.
 Moves:
 - research: commission market research from the IMD swarm (costs one IMD order)
-- build_product: commission a sellable digital product (report, tool, template or dataset) from the IMD swarm, then sell it (costs one IMD order)
+- build_product: commission a sellable digital product (report, template or dataset, delivered as a file) from the IMD swarm, then sell it (costs one IMD order)
 - build_site: commission the landing page (costs one IMD order; only if there is none)
 - improve_site: commission a change to the existing page (costs one IMD order)
 - marketing: write one post for the audience (free)
@@ -138,7 +138,10 @@ export async function llmDecision(llm: LlmClient, model: string, c: Company, s: 
     if ((d.kind === "reprice" || d.kind === "retire_product") && !c.products.some((p) => p.id === d.productId)) return null;
     if (d.kind === "build_site" && c.site) return null;
     if ((d.kind === "build_site" || d.kind === "improve_site") && c.products.length === 0) return null;
-    if (d.product) d.product.priceUsd = Math.min(499, Math.max(1, Number(d.product.priceUsd) || 9));
+    if (d.product) {
+      d.product.priceUsd = Math.min(499, Math.max(1, Number(d.product.priceUsd) || 9));
+      if (!["report", "template", "dataset"].includes(d.product.kind)) d.product.kind = "template";
+    }
     return { decision: { ...d, brief: d.brief ?? "" }, costUsd: res.costUsd, servedModel: res.servedModel };
   } catch {
     return null;

@@ -58,6 +58,7 @@ export function FundCard({ id, wallet, onFunded }: { id: string; wallet: `0x${st
       }
       setStep("Sent. Waiting for the chain…");
       for (let i = 0; i < 40; i++) { await new Promise((r) => setTimeout(r, 6000)); await load(); }
+      setStep(null);
     } catch (e) {
       setErr(((e as Error).message ?? "").split("\n")[0]!.slice(0, 160));
       setStep(null);

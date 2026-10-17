@@ -94,6 +94,8 @@ export interface Company {
   tasks: Task[];
   journal: JournalEntry[];
   marketing: { at: number; channel: string; text: string; status: "drafted" | "posted" | "failed"; url?: string; error?: string }[];
+  /** Created in simulation: never sells, spends or withdraws in live mode. */
+  sim?: boolean;
   /** Where the company posts. The password lives in the vault, never here. */
   social?: { bluesky?: { handle: string; auto: boolean } };
 }
