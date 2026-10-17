@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { inUsd, useImdUsd } from "./price";
 import { type Hex, createPublicClient, createWalletClient, custom, erc20Abi, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
@@ -32,6 +33,7 @@ export function FrogsPage() {
   const [step, setStep] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const usd = useImdUsd();
   const load = () => fetch("/api/frogs").then((r) => r.json()).then(setInfo).catch(() => {});
   useEffect(() => { void load(); const t = setInterval(load, 20_000); return () => clearInterval(t); }, []);
 
@@ -94,7 +96,7 @@ export function FrogsPage() {
             <div className="frogs-meter"><i style={{ width: `${(minted / 500) * 100}%` }} /></div>
             <div className="frogs-nums">
               <div><b>{minted}</b><span>of 500 minted</span></div>
-              <div><b>{price} IMD</b><span>per frog</span></div>
+              <div><b>{price} IMD</b><span>per frog{usd ? ` · ${inUsd(price, usd)}` : ""}</span></div>
               <div><b>🔥 {(s?.burned ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}</b><span>IMD burned forever</span></div>
             </div>
             {left > 0 ? (

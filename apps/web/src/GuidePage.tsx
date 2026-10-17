@@ -1,4 +1,5 @@
 import { Faq } from "./landing/content";
+import { inUsd, useImdUsd } from "./price";
 import { Link } from "./router";
 
 const STEPS: [string, string, string][] = [
@@ -12,10 +13,10 @@ const STEPS: [string, string, string][] = [
   ["Withdraw", "Send the revenue to your wallet with one click. $SHIFT holders pay no platform fee.", "Your money, your call."],
 ];
 
-const COSTS: [string, string][] = [
+const costs = (usd: number | null): [string, string][] => [
   ["Starting a company", "Free"],
-  ["One piece of work from the IMD swarm (product, site, research)", "0.5 IMD ≈ $3.50"],
-  ["First product + website", "≈ 1 IMD ≈ $7"],
+  ["One piece of work from the IMD swarm (product, site, research)", `0.5 IMD ${inUsd(0.5, usd)}`.trim()],
+  ["First product + website", `≈ 1 IMD ${inUsd(1, usd)}`.trim()],
   ["A post, a price change", "Free"],
   ["Gas: first IMD approval, selling, withdrawing", "Cents to a few dollars"],
   ["Platform fee on withdrawals", "Shown in your dashboard; 0 for $SHIFT holders"],
@@ -30,6 +31,7 @@ const PRODUCTS: [string, string][] = [
 ];
 
 export function GuidePage() {
+  const usd = useImdUsd();
   return (
     <div className="docs guide">
       <span className="eyebrow">GUIDE</span>
@@ -46,8 +48,8 @@ export function GuidePage() {
       </section>
 
       <section className="card">
-        <div className="card-h"><h3>What it costs</h3><span className="faint mono" style={{ fontSize: 11 }}>at ≈ $6.90 per IMD</span></div>
-        <table><tbody>{COSTS.map(([a, b]) => <tr key={a}><td>{a}</td><td className="r mono">{b}</td></tr>)}</tbody></table>
+        <div className="card-h"><h3>What it costs</h3><span className="faint mono" style={{ fontSize: 11 }}>{usd ? `IMD ≈ $${usd.toFixed(2)} · live` : "prices in IMD"}</span></div>
+        <table><tbody>{costs(usd).map(([a, b]) => <tr key={a}><td>{a}</td><td className="r mono">{b}</td></tr>)}</tbody></table>
       </section>
 
       <section className="card">

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { inUsd, useImdUsd } from "./price";
 import { chooseWallet } from "./wallet";
 import { type Hex, createPublicClient, createWalletClient, custom, erc20Abi, http, parseAbi, stringToHex } from "viem";
 import { mainnet } from "viem/chains";
@@ -23,6 +24,7 @@ export function TokenLaunch({ call, token }: { call: (token: string, path: strin
   const [err, setErr] = useState<string | null>(null);
   const [launch, setLaunch] = useState<Launch>(null);
   const [tokenOn, setTokenOn] = useState(false);
+  const usd = useImdUsd();
 
   const refresh = () => fetch("/api/token").then((r) => r.json()).then((d) => { setLaunch(d.launch); setTokenOn(d.on); }).catch(() => {});
   useEffect(() => { void refresh(); const t = setInterval(refresh, 20_000); return () => clearInterval(t); }, []);
@@ -92,7 +94,7 @@ export function TokenLaunch({ call, token }: { call: (token: string, path: strin
       <ul className="token-facts">
         <li>Ethereum mainnet, paired with IMD. 10% of the supply goes to the IMD swarm, always.</li>
         <li>Every trade pays 1.25%: <b>1% to the wallet that pays for the launch</b>, 0.25% to IMD.</li>
-        <li>Costs 0.5 IMD (≈ ${(0.5 * 6.9).toFixed(2)}) plus gas, from your wallet. No refunds once sent, so it is checked first.</li>
+        <li>Costs 0.5 IMD{usd ? ` (${inUsd(0.5, usd)})` : ""} plus gas, from your wallet. No refunds once sent, so it is checked first.</li>
       </ul>
       <div className="token-actions">
         <button className="btn" disabled={Boolean(step)} onClick={check}>Check with IMD (free)</button>
