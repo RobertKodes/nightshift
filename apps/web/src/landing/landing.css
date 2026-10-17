@@ -257,7 +257,8 @@
 .ns-social { display: flex; gap: 6px; }
 .ns-social a { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--edge); color: var(--dim); transition: color .2s, border-color .2s; }
 .ns-social a:hover { color: var(--ink); border-color: var(--ink); }
-@media (max-width: 1400px) { .ns-social { display: none; } }
+@media (max-width: 1640px) { .ns-social { display: none; } }
+@media (max-width: 1520px) { .ns-bar .ns-status { display: none; } }
 .ns-acct { height: 44px; padding: 0 14px; background: transparent; border: 1px solid var(--edge); color: var(--ink); font: 500 11px var(--mono); letter-spacing: .12em; cursor: pointer; white-space: nowrap; }
 .ns-acct:hover { border-color: var(--uv-hi); background: rgba(124, 92, 255, .1); }
 .ns-app { min-height: 100vh; display: flex; flex-direction: column; }
