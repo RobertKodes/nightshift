@@ -254,7 +254,7 @@ export function serve(engine: Engine) {
         });
       }
       if (p === "/api/token") {
-        const fees = await engine.ledger.balance("ext:platform", "USDC");
+        const fees = (await Promise.all(["ext:platform", "ext:platform:dev", "ext:platform:treasury"].map((a) => engine.ledger.balance(a, "USDC")))).reduce((a, b) => a + b, 0n);
         const bb = buybacks();
         return json(res, 200, {
           on: tokenOn(), symbol: config.token.symbol, address: config.token.address || null, buyUrl: config.token.buyUrl || null, holderMin: config.token.holderMin,

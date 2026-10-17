@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { readSettings } from "./settings.js";
-import { TREASURY_WALLET } from "./shift-launch.js";
+import { DEV_WALLET, TREASURY_WALLET } from "./shift-launch.js";
 
 /** The environment, overridden by what the operator saved on /setup. */
 const env: Record<string, string | undefined> = { ...process.env, ...readSettings() };
@@ -34,6 +34,8 @@ export const config = {
   /** Platform fee on revenue, taken when the owner withdraws. 0 = none. */
   platformFeeBps: Math.min(1000, Math.max(0, num(env.PLATFORM_FEE_BPS, 0))),
   platformTreasury: (env.PLATFORM_TREASURY || TREASURY_WALLET) as `0x${string}` | "",
+  /** The dev wallet's part of every platform fee: 20%, the one rule. The rest goes to the treasury. */
+  platformDev: (env.PLATFORM_DEV || DEV_WALLET) as `0x${string}`,
   /** Operator alerts: a Telegram bot token and the chat it writes to. */
   telegramToken: env.TELEGRAM_BOT_TOKEN ?? "",
   /** One chat id, or several separated by commas (a group and a person). */

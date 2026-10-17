@@ -30,7 +30,7 @@ export async function setupState(engine: Engine) {
     NIGHTSHIFT_MODE: config.mode, PUBLIC_URL: config.publicUrl, REQUIRE_AUTH: config.requireAuth ? "1" : "0",
     OPENROUTER_API_KEY: config.openrouterKey ? "set" : "", NIGHTSHIFT_MODEL: config.model,
     ETH_RPC: config.ethRpc, SALES_CHAIN_ID: String(config.salesChainId), SALES_RPC: config.salesRpc,
-    PLATFORM_FEE_BPS: String(config.platformFeeBps), PLATFORM_TREASURY: config.platformTreasury, MAX_COMPANIES_PER_OWNER: String(config.maxCompaniesPerOwner),
+    PLATFORM_FEE_BPS: String(config.platformFeeBps), PLATFORM_TREASURY: config.platformTreasury, PLATFORM_DEV: config.platformDev, MAX_COMPANIES_PER_OWNER: String(config.maxCompaniesPerOwner),
     SIM_SHIFT_MINUTES: String(config.simShiftMinutes), SIM_JOB_SECONDS: String(config.simJobSeconds),
     TELEGRAM_BOT_TOKEN: config.telegramToken ? "set" : "", TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","),
     TOKEN_ADDRESS: config.token.address, TOKEN_SYMBOL: config.token.symbol, TOKEN_HOLDER_MIN: String(config.token.holderMin), TOKEN_BUY_URL: config.token.buyUrl,
@@ -62,7 +62,7 @@ export async function setupState(engine: Engine) {
     { id: "url", label: "Public address", state: /localhost|127\.0\.0\.1/.test(config.publicUrl) ? "block" : "ok", detail: `${config.publicUrl} (used in buy links and company sites)` },
     { id: "llm", label: "CEO model", state: or === false ? "warn" : "ok", detail: or === null ? "No OpenRouter key: the free playbook decides. Fine to start" : or ? `${config.model} via OpenRouter` : "OpenRouter rejected the key" },
     { id: "fee", label: "Platform fee", state: config.platformFeeBps > 0 && !isAddress(config.platformTreasury || "0x") ? "block" : "ok",
-      detail: config.platformFeeBps > 0 ? `${config.platformFeeBps / 100}% to ${config.platformTreasury || "missing treasury"}` : "None" },
+      detail: config.platformFeeBps > 0 ? `${config.platformFeeBps / 100}% of withdrawals: 20% to dev ${config.platformDev}, 80% to treasury ${config.platformTreasury || "missing"}` : "None" },
     { id: "price", label: "IMD price for budgets", state: config.imdUsdPinned || Date.now() - config.imdUsdAt < 30 * 60_000 ? "ok" : "warn",
       detail: config.imdUsdPinned ? `Pinned at $${config.imdUsd} by IMD_USD` : config.imdUsdAt ? `$${config.imdUsd.toFixed(2)} live from the market, ${Math.round((Date.now() - config.imdUsdAt) / 60_000)} min ago. Nothing to set` : "Market price not read yet; it reads itself every 10 minutes. Nothing to set" },
     { id: "alerts", label: "Alerts", state: config.telegramToken && config.telegramChat ? "ok" : "warn", detail: config.telegramToken && config.telegramChat ? "Telegram: warnings in live mode reach you" : "No Telegram bot: nobody hears when something breaks" },
@@ -95,6 +95,8 @@ export function saveSetup(patch: Record<string, unknown>): string | null {
   for (const k of ["ETH_RPC", "SALES_RPC"]) { const r = v(k); if (r && !/^https:\/\/[^\s/]+/.test(r)) return `${k} must be an https:// URL`; }
   const t = v("PLATFORM_TREASURY");
   if (t && !isAddress(t)) return "PLATFORM_TREASURY must be an address";
+  const dv = v("PLATFORM_DEV");
+  if (dv && !isAddress(dv)) return "PLATFORM_DEV must be an address";
   const ta = v("TOKEN_ADDRESS");
   if (ta && !isAddress(ta)) return "TOKEN_ADDRESS must be an address";
   // A masked secret coming back unchanged means "keep it".

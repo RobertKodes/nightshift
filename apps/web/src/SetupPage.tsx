@@ -40,7 +40,8 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "SALES_CHAIN_ID", label: "Sales chain", options: [["84532", "Base Sepolia (test USDC)"], ["8453", "Base mainnet (real USDC)"]] },
     { k: "SALES_RPC", label: "Sales RPC (optional)", hint: "empty = public Base RPC" },
     { k: "PLATFORM_FEE_BPS", label: "Platform fee on withdrawals (bps, 100 = 1%)", hint: "0" },
-    { k: "PLATFORM_TREASURY", label: "Fee goes to (default: treasury 0x3322…4D69)", hint: "0x…" },
+    { k: "PLATFORM_TREASURY", label: "Fee: 80% to treasury (default 0x3322…4D69)", hint: "0x…" },
+    { k: "PLATFORM_DEV", label: "Fee: 20% to dev wallet (default 0x6C4c…19b5)", hint: "0x…" },
     { k: "MAX_COMPANIES_PER_OWNER", label: "Companies per owner", hint: "5" },
   ] },
   { title: "IMD", note: "Leave empty: a free public Ethereum RPC is already used. The IMD price follows the market by itself (DexScreener, every 10 minutes).", fields: [

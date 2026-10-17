@@ -13,10 +13,10 @@ export function RuleBar() {
   );
 }
 
-const WHERE: [string, string, string][] = [
+const where = (bps: number): [string, string, string][] => [
   ["Selling $SHIFT", "5% of the sell", "From the first trade"],
   ["Swap on NIGHTSHIFT", "0.3% of the swap", "Coming soon"],
-  ["Company withdrawals (USDC)", "5% of the withdrawal, 0% for $SHIFT holders", "When companies go live"],
+  ["Company withdrawals (USDC)", `${bps / 100}% of the withdrawal (20% of it to the dev wallet, 80% to the treasury), 0% for $SHIFT and NIGHT FROGS holders`, "When companies go live"],
   ["Launchpad", "A launch fee, lower when paid in $SHIFT", "Coming soon"],
   ["Game Room", "5% of each pot", "Coming soon"],
   ["IMD bot premium", "Paid in $SHIFT", "Coming soon"],
@@ -65,7 +65,7 @@ export function TokenomicsPage() {
 
       <h2 id="where" className="guide-h2">Where the rule applies</h2>
       <table className="plain"><thead><tr><th>Utility</th><th>Fee</th><th>Status</th></tr></thead>
-        <tbody>{WHERE.map(([a, b, s]) => <tr key={a}><td>{a}</td><td>{b}</td><td className={s.startsWith("Coming") ? "faint" : ""}>{s}</td></tr>)}</tbody></table>
+        <tbody>{where(t?.platformFeeBps ?? 150).map(([a, b, s]) => <tr key={a}><td>{a}</td><td>{b}</td><td className={s.startsWith("Coming") ? "faint" : ""}>{s}</td></tr>)}</tbody></table>
 
       <h2 id="launch" className="guide-h2">Launch day</h2>
       <ul className="frogs-util">

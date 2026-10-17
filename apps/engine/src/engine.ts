@@ -510,8 +510,9 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
   }
 
   /**
-   * Sends the company's USDC to its owner. The platform fee, when one is set, goes to the platform
-   * treasury in the same withdrawal. In sim mode only the books move.
+   * Sends the company's USDC to its owner. The platform fee, when one is set, is split by the one
+   * rule in the same withdrawal: 20% to the dev wallet, 80% to the treasury, which holds the
+   * rewards and burn parts (60%) until those contracts take USDC. In sim mode only the books move.
    */
   readonly #withdrawing = new Set<string>();
   /** One withdrawal at a time per company; the fee leaves first; perks are read fresh from the chain. */
@@ -527,6 +528,8 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     const holder = (await holderStatus(c.owner, true)).holds || (await frogCount(c.owner, true)) > 0;
     const fee = config.platformTreasury && !holder ? (total * BigInt(config.platformFeeBps)) / 10_000n : 0n;
     const sent = total - fee;
+    const devFee = (fee * 2000n) / 10_000n;
+    const parts = ([[config.platformDev, devFee, "ext:platform:dev"], [config.platformTreasury as `0x${string}`, fee - devFee, "ext:platform:treasury"]] as const).filter(([, v]) => v > 0n);
     const txs: string[] = [];
     if (config.mode === "live") {
       const account = this.vault.account(c.id);
@@ -538,11 +541,14 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
         if (r.status !== "success") throw new Error(`transfer reverted: ${hash}`);
         txs.push(hash);
       };
-      if (fee > 0n) await send(config.platformTreasury as `0x${string}`, fee);
-      try { await send(to, sent); } catch (e) {
-        // the fee already left: book it so the ledger matches the wallet, then report the failure
-        if (txs[0]) await this.ledger.post({ id: `withdraw-fee:${txs[0]}`, at: new Date(), kind: "withdrawal", memo: "platform fee (owner transfer failed)", ref: { chainTx: txs[0] }, postings: [
-          { account: `co:${c.id}:usdc`, asset: "USDC", amount: -fee }, { account: "ext:platform", asset: "USDC", amount: fee }] });
+      try {
+        for (const [dest, v] of parts) await send(dest, v);
+        await send(to, sent);
+      } catch (e) {
+        // fee parts that already left: book them so the ledger matches the wallet, then report the failure
+        const left = parts.slice(0, txs.length);
+        if (left.length) await this.ledger.post({ id: `withdraw-fee:${txs[0]}`, at: new Date(), kind: "withdrawal", memo: "platform fee (owner transfer failed)", ref: { chainTx: txs[0]! }, postings: [
+          { account: `co:${c.id}:usdc`, asset: "USDC", amount: -left.reduce((a, [, v]) => a + v, 0n) }, ...left.map(([, v, acc]) => ({ account: acc, asset: "USDC" as const, amount: v }))] });
         throw e;
       }
     }
@@ -550,7 +556,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     await this.ledger.post({ id: `withdraw:${id}`, at: new Date(), kind: "withdrawal", memo: `to ${to}`, ref: txs[0] ? { chainTx: txs[0] } : undefined, postings: [
       { account: `co:${c.id}:usdc`, asset: "USDC", amount: -total },
       { account: `ext:owner:${to.toLowerCase()}`, asset: "USDC", amount: sent },
-      ...(fee > 0n ? [{ account: "ext:platform", asset: "USDC", amount: fee }] : []),
+      ...parts.map(([, v, acc]) => ({ account: acc, asset: "USDC" as const, amount: v })),
     ] });
     note(c, this.#deps(c), "note", `Withdrew $${fromUsdc(sent).toFixed(2)} to ${to.slice(0, 6)}…${to.slice(-4)}${fee > 0n ? ` (platform fee $${fromUsdc(fee).toFixed(2)})` : ""}${config.mode === "sim" ? " [sim]" : ""}.`);
     this.#emit(c.id, "company", null);
