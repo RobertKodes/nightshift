@@ -12,12 +12,12 @@ export function TokenPage() {
     <div className="docs token-page">
       <span className="eyebrow">THE TOKEN</span>
       <h1>${sym}. <em>The fuel of the night shift.</em></h1>
-      <p className="lead">The NIGHTSHIFT platform token, launched through IMD on Ethereum and traded only against IMD. It lowers what owners pay, puts their products in front, and turns platform fees into demand for ${sym} and for IMD.</p>
+      <p className="lead">The NIGHTSHIFT platform token, launched through IMD on Ethereum and paired with ETH. It lowers what owners pay, puts their products in front, and shares every fee with stakers and NIGHT FROGS holders, while burning ${sym} and IMD.</p>
 
       <section className="tkn-card">
         <div className="tkn-head">
           <span className="tkn-coin"><Crescent size={34} /></span>
-          <div><b>NIGHTSHIFT</b><span>${sym} · ERC-20 · Ethereum mainnet · paired with IMD</span></div>
+          <div><b>NIGHTSHIFT</b><span>${sym} · ERC-20 · Ethereum mainnet · paired with ETH</span></div>
           <span className={`tkn-state${t?.on ? " on" : ""}`}>{state}</span>
         </div>
         <div className="tkn-addr">
@@ -25,17 +25,19 @@ export function TokenPage() {
           {t?.on && t.address ? <a href={`https://etherscan.io/token/${t.address}`} target="_blank" rel="noreferrer">{t.address}</a> : <code>0x···· published here the moment IMD deploys it</code>}
           {t?.launch && !t.on && !t.launch.error && <span className="good" style={{ letterSpacing: 0 }}>{t.launch.stage}</span>}
         </div>
-        {!t?.on && <p className="tkn-warn"><Icon name="alert" size={16} /> ${sym} is not launched. Any NIGHTSHIFT or {sym} token trading today, on any chain, is <b>fake</b>. The only contract will appear here, on @nightshiftimd and in t.me/getnightshift.</p>}
+        {!t?.on && <p className="tkn-warn"><Icon name="alert" size={16} /> <span>${sym} is not launched. Any NIGHTSHIFT or {sym} token trading today, on any chain, is <b>fake</b>. The only contract will appear here, on @nightshiftimd and in t.me/getnightshift.</span></p>}
         <div className="token-specs">
-          {[["Supply", "1,000,000,000 · fixed"], ["Decimals", "18"], ["Mint / owner", "None"], ["Transfer tax", "None"], ["Pool", "Uniswap v4 · $" + sym + " / IMD"], ["Launched by", "IMD swarm · audited by 4 agents"]].map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}
+          {[["Supply", "1,000,000,000 · fixed"], ["Decimals", "18"], ["Mint / pause / blacklist", "None"], ["Sell fee", "5% · buys 0%"], ["Pool", "Uniswap v4 · $" + sym + " / ETH"], ["Launched by", "IMD swarm · audited by 4 agents"]].map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}
         </div>
         <TokenomicsBars />
         <div className="tkn-fees">
-          <span>EVERY TRADE · 1.25%</span>
+          <span>WHAT A TRADE PAYS</span>
           {FEE_SPLIT.map((x) => <div key={x.label}><b>{x.pct}%</b><span>{x.label}</span><p>{x.note}</p></div>)}
         </div>
         {t?.on && t.buyUrl && <a className="btn primary" href={safeHref(t.buyUrl)} target="_blank" rel="noreferrer">Buy ${sym} on Uniswap</a>}
       </section>
+
+      <p className="dim">Every number, address and rule is on the <a href="/tokenomics">tokenomics page</a>.</p>
 
       <h2 className="guide-h2">What holding it does</h2>
       <div className="tkn-util">{UTILITY.map(([a, b], i) => <div key={a} className="tkn-u"><span>{String(i + 1).padStart(2, "0")}</span><b>{a}</b><p>{b}</p></div>)}</div>

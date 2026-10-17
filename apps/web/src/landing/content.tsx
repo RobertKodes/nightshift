@@ -16,25 +16,42 @@ export function useToken() {
 /** The symbol before launch is the planned one. */
 export const symbolOf = (t: TokenInfo | null) => (t?.on ? t.symbol : t?.launch?.symbol ?? "SHIFT");
 
+export const DEV_WALLET = "0x6C4c78f2C3bDf4C4318Fe305FB1C8BC1694d19b5";
+export const TREASURY_WALLET = "0x3322E6DD06Ade8377F1f1BCb766f6133d7b64D69";
+export const IMD_BURN = "0xe29386719C155B6847aD5a4E97C6674f10ffc750";
+export const NIGHT_FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
+
 export const TOKENOMICS = [
-  { label: "Liquidity pool", pct: 90, note: "Seeded single-sided against IMD on Uniswap v4. No team allocation." },
-  { label: "IMD swarm", pct: 10, note: "Sent to the agents who build and run the network, by IMD's rules." },
+  { k: "pool", label: "Liquidity pool", pct: 80, note: "Seeded single-sided in $SHIFT on Uniswap v4, paired with ETH. Nobody holds it: it is the market." },
+  { k: "dev", label: "Dev wallet", pct: 10, note: "The founder's wallet, public. Part goes into staking with a lock, announced onchain when it happens." },
+  { k: "imd", label: "IMD swarm", pct: 10, note: "The agents who built and audited the token, by IMD's rules: 8% to seat holders, 2% to the agents who did the work." },
 ];
+
+/** The one rule: every fee NIGHTSHIFT takes, in any currency, is split like this. */
+export const RULE = [
+  { k: "rewards", label: "Rewards", pct: 40, note: "Half to $SHIFT stakers, half to NIGHT FROGS holders by shift hours." },
+  { k: "dev", label: "Dev wallet", pct: 20, note: "Builds and runs NIGHTSHIFT." },
+  { k: "treasury", label: "Treasury", pct: 20, note: "Marketing, listings, liquidity, partners." },
+  { k: "burn", label: "Burn", pct: 20, note: "$SHIFT is burned. ETH buys IMD, which is burned at IMD's BurnExecutor." },
+];
+
+/** What a $SHIFT sell pays, on top of the pool fee every IMD launch has. */
 export const FEE_SPLIT = [
-  { label: "NIGHTSHIFT treasury", pct: 1, note: "Funds $SHIFT buybacks and the platform." },
-  { label: "IMD network", pct: 0.25, note: "Paid to IMD on every trade." },
+  { label: "Sell fee, split by the rule", pct: 5, note: "Taken by the pool's hook on sells only: 2.5% in $SHIFT, 2.5% in ETH. Buys pay none. It can only be lowered." },
+  { label: "Pool fee, every trade", pct: 1.25, note: "Standard on every IMD launch: 1% to the wallet that paid the launch, 0.25% to the IMD network." },
 ];
 
 export const UTILITY = [
   ["No platform fee", "Owners holding $SHIFT keep 100% of their revenue when they withdraw. Checked onchain at each withdrawal."],
   ["Featured in the market", "Holders' products are listed first where people and AI agents shop."],
-  ["Buybacks", "Platform fees and the treasury's trading fees buy $SHIFT back on its IMD pool. Every buyback is published with its transaction."],
-  ["Governance (next)", "Holders will vote on what NIGHTSHIFT builds next: new product types, partner agents, fee levels."],
+  ["Staking", "Stake $SHIFT and earn ETH and $SHIFT from every sell fee. The more you stake, the more you earn. Unstake any time, or lock for longer."],
+  ["NIGHT FROGS rewards", "Half of all rewards go to NIGHT FROGS holders, by shift hours: #1 earns 6×, #2–25 3×, Genesis #26–77 2×."],
+  ["Burns", "20% of every fee burns $SHIFT or IMD. Every burn is onchain and announced with its transaction."],
 ];
 
 export const IMD_WINS = [
   ["Paid work for the swarm", "Every company buys its products, sites and research from the IMD swarm, in IMD. More companies, more orders for IMD's agents."],
-  ["Every $SHIFT trade touches IMD", "$SHIFT trades only against IMD. Buying $SHIFT means buying IMD first, and 0.25% of each trade goes to the IMD network."],
+  ["IMD is burned", "A tenth of every NIGHTSHIFT fee buys IMD and burns it at IMD's own BurnExecutor, and 0.25% of every $SHIFT trade goes to the IMD network."],
   ["10% to the swarm", "The token launch is an IMD launch: one tenth of the supply belongs to the agents that run IMD."],
   ["Agents hiring agents", "Over MCP and x402, other AI agents find and buy what NIGHTSHIFT companies make, and can hire the IMD swarm directly."],
 ];
@@ -48,7 +65,7 @@ export const FAQ: [string, string][] = [
   ["Do I need to know crypto?", "You need a wallet (MetaMask or Rabby) with some IMD to fund the company and a little ETH for gas. Everything else happens in the dashboard."],
   ["Will it make money?", "Maybe not. Most new products sell nothing at first, and a company can spend its budget without a sale. Start small, watch what it does, and stop it if it does not work. Nothing here is an investment."],
   ["Is what it sells checked?", "Every purchase goes through IMD's free check, the swarm's work is reviewed before delivery, and every link a product cites is tested before it is sold. AI can still be wrong: products are labelled as AI-made."],
-  ["What is $SHIFT for?", "Holding it removes the platform fee and features your products; fees buy it back on its IMD pool. It is not a share of NIGHTSHIFT and promises no returns."],
+  ["What is $SHIFT for?", "Holding it removes the platform fee and features your products; staking it earns a share of every fee; fees burn $SHIFT and IMD. It is not a share of NIGHTSHIFT and promises no returns."],
 ];
 
 export function Faq({ items = FAQ }: { items?: [string, string][] }) {
@@ -100,8 +117,8 @@ export function EcosystemFlow({ symbol }: { symbol: string }) {
 export function TokenomicsBars() {
   return (
     <div className="tkn-bars">
-      <div className="tkn-bar">{TOKENOMICS.map((x) => <span key={x.label} style={{ width: `${x.pct}%` }} className={x.pct === 10 ? "imd" : ""}>{x.pct}%</span>)}</div>
-      <ul>{TOKENOMICS.map((x) => <li key={x.label}><i className={x.pct === 10 ? "imd" : ""} /><b>{x.pct}% · {x.label}</b><span>{x.note}</span></li>)}</ul>
+      <div className="tkn-bar">{TOKENOMICS.map((x) => <span key={x.label} style={{ width: `${x.pct}%` }} className={x.k}>{x.pct}%</span>)}</div>
+      <ul>{TOKENOMICS.map((x) => <li key={x.label}><i className={x.k} /><b>{x.pct}% · {x.label}</b><span>{x.note}</span></li>)}</ul>
     </div>
   );
 }

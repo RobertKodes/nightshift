@@ -23,7 +23,7 @@ export function SwapPage() {
       <h2>What it will do</h2>
       <ul className="frogs-util">
         <li><b>One place for the IMD economy</b>: ETH ⇄ IMD ⇄ $SHIFT and the tokens IMD launches, with the route found for you.</li>
-        <li><b>Fees that come back</b>: the swap's fee funds $SHIFT buybacks, published onchain like every other buyback.</li>
+        <li><b>Fees that come back</b>: a 0.3% swap fee, split by <a href="/tokenomics#rule">the one rule</a>: 40% to stakers and NIGHT FROGS holders, 20% burned as $SHIFT and IMD.</li>
         <li><b>Perks for the crew</b>: lower swap fees for NIGHT FROGS and $SHIFT holders.</li>
         <li><b>Built by the swarm</b>: the contracts will be written, tested and audited by the IMD swarm, like NIGHT FROGS.</li>
       </ul>

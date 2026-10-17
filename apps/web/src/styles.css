@@ -373,3 +373,27 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 .ns-app .docs .guide-step b, .ns-app .docs .guide-step h3, .ns-app .docs .guide-step strong { font-family: Inter, sans-serif; }
 .ns-app .docs table td { font-family: Inter, sans-serif; }
 .ns-app .docs .tkn-state, .ns-app .docs .pill { font-family: Inter, sans-serif !important; letter-spacing: 0 !important; }
+
+/* Tokenomics and the coming-soon utility pages */
+.toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.toc a { font: 500 11.5px var(--mono); letter-spacing: .06em; color: var(--dim); padding: 6px 10px; border: 1px solid var(--line); }
+.toc a:hover { color: var(--text); border-color: var(--line-2); }
+.tokenomics-page h2[id] { scroll-margin-top: 90px; }
+.rule { display: grid; gap: 14px; margin: 6px 0 10px; }
+.rule-bar { display: flex; height: 38px; border: 1px solid var(--line-2); }
+.rule-bar span { display: grid; place-items: center; font: 600 12px var(--mono); color: #03020a; }
+.rule-bar .rewards, .rule-legend i.rewards { background: var(--good); }
+.rule-bar .dev, .rule-legend i.dev { background: var(--sky); }
+.rule-bar .treasury, .rule-legend i.treasury { background: var(--moon); }
+.rule-bar .burn, .rule-legend i.burn { background: var(--warn); }
+.rule-legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.rule-legend > div { display: grid; grid-template-columns: 12px 1fr; column-gap: 10px; font-size: 13.5px; }
+.rule-legend i { width: 10px; height: 10px; margin-top: 5px; }
+.rule-legend span { grid-column: 2; color: var(--dim); }
+table.plain { width: 100%; border-collapse: collapse; font-size: 14px; margin: 4px 0 10px; }
+table.plain th { text-align: left; font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); padding: 8px 10px; border-bottom: 1px solid var(--line-2); }
+table.plain td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.plain.addr td:first-child { width: 34%; color: var(--dim); }
+table.plain.addr a { overflow-wrap: anywhere; font-size: 12.5px; }
+@media (max-width: 900px) { .rule-legend { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .rule-legend { grid-template-columns: 1fr; } table.plain.addr td:first-child { width: auto; } table.plain.addr tr { display: grid; } table.plain.addr td { border-bottom: 0; padding: 4px 0; } table.plain.addr tr { border-bottom: 1px solid var(--line); padding: 8px 0; } }

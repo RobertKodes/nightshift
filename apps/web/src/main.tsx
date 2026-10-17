@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { type Health, api } from "./api";
 import { CompanyPage } from "./CompanyPage";
 import { Home } from "./Home";
-import { NightFrog, SiteFooter, SiteHeader } from "./landing/chrome";
+import { type Active, NightFrog, SiteFooter, SiteHeader } from "./landing/chrome";
 import { Landing } from "./landing/Landing";
 import { McpPage } from "./McpPage";
 import { PublicPage } from "./PublicPage";
@@ -17,6 +17,9 @@ import { SwapPage } from "./SwapPage";
 import { ImpactPage } from "./ImpactPage";
 import { GuidePage } from "./GuidePage";
 import { TermsPage } from "./TermsPage";
+import { TokenomicsPage } from "./TokenomicsPage";
+import { GameRoomPage } from "./GameRoomPage";
+import { LaunchpadPage } from "./LaunchpadPage";
 import "./styles.css";
 import "./landing/landing.css";
 
@@ -39,7 +42,11 @@ function App() {
   if (seg[0] === "swap") page = <SwapPage />;
   if (seg[0] === "impact") page = <ImpactPage />;
   if (seg[0] === "guide") page = <GuidePage />;
-  const active = seg[0] === "co" ? "company" : seg[0] === "mcp" ? "mcp" : seg[0] === "terms" ? "terms" : seg[0] === "market" ? "market" : seg[0] === "token" ? "token" : seg[0] === "frogs" ? "frogs" : seg[0] === "swap" ? "swap" : seg[0] === "guide" ? "guide" : "companies";
+  if (seg[0] === "tokenomics") page = <TokenomicsPage />;
+  if (seg[0] === "games") page = <GameRoomPage />;
+  if (seg[0] === "launchpad") page = <LaunchpadPage />;
+  const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "guide", "tokenomics", "games", "impact", "launchpad"];
+  const active: Active = seg[0] === "co" ? "company" : named.includes(seg[0] as Active) ? (seg[0] as Active) : "companies";
   return (
     <div className="ns ns-app">
       <SiteHeader active={active} />

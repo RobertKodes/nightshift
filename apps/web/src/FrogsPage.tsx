@@ -184,7 +184,7 @@ function Staking({ on }: { on: boolean }) {
   return (
     <section id="staking">
       <h2>Soft staking · shift hours</h2>
-      <p className="dim">Keep your frog in your own wallet. Nothing is locked or sent anywhere, no transactions, no gas. Every hour you hold it you earn shift hours: <b>1×</b> a frog, <b>2×</b> a Genesis (#1–77), <b>5×</b> the Zero-Sleep Captain (#1). Holding an <b>IMD seat</b> as well doubles it all. Hours go to the wallet holding the frog; selling it stops the clock.</p>
+      <p className="dim">Keep your frog in your own wallet. Nothing is locked or sent anywhere, no transactions, no gas. Every hour you hold it you earn shift hours: <b>1×</b> a frog, <b>2×</b> a Genesis (#26–77), <b>3×</b> an early Genesis (#2–25), <b>6×</b> the Zero-Sleep Captain (#1). Holding an <b>IMD seat</b> as well doubles it all. Hours go to the wallet holding the frog; selling it stops the clock.</p>
       <p className="dim">Shift hours will be redeemable for perks (fee discounts, early access, holder roles) and later for $SHIFT airdrops paid from platform fees. The weekly top crew is posted in the Telegram chat every Sunday.</p>
       {on ? (
         <>

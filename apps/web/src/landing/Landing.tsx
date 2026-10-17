@@ -281,7 +281,7 @@ export function Landing() {
           <div className="tkn-card">
             <div className="tkn-head">
               <span className="tkn-coin"><Crescent size={34} /></span>
-              <div><b>NIGHTSHIFT</b><span>${tsym} · Ethereum · paired with IMD</span></div>
+              <div><b>NIGHTSHIFT</b><span>${tsym} · Ethereum · paired with ETH</span></div>
               <span className={`tkn-state${token?.on ? " on" : ""}`}>{token?.on ? "LIVE" : token?.launch && !token.launch.error ? "LAUNCHING" : "COMING SOON"}</span>
             </div>
             <div className="tkn-addr">

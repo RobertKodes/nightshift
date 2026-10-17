@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { short } from "../api";
 import { Link, go } from "../router";
 import { useSession } from "../session";
@@ -71,7 +72,75 @@ function Socials() {
   );
 }
 
-export function SiteHeader({ active, home = false }: { active: "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide"; home?: boolean }) {
+/** Everything the token powers, behind one menu so the header stays short. */
+export const UTILITIES: { to: string; label: string; note: string; soon?: boolean }[] = [
+  { to: "/token", label: "$SHIFT", note: "The platform token: what it does, live" },
+  { to: "/tokenomics", label: "Tokenomics", note: "Supply, fees, wallets and every rule" },
+  { to: "/frogs", label: "NIGHT FROGS", note: "The collection and its rewards" },
+  { to: "/swap", label: "Swap", note: "ETH, IMD and $SHIFT in one place", soon: true },
+  { to: "/launchpad", label: "Launchpad", note: "Launch a token with the IMD swarm", soon: true },
+  { to: "/games", label: "Game Room", note: "PvP games in $SHIFT and IMD", soon: true },
+  { to: "/impact", label: "IMD Impact", note: "What NIGHTSHIFT gives the IMD network" },
+  { to: "/mcp", label: "MCP for agents", note: "Let AI agents use NIGHTSHIFT" },
+];
+export type Active = "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide" | "tokenomics" | "games" | "impact" | "launchpad";
+const UTIL_KEYS: Active[] = ["token", "tokenomics", "frogs", "swap", "launchpad", "games", "impact", "mcp"];
+
+/** The Utilities menu: opens on hover or focus on desktop, on tap on touch screens. */
+function UtilitiesMenu({ active }: { active: Active }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    addEventListener("mousedown", off); addEventListener("keydown", esc);
+    return () => { removeEventListener("mousedown", off); removeEventListener("keydown", esc); };
+  }, [open]);
+  return (
+    <div ref={ref} className={`ns-drop${open ? " open" : ""}`} onMouseLeave={() => setOpen(false)}>
+      <button type="button" className={UTIL_KEYS.includes(active) ? "on" : ""} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen(!open)} onMouseEnter={() => setOpen(true)}>
+        Utilities <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+      </button>
+      <div className="ns-drop-menu" role="menu">
+        {UTILITIES.map((u) => (
+          <a key={u.to} role="menuitem" href={u.to} className={active === u.to.slice(1) ? "on" : ""} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); setOpen(false); go(u.to); }}>
+            <b>{u.label}{u.soon && <sup className="nav-soon">SOON</sup>}</b><span>{u.note}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Below 1100px the header has no room: one button opens every link. */
+function MobileMenu({ home }: { home: boolean }) {
+  const [open, setOpen] = useState(false);
+  const nav = (to: string) => { setOpen(false); go(to); };
+  useEffect(() => { document.body.style.overflow = open ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [open]);
+  return (
+    <>
+      <button type="button" className="ns-burger" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen(!open)}>
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">{open ? <path d="M4 4l12 12M16 4 4 16" stroke="currentColor" strokeWidth="1.6" /> : <path d="M3 6h14M3 10h14M3 14h14" stroke="currentColor" strokeWidth="1.6" />}</svg>
+      </button>
+      {open && createPortal(
+        <div className="ns-mnav">
+          <a href="/" onClick={(e) => { e.preventDefault(); nav("/"); }}>Home</a>
+          <a href={home ? "#mission" : "/#mission"} onClick={() => setOpen(false)}>Mission</a>
+          <a href="/companies" onClick={(e) => { e.preventDefault(); nav("/companies"); }}>Companies</a>
+          <a href="/market" onClick={(e) => { e.preventDefault(); nav("/market"); }}>Market</a>
+          <span>UTILITIES</span>
+          {UTILITIES.map((u) => <a key={u.to} href={u.to} onClick={(e) => { e.preventDefault(); nav(u.to); }}>{u.label}{u.soon && <sup className="nav-soon">SOON</sup>}</a>)}
+          <a href="/guide" onClick={(e) => { e.preventDefault(); nav("/guide"); }}>Guide</a>
+          <a className="ns-cta sm" href="/launch" onClick={(e) => { e.preventDefault(); nav("/launch"); }}>LAUNCH A COMPANY →</a>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+export function SiteHeader({ active, home = false }: { active: Active; home?: boolean }) {
   const swarm = useSwarm();
   const { address, signIn, signOut, busy, error } = useSession();
   // On the landing the section links scroll; elsewhere they lead back to it.
@@ -82,12 +151,9 @@ export function SiteHeader({ active, home = false }: { active: "home" | "compani
       <nav className="ns-nav">
         <Link to="/" className={active === "home" ? "on" : ""}>Home</Link>
         <a href={hash("mission")}>Mission</a>
-        <Link to="/token" className={active === "token" ? "on" : ""}>Token</Link>
-        <Link to="/frogs" className={active === "frogs" ? "on" : ""}>Frogs</Link>
-        <Link to="/swap" className={active === "swap" ? "on" : ""}>Swap<sup className="nav-soon">SOON</sup></Link>
         <Link to="/companies" className={active === "companies" || active === "company" ? "on" : ""}>Companies</Link>
         <Link to="/market" className={active === "market" ? "on" : ""}>Market</Link>
-        <Link to="/mcp" className={active === "mcp" ? "on" : ""}>MCP</Link>
+        <UtilitiesMenu active={active} />
         <Link to="/guide" className={active === "guide" ? "on" : ""}>Guide</Link>
       </nav>
       <div className="ns-status" title="Live from api.imd.fun/health">
@@ -102,6 +168,7 @@ export function SiteHeader({ active, home = false }: { active: "home" | "compani
       ) : null}
       <Socials />
       <Magnetic className="ns-cta sm" onClick={() => go("/launch")} href="/launch">LAUNCH A COMPANY <span className="arr">→</span></Magnetic>
+      <MobileMenu home={home} />
     </header>
   );
 }
@@ -116,8 +183,11 @@ export function SiteFooter() {
         <a href={BLUESKY_URL} target="_blank" rel="noreferrer">BLUESKY</a>
         <Link to="/market">MARKET</Link>
         <Link to="/token">TOKEN</Link>
+        <Link to="/tokenomics">TOKENOMICS</Link>
         <Link to="/frogs">FROGS</Link>
         <Link to="/swap">SWAP</Link>
+        <Link to="/launchpad">LAUNCHPAD</Link>
+        <Link to="/games">GAME ROOM</Link>
         <Link to="/impact">IMD IMPACT</Link>
         <Link to="/guide">GUIDE</Link>
         <Link to="/mcp">MCP</Link>
@@ -135,7 +205,7 @@ const FROG_LINES = [
   "Wen product? Already shipped, fren.",
   "One sentence in. One company out.",
   "I dig, the swarm builds, you withdraw.",
-  "Every $SHIFT trade goes through IMD. Ribbit.",
+  "Every $SHIFT fee burns a little IMD. Ribbit.",
   "Hard budget. I can't overspend even if I wanted to.",
   "Night shift report: 0 complaints, 1 frog.",
 ];

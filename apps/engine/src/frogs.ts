@@ -76,14 +76,15 @@ export async function newMints(): Promise<{ payer: string; first: number; quanti
 
 /**
  * Soft staking: a frog never leaves its holder's wallet. Every hour the engine reads who holds
- * each minted frog and credits that wallet "shift hours": 1 an hour, 2 for a Genesis frog
- * (#1–77), 5 for #1. The hours belong to the wallet; selling a frog stops its accrual.
+ * each minted frog and credits that wallet "shift hours" per hour: 6 for #1, 3 for #2–25,
+ * 2 for #26–77 (Genesis), 1 for the rest. The hours belong to the wallet; selling a frog stops
+ * its accrual.
  */
 type Staking = { at: number; wallets: Record<string, number>; holders: Record<string, string>; seat?: Record<string, boolean> };
 const sFile = () => join(config.dataDir, "staking.json");
 const loadStaking = (): Staking => { try { return existsSync(sFile()) ? JSON.parse(readFileSync(sFile(), "utf8")) : { at: 0, wallets: {}, holders: {} }; } catch { return { at: 0, wallets: {}, holders: {} }; } };
 const staking = loadStaking();
-export const multiplier = (id: number) => (id === 1 ? 5 : id <= 77 ? 2 : 1);
+export const multiplier = (id: number) => (id === 1 ? 6 : id <= 25 ? 3 : id <= 77 ? 2 : 1);
 const OWNER_OF = parseAbi(["function ownerOf(uint256) view returns (address)"]);
 /** IMD's own seats (the identity.md NFT): holding one as well doubles a wallet's shift hours. */
 export const IMD_SEATS = "0x0000ec93127baa929e58e97dd0095a2bfb38ec1d";
