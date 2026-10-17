@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useImdUsd } from "./price";
 import { safeHref } from "./safe";
 import { type CompanyFull, type Health, type Policy, type TaskView, ago, api, events, fromUsdc, short, until, usd } from "./api";
 import { Link } from "./router";
@@ -75,6 +76,8 @@ function Now({ t }: { t: TaskView }) {
 }
 
 function PolicyForm({ c, onSaved }: { c: CompanyFull; onSaved: () => void }) {
+  const imdUsd = useImdUsd();
+  const job = imdUsd ? imdUsd * 0.5 : null;
   const [p, setP] = useState<Policy>(c.policy);
   const [saved, setSaved] = useState(false);
   useEffect(() => setP(c.policy), [c.policy]);
@@ -84,6 +87,7 @@ function PolicyForm({ c, onSaved }: { c: CompanyFull; onSaved: () => void }) {
       <div className="two">
         <label>Daily budget ($)<input className="field mono" type="number" min={0} value={p.dailyBudgetUsd} onChange={(e) => setP({ ...p, dailyBudgetUsd: Number(e.target.value) })} /></label>
         <label>Ask me over ($)<input className="field mono" type="number" min={0} value={p.approvalOverUsd} onChange={(e) => setP({ ...p, approvalOverUsd: Number(e.target.value) })} /></label>
+        {job ? <span className={p.dailyBudgetUsd < job ? "bad" : "dim"} style={{ fontSize: 12, gridColumn: "1 / -1" }}>One swarm job costs about ${job.toFixed(2)} now (0.5 IMD).{p.dailyBudgetUsd < job ? " This daily budget cannot buy any: raise it." : ""}</span> : null}
       </div>
       <div className="two">
         <label>Minutes between shifts<input className="field mono" type="number" min={1} value={p.shiftMinutes} onChange={(e) => setP({ ...p, shiftMinutes: Number(e.target.value) })} /></label>

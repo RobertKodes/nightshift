@@ -58,8 +58,6 @@ export class Engine {
 
   constructor() {
     this.auth = new Auth(this.vault.material, this.store.apiKeys, () => this.store.markDirty());
-    // Older logs named the model behind each decision; the log keeps the decision only.
-    for (const c of this.store.companies.values()) for (const j of c.journal) if (j.kind === "decision") j.text = j.text.replace(/ \([\w.-]+\/[\w.:-]+\)$/, "");
     this.sim = new SimDeliveries(config.publicUrl, this.llm, config.model, (input) => {
       const id = typeof input === "object" && input ? this.#inputOwner.get(input) : undefined;
       return id ? this.store.companies.get(id) : undefined;
@@ -70,6 +68,7 @@ export class Engine {
 
   async start(): Promise<void> {
     await this.store.load();
+    this.#recover();
     if (config.mode === "live") await this.#retireSim();
     setInterval(() => void this.#tick().catch((e) => console.error("tick", e)), 4000);
     setInterval(() => void this.store.flush(), 3000);
@@ -534,6 +533,23 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     c.status = status;
     note(c, this.#deps(c), "note", status === "paused" ? "Paused by the owner. No shifts, no spending." : "Resumed by the owner.");
     this.#emit(c.id, "company", null);
+  }
+
+  /** After a restart: work cut off mid-step is closed honestly, and old logs lose the model's name. */
+  #recover(): void {
+    for (const c of this.store.companies.values()) {
+      for (const j of c.journal) if (j.kind === "decision") j.text = j.text.replace(/ \([\w.-]+\/[\w.:-]+\)$/, "");
+      for (const t of c.tasks) {
+        const paid = t.status === "ordering" && !t.imd?.orderId;
+        if (t.status !== "checking" && !paid) continue;
+        Object.assign(t, { status: "failed", activity: null, error: paid ? "interrupted while paying; it may have been paid, check the wallet on Etherscan" : "interrupted before payment; nothing was paid" });
+        if (!paid) t.costImd = 0n;
+        const i = c.products.findIndex((p) => p.id === t.productId && p.status === "building");
+        if (i >= 0) c.products.splice(i, 1);
+        note(c, this.#deps(c), "note", paid ? `"${t.title}" was cut off while paying. If IMD left the wallet, it still counts against the budget.` : `"${t.title}" was cut off before payment. Nothing was paid; the next shift starts fresh.`);
+      }
+    }
+    this.store.markDirty();
   }
 
   /** Live mode: companies made in simulation stop for good: no sales, no orders, no withdrawals. */

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useImdUsd } from "./price";
 import { fundNext } from "./FundCard";
 import { type CompanyCard, type Health, api, events, until, usd } from "./api";
 import { Link, go } from "./router";
@@ -15,6 +16,8 @@ export function Home({ health }: { health: Health | null }) {
   const [list, setList] = useState<CompanyCard[]>([]);
   const [idea, setIdea] = useState("");
   const [budget, setBudget] = useState(10);
+  const imdUsd = useImdUsd();
+  const job = imdUsd ? imdUsd * 0.5 : null;
   const [limit, setLimit] = useState(5);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -62,6 +65,7 @@ export function Home({ health }: { health: Health | null }) {
           <div className="row">
             <label>Daily budget $<input className="field" type="number" min={0} value={budget} onChange={(e) => setBudget(Number(e.target.value))} /></label>
             <label>Ask me over $<input className="field" type="number" min={0} value={limit} onChange={(e) => setLimit(Number(e.target.value))} /></label>
+            {job ? <span className={budget < job ? "bad" : "dim"} style={{ fontSize: 12, gridColumn: "1 / -1" }}>One swarm job costs about ${job.toFixed(2)} now (0.5 IMD).{budget < job ? " This daily budget cannot buy any: raise it." : ""}</span> : null}
             {needSignIn ? (
               <button className="btn primary" style={{ marginLeft: "auto" }} onClick={signIn}>Sign in to start</button>
             ) : (
