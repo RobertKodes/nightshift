@@ -14,10 +14,10 @@ import type { LlmClient } from "@nightshift/llm";
 const VOCAB: [string, number][] = [
   ["nightshift", 3], ["shift", 3], ["frog", 3], ["frogs", 3], ["imd", 3], ["keeper", 3], ["tokenomics", 3], ["getnightshift", 3],
   ["stake", 2], ["staking", 2], ["staked", 2], ["unstake", 2], ["lock", 2], ["locked", 2], ["rewards", 2], ["reward", 2], ["claim", 2], ["burn", 2], ["burned", 2], ["burns", 2],
-  ["company", 2], ["companies", 2], ["swarm", 2], ["launch", 2], ["launched", 2], ["treasury", 2], ["hook", 2], ["swap", 2], ["airdrop", 2], ["presale", 2], ["seat", 2], ["genesis", 2],
+  ["company", 2], ["companies", 2], ["swarm", 2], ["launch", 2], ["launched", 2], ["launching", 2], ["launches", 2], ["network", 2], ["chain", 2], ["listing", 2], ["listed", 2], ["treasury", 2], ["hook", 2], ["swap", 2], ["airdrop", 2], ["presale", 2], ["seat", 2], ["genesis", 2],
   ["contract", 1], ["address", 1], ["ca", 3], ["token", 1], ["tokens", 1], ["tax", 1], ["fee", 1], ["fees", 1], ["buy", 1], ["sell", 1], ["selling", 1], ["buying", 1],
   ["chart", 1], ["liquidity", 1], ["lp", 1], ["price", 1], ["mcap", 1], ["supply", 1], ["audit", 1], ["audited", 1], ["wallet", 1], ["dev", 1], ["team", 1],
-  ["roadmap", 1], ["website", 1], ["site", 1], ["bot", 1], ["uniswap", 1], ["etherscan", 1], ["dexscreener", 1], ["legit", 1], ["safe", 1], ["mint", 1], ["minted", 1], ["holders", 1],
+  ["eth", 1], ["ethereum", 1], ["base", 1], ["buyers", 1], ["holder", 1], ["project", 1], ["roadmap", 1], ["website", 1], ["site", 1], ["bot", 1], ["uniswap", 1], ["etherscan", 1], ["dexscreener", 1], ["legit", 1], ["safe", 1], ["mint", 1], ["minted", 1], ["holders", 1],
 ];
 const VOCAB_MAP = new Map(VOCAB);
 const QUESTION = /\?|^(what|how|when|where|why|who|which|is|are|can|could|do|does|did|will|should|any|anyone|pls|please|explain|tell|wen)\b/i;
@@ -49,34 +49,38 @@ export function relevance(text: string): { score: number; hits: string[] } {
 }
 
 /**
- * Worth an answer? Asked to the bot: yes. A question: if it touches the project at all (score 2+,
- * so "is the price up?" alone is not enough but "is the shift price up?" is). Not a question but
- * someone stuck ("can't find the staking page"): score 2+. Plain chat about the project: score 5+.
+ * Worth an answer? In the project's own group almost every question is about the project, so:
+ * asked to the bot, or any question (short ones even without a project word: "where to buy?"),
+ * or someone stuck with a project word, or plain chat that is clearly about the project (5+).
+ * The model has the last word: it answers SKIP to anything off-topic.
  */
 export function worthAsking(text: string, toBot: boolean): boolean {
   const t = text.trim();
-  if (t.length < 6 || t.length > 600 || t.startsWith("/")) return false;
+  if (t.length < 5 || t.length > 600 || t.startsWith("/")) return false;
   if (toBot) return true;
   const { score } = relevance(t);
-  if (QUESTION.test(t) || NEEDS_HELP.test(t)) return score >= 2;
+  const words = t.split(/\s+/).length;
+  if (QUESTION.test(t) || /^(where|how|what|when|wen)\b/i.test(t)) return score >= 1 || words <= 8;
+  if (NEEDS_HELP.test(t)) return score >= 2;
   return score >= 5;
 }
 
-const SYSTEM = `You are the NIGHTSHIFT community assistant in the project's public Telegram group.
+const SYSTEM = `You are a friendly, sharp community mod in the NIGHTSHIFT Telegram group, answering in chat.
 Answer ONLY questions about NIGHTSHIFT, $SHIFT, NIGHT FROGS, staking, the fees and burns, the companies platform, or how NIGHTSHIFT relates to IMD.
 If the message is not such a question (greetings, jokes, price predictions, other projects, general chat, insults), reply with exactly: SKIP
 Rules:
 - Use ONLY the FACTS below. If the answer is not in them, say it is not known yet and point to the most relevant link. Never invent numbers, dates, partnerships or listings.
 - Never give financial advice, price predictions or "wen moon" promises. Never ask anyone to DM or to connect a wallet anywhere but getnightshift.tech.
-- Plain English, friendly, at most 3 short sentences, then one relevant link from the facts. No hashtags, no emojis except at most one.
+- Sound like a real person in a crypto Telegram chat: casual, warm, direct, with contractions. One or two short sentences, three at most. No corporate tone, no lists, no "Great question", don't repeat the question, vary your wording.
+- Add a link only when it really helps (buying → the swap page, staking → the stake page, fees → tokenomics), as a bare URL at the end. At most one emoji.
 - If someone asks for the contract address: give it only if the FACTS list it as live; otherwise say it is not launched yet and anything posted earlier is fake.`;
 
 export type Facts = Record<string, unknown>;
 
-export async function answer(llm: LlmClient, model: string, question: string, facts: Facts): Promise<string | null> {
+export async function answer(llm: LlmClient, model: string, question: string, facts: Facts, asker = ""): Promise<string | null> {
   const r = await llm.chat({
     model, temperature: 0.5, maxTokens: 500,
-    messages: [{ role: "system", content: `${SYSTEM}\n\nFACTS (live, ${new Date().toISOString()}):\n${JSON.stringify(facts)}` }, { role: "user", content: question.slice(0, 600) }],
+    messages: [{ role: "system", content: `${SYSTEM}\n\nFACTS (live, ${new Date().toISOString()}):\n${JSON.stringify(facts)}` }, { role: "user", content: `${asker ? `${asker} asks: ` : ""}${question.slice(0, 600)}` }],
   });
   const text = (r.message.content ?? "").trim().replace(/^["']|["']$/g, "");
   if (!text || /^skip\b/i.test(text) || text.length < 8) return null;
@@ -89,7 +93,7 @@ const hour: number[] = [];
 let day = { key: "", n: 0 };
 
 export function allowed(user: string, now = Date.now()): boolean {
-  if (now - (asked.get(user) ?? 0) < 120_000) return false;
+  if (now - (asked.get(user) ?? 0) < 45_000) return false;
   while (hour.length && now - hour[0]! > 3_600_000) hour.shift();
   const k = new Date(now).toISOString().slice(0, 10);
   if (day.key !== k) day = { key: k, n: 0 };

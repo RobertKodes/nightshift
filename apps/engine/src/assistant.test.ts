@@ -7,12 +7,13 @@ describe("community assistant gate", () => {
       "what's the CA?", "how does staking work?", "is there a sell tax on shift?", "who burns the IMD?", "when do frog holders get rewards?",
       "can i lock my tokens for a year", "i cant find the stakin page", "where do I buy nightshif token", "is the contract audited?",
       "how do I start a company here?", "does the keeper run every day?", "my claim on the frogs page is not working",
+      "Where to buy", "How to buy?", "Launching on what network?", "How do I buy this token", "wen launch?",
     ]) expect(worthAsking(t, false), `${t} ${JSON.stringify(relevance(t))}`).toBe(true);
   });
   it("stays quiet on everything else", () => {
     for (const t of [
-      "gm frens", "wen lambo?", "what do you think about pepe coin?", "lol this chart", "anyone watching the game tonight?",
-      "is the price up?", "good night everyone", "I love this community", "what time is it in London?", "how are you all doing?",
+      "gm frens", "lol this chart", "good night everyone", "I love this community", "just woke up, coffee first",
+      "lets go boys", "this weather is crazy today honestly", "brb dinner",
     ]) expect(worthAsking(t, false), `${t} ${JSON.stringify(relevance(t))}`).toBe(false);
   });
   it("always answers when asked to the bot directly", () => {

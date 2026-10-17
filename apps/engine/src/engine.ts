@@ -391,7 +391,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     if (!worthAsking(m.text, toBot)) return;
     if (!allowed(m.user)) return;
     spend(m.user);
-    const text = await answer(this.llm, config.model, m.text.replace(new RegExp(`@${this.#botName}`, "ig"), "").trim(), await this.#facts()).catch(() => null);
+    const text = await answer(this.llm, config.model, m.text.replace(new RegExp(`@${this.#botName}`, "ig"), "").trim(), await this.#facts(), m.name.replace(/^@/, "")).catch(() => null);
     if (!text) return;
     await tgCall(token, "sendMessage", { chat_id: m.chat, text, reply_parameters: { message_id: m.messageId, allow_sending_without_reply: true }, disable_web_page_preview: true });
   }
@@ -409,7 +409,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       project: "NIGHTSHIFT: an autonomous AI company platform. You give a company an idea and a budget; an AI CEO picks the next move every shift, buys the work (products, sites, research) from the IMD swarm (imd.fun), paid in IMD, sells what ships for USDC on Base, and the owner withdraws the revenue.",
       token: live
         ? { symbol: "$SHIFT", status: "LIVE on Ethereum", contractAddress: config.token.address, buy: `${u}/swap (or Uniswap, paired with ETH)`, chart: `https://dexscreener.com/ethereum/${config.token.address}`, priceUsd: m?.priceUsd ?? null, marketCapUsd: m?.mcap ?? null, liquidityUsd: m?.liquidity ?? null }
-        : { symbol: "$SHIFT", status: l ? "being launched through IMD, not trading yet" : "not launched yet", contractAddress: "not published yet: the only CA will be posted on getnightshift.tech, this Telegram and X after launch; anything earlier is fake" },
+        : { symbol: "$SHIFT", status: l ? "being launched through IMD right now, not trading yet" : "not launched yet, launch is coming soon (no date announced here)", network: "Ethereum mainnet, paired with ETH on Uniswap v4", howToBuyAfterLaunch: `with ETH on Ethereum, at ${u}/swap or on Uniswap, once the official CA is posted`, contractAddress: "not published yet: the only CA will be posted on getnightshift.tech, this Telegram and X after launch; anything earlier is fake" },
       supply: "1,000,000,000 fixed, 18 decimals. No mint, no pause, no blacklist. 80% in the Uniswap v4 pool, 10% dev wallet (public), 10% to the IMD swarm. No presale, no private round, no unlock schedule.",
       launch: "Launched through IMD's swarm: built, tested twice and audited by 4 specialist agents and a judge, deployed by IMD on Ethereum. Not audited by an outside firm. The pool opened at a 10 ETH market cap. Launch was gated: only the treasury could make the first buy, against sniper bots.",
       fees: "Buys pay only the 1.25% pool fee (1% to the launch payer, the dev wallet; 0.25% to the IMD network). Sells also pay 5% (2.5% in SHIFT, 2.5% in ETH), which can only go down, never up.",
