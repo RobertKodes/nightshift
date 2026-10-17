@@ -61,7 +61,10 @@ export async function checkLaunch(): Promise<unknown> {
 export type LaunchState = {
   tx: string; at: number; symbol: string; stage: string; jobId?: string; launchId?: string; token?: string; done?: boolean; error?: string;
   contracts?: Record<string, string>; open?: boolean; openTx?: string; scanFrom?: number;
+  /** After the first buy: when the main group is told (5 minutes later), and whether it was. */
+  publicAt?: number; announced?: boolean;
 };
+export function patchLaunch(p: Partial<LaunchState>) { const l = launchState(); if (l) saveToken({ launch: { ...l, ...p } }); }
 export function launchState(): LaunchState | null {
   try { return existsSync(file()) ? (JSON.parse(readFileSync(file(), "utf8")).launch ?? null) : null; } catch { return null; }
 }

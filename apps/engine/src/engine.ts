@@ -33,7 +33,7 @@ import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { type Anim, buyCard, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
 import { type Button, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands } from "./social.js";
-import { followLaunch, followOpen, holderStatus, holdsCached, launchState, saveVerification } from "./token.js";
+import { followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { writeSettings } from "./settings.js";
 
@@ -278,7 +278,8 @@ export class Engine {
   /** While the platform token is being launched through IMD, follow it and switch it on when live. */
   async #followTokenLaunch(): Promise<void> {
     const before = launchState();
-    if (!before || before.open || before.error) return;
+    if (!before || before.announced || before.error) return;
+    const buyUrl = (t: string) => `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=NATIVE&outputCurrency=${t}`;
     if (!before.done) {
       const l = await followLaunch();
       if (l && l.stage !== before.stage) void this.alert(`🪙 ${l.symbol} launch: ${l.stage}`, `launch-${l.stage}`);
@@ -289,24 +290,47 @@ export class Engine {
         const ok = checks.every((c) => c.ok);
         const card = this.launchReadyCard(l, checks);
         void this.adminCard(card.html, card.buttons, "launch-verified", ok ? "launch" : "alert");
+        const t = l.token ?? "";
+        void this.launchDm(ok
+          ? `🚀 <b>$${esc(l.symbol)} is deployed and checked.</b> Waiting for the treasury buy.\n\nCA: <code>${esc(t)}</code>\n\nTrading is closed to everyone except the treasury <b>0x3322…4D69</b>. Buy from that wallet, any amount: the moment it lands, trading opens.`
+          : `❌ <b>$${esc(l.symbol)} is deployed, but a check failed. Do NOT buy.</b>\n\nCA: <code>${esc(t)}</code>\n\nThe admins were told what is wrong.`,
+          ok ? [[{ text: "🟢 First buy on Uniswap (treasury wallet)", url: buyUrl(t) }], [{ text: "📊 Etherscan", url: `https://etherscan.io/token/${t}` }]] : [[{ text: "📊 Etherscan", url: `https://etherscan.io/token/${t}` }]]);
       }
       return;
     }
-    // Deployed and checked: wait for the first buyer, then go public.
-    const l = await followOpen();
-    if (l?.open && l.token && !config.token.address) {
-      const buyUrl = `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=NATIVE&outputCurrency=${l.token}`;
-      writeSettings({ TOKEN_ADDRESS: l.token, TOKEN_SYMBOL: l.symbol, TOKEN_BUY_URL: buyUrl });
-      Object.assign(config.token, { address: l.token as `0x${string}`, symbol: l.symbol, buyUrl });
-      void toCommunity(`🚀🌙 <b>$${esc(l.symbol)} IS LIVE</b>
+    // Deployed and checked: wait for the treasury's first buy.
+    if (!before.open) {
+      const l = await followOpen();
+      if (!l?.open || !l.token) return;
+      // 1. At once: the site and bot switch to the token, the first buyer gets the CA, the other networks are told.
+      writeSettings({ TOKEN_ADDRESS: l.token, TOKEN_SYMBOL: l.symbol, TOKEN_BUY_URL: buyUrl(l.token) });
+      Object.assign(config.token, { address: l.token as `0x${string}`, symbol: l.symbol, buyUrl: buyUrl(l.token) });
+      const publicAt = Date.now() + 5 * 60_000;
+      patchLaunch({ publicAt });
+      void this.launchDm(`✅ <b>The treasury buy landed. $${esc(l.symbol)} is open to everyone.</b>\n\nCA: <code>${l.token}</code>\n\nThe main group is told in 5 minutes.`,
+        [[{ text: `🟢 Buy $${l.symbol}`, url: buyUrl(l.token) }], [{ text: "🧾 First buy", url: `https://etherscan.io/tx/${l.openTx}` }, { text: "📊 Etherscan", url: `https://etherscan.io/token/${l.token}` }]]);
+      housePost(`🚀 $${l.symbol} is live on Ethereum.\n\n${l.token}\n\nEvery sell feeds stakers, NIGHT FROGS holders and burns SHIFT and IMD. ${config.publicUrl}/token`, "token-live");
+      void this.adminCard(`✅ <b>The first buy landed.</b> Site, bot and token page now use <code>${l.token}</code>; Bluesky was told. The main group is told at ${new Date(publicAt).toISOString().slice(11, 16)} UTC.`,
+        [[{ text: "🧾 First buy", url: `https://etherscan.io/tx/${l.openTx}` }, { text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch-open");
+      return;
+    }
+    // 2. Five minutes after the first buy: the main group.
+    if (before.announced || !before.token || Date.now() < (before.publicAt ?? 0)) return;
+    patchLaunch({ announced: true });
+    void toCommunity(`🚀🌙 <b>$${esc(before.symbol)} IS LIVE</b>
 
-<code>${l.token}</code>
+<code>${before.token}</code>
 
 Trading is open to everyone on Ethereum, paired with ETH.
-Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT and IMD).`, [[{ text: `🟢 Buy $${l.symbol}`, url: buyUrl }], [{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch");
-      housePost(`🚀 $${l.symbol} is live on Ethereum.\n\n${l.token}\n\nEvery sell feeds stakers, NIGHT FROGS holders and burns SHIFT and IMD. ${config.publicUrl}/token`, "token-live");
-      void this.adminCard(`🚀 <b>$${esc(l.symbol)} is public.</b> The first buy landed and the community was told.`, [[{ text: "🧾 First buy", url: `https://etherscan.io/tx/${l.openTx}` }, { text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch-live");
-    }
+Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT and IMD).`, [[{ text: `🟢 Buy $${before.symbol}`, url: buyUrl(before.token) }], [{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch");
+    void this.adminCard(`🚀 <b>$${esc(before.symbol)} is public.</b> The main group was told.`, [[{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch-live");
+  }
+
+  /** The contract address, privately, to the launch chats (LAUNCH_NOTIFY). */
+  async launchDm(html: string, buttons: Button[][]): Promise<boolean> {
+    if (!config.telegramToken) return false;
+    const sent = await Promise.all(config.launchNotify.split(",").map((id) => id.trim()).filter(Boolean).map((id) => sendCard(id, "launch", `🌙 <b>NIGHTSHIFT · launch</b>\n${html}`, buttons)));
+    return sent.some(Boolean);
   }
 
   /** The IMD price from its deepest Ethereum pool on DexScreener, else GeckoTerminal; keeps the last good value on failure. */
@@ -610,6 +634,11 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     const buy = (usdv: number) => buyCard({ test: true, usd: usdv, imd: usdv / config.imdUsd, tokens: usdv / 0.0000068, buyer: "0x8f3a1c2b4d5e6f708192a3b4c5d6e7f8091a2b3c", tx: `0x${"0".repeat(64)}`, newHolder: usdv < 1000, position: 35, mcap: 2500 * config.imdUsd, liquidity: 2250 * config.imdUsd });
     const ready = this.launchReadyCard({ symbol: sym, token: "0x000000000000000000000000000000000000dEaD", launchId: "test", contracts: { hook: "0x000000000000000000000000000000000000dEaD" } }, [{ label: "Token is NIGHTSHIFT / SHIFT", ok: true, detail: "" }, { label: "Trading is still closed (only the first buyer can buy)", ok: true, detail: "" }, { label: "Splitter burns IMD at IMD's BurnExecutor 0xe293…c750", ok: true, detail: "" }]);
     await say("Launch ready (admin only)", this.adminCard(`${T}${ready.html}`, ready.buttons, "test-launch-ready"));
+    await say("Launch DM (CA, before the treasury buy)", this.launchDm(`${T}🚀 <b>$${esc(sym)} is deployed and checked.</b> Waiting for the treasury buy.
+
+CA: <code>0x0000…TEST</code>
+
+Trading is closed to everyone except the treasury <b>0x3322…4D69</b>.`, [[{ text: "🟢 First buy on Uniswap (treasury wallet)", url: "https://app.uniswap.org/swap?chain=mainnet" }]]));
     const b1 = buy(180); await say("Buy", toCommunity(b1.text, b1.buttons, "buy"));
     const b2 = buy(3200); await say("Whale buy", toCommunity(b2.text, b2.buttons, "whale"));
     await say("X raid", raid(`${config.xUrl}/status/1846000000000000000`, "TEST: this is how a raid looks"));
