@@ -203,7 +203,7 @@ export function PinballPage() {
             <p>A little skill. A little chaos. All night.</p>
           </div>
           <div className="arc-cabinet">
-            <div className="arc-marquee"><span><Icon name="orbit" size={17} /> NIGHTSHIFT ORIGINAL</span><span className="arc-live">LIVE TABLE</span></div>
+            <div className="arc-marquee"><span><Icon name="orbit" size={17} /> NIGHTSHIFT ORIGINAL</span><span className="arc-live" title="A bot plays this table while you choose your mode">DEMO · AUTOPLAY</span></div>
             <div className="arc-screen"><PinballGame seed={7} demo />{search}</div>
             <div className="arc-insert"><Icon name="flipper" size={16} /><span>THREE BALLS. MAKE THEM COUNT.</span><span>01</span></div>
           </div>
