@@ -110,6 +110,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "price", description: "Price, market cap, liquidity" },
     { command: "ca", description: "The official contract address" },
     { command: "links", description: "Website, X, Telegram, Bluesky" },
+    { command: "memes", description: "Memes and art from the night crew" },
   ];
   void tg(token, "setMyCommands", { commands: open });
   for (const id of admins) void tg(token, "setMyCommands", { scope: { type: "chat", chat_id: Number(id) }, commands: [
