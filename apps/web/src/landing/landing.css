@@ -259,7 +259,7 @@
 .ns-social a:hover { color: var(--ink); border-color: var(--ink); }
 @media (max-width: 1640px) { .ns-social { display: none; } }
 @media (max-width: 1520px) { .ns-bar .ns-status { display: none; } }
-.ns-acct { height: 44px; padding: 0 14px; background: transparent; border: 1px solid var(--edge); color: var(--ink); font: 500 11px var(--mono); letter-spacing: .12em; cursor: pointer; white-space: nowrap; }
+.ns-acct { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 14px; line-height: 1; background: transparent; border: 1px solid var(--edge); color: var(--ink); font: 500 11px var(--mono); letter-spacing: .12em; cursor: pointer; white-space: nowrap; }
 .ns-acct:hover { border-color: var(--uv-hi); background: rgba(124, 92, 255, .1); }
 .ns-app { min-height: 100vh; display: flex; flex-direction: column; }
 .ns-app::before { content: ""; position: fixed; inset: 0 0 auto auto; width: min(1100px, 90vw); aspect-ratio: 1672 / 941; background: url(/art/megastructure.webp) center / cover; opacity: .2; pointer-events: none; -webkit-mask-image: radial-gradient(ellipse 60% 60% at 60% 40%, #000 30%, transparent 75%); mask-image: radial-gradient(ellipse 60% 60% at 60% 40%, #000 30%, transparent 75%); animation: ns-fadein 1.4s ease both, ns-drift 60s ease-in-out infinite alternate; }

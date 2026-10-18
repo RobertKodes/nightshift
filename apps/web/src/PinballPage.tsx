@@ -303,7 +303,7 @@ export function PinballPage() {
               >{tab.label}</button>)}
             </div>
             <div id="arc-board-scores" role="tabpanel" aria-labelledby={`arc-tab-${boardTab}`} tabIndex={0}>
-              {board.length > 0 ? <ol>{board.map((b, i) => <li key={`${b.name}-${b.at}-${i}`}><span className={`arc-rank rank-${i + 1}`}>{String(i + 1).padStart(2, "0")}</span><span>{b.name}</span><b>{b.score.toLocaleString()}</b></li>)}</ol> : <p className="arc-board-empty">{`No verified ${boardKind === "duel" ? "duels" : "solo runs"} yet${boardTab === "board" ? " tonight" : ""}. Be the first on the board.`}</p>}
+              {board.length > 0 ? <ol>{board.map((b, i) => <li className={i<3 ? `ns-place-${i+1}` : undefined} key={`${b.name}-${b.at}-${i}`}><span className={`ns-rank ${i<3 ? "ns-medal" : ""}`} aria-label={`Place ${i+1}`}>{i<3 && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="m8 14-2 8 6-3 6 3-2-8"/><circle cx="12" cy="9" r="7"/></svg>}<span aria-hidden="true">{i<3 ? i+1 : String(i+1).padStart(2,"0")}</span></span><span>{b.name}</span><b>{b.score.toLocaleString()}</b></li>)}</ol> : <p className="arc-board-empty">{`No verified ${boardKind === "duel" ? "duels" : "solo runs"} yet${boardTab === "board" ? " tonight" : ""}. Be the first on the board.`}</p>}
             </div>
           </div>
           <p className="arc-legal">18+ for staked play. Money games may be gambling, including in Romania. Staked duels open only where allowed.</p>
