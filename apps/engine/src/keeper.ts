@@ -1,5 +1,7 @@
-import { type Address, parseAbi } from "viem";
+import { type Address, createWalletClient, http, parseAbi } from "viem";
+import { mainnet } from "viem/chains";
 import { eth, ethWallet } from "./chain.js";
+import { V4, quoteArgs, quoterAbi } from "./v4.js";
 import { IMD_TOKEN } from "./token.js";
 import type { Vault } from "./vault.js";
 
@@ -56,11 +58,13 @@ export async function runKeeper(vault: Vault, c: { splitter?: string; token?: st
   const w = ethWallet(account);
   const gas = await eth.getBalance({ address: account.address });
   if (gas < 2n * 10n ** 15n) return { ...run, error: `the keeper ${account.address} needs ETH for gas (has ${Number(gas) / 1e18})` };
+  // The burn swap goes through Flashbots Protect, out of the public mempool, so no bot can sandwich it.
+  const prot = createWalletClient({ account, chain: mainnet, transport: http("https://rpc.flashbots.net") });
   const send = async (label: string, functionName: "distribute" | "burnReserve", args: readonly unknown[]) => {
     try {
       const { request } = await eth.simulateContract({ account, address: splitter, abi: SPLITTER, functionName, args } as never);
-      const hash = await w.writeContract(request as never);
-      const r = await eth.waitForTransactionReceipt({ hash });
+      const hash = await (functionName === "burnReserve" ? prot : w).writeContract(request as never);
+      const r = await eth.waitForTransactionReceipt({ hash, timeout: 300_000 });
       if (r.status === "success") run.did.push(`${label}: ${hash}`); else run.skipped.push(`${label}: reverted ${hash}`);
     } catch (e) { run.skipped.push(`${label}: ${(e as Error).message.split("\n")[0]!.slice(0, 120)}`); }
   };
@@ -102,11 +106,13 @@ export async function runKeeper(vault: Vault, c: { splitter?: string; token?: st
   // The spec's reserve(token) view; the splitter's ETH balance if the view is missing.
   const reserve = await eth.readContract({ address: splitter, abi: SPLITTER, functionName: "reserve", args: [ETH] }).catch(() => bal(ETH));
   if (reserve >= DUST.burn) {
-    const perImd = await ethPerImd().catch(() => 0);
-    if (perImd > 0) {
-      const minOut = BigInt(Math.floor((Number(reserve) / perImd) * 0.92));
+    // The price is the pool's own, from Uniswap's v4 Quoter, and at most 3% may be lost to price movement.
+    const quoted = await eth.simulateContract({ address: V4.quoter, abi: quoterAbi, functionName: "quoteExactInputSingle", args: quoteArgs(IMD_POOL as never, true, reserve) as never })
+      .then((q) => (q.result as readonly [bigint, bigint])[0]).catch(() => 0n);
+    if (quoted > 0n) {
+      const minOut = (quoted * 97n) / 100n;
       await send(`burn ${Number(reserve) / 1e18} ETH as IMD`, "burnReserve", [ETH, reserve, minOut]);
-    } else run.skipped.push("burn: no IMD price");
+    } else run.skipped.push("burn: the Quoter gave no price");
   } else run.skipped.push(`burn: reserve ${Number(reserve) / 1e18} ETH is too small`);
   return run;
 }

@@ -42,7 +42,7 @@ async function discover(): Promise<Detail[]> {
   const list = [...found.values()];
   const legacy = (window as unknown as { ethereum?: unknown }).ethereum;
   if (!list.length && legacy) list.push({ info: { uuid: "legacy", name: "Browser wallet", icon: "", rdns: "legacy" }, provider: legacy });
-  if (id) list.push({ info: { uuid: "walletconnect", name: "WalletConnect · phone wallet", icon: WC_ICON, rdns: "walletconnect" }, provider: id });
+  if (id) list.push({ info: { uuid: "walletconnect", name: "WalletConnect · Uniswap, Rainbow, Ledger and 300+ more", icon: WC_ICON, rdns: "walletconnect" }, provider: id });
   return list;
 }
 /** A picked entry's provider; WalletConnect's is made on first use. */
@@ -80,11 +80,15 @@ function pick(list: Detail[]): Promise<Detail | null> {
 /** The wallet to use: the only one, the remembered one, or the person's pick. */
 export async function chooseWallet(opts: { ask?: boolean } = {}): Promise<unknown> {
   const list = await discover();
-  if (!list.length) {
-    // A phone browser has no wallet inside it: open this page in a wallet app's own browser instead.
-    if (/android|iphone|ipad|ipod/i.test(navigator.userAgent)) { openInWalletApp(); throw new Error("Open NIGHTSHIFT in your wallet app to sign in."); }
-    throw new Error("No wallet in this browser. Install the Uniswap Wallet, MetaMask or Rabby extension.");
+  const injected = list.filter((d) => d.info.rdns !== "walletconnect");
+  const wc = list.find((d) => d.info.rdns === "walletconnect");
+  // A phone browser has no wallet inside it: open this page in a wallet app, or connect one through WalletConnect.
+  if (!injected.length && /android|iphone|ipad|ipod/i.test(navigator.userAgent)) {
+    const viaWc = await walletSheet("phone", wc);
+    if (viaWc) return open(viaWc);
+    throw new Error("Open NIGHTSHIFT in your wallet app to sign in.");
   }
+  if (!list.length) { void walletSheet("desktop"); throw new Error("No wallet in this browser yet: install one, then sign in again."); }
   if (list.length === 1) return open(list[0]!);
   const saved = list.find((d) => d.info.rdns === remembered());
   if (saved && !opts.ask) return open(saved);
@@ -94,37 +98,65 @@ export async function chooseWallet(opts: { ask?: boolean } = {}): Promise<unknow
   return open(d);
 }
 
-/** The wallet apps that can open a page in their own browser, by their official links. */
+/** Wallet apps that open a page in their own browser, by their official links. */
 const APPS: { name: string; href: (url: string) => string }[] = [
   { name: "MetaMask", href: (u) => `https://metamask.app.link/dapp/${u.replace(/^https?:\/\//, "")}` },
+  { name: "Phantom", href: (u) => `https://phantom.app/ul/browse/${encodeURIComponent(u)}?ref=${encodeURIComponent(location.origin)}` },
   { name: "Trust Wallet", href: (u) => `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(u)}` },
   { name: "Coinbase Wallet", href: (u) => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(u)}` },
+  { name: "OKX Wallet", href: (u) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(u)}` },
+  { name: "Bitget Wallet", href: (u) => `https://bkcode.vip?action=dapp&url=${encodeURIComponent(u)}` },
+];
+/** Browser extensions to install on a computer. */
+const EXTENSIONS: { name: string; href: string }[] = [
+  { name: "MetaMask", href: "https://metamask.io/download" },
+  { name: "Phantom", href: "https://phantom.com/download" },
+  { name: "Uniswap Wallet", href: "https://wallet.uniswap.org" },
+  { name: "Rabby", href: "https://rabby.io" },
+  { name: "Coinbase Wallet", href: "https://www.coinbase.com/wallet/downloads" },
 ];
 
-/** A sheet with one button per wallet app; the page reopens there, signed-in flows work as on a computer. */
-function openInWalletApp(): void {
-  const url = location.href;
-  const wrap = document.createElement("div");
-  wrap.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(3,2,10,.72);display:grid;place-items:end center;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px));font-family:Inter,system-ui,sans-serif";
-  const box = document.createElement("div");
-  box.style.cssText = "width:min(420px,100%);background:#0d0a1f;border:1px solid #2c2550;border-radius:16px;padding:18px;color:#f2efff;box-shadow:0 20px 60px rgba(0,0,0,.6)";
-  box.innerHTML = `<div style="font:600 12px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#a9a3c4;margin-bottom:6px">OPEN IN YOUR WALLET</div><p style="margin:0 0 12px;color:#a9a3c4;font-size:13px;line-height:1.5">Your phone's browser has no wallet. Open this page in your wallet app: you sign in there and nothing leaves your phone.</p>`;
-  for (const a of APPS) {
-    const l = document.createElement("a");
-    l.href = a.href(url);
-    l.rel = "noopener";
-    l.textContent = `Open in ${a.name}`;
-    l.style.cssText = "display:block;padding:13px 12px;margin:6px 0;background:#15112b;border:1px solid #2c2550;border-radius:12px;color:#f2efff;font:500 15px Inter,system-ui,sans-serif;text-decoration:none";
-    box.append(l);
-  }
-  const c = document.createElement("button");
-  c.textContent = "Cancel";
-  c.style.cssText = "margin-top:8px;background:none;border:0;color:#a9a3c4;cursor:pointer;font:500 13px Inter,system-ui,sans-serif";
-  c.onclick = () => wrap.remove();
-  box.append(c);
-  wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
-  wrap.append(box);
-  document.body.append(wrap);
+/**
+ * A sheet listing every big wallet. On a phone: open this page in a wallet app, or WalletConnect
+ * for the apps without a browser (Uniswap Wallet, Rainbow, Zerion, Ledger Live…); resolves with the
+ * WalletConnect entry if that was picked. On a computer: where to install an extension.
+ */
+function walletSheet(kind: "phone" | "desktop", wc?: Detail): Promise<Detail | null> {
+  return new Promise((resolve) => {
+    const url = location.href;
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(3,2,10,.72);display:grid;place-items:end center;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px));font-family:Inter,system-ui,sans-serif";
+    const box = document.createElement("div");
+    box.style.cssText = "width:min(420px,100%);max-height:calc(100dvh - 48px);overflow-y:auto;background:#0d0a1f;border:1px solid #2c2550;border-radius:16px;padding:18px;color:#f2efff;box-shadow:0 20px 60px rgba(0,0,0,.6)";
+    const done = (d: Detail | null) => { wrap.remove(); resolve(d); };
+    const head = document.createElement("div");
+    head.innerHTML = kind === "phone"
+      ? `<div style="font:600 12px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#a9a3c4;margin-bottom:6px">CONNECT A WALLET</div><p style="margin:0 0 10px;color:#a9a3c4;font-size:13px;line-height:1.5">Open NIGHTSHIFT inside your wallet app and sign in there. Nothing leaves your phone.</p>`
+      : `<div style="font:600 12px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#a9a3c4;margin-bottom:6px">NO WALLET IN THIS BROWSER</div><p style="margin:0 0 10px;color:#a9a3c4;font-size:13px;line-height:1.5">Install one of these, reload the page and sign in.</p>`;
+    box.append(head);
+    const row = (label: string, href?: string, onClick?: () => void, note?: string) => {
+      const el = document.createElement(href ? "a" : "button");
+      if (href) { (el as HTMLAnchorElement).href = href; (el as HTMLAnchorElement).rel = "noopener"; if (kind === "desktop") (el as HTMLAnchorElement).target = "_blank"; }
+      if (onClick) el.addEventListener("click", onClick);
+      el.style.cssText = "display:block;width:100%;box-sizing:border-box;min-height:48px;padding:12px;margin:6px 0;background:#15112b;border:1px solid #2c2550;border-radius:12px;color:#f2efff;font:500 15px Inter,system-ui,sans-serif;text-decoration:none;text-align:left;cursor:pointer";
+      el.textContent = label;
+      if (note) { const n = document.createElement("span"); n.textContent = note; n.style.cssText = "display:block;margin-top:2px;color:#a9a3c4;font-size:12px"; el.append(n); }
+      box.append(el);
+    };
+    if (kind === "phone") {
+      for (const a of APPS) row(`Open in ${a.name}`, a.href(url));
+      if (wc) row("Uniswap Wallet, Rainbow, Zerion, Ledger and more", undefined, () => done(wc), "Through WalletConnect: pick your app and approve there");
+      else row("Uniswap Wallet, Rainbow, Zerion, Ledger and more", undefined, undefined, "WalletConnect is being switched on: use one of the apps above for now");
+    } else for (const e of EXTENSIONS) row(e.name, e.href);
+    const c = document.createElement("button");
+    c.textContent = "Cancel";
+    c.style.cssText = "margin-top:8px;min-height:44px;background:none;border:0;color:#a9a3c4;cursor:pointer;font:500 13px Inter,system-ui,sans-serif";
+    c.onclick = () => done(null);
+    box.append(c);
+    wrap.onclick = (e) => { if (e.target === wrap) done(null); };
+    wrap.append(box);
+    document.body.append(wrap);
+  });
 }
 
 /** Forget the remembered wallet so the next action asks again. */

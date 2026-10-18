@@ -267,6 +267,14 @@ export function serve(engine: Engine) {
           recordBuyback({ at: Date.now(), tx, usd: Number(b.usd) || 0, amount: Number(b.amount) || 0, note: b.note ? String(b.note).slice(0, 200) : undefined });
           return json(res, 200, { ok: true, buybacks: buybacks() });
         }
+        if (p === "/api/admin/companies/purge-sim" && req.method === "POST") {
+          // The demo companies from before going live: gone for good, with their numbers. Real companies are never touched.
+          if (config.mode !== "live") return json(res, 400, { error: "Only in live mode." });
+          const gone = [...engine.store.companies.values()].filter((c) => c.sim).map((c) => ({ id: c.id, name: c.name }));
+          for (const g of gone) { engine.store.companies.delete(g.id); engine.store.metrics.delete(g.id); }
+          engine.store.markDirty(); await engine.store.flush();
+          return json(res, 200, { removed: gone, left: engine.store.companies.size });
+        }
         if (p === "/api/admin/swarm" && req.method === "GET") return json(res, 200, { orders: await swarmOrders() });
         if (p === "/api/admin/swarm/check" && req.method === "POST") { const b = await body(req); try { return json(res, 200, await checkSwarmOrder(String(b.key ?? ""))); } catch (e) { return json(res, 400, { error: (e as Error).message }); } }
         if (p === "/api/admin/swarm/placed" && req.method === "POST") {

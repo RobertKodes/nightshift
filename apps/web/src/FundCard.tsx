@@ -5,7 +5,7 @@ import { chooseWallet } from "./wallet";
 
 const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
 /** What a company needs before its first shift: IMD for the swarm, gas on Ethereum, gas where it sells. */
-const NEED = { imd: 2n * 10n ** 18n, eth: parseEther("0.002"), saleGas: parseEther("0.0005") };
+const NEED = { imd: 1n * 10n ** 18n, eth: parseEther("0.002"), saleGas: parseEther("0.0005") };
 type Bal = { imd: bigint; eth: bigint; saleGas: bigint };
 
 const flag = "ns-fund";
@@ -76,7 +76,7 @@ export function FundCard({ id, wallet, first = true, onFunded }: { id: string; w
     <div className="card fund-card">
       <div className="card-h"><h3>Fund the company</h3><span className="pill failed">{first ? "needed before its first shift" : "running low: top it up"}</span></div>
       <ul className="checks">
-        {row("IMD for the swarm (Ethereum)", formatUnits(bal.imd, 18), "2 IMD", !missing!.imd)}
+        {row("IMD for the swarm (Ethereum)", formatUnits(bal.imd, 18), "1 IMD", !missing!.imd)}
         {row("Gas on Ethereum", formatEther(bal.eth), "0.002 ETH", !missing!.eth)}
         {row("Gas on Base, for sales and withdrawals", formatEther(bal.saleGas), "0.0005 ETH", !missing!.saleGas)}
       </ul>
