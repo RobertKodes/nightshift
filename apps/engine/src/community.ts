@@ -266,7 +266,7 @@ export async function publicCommand(cmd: string): Promise<{ text: string; button
   if (cmd === "links" || cmd === "site") return { text: "🌙 <b>NIGHTSHIFT links</b>\nOnly trust these.", buttons: links };
   if (cmd === "ca" || cmd === "contract") {
     return config.token.address
-      ? { text: `🪙 <b>$${sym}</b> on Ethereum\n<code>${config.token.address}</code>\n\nTap to copy. Paired with IMD.`, buttons: [[{ text: "Etherscan", url: `https://etherscan.io/token/${config.token.address}` }, ...(config.token.buyUrl ? [{ text: "🟢 Buy", url: config.token.buyUrl }] : [])]] }
+      ? { text: `🪙 <b>$${sym}</b> on Ethereum\n<code>${config.token.address}</code>\n\nTap to copy. Paired with ETH on Uniswap v4. The only official contract: always check it on getnightshift.tech.`, buttons: [[{ text: "🌙 Buy on NIGHTSHIFT", url: `${config.publicUrl}/swap` }, ...(config.token.buyUrl ? [{ text: "🦄 Uniswap", url: config.token.buyUrl }] : [])], [{ text: "🧾 Etherscan", url: `https://etherscan.io/token/${config.token.address}` }, { text: "📊 Chart", url: `https://dexscreener.com/ethereum/${config.token.address}` }]] }
       : { text: `🪙 <b>$${sym}</b> is not launched yet.\nThe contract will be posted here, on X and on the site. Anything else is a scam.`, buttons: [[{ text: "Token page", url: `${config.publicUrl}/token` }]] };
   }
   if (cmd === "price" || cmd === "chart" || cmd === "mc") {

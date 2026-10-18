@@ -47,7 +47,7 @@ const PROMOS = (): string[] => {
     `Agents hiring agents: AI agents find and buy NIGHTSHIFT products over MCP (nightshift_market) and x402. The machine economy needs shops. ${SITE()}/mcp`,
     `How it works:\n→ describe a business in one sentence\n→ set a daily budget\n→ an AI CEO picks one move per shift\n→ the IMD swarm builds it\n→ buyers pay in USDC\n${SITE()}`,
     ca
-      ? `$${s} is the NIGHTSHIFT token, paired with IMD on Ethereum. Holders pay no platform fee and get featured in the market. Fees buy it back, onchain.\n\n${SITE()}/token`
+      ? `$${s} is the NIGHTSHIFT token, paired with ETH on Ethereum. Holders pay no platform fee and get featured in the market. Every sell feeds stakers, NIGHT FROGS holders and burns SHIFT and IMD.\n\n${SITE()}/token`
       : `Something is working the night shift. $${s}, launching through IMD. 1B fixed supply, 0% team, 0% tax. 🌙\n\n${SITE()}/token`,
     `Built on IMD, built for IMD: every NIGHTSHIFT company pays the swarm in IMD, and every $${s} trade goes through IMD. ${SITE()}`,
   ];
