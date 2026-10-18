@@ -59,9 +59,11 @@ function record(list: Score[], kind: keyof Boards = "duel"): void {
   try { writeFileSync(boardFile(), JSON.stringify(boards)); } catch (e) { console.error("pinball board", e); }
 }
 
+/** How long before the start both players get the seed: just enough to draw the table. */
+const SEED_LEAD = 400;
 const emit = (m: Match) => { for (const f of listeners.get(m.id) ?? []) f(m); };
 const view = (m: Match, me?: string) => ({
-  id: m.id, seed: m.seed, currency: m.currency, stake: m.stake, startedAt: m.startedAt, now: Date.now(), done: m.done, draw: m.draw, winner: m.winner,
+  id: m.id, seed: m.startedAt && Date.now() >= m.startedAt - SEED_LEAD ? m.seed : null, currency: m.currency, stake: m.stake, startedAt: m.startedAt, now: Date.now(), done: m.done, draw: m.draw, winner: m.winner,
   players: m.players.map((p) => ({ name: p.name, avatar: p.avatar, live: p.live, tick: p.tick, x: p.x, y: p.y, attacks: p.attacks, score: p.score, solo: p.solo, stats: p.stats ?? null, you: p.id === me, finished: p.inputs !== null })),
 });
 
@@ -86,6 +88,7 @@ export function queue(name: string, wallet: string | null, currency: Currency, s
   if (m && !m.startedAt && m.players.length === 1 && Date.now() - m.createdAt < 10 * 60_000 && (listeners.get(m.id)?.size ?? 0) > 0) {
     m.players.push(fresh());
     m.startedAt = Date.now() + 6_000; // the VS screen and a countdown, the same for both
+    setTimeout(() => emit(m), 6_000 - SEED_LEAD).unref?.();
     waiting.delete(key);
     emit(m);
     return { match: view(m, pid), player: pid };

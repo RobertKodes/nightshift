@@ -13,7 +13,7 @@ import "./pinball/arcade.css";
 type Currency = "FREE" | "IMD" | "SHIFT";
 type Mode = "PRACTICE" | Currency;
 type PlayerView = { name: string; avatar: string | null; live: number; x: number; y: number; attacks: { kind: Attack; tick: number }[]; score: number | null; solo: number | null; stats: Record<string, number> | null; you: boolean; finished: boolean };
-type MatchView = { id: string; seed: number; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; winner: string | null; players: PlayerView[] };
+type MatchView = { id: string; seed: number | null; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; winner: string | null; players: PlayerView[] };
 /** What is on the table (it stays mounted under the result) and what is shown over it. */
 type Play = { kind: "practice"; seed: number; run: number; id?: string } | { kind: "duel"; match: MatchView; player: string };
 type Over = { score: number; stats?: Record<string, number>; rank?: number | null };
@@ -291,8 +291,8 @@ export function PinballPage() {
 
       {play && <main className="arc-game">
         <PinballGame
-          key={play.kind === "practice" ? `p${play.run}` : play.match.id}
-          seed={play.kind === "practice" ? play.seed : play.match.seed}
+          key={play.kind === "practice" ? `p${play.run}` : `${play.match.id}-${play.match.seed ?? "vs"}`}
+          seed={play.kind === "practice" ? play.seed : play.match.seed ?? 0}
           startAt={play.kind === "duel" ? play.match.startedAt ?? undefined : undefined}
           clockOffset={play.kind === "duel" ? clock.current : 0}
           name={me} avatar={avatar} rival={rival}
