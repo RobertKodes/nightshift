@@ -289,7 +289,7 @@ export async function publicCommand(cmd: string): Promise<{ text: string; button
     return { text: ["🎱 <b>SPACE PINBALL</b>", "PvP duels on the same table and seed: black holes throw meteors at your rival, the frog crew sends heavy gravity. Every score is replayed and verified by the server.", "", rows.length ? "<b>All-time best</b>" : "The board is open: be the first.", ...rows].join("\n"), buttons: [[{ text: "🎱 Play Space Pinball", url: `${config.publicUrl}/games/pinball` }]] };
   }
   if (cmd === "chess") {
-    return { text: ["♟ <b>NIGHT CHESS</b>", "3D real-time chess with the NIGHT FROGS as pieces. Blitz 3+2 and 5+0, rapid 10+0, rated, with the clocks kept by the server. No rival online? Practise against Frog #7.", "", "Coming to the Game Room very soon."].join("\n"), buttons: [[{ text: "🎮 The Game Room", url: `${config.publicUrl}/games` }]] };
+    return { text: ["♟ <b>NIGHT CHESS</b>", "3D real-time chess on a NIGHTSHIFT board: blitz 3+2 and 5+0, rapid 10+0, rated, clocks kept by the server. No rival online? Play Frog #7, the bot.", "", "Live now, free to play. Real IMD and $SHIFT stakes open with the escrow."].join("\n"), buttons: [[{ text: "♟ Play NIGHT CHESS", url: `${config.publicUrl}/games/chess` }]] };
   }
   if (cmd === "games" || cmd === "game" || cmd === "play" || cmd === "arcade") {
     // the Game Room: what is live, tonight's best, where to play
