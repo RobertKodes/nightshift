@@ -1,3 +1,4 @@
+import { LiveHoldings } from "./LiveHoldings";
 import { DEV_WALLET, IMD_BURN, NIGHT_FROGS, RULE, TOKENOMICS, TREASURY_WALLET, TokenomicsBars, symbolOf, useToken } from "./landing/content";
 
 const ether = (a: string) => `https://etherscan.io/address/${a}`;
@@ -46,7 +47,12 @@ export function TokenomicsPage() {
         </div>
         <TokenomicsBars />
       </section>
-      <p className="dim">No presale, no private round, no team unlock schedule. The dev's {TOKENOMICS.find((x) => x.k === "dev")?.pct}% sits in a public wallet; when part of it is staked with a lock, the bot announces it with the transaction.</p>
+      {t?.on && t.address && <>
+        <h3 className="guide-h3">Where every $SHIFT is right now</h3>
+        <p className="dim">Read live from Ethereum, every minute. Click a row to check it on Etherscan.</p>
+        <LiveHoldings token={t.address} contracts={c} />
+      </>}
+      <p className="dim">No presale, no private round, no team unlock schedule. At launch IMD seeded 88.89% of the supply in the pool, gave 10% to its swarm and 1.11% (11.1M) to the dev wallet. The treasury then made the first buy like anyone else: 0.91 ETH for 81.49M $SHIFT, paid into the pool. Both wallets are public; when part of them is staked with a lock, the bot announces it with the transaction.</p>
 
       <h2 id="rule" className="guide-h2">The one rule</h2>
       <p>Every fee NIGHTSHIFT takes, from any product and in any currency (ETH, ${sym}, IMD or USDC), is split the same way. The contract that splits it has the four destinations hard-coded.</p>
@@ -73,6 +79,7 @@ export function TokenomicsPage() {
       <h2 id="launch" className="guide-h2">Launch day</h2>
       <ul className="frogs-util">
         <li><b>IMD deploys</b> the token, the pool's hook, the fee splitter and the rewards contract, after its swarm built, tested and audited them. IMD's wallet only deploys: it gets no role and no tokens beyond the swarm's 10%.</li>
+        <li><b>The first buy.</b> On launch night the treasury bought 81.49M $SHIFT for 0.91 ETH (<a href="https://etherscan.io/tx/0xf5a5ac372ea3fa89cc2f05372263b201e722da06c17f4ed07dc2c46bd5dcddfa" target="_blank" rel="noreferrer">the transaction</a>), which opened trading to everyone.</li>
         <li><b>Trading opens with one buy.</b> Until the treasury wallet {TREASURY_WALLET.slice(0, 6)}…{TREASURY_WALLET.slice(-4)} makes the first buy, the hook refuses every other swap. This stops bots from buying the first block. The moment that buy lands, trading opens to everyone, for good: nobody can close it again.</li>
         <li><b>Checked before it opens.</b> Between deploy and that first buy, NIGHTSHIFT checks the contracts on chain against this page. If anything is wrong, the first buy never happens and nobody can trade.</li>
         <li><b>The contract address</b> is published here, on Telegram and on X only after trading opens. Anything earlier is fake.</li>

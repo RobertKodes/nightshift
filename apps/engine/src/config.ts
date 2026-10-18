@@ -76,8 +76,8 @@ export const config = {
   botAnimations: (env.BOT_ANIMATIONS ?? "1") === "1",
   /** Pin each X raid in the community chat (the bot needs the pin right). */
   raidPin: (env.RAID_PIN ?? "1") === "1",
-  xUrl: env.X_URL ?? "https://x.com/nightshiftimd",
-  telegramUrl: env.TELEGRAM_URL ?? "https://t.me/getnightshift",
+  xUrl: env.X_URL || "https://x.com/nightshiftimd",
+  telegramUrl: env.TELEGRAM_URL || "https://t.me/getnightshift",
   blueskyHandle: (env.BLUESKY_HANDLE ?? "nightshifttech.bsky.social").replace(/^@/, ""),
   /** The project account's app password (Bluesky → Settings → Privacy and security → App passwords). */
   blueskyAppPassword: env.BLUESKY_APP_PASSWORD ?? "",
