@@ -20,6 +20,7 @@ import { GuidePage } from "./GuidePage";
 import { TermsPage } from "./TermsPage";
 import { TokenomicsPage } from "./TokenomicsPage";
 import { GameRoomPage } from "./GameRoomPage";
+import { PinballPage } from "./PinballPage";
 import { LaunchpadPage } from "./LaunchpadPage";
 import "./styles.css";
 import "./landing/landing.css";
@@ -31,6 +32,8 @@ function App() {
   const seg = path.split("/").filter(Boolean);
   // The landing is a full-bleed experience with its own header; every other route uses the app shell.
   if (seg.length === 0) return <Landing />;
+  // Space Pinball is a full-screen arcade with its own bar, like the landing.
+  if (seg[0] === "games" && seg[1] === "pinball") return <PinballPage />;
   let page: React.ReactNode = <Home health={health} />;
   if (seg[0] === "co" && seg[1]) page = <CompanyPage id={seg[1]} health={health} />;
   if (seg[0] === "c" && seg[1]) page = <PublicPage slug={seg[1]} health={health} />;

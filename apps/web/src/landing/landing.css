@@ -468,3 +468,11 @@
 .tkn-bar span.dev { background: linear-gradient(90deg, #5d7fe0, var(--sky, #8fb0ff)); color: #03020a; }
 .tkn-bars li i.dev { background: #8fb0ff; }
 @media (max-width: 640px) { .ns-mnav { inset: 70px 0 0; } }
+
+/* the staked supply card (staking page) */
+.staked-card .staked-row { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 4px 12px; padding: 14px 0 12px; }
+.staked-card .staked-row b { font: 600 clamp(26px, 5vw, 38px) / 1 var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+.staked-card .staked-row em { font: italic 400 30px / 1 var(--serif); color: var(--uv-hi); }
+.staked-card .staked-row span { font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.staked-card .staked-bar { height: 6px; border-radius: 3px; background: var(--uv-soft); overflow: hidden; }
+.staked-card .staked-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--uv), var(--acid)); box-shadow: 0 0 12px var(--uv); transition: width .8s ease; }

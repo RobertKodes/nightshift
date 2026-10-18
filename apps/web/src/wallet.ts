@@ -19,14 +19,34 @@ const KEY = "ns-wallet";
 const remembered = () => { try { return localStorage.getItem(KEY); } catch { return null; } };
 const remember = (rdns: string) => { try { localStorage.setItem(KEY, rdns); } catch { /* private window */ } };
 
+const WC_ICON = "data:image/svg+xml;base64," + btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#3b99fc"/><path d="M9.6 12.4c3.5-3.4 9.3-3.4 12.8 0l.4.4a.4.4 0 0 1 0 .6l-1.5 1.4a.2.2 0 0 1-.3 0l-.6-.6a6.3 6.3 0 0 0-8.8 0l-.6.6a.2.2 0 0 1-.3 0l-1.5-1.4a.4.4 0 0 1 0-.6l.4-.4Zm15.8 2.9 1.3 1.3a.4.4 0 0 1 0 .6l-6 5.8a.5.5 0 0 1-.6 0L16 18.9a.1.1 0 0 0-.2 0l-4.2 4.1a.5.5 0 0 1-.6 0l-6-5.8a.4.4 0 0 1 0-.6l1.3-1.3a.5.5 0 0 1 .6 0l4.2 4.1c.1.1.2.1.2 0l4.2-4.1a.5.5 0 0 1 .6 0l4.2 4.1c.1.1.2.1.2 0l4.2-4.1a.5.5 0 0 1 .6 0Z" fill="#fff"/></svg>');
+let wcId: Promise<string | null> | null = null;
+const walletConnectId = () => (wcId ??= fetch("/api/wallet-config").then((r) => r.json()).then((d) => (d.walletConnect as string) || null).catch(() => null));
+let wcProvider: unknown = null;
+/** WalletConnect: a wallet app on the phone (QR code on a computer), loaded only when chosen. */
+async function walletConnect(projectId: string): Promise<unknown> {
+  if (wcProvider) return wcProvider;
+  const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
+  const p = await EthereumProvider.init({
+    projectId, chains: [1], optionalChains: [8453], showQrModal: true,
+    metadata: { name: "NIGHTSHIFT", description: "Autonomous AI companies and Space Pinball", url: location.origin, icons: [`${location.origin}/brand/shift-icon-512.png`] },
+  });
+  await p.connect();
+  wcProvider = p;
+  return p;
+}
+
 async function discover(): Promise<Detail[]> {
   window.dispatchEvent(new Event("eip6963:requestProvider"));
-  await new Promise((r) => setTimeout(r, 250));
+  const [, id] = await Promise.all([new Promise((r) => setTimeout(r, 250)), walletConnectId()]);
   const list = [...found.values()];
   const legacy = (window as unknown as { ethereum?: unknown }).ethereum;
   if (!list.length && legacy) list.push({ info: { uuid: "legacy", name: "Browser wallet", icon: "", rdns: "legacy" }, provider: legacy });
+  if (id) list.push({ info: { uuid: "walletconnect", name: "WalletConnect · phone wallet", icon: WC_ICON, rdns: "walletconnect" }, provider: id });
   return list;
 }
+/** A picked entry's provider; WalletConnect's is made on first use. */
+const open = (d: Detail): Promise<unknown> => (d.info.rdns === "walletconnect" ? walletConnect(d.provider as string) : Promise.resolve(d.provider));
 
 function pick(list: Detail[]): Promise<Detail | null> {
   return new Promise((resolve) => {
@@ -61,13 +81,13 @@ function pick(list: Detail[]): Promise<Detail | null> {
 export async function chooseWallet(opts: { ask?: boolean } = {}): Promise<unknown> {
   const list = await discover();
   if (!list.length) throw new Error("No wallet in this browser. Install the Uniswap Wallet, MetaMask or Rabby extension.");
-  if (list.length === 1) return list[0]!.provider;
+  if (list.length === 1) return open(list[0]!);
   const saved = list.find((d) => d.info.rdns === remembered());
-  if (saved && !opts.ask) return saved.provider;
+  if (saved && !opts.ask) return open(saved);
   const d = await pick(list);
   if (!d) throw new Error("No wallet chosen.");
   remember(d.info.rdns);
-  return d.provider;
+  return open(d);
 }
 
 /** Forget the remembered wallet so the next action asks again. */

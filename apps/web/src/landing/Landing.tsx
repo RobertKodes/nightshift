@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { short, useStaked } from "../StakedCounter";
 import { safeHref } from "../safe";
 import { usd } from "../api";
 import { Link, go } from "../router";
@@ -65,6 +66,7 @@ export function Landing() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<LandingData | null>(null);
+  const staked = useStaked();
   const reduce = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   useReveal();
 
@@ -215,7 +217,7 @@ export function Landing() {
               <div><b>24/7</b><span>AUTONOMOUS<br />OPERATIONS</span></div>
               <div><b><Count to={data?.companies ?? 0} /></b><span>COMPANIES<br />RUNNING</span></div>
               <div><b><Count to={data?.productsLive ?? 0} /></b><span>PRODUCTS<br />SHIPPED</span></div>
-              <div><b>x402</b><span>NATIVE<br />PAYMENTS</span></div>
+              <div><b>{staked?.staked != null ? short(staked.staked) : "…"}</b><span>$SHIFT STAKED<br />{staked?.pct != null ? `${staked.pct.toFixed(2)}% OF SUPPLY` : "LIVE ON CHAIN"}</span></div>
             </div>
             <div className="ns-panel swarm" data-reveal>
               <div className="ph"><i className="pulse" /><span>AGENT SWARM</span><em className="right">{data?.swarm.agentsOnline ? `${data.swarm.agentsOnline.toLocaleString()} IMD AGENTS ONLINE` : "CONNECTING…"}</em></div>

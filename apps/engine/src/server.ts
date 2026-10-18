@@ -8,6 +8,7 @@ import { balances, eth, sales, salesWallet } from "./chain.js";
 import { findPool } from "./v4.js";
 import { liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
 import { keeperAccount } from "./keeper.js";
+import { board as pinBoard, finish as pinFinish, get as pinGet, leave as pinLeave, listen as pinListen, progress as pinProgress, queue as pinQueue, stakes as pinStakes } from "./pinball.js";
 import { claimsOf, epochs, markPosted } from "./frogpot.js";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
@@ -55,11 +56,11 @@ const json = (res: ServerResponse, status: number, body: unknown, headers: Recor
   res.end(JSON.stringify(body, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
 };
 
-async function body(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function body(req: IncomingMessage, max = 64_000): Promise<Record<string, unknown>> {
   let raw = "";
   for await (const chunk of req) {
     raw += chunk;
-    if (raw.length > 64_000) throw new Error("body too large");
+    if (raw.length > max) throw new Error("body too large");
   }
   return raw ? JSON.parse(raw) : {};
 }
@@ -150,7 +151,7 @@ function series(visits: number[], sales: { at: number; usd: number }[]) {
   return { bucketMs: bucket, points: out };
 }
 
-const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".woff2": "font/woff2" };
+const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".mp4": "video/mp4", ".webmanifest": "application/manifest+json" };
 
 function serveStatic(res: ServerResponse, path: string): boolean {
   if (!existsSync(config.webDist)) return false;
@@ -162,6 +163,8 @@ function serveStatic(res: ServerResponse, path: string): boolean {
   res.end(readFileSync(f));
   return true;
 }
+
+let stakedCache: { at: number; staked: number } | null = null;
 
 export function serve(engine: Engine) {
   const server = createServer(async (req, res) => {
@@ -272,6 +275,51 @@ export function serve(engine: Engine) {
       if (p === "/api/frogs/staking") {
         const w = new URL(req.url ?? "/", config.publicUrl).searchParams.get("wallet") ?? "";
         return json(res, 200, { board: stakingBoard(20), me: /^0x[0-9a-fA-F]{40}$/.test(w) ? stakingOf(w) : null });
+      }
+      if (p.startsWith("/api/pinball/")) {
+        const parts = p.split("/").filter(Boolean); // api pinball …
+        if (p === "/api/pinball/stakes") return json(res, 200, pinStakes());
+        if (p === "/api/pinball/board") return json(res, 200, pinBoard());
+        if (p === "/api/pinball/queue" && req.method === "POST") {
+          if (limited(req, "pinball-queue", 20, 600_000)) return json(res, 429, { error: "slow down" });
+          const b = await body(req);
+          try { return json(res, 200, pinQueue(String(b.name ?? ""), engine.auth.owner(req), String(b.currency ?? "FREE") as never, Number(b.stake ?? 0), typeof b.avatar === "string" ? b.avatar : null)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
+        if (parts[2] === "match" && parts[3]) {
+          const id = parts[3];
+          if (parts[4] === "events") {
+            const me = url.searchParams.get("player") ?? undefined;
+            const first = pinGet(id, me);
+            if (!first) return json(res, 404, { error: "no such match" });
+            res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+            res.write(`data: ${JSON.stringify(first)}\n\n`);
+            const off = pinListen(id, () => res.write(`data: ${JSON.stringify(pinGet(id, me))}\n\n`));
+            const ping = setInterval(() => res.write(": ping\n\n"), 20_000);
+            req.on("close", () => { off(); clearInterval(ping); });
+            return;
+          }
+          if (parts[4] === "progress" && req.method === "POST") { const b = await body(req); pinProgress(id, String(b.player ?? ""), b as never); return json(res, 200, { ok: true }); }
+          if (parts[4] === "leave" && req.method === "POST") { const b = await body(req); pinLeave(id, String(b.player ?? "")); return json(res, 200, { ok: true }); }
+          if (parts[4] === "finish" && req.method === "POST") {
+            if (limited(req, `pinball-finish:${id}`, 4, 60_000)) return json(res, 429, { error: "slow down" });
+            const b = await body(req, 400_000);
+            try { return json(res, 200, pinFinish(id, String(b.player ?? ""), b.inputs)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          }
+          const m = pinGet(id, url.searchParams.get("player") ?? undefined);
+          return m ? json(res, 200, m) : json(res, 404, { error: "no such match" });
+        }
+        return json(res, 404, { error: "not found" });
+      }
+      if (p === "/api/wallet-config") return json(res, 200, { walletConnect: config.walletConnect || null });
+      if (p === "/api/staked") {
+        // How much $SHIFT sits staked in ShiftRewards, read on chain at most once a minute.
+        if (!stakedCache || Date.now() - stakedCache.at > 60_000) {
+          const r = launchState()?.contracts?.rewards as `0x${string}` | undefined;
+          const total = r ? await eth.readContract({ address: r, abi: [{ type: "function", name: "totalSupply", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }], functionName: "totalSupply" }).catch(() => null) : null;
+          if (total !== null) stakedCache = { at: Date.now(), staked: Number(total / 10n ** 18n) };
+        }
+        const supply = 1_000_000_000;
+        return json(res, 200, stakedCache ? { staked: stakedCache.staked, supply, pct: (stakedCache.staked / supply) * 100 } : { staked: null, supply, pct: null });
       }
       if (p === "/api/frogs/claims") {
         const a = url.searchParams.get("address") ?? "";

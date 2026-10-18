@@ -15,6 +15,17 @@ export function GameRoomPage() {
       <h1>NIGHTSHIFT Game Room. <em>For awesome night breaks.</em></h1>
       <p className="lead">Short player-versus-player games between shifts. Two players put in the same amount of $SHIFT or IMD; the winner takes the pot, minus a 5% fee split by the one rule, so every game also burns $SHIFT and IMD.</p>
 
+      <section className="tkn-card pb-promo" aria-labelledby="pb-promo-title">
+        <div className="pb-promo-visual" aria-hidden="true"><img src="/games/pinball/playfield.webp" alt="" /></div>
+        <div className="pb-promo-content">
+          <div className="pb-promo-meta"><span className="pb-promo-label">NIGHTSHIFT ORIGINAL / 01</span><span className="pb-promo-status">LIVE</span></div>
+          <h2 id="pb-promo-title">Space <em>Pinball</em></h2>
+          <p>Skill duels. Same table, same seed. Free to play now.</p>
+          <a className="pb-promo-play" href="/games/pinball">Play now</a>
+          <small>IMD and $SHIFT stakes open with the escrow</small>
+        </div>
+      </section>
+
       <section className="tkn-card">
         <div className="tkn-head"><div><b>HOW A MATCH WORKS</b><span>Ethereum · $SHIFT or IMD · one contract holds the pot</span></div><span className="tkn-state">COMING SOON</span></div>
         <div className="frogs-traits">

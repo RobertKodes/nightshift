@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, formatEther, http, parseAbi, parseAbiItem, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
+import { StakedSupply } from "./StakedCounter";
 
 const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
 /** ShiftRewards, as fixed in the launch spec IMD checked: stake with a lock, withdraw unlocked, claim. */
@@ -107,6 +108,8 @@ export function StakePage() {
       <span className="eyebrow">{ready ? "STAKING · LIVE" : "STAKING · OPENS AT LAUNCH"}</span>
       <h1>Stake ${sym}. <em>Lock it, earn from every sell.</em></h1>
       <p className="lead">Half of every NIGHTSHIFT reward streams to ${sym} stakers over 7 days, in ETH and ${sym}. The more you stake and the longer you lock, the bigger your share. Your stake stays yours: nobody, us included, can touch it.</p>
+
+      <StakedSupply sym={sym} />
 
       <section className="tkn-card">
         <div className="tkn-head"><div><b>STAKE</b><span>Ethereum · ShiftRewards{rewards ? ` · ${rewards.slice(0, 6)}…${rewards.slice(-4)}` : ""}</span></div><span className="tkn-state">{ready ? "LIVE" : "SOON"}</span></div>

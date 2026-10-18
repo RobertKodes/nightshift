@@ -418,3 +418,30 @@ table.plain.addr a { overflow-wrap: anywhere; font-size: 12.5px; }
 .swap-slip button { background: none; border: 1px solid var(--line); color: var(--dim); padding: 4px 8px; font: 12px var(--mono); cursor: pointer; }
 .swap-slip button.on { color: var(--text); border-color: var(--text); }
 .swap-links { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font: 12px var(--mono); }
+
+
+/* Game Room: the Space Pinball card */
+.ns-app .docs .pb-promo { position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 0; min-height: 340px; padding: 0; overflow: hidden; margin-bottom: 18px; border: 1px solid rgba(164, 139, 255, .38); border-radius: 2px; background: radial-gradient(ellipse at 80% 15%, rgba(124, 92, 255, .15), transparent 65%), rgba(10, 8, 22, .88); box-shadow: 0 28px 70px -40px rgba(124, 92, 255, .5), inset 0 1px rgba(242, 239, 255, .05); backdrop-filter: blur(16px); }
+.pb-promo .pb-promo-visual { position: relative; min-height: 340px; overflow: hidden; border-right: 1px solid rgba(164, 139, 255, .22); background: #03020a; }
+.pb-promo .pb-promo-visual::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, transparent 50%, rgba(10, 8, 22, .7)), linear-gradient(0deg, rgba(3, 2, 10, .35), transparent 50%); }
+.pb-promo .pb-promo-visual img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; opacity: .85; }
+.pb-promo .pb-promo-content { display: grid; align-content: center; justify-items: start; gap: 18px; min-width: 0; padding: clamp(24px, 3vw, 40px); }
+.pb-promo .pb-promo-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; width: 100%; }
+.pb-promo .pb-promo-label { color: #a48bff; font: 500 9px/1.5 var(--mono); letter-spacing: .13em; }
+.pb-promo .pb-promo-status { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: #b8ff4a; font: 500 9px/1.5 var(--mono); letter-spacing: .14em; }
+.pb-promo .pb-promo-status::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px rgba(184, 255, 74, .45); }
+.ns-app .docs .pb-promo h2 { margin: 0; color: #f2efff; font: 400 clamp(42px, 4.4vw, 64px)/.98 var(--serif); letter-spacing: -.025em; }
+.pb-promo h2 em { color: #a48bff; font-weight: 400; }
+.pb-promo .pb-promo-content p { max-width: 34ch; margin: 0; color: #b9b3d0; font-size: 14px; line-height: 1.65; }
+.pb-promo .pb-promo-play { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; min-width: 142px; padding: 12px 24px; border: 1px solid #a48bff; background: linear-gradient(120deg, rgba(242, 239, 255, .15), transparent 45%), linear-gradient(180deg, #6d4dff, #4a2fd6); color: #fff; text-decoration: none; font: 600 11px/1.5 var(--mono); letter-spacing: .12em; text-transform: uppercase; box-shadow: 0 8px 30px -10px rgba(124, 92, 255, .6); transition: box-shadow .2s, filter .2s; }
+.pb-promo .pb-promo-play:hover { filter: brightness(1.12); box-shadow: 0 10px 36px -8px rgba(124, 92, 255, .8); }
+.pb-promo .pb-promo-play:focus-visible { outline: 2px solid #f2efff; outline-offset: 4px; box-shadow: 0 0 0 7px rgba(124, 92, 255, .25); }
+.pb-promo .pb-promo-content small { color: #a9a3c4; font: 400 9px/1.7 var(--mono); }
+@media (max-width: 700px) {
+  .ns-app .docs .pb-promo { grid-template-columns: minmax(0, 1fr); }
+  .pb-promo .pb-promo-visual { min-height: 220px; border-right: 0; border-bottom: 1px solid rgba(164, 139, 255, .22); }
+  .pb-promo .pb-promo-visual img { object-position: 50% 35%; }
+  .pb-promo .pb-promo-visual::after { background: linear-gradient(0deg, rgba(10, 8, 22, .8), transparent 65%); }
+  .pb-promo .pb-promo-content { padding: 24px; }
+}
+@media (prefers-reduced-motion: reduce) { .pb-promo .pb-promo-play { transition: none; } }

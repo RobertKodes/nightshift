@@ -1,0 +1,19 @@
+{
+  "name": "NIGHTSHIFT Space Pinball",
+  "short_name": "Space Pinball",
+  "description": "PvP space pinball by NIGHTSHIFT. Same table, same seed, every duel verified by replay.",
+  "id": "/games/pinball",
+  "start_url": "/games/pinball?app=1",
+  "scope": "/games/pinball",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "portrait",
+  "background_color": "#03020a",
+  "theme_color": "#03020a",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "/games/pinball/app/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/games/pinball/app/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/games/pinball/app/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

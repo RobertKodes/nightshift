@@ -78,6 +78,8 @@ export const config = {
   raidPin: (env.RAID_PIN ?? "1") === "1",
   xUrl: env.X_URL || "https://x.com/nightshiftimd",
   telegramUrl: env.TELEGRAM_URL || "https://t.me/getnightshift",
+  /** WalletConnect (Reown) project id: phones and the installed game connect a wallet app with it. */
+  walletConnect: env.WALLETCONNECT_PROJECT_ID ?? "",
   blueskyHandle: (env.BLUESKY_HANDLE ?? "nightshifttech.bsky.social").replace(/^@/, ""),
   /** The project account's app password (Bluesky → Settings → Privacy and security → App passwords). */
   blueskyAppPassword: env.BLUESKY_APP_PASSWORD ?? "",
