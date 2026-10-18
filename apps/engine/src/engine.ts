@@ -100,13 +100,14 @@ export class Engine {
       startCommunity();
     }
     setInterval(() => void this.#followTokenLaunch(), 60_000);
-    // After launch: the keeper splits fees and burns IMD daily at 03:00 UTC; the frog list is built on Mondays.
+    // After launch: the keeper splits fees and burns IMD every 2 hours (01:00, 03:00 … UTC); the frog list is built on Mondays.
     let kept = "", built = "";
     setInterval(() => {
       const l = launchState();
       if (!l?.open || !l.contracts?.splitter) return;
       const d = new Date(), day = d.toISOString().slice(0, 10);
-      if (d.getUTCHours() === 3 && kept !== day) { kept = day; void this.keeperRun(); }
+      const slot = `${day}-${d.getUTCHours()}`;
+      if (d.getUTCHours() % 2 === 1 && kept !== slot) { kept = slot; void this.keeperRun(); }
       if (d.getUTCDay() === 1 && d.getUTCHours() === 0 && built !== day) { built = day; void this.frogEpoch(); }
     }, 60_000);
     setInterval(() => void houseTick().catch((e) => console.error("house", e)), 60_000);
@@ -429,7 +430,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     }
     const r = await runKeeper(this.vault, l?.contracts ?? {}, { launchNumber: n, payer: DEV_WALLET }).catch((e) => ({ at: Date.now(), did: [], skipped: [], error: (e as Error).message }));
     this.lastKeeper = r;
-    void this.adminCard(`🧹 <b>Keeper run</b>\n${r.error ? `⚠️ ${esc(r.error)}` : ""}${r.did.map((x) => `✅ ${esc(x)}`).join("\n")}${r.skipped.length ? `\n${r.skipped.map((x) => `· ${esc(x)}`).join("\n")}` : ""}`, [[{ text: "⚙️ Setup", url: `${config.publicUrl}/setup` }]], `keeper-${r.at}`, r.error ? "alert" : "report");
+    if (r.error || r.did.length) void this.adminCard(`🧹 <b>Keeper run</b>\n${r.error ? `⚠️ ${esc(r.error)}` : ""}${r.did.map((x) => `✅ ${esc(x)}`).join("\n")}${r.skipped.length ? `\n${r.skipped.map((x) => `· ${esc(x)}`).join("\n")}` : ""}`, [[{ text: "⚙️ Setup", url: `${config.publicUrl}/setup` }]], `keeper-${r.at}`, r.error ? "alert" : "report");
     return r;
   }
 

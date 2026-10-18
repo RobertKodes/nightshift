@@ -110,11 +110,14 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "price", description: "Price, market cap, liquidity" },
     { command: "ca", description: "The official contract address" },
     { command: "links", description: "Website, X, Telegram, Bluesky" },
+    { command: "games", description: "The Game Room: Space Pinball and more" },
     { command: "frogs", description: "NIGHT FROGS on OpenSea" },
     { command: "memes", description: "Memes and art from the night crew" },
   ];
   void tg(token, "setMyCommands", { commands: open });
-  for (const id of admins) void tg(token, "setMyCommands", { scope: { type: "chat", chat_id: Number(id) }, commands: [
+  void tg(token, "setMyCommands", { scope: { type: "all_group_chats" }, commands: open });
+  for (const id of admins.filter((x) => Number(x) < 0)) void tg(token, "deleteMyCommands", { scope: { type: "chat", chat_id: Number(id) } });
+  for (const id of admins.filter((x) => Number(x) > 0)) void tg(token, "setMyCommands", { scope: { type: "chat", chat_id: Number(id) }, commands: [
     { command: "status", description: "Mode, companies, swarm, price" },
     { command: "companies", description: "Every company and its money" },
     { command: "market", description: "What is on sale" },
@@ -167,7 +170,8 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
         const pub = await h.open(cmd, args).catch(() => null);
         const rt = m?.reply_to_message?.from;
         const ctx: CommandContext = { chat, group: m?.chat.type === "group" || m?.chat.type === "supergroup", replyTo: rt && !rt.is_bot ? { id: String(rt.id), name: rt.username ? `@${rt.username}` : (rt.first_name ?? String(rt.id)) } : undefined };
-        const reply: Reply | null = pub ?? (isAdmin ? await h.admin(cmd, args, ctx).catch((e) => ({ text: `⚠️ ${esc((e as Error).message)}` })) : m?.chat.type === "private" ? { text: "🌙 Public commands: /price · /ca · /links" } : null);
+        const adminHere = isAdmin && (!ctx.group || cmd === "mute" || cmd === "unmute");
+        const reply: Reply | null = pub ?? (adminHere ? await h.admin(cmd, args, ctx).catch((e) => ({ text: `⚠️ ${esc((e as Error).message)}` })) : m?.chat.type === "private" ? { text: "🌙 Public commands: /price · /ca · /links" } : null);
         if (!reply) continue;
         if (q?.message && cmd !== "stop") await tg(token, "editMessageText", { chat_id: chat, message_id: q.message.message_id, text: reply.text, parse_mode: "HTML", disable_web_page_preview: true, reply_markup: kb(reply.buttons) });
         else await telegram(token, chat, reply.text, reply.buttons);

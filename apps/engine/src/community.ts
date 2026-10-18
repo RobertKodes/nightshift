@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { board as pinballBoard } from "./pinball.js";
 import { join } from "node:path";
 import { erc20Abi, parseAbiItem } from "viem";
 import { eth } from "./chain.js";
@@ -268,7 +269,7 @@ export function welcome(names: string[]): { text: string; buttons: Button[][] } 
       "NIGHTSHIFT turns one sentence into an AI company, built by the IMD swarm while you sleep.", "",
       config.token.address ? `🪙 $${esc(sym)}: <code>${config.token.address}</code>` : `🪙 $${esc(sym)}: coming soon. The contract is only ever posted by the team, here and on the site.`,
       "⚠️ Admins never DM first. Nobody here will ask for your seed phrase.",
-      "", "/ca · /price · /links · /frogs · /memes",
+      "", "/ca · /price · /links · /games · /frogs · /memes",
     ].join("\n"),
     buttons: [[{ text: "🌐 Website", url: config.publicUrl }, { text: "𝕏 Follow", url: config.xUrl }], [{ text: "🚀 Launch a company", url: `${config.publicUrl}/launch` }]],
   };
@@ -282,6 +283,22 @@ export async function publicCommand(cmd: string): Promise<{ text: string; button
   const sym = esc(config.token.symbol);
   const links: Button[][] = [[{ text: "🌐 Website", url: config.publicUrl }, { text: "𝕏 X", url: config.xUrl }], [{ text: "💬 Telegram", url: config.telegramUrl }, { text: "🦋 Bluesky", url: `https://bsky.app/profile/${config.blueskyHandle}` }], [{ text: "🌊 NIGHT FROGS on OpenSea", url: OPENSEA_URL }], [{ text: "👨‍💻 Developer · @probert_mihai", url: "https://x.com/probert_mihai" }]];
   if (cmd === "memes" || cmd === "meme" || cmd === "art") return { text: "🎨 <b>NIGHTSHIFT memes &amp; art</b>\nAll the memes and art from the night crew are posted here. Join and share yours 🐸", buttons: [[{ text: "🎨 Open memes & art", url: MEMES_URL }]] };
+  if (cmd === "games" || cmd === "game" || cmd === "play" || cmd === "arcade") {
+    // the Game Room: what is live, tonight's best, where to play
+    const top = (() => { try { const b = pinballBoard() as { board?: { name: string; score: number }[] }; return b.board?.[0]; } catch { return undefined; } })();
+    return { text: [
+      "🎮 <b>NIGHTSHIFT GAME ROOM</b>", "",
+      "🎱 <b>Space Pinball</b> · live, free", "PvP duels on the same table and seed, every score verified by replay. Solo board too.",
+      top ? `🥇 Tonight's best: <b>${esc(top.name)}</b> · ${top.score.toLocaleString("en-US")}` : "🥇 Tonight's board is open: be the first.", "",
+      "♟ <b>NIGHT CHESS</b> · coming next", "3D real-time chess, blitz and rapid, rated.", "",
+      "<b>Planned</b>",
+      "🪙 Frog Flip · two players, one coin, randomness from Chainlink VRF",
+      "✊ Rock, Paper, Frog · secret picks, then reveal",
+      "🎲 Night Dice · highest roll takes the pot",
+      "🏁 Moon Race · a short race of reflexes", "",
+      "💎 Games with real IMD and $SHIFT stakes open once the IMD swarm's escrow contract is deployed and audited.",
+    ].join("\n"), buttons: [[{ text: "🎱 Play Space Pinball", url: `${config.publicUrl}/games/pinball` }], [{ text: "🎮 The Game Room", url: `${config.publicUrl}/games` }]] };
+  }
   if (cmd === "frogs" || cmd === "opensea" || cmd === "nft" || cmd === "nfts") return { text: "🐸 <b>NIGHT FROGS</b>\n500 onchain frogs, the crew of the 3 AM shift. Holders share half of every NIGHTSHIFT reward, by shift hours.\n\nOnly trust this collection link.", buttons: [[{ text: "🌊 NIGHT FROGS on OpenSea", url: OPENSEA_URL }], [{ text: "🐸 Rewards and the crew", url: `${config.publicUrl}/frogs` }]] };
   if (cmd === "links" || cmd === "site") return { text: "🌙 <b>NIGHTSHIFT links</b>\nOnly trust these.", buttons: links };
   if (cmd === "ca" || cmd === "contract") {
