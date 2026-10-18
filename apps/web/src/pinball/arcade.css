@@ -405,3 +405,5 @@
 .arc .arc-name-field .arc-name { border-bottom: 0; padding: 2px 0; }
 .arc .arc-name-field .arc-name::placeholder { color: var(--dim); opacity: .8; }
 .arc .arc-name-field .icon { flex: none; color: var(--uv-hi); }
+.arc .arc-board-tabs.kind { margin-right: 6px; }
+.arc .arc-board-tabs.kind button.on { color: var(--ink); border-color: var(--edge); background: var(--uv-soft); }

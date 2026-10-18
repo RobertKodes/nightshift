@@ -15,10 +15,10 @@ type Mode = "PRACTICE" | Currency;
 type PlayerView = { name: string; avatar: string | null; live: number; x: number; y: number; attacks: { kind: Attack; tick: number }[]; score: number | null; solo: number | null; stats: Record<string, number> | null; you: boolean; finished: boolean };
 type MatchView = { id: string; seed: number; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; winner: string | null; players: PlayerView[] };
 /** What is on the table (it stays mounted under the result) and what is shown over it. */
-type Play = { kind: "practice"; seed: number; run: number } | { kind: "duel"; match: MatchView; player: string };
-type Over = { score: number; stats?: Record<string, number> };
+type Play = { kind: "practice"; seed: number; run: number; id?: string } | { kind: "duel"; match: MatchView; player: string };
+type Over = { score: number; stats?: Record<string, number>; rank?: number | null };
 type BoardEntry = { name: string; score: number; at: number };
-type Leaderboard = { board: BoardEntry[]; best: BoardEntry[] };
+type Leaderboard = { board: BoardEntry[]; best: BoardEntry[]; solo?: BoardEntry[]; soloBest?: BoardEntry[] };
 
 const FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
 const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
@@ -87,7 +87,8 @@ export function PinballPage() {
   const [err, setErr] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<Leaderboard>({ board: [], best: [] });
   const [boardTab, setBoardTab] = useState<"board" | "best">("board");
-  const board = leaderboard[boardTab];
+  const [boardKind, setBoardKind] = useState<"duel" | "solo">("duel");
+  const board = (boardKind === "duel" ? leaderboard[boardTab] : boardTab === "board" ? leaderboard.solo : leaderboard.soloBest) ?? [];
   const es = useRef<EventSource | null>(null);
   // server time minus ours; the smallest delivery delay gives the best estimate, so keep the largest sample
   const clock = useRef(0);
@@ -117,7 +118,13 @@ export function PinballPage() {
   const start = async () => {
     setErr(null); setOver(null);
     try { localStorage.setItem("pb-name", name); } catch { /* private window */ }
-    if (mode === "PRACTICE") { es.current?.close(); setPlay({ kind: "practice", seed: Math.floor(Math.random() * 2 ** 32), run: Date.now() }); return; }
+    if (mode === "PRACTICE") {
+      es.current?.close();
+      // the server deals the table so the run can go on the solo board; offline, practice still works
+      const r = await api<{ id: string; seed: number }>("solo", { name: me }).catch(() => null);
+      setPlay({ kind: "practice", seed: r?.seed ?? Math.floor(Math.random() * 2 ** 32), run: Date.now(), id: r?.id });
+      return;
+    }
     try {
       clock.current = 0;
       const r = await api<{ match: MatchView; player: string }>("queue", { name: me, currency: mode, stake, avatar: avatar ?? "/games/pinball/frog-0.webp" });
@@ -129,6 +136,10 @@ export function PinballPage() {
 
   const finished = async (r: { score: number; inputs: Input[]; stats: Record<string, number> }) => {
     setOver({ score: r.score, stats: r.stats });
+    if (play?.kind === "practice" && play.id) {
+      const v = await api<{ score: number; rank: number | null }>(`solo/${play.id}/finish`, { inputs: r.inputs }).catch(() => null);
+      if (v) { setOver({ score: v.score, stats: r.stats, rank: v.rank }); void api<Leaderboard>("board").then(setLeaderboard).catch(() => {}); }
+    }
     if (play?.kind === "duel") await api(`match/${play.match.id}/finish`, { player: play.player, inputs: r.inputs }).catch((e) => setErr((e as Error).message));
   };
   const toLobby = () => { es.current?.close(); setPlay(null); setOver(null); setWaiting(null); };
@@ -148,7 +159,7 @@ export function PinballPage() {
         {won && <Confetti />}
         <div className="arc-result">
           <span className="arc-result-icon"><Icon name={won ? "trophy" : !m ? "orbit" : !m.done ? "radar" : m.draw ? "scales" : "swords"} size={28} /></span>
-          <span className="arc-kicker">{m ? (m.done ? "Final result · verified by replay" : "Waiting for your rival to finish") : "Practice complete"}</span>
+          <span className="arc-kicker">{m ? (m.done ? "Final result · verified by replay" : "Waiting for your rival to finish") : over.rank ? `Verified by replay · #${over.rank} on the solo board` : "Practice complete"}</span>
           <h2 key={title} className="arc-result-title">{title}</h2>
           {m ? <div className="arc-vs">
             <div><div className="arc-face"><img src={mine?.avatar ?? "/games/pinball/frog-0.webp"} alt="" /></div><span>{mine?.name ?? me}</span><b>{(mine?.score ?? over.score).toLocaleString()}</b></div>
@@ -253,6 +264,9 @@ export function PinballPage() {
 
           <div className="arc-board">
             <div className="arc-section-head"><span className="arc-kicker"><Icon name="trophy" size={15} /> VERIFIED BEST</span><span>{boardTab === "board" ? "LAST 24 HOURS" : "ALL-TIME RECORDS"}</span></div>
+            <div className="arc-board-tabs kind" role="group" aria-label="Leaderboard">
+              {([{ key: "duel", label: "Duels" }, { key: "solo", label: "Solo" }] as const).map((k) => <button type="button" key={k.key} aria-pressed={boardKind === k.key} className={boardKind === k.key ? "on" : ""} onClick={() => setBoardKind(k.key)}>{k.label}</button>)}
+            </div>
             <div className="arc-board-tabs" role="tablist" aria-label="Leaderboard period">
               {([{ key: "board", label: "Tonight" }, { key: "best", label: "All time" }] as const).map((tab) => <button
                 type="button" role="tab" key={tab.key} id={`arc-tab-${tab.key}`} aria-selected={boardTab === tab.key}
@@ -268,7 +282,7 @@ export function PinballPage() {
               >{tab.label}</button>)}
             </div>
             <div id="arc-board-scores" role="tabpanel" aria-labelledby={`arc-tab-${boardTab}`} tabIndex={0}>
-              {board.length > 0 ? <ol>{board.map((b, i) => <li key={`${b.name}-${b.at}-${i}`}><span className={`arc-rank rank-${i + 1}`}>{String(i + 1).padStart(2, "0")}</span><span>{b.name}</span><b>{b.score.toLocaleString()}</b></li>)}</ol> : <p className="arc-board-empty">{boardTab === "board" ? "No verified duels yet tonight. Be the first on the board." : "No verified duels yet. Be the first on the board."}</p>}
+              {board.length > 0 ? <ol>{board.map((b, i) => <li key={`${b.name}-${b.at}-${i}`}><span className={`arc-rank rank-${i + 1}`}>{String(i + 1).padStart(2, "0")}</span><span>{b.name}</span><b>{b.score.toLocaleString()}</b></li>)}</ol> : <p className="arc-board-empty">{`No verified ${boardKind === "duel" ? "duels" : "solo runs"} yet${boardTab === "board" ? " tonight" : ""}. Be the first on the board.`}</p>}
             </div>
           </div>
           <p className="arc-legal">18+ for staked play. Money games may be gambling, including in Romania. Staked duels open only where allowed.</p>

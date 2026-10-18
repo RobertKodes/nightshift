@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { TokenLaunch } from "./TokenLaunch";
+import { SwarmOrders } from "./SwarmOrders";
 import { ImdOrders } from "./ImdOrders";
 import { FrogsAdmin } from "./FrogsAdmin";
 import { AfterLaunch } from "./AfterLaunch";
@@ -156,6 +157,11 @@ export function SetupPage() {
               <button className="btn primary" disabled={busy || blocks.length > 0} onClick={goLive}>Go live</button></>
           )}
         </div>
+      </section>
+
+      <section className="card">
+        <div className="card-h"><h3>Space Pinball: orders for the IMD swarm</h3><span className="faint" style={{ fontSize: 12 }}>free check first · 0.5 IMD each from your dev wallet</span></div>
+        <SwarmOrders call={call} token={token} />
       </section>
 
       <section className="card">

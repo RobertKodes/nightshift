@@ -39,6 +39,7 @@ import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
 import { newFrogListings, newFrogSales, OPENSEA_SLUG } from "./frogmarket.js";
+import { type ArcadeEvent, onArcade } from "./pinball.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
@@ -137,6 +138,41 @@ export class Engine {
       const medal = ["🥇", "🥈", "🥉", "4.", "5."];
       void toCommunity(`🐸⏱ <b>NIGHT SHIFT HOURS · top of the crew</b>\n\n${top.map((t, i) => `${medal[i]} <a href="https://etherscan.io/address/${t.wallet}">${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}</a> · ${t.hours.toLocaleString("en-US")} h · ${t.frogs} frog${t.frogs === 1 ? "" : "s"}`).join("\n")}\n\nHold a frog, earn hours. Genesis 2×, #1 5×. No locking, no gas.`, [[{ text: "⏱ My shift hours", url: `${config.publicUrl}/frogs#staking` }]], "frog");
     }, 60_000);
+    // Space Pinball in the community chat: records and crushing wins at once, the rest in a half-hourly report.
+    const play = `${config.publicUrl}/games/pinball`;
+    const pick = <T,>(l: T[]) => l[Math.floor(Math.random() * l.length)]!;
+    const n = (x: number) => x.toLocaleString("en-US");
+    let posts: number[] = [];
+    const room = () => { posts = posts.filter((t) => Date.now() - t < 3_600_000); return posts.length < 6; };
+    const arcadePost = (text: string, kind: Anim = "post") => { if (!room()) return; posts.push(Date.now()); void toCommunity(text, [[{ text: "🎱 Play Space Pinball", url: play }]], kind); };
+    const half = { games: 0, duels: 0, solos: 0, best: null as { name: string; score: number } | null, duel: null as { w: string; l: string; ws: number; ls: number } | null };
+    onArcade((e: ArcadeEvent) => {
+      half.games++;
+      if (e.kind === "duel") {
+        half.duels++;
+        const [w, l] = e.a.score >= e.b.score ? [e.a, e.b] : [e.b, e.a];
+        if (!half.best || w.score > half.best.score) half.best = { name: w.name, score: w.score };
+        if (!e.draw && (!half.duel || w.score - l.score > half.duel.ws - half.duel.ls)) half.duel = { w: w.name, l: l.name, ws: w.score, ls: l.score };
+        if (e.record) arcadePost(`🏆🎱 <b>NEW ALL-TIME DUEL RECORD</b>\n\n<b>${esc(w.name)}</b> just put up <b>${n(w.score)}</b> against ${esc(l.name)} (${n(l.score)}).\n${pick(["The table is still smoking.", "Somebody check the flippers for steroids.", "The black hole asked for a day off."])}\n\nVerified by replay. Think you can beat it?`, "milestone");
+        else if (e.tonightTop) arcadePost(`🌙🎱 <b>NEW #1 TONIGHT</b>\n\n<b>${esc(w.name)}</b> takes the top of tonight's duel board with <b>${n(w.score)}</b>, beating ${esc(l.name)}.\n${pick(["The night shift has a new boss.", "Clock in and take it back.", "Who's next?"])}`);
+        else if (!e.draw && l.score > 0 && w.score >= l.score * 3 && w.score >= 30_000) arcadePost(`💥🎱 <b>FLAWLESS NIGHT</b>\n\n<b>${esc(w.name)}</b> ${pick(["sent", "launched", "dropped"])} ${esc(l.name)} into the black hole: <b>${n(w.score)}</b> to ${n(l.score)}.\n${pick(["Meteors were involved.", "That was not a duel, that was a lesson.", "Gravity surge, then silence."])}`);
+        else if (e.draw) arcadePost(`⚖️🎱 <b>A PERFECT DRAW</b>\n\n${esc(e.a.name)} and ${esc(e.b.name)} both finished on <b>${n(e.a.score)}</b>. Same table, same seed, same score. Rematch?`);
+      } else {
+        half.solos++;
+        if (!half.best || e.run.score > half.best.score) half.best = { name: e.run.name, score: e.run.score };
+        if (e.record) arcadePost(`🏆🌙 <b>NEW ALL-TIME SOLO RECORD</b>\n\n<b>${esc(e.run.name)}</b> scored <b>${n(e.run.score)}</b> alone at 3 AM.\n${pick(["No rival needed.", "The frogs are taking notes.", "Verified by replay, every flip."])}`, "milestone");
+        else if (e.tonightTop) arcadePost(`🌙 <b>NEW #1 ON TONIGHT'S SOLO BOARD</b>\n\n<b>${esc(e.run.name)}</b> with <b>${n(e.run.score)}</b>. ${pick(["Beat it before sunrise.", "The board is open.", "Your move, night crew."])}`);
+      }
+    });
+    setInterval(() => {
+      if (!half.games) return;
+      const lines = [`🎱 <b>ARCADE REPORT · the last 30 minutes</b>`, "", `🕹 ${half.games} game${half.games > 1 ? "s" : ""} verified · ${half.duels} duel${half.duels === 1 ? "" : "s"} · ${half.solos} solo`];
+      if (half.best) lines.push(`🥇 Best score: <b>${esc(half.best.name)}</b> · ${n(half.best.score)}`);
+      if (half.duel) lines.push(`⚔️ Duel of the half hour: <b>${esc(half.duel.w)}</b> beat ${esc(half.duel.l)} ${n(half.duel.ws)} to ${n(half.duel.ls)}`);
+      lines.push("", pick(["Same table, same seed. Bring a friend.", "Free to play. The board resets every night.", "Practice counts too: the solo board is live."]));
+      arcadePost(lines.join("\n"));
+      Object.assign(half, { games: 0, duels: 0, solos: 0, best: null, duel: null });
+    }, 30 * 60_000);
     // Frogs sold on OpenSea (read from Seaport on chain) and, with an OpenSea key, new listings.
     const who = (a: string) => `<a href="https://etherscan.io/address/${a}">${a.slice(0, 6)}…${a.slice(-4)}</a>`;
     const frogUrl = (id: number) => `https://opensea.io/assets/ethereum/${config.nft.address || "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c"}/${id}`;

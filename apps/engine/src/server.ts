@@ -8,7 +8,7 @@ import { balances, eth, sales, salesWallet } from "./chain.js";
 import { findPool } from "./v4.js";
 import { liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
 import { keeperAccount } from "./keeper.js";
-import { board as pinBoard, finish as pinFinish, get as pinGet, leave as pinLeave, listen as pinListen, progress as pinProgress, queue as pinQueue, stakes as pinStakes } from "./pinball.js";
+import { board as pinBoard, soloFinish as pinSoloFinish, soloStart as pinSoloStart, finish as pinFinish, get as pinGet, leave as pinLeave, listen as pinListen, progress as pinProgress, queue as pinQueue, stakes as pinStakes } from "./pinball.js";
 import { claimsOf, epochs, markPosted } from "./frogpot.js";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
@@ -19,6 +19,7 @@ import { verifyShift } from "./shift-verify.js";
 import { DEV_WALLET, FIRST_BUYER } from "./shift-launch.js";
 import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
 import { burnTotals, marketSnapshot } from "./community.js";
+import { checkOrder as checkSwarmOrder, orders as swarmOrders, placeOrder as placeSwarmOrder } from "./swarm.js";
 import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
 import { impact } from "./impact.js";
 import { usdc } from "@nightshift/core";
@@ -266,6 +267,14 @@ export function serve(engine: Engine) {
           recordBuyback({ at: Date.now(), tx, usd: Number(b.usd) || 0, amount: Number(b.amount) || 0, note: b.note ? String(b.note).slice(0, 200) : undefined });
           return json(res, 200, { ok: true, buybacks: buybacks() });
         }
+        if (p === "/api/admin/swarm" && req.method === "GET") return json(res, 200, { orders: await swarmOrders() });
+        if (p === "/api/admin/swarm/check" && req.method === "POST") { const b = await body(req); try { return json(res, 200, await checkSwarmOrder(String(b.key ?? ""))); } catch (e) { return json(res, 400, { error: (e as Error).message }); } }
+        if (p === "/api/admin/swarm/placed" && req.method === "POST") {
+          const b = await body(req);
+          const tx = String(b.tx ?? "");
+          if (!/^0x[0-9a-fA-F]{64}$/.test(tx)) return json(res, 400, { error: "tx must be a transaction hash" });
+          try { placeSwarmOrder(String(b.key ?? ""), tx); return json(res, 200, { orders: await swarmOrders() }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
         if (p === "/api/admin/token/check" && req.method === "POST") {
           // The launch is fixed (shift-launch.ts): nothing to type, only IMD's free check.
           return json(res, 200, { body: launchBody(), check: await checkLaunch(), dev: DEV_WALLET, firstBuyer: FIRST_BUYER });
@@ -353,6 +362,16 @@ export function serve(engine: Engine) {
         const parts = p.split("/").filter(Boolean); // api pinball …
         if (p === "/api/pinball/stakes") return json(res, 200, pinStakes());
         if (p === "/api/pinball/board") return json(res, 200, pinBoard());
+        if (p === "/api/pinball/solo" && req.method === "POST") {
+          if (limited(req, "pinball-solo", 40, 600_000)) return json(res, 429, { error: "slow down" });
+          const b = await body(req);
+          return json(res, 200, pinSoloStart(String(b.name ?? "")));
+        }
+        if (parts[2] === "solo" && parts[3] && parts[4] === "finish" && req.method === "POST") {
+          if (limited(req, "pinball-solo-finish", 40, 600_000)) return json(res, 429, { error: "slow down" });
+          const b = await body(req, 400_000);
+          try { return json(res, 200, pinSoloFinish(parts[3], b.inputs)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
         if (p === "/api/pinball/queue" && req.method === "POST") {
           if (limited(req, "pinball-queue", 20, 600_000)) return json(res, 429, { error: "slow down" });
           const b = await body(req);

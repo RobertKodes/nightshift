@@ -33,10 +33,30 @@ export const STAKES_LIVE = false;
 type Score = { name: string; score: number; at: number };
 /** Every verified duel score worth keeping: the best 200, kept across restarts. */
 const boardFile = () => join(config.dataDir, "pinball.json");
-let scores: Score[] = (() => { try { return existsSync(boardFile()) ? (JSON.parse(readFileSync(boardFile(), "utf8")) as Score[]) : []; } catch { return []; } })();
-function record(list: Score[]): void {
-  scores = [...scores, ...list.filter((s) => s.score > 0)].sort((x, y) => y.score - x.score).slice(0, 200);
-  try { writeFileSync(boardFile(), JSON.stringify(scores)); } catch (e) { console.error("pinball board", e); }
+/** What the arcade tells the community chat: every verified result, flagged when it tops a board. */
+export type ArcadeEvent =
+  | { kind: "duel"; a: Score; b: Score; winner: string | null; draw: boolean; record: boolean; tonightTop: boolean }
+  | { kind: "solo"; run: Score; record: boolean; tonightTop: boolean };
+const arcade: ((e: ArcadeEvent) => void)[] = [];
+export const onArcade = (f: (e: ArcadeEvent) => void) => { arcade.push(f); };
+const tell = (e: ArcadeEvent) => { for (const f of arcade) try { f(e); } catch (err) { console.error("arcade", err); } };
+/** Would this score be the new best, all-time and tonight? Read before it is recorded. */
+function tops(kind: "duel" | "solo", score: number): { record: boolean; tonightTop: boolean } {
+  const l = boards[kind], night = Date.now() - 86_400_000;
+  const tonight = l.filter((s) => s.at > night)[0]?.score ?? 0;
+  return { record: score > (l[0]?.score ?? 0), tonightTop: score > tonight };
+}
+
+type Boards = { duel: Score[]; solo: Score[] };
+let boards: Boards = (() => {
+  try {
+    const d = existsSync(boardFile()) ? JSON.parse(readFileSync(boardFile(), "utf8")) : {};
+    return Array.isArray(d) ? { duel: d as Score[], solo: [] } : { duel: d.duel ?? [], solo: d.solo ?? [] }; // the first file held duels only
+  } catch { return { duel: [], solo: [] }; }
+})();
+function record(list: Score[], kind: keyof Boards = "duel"): void {
+  boards[kind] = [...boards[kind], ...list.filter((s) => s.score > 0)].sort((x, y) => y.score - x.score).slice(0, 200);
+  try { writeFileSync(boardFile(), JSON.stringify(boards)); } catch (e) { console.error("pinball board", e); }
 }
 
 const emit = (m: Match) => { for (const f of listeners.get(m.id) ?? []) f(m); };
@@ -135,7 +155,9 @@ function settle(m: Match): void {
   m.done = true;
   m.draw = a.score === b.score;
   m.winner = m.draw ? null : a.score > b.score ? a.name : b.name;
+  const best = Math.max(a.score, b.score), flags = tops("duel", best);
   record([a, b].filter((p) => p.inputs).map((p) => ({ name: p.name, score: p.score ?? 0, at: p.finishedAt ?? Date.now() })));
+  if (a.inputs && b.inputs) tell({ kind: "duel", a: { name: a.name, score: a.score, at: Date.now() }, b: { name: b.name, score: b.score, at: Date.now() }, winner: m.winner, draw: m.draw, ...flags });
   emit(m);
 }
 
@@ -146,9 +168,39 @@ setInterval(() => {
   }
 }, 20_000).unref();
 
-/** The boards: tonight's (last 24 hours) and all-time best verified duel scores. */
-export function board(): { board: Score[]; best: Score[] } {
+/** The boards: tonight's (last 24 hours) and all-time best verified scores, duels and solo runs. */
+export function board(): { board: Score[]; best: Score[]; solo: Score[]; soloBest: Score[] } {
   const night = Date.now() - 86_400_000;
-  return { board: scores.filter((s) => s.at > night).slice(0, 10), best: scores.slice(0, 10) };
+  const top = (l: Score[]) => [l.filter((s) => s.at > night).slice(0, 10), l.slice(0, 10)] as const;
+  const [board, best] = top(boards.duel), [solo, soloBest] = top(boards.solo);
+  return { board, best, solo, soloBest };
+}
+
+/**
+ * Solo runs for the solo board. The server picks the seed when the run starts, so nobody can shop
+ * for a lucky table, and at the end it replays the inputs with the same engine: only that score counts.
+ */
+type Run = { seed: number; name: string; startedAt: number; done: boolean };
+const runs = new Map<string, Run>();
+export function soloStart(name: string): { id: string; seed: number } {
+  const id = randomBytes(6).toString("hex");
+  const seed = randomBytes(4).readUInt32BE(0);
+  runs.set(id, { seed, name: name.replace(/[^\w .-]/g, "").slice(0, 18) || "Night crew", startedAt: Date.now(), done: false });
+  if (runs.size > 20_000) for (const [k, r] of runs) if (Date.now() - r.startedAt > 3_600_000) runs.delete(k);
+  return { id, seed };
+}
+export function soloFinish(id: string, inputs: unknown): { score: number; rank: number | null } {
+  const r = runs.get(id);
+  if (!r || r.done) throw new Error("no such run");
+  const clean = cleanInputs(inputs);
+  const lastTick = clean.reduce((x, i) => Math.max(x, i[0]), 0);
+  if (Date.now() - r.startedAt < (lastTick / 240) * 1000 - 3_000) throw new Error("inputs from later than the run has lasted");
+  r.done = true;
+  const score = replay(r.seed, clean).score;
+  const flags = tops("solo", score);
+  record([{ name: r.name, score, at: Date.now() }], "solo");
+  if (score > 0) tell({ kind: "solo", run: { name: r.name, score, at: Date.now() }, ...flags });
+  const i = boards.solo.findIndex((s) => s.score === score && s.name === r.name);
+  return { score, rank: i >= 0 ? i + 1 : null };
 }
 export const stakes = () => ({ live: STAKES_LIVE, options: STAKES });

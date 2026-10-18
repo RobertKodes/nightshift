@@ -86,6 +86,8 @@ export class Table {
   ball = { x: 558, y: 860, vx: 0, vy: 0 };
   inLane = true;
   held = 0;
+  /** Ticks the ball has sat still with both flippers down: past 3 s it gets a nudge, like a tilt. */
+  still = 0;
   plunge = 0;
   ballsLeft = BALLS;
   score = 0;
@@ -180,6 +182,11 @@ export class Table {
       return;
     }
     for (let i = 0; i < SUB; i++) this.#move();
+    // A ball that settles anywhere (a pocket, a post) while no flipper is held is nudged back into play.
+    // A ball cradled on a raised flipper is the player's choice and is left alone.
+    if (Math.abs(ball.vx) + Math.abs(ball.vy) < 8 && this.fl === 0 && this.fr === 0) {
+      if (++this.still >= 720) { this.still = 0; ball.vy = -320; ball.vx = ball.x < W / 2 ? 160 : -160; }
+    } else this.still = 0;
     if (ball.y > H + BALL_R) {
       // Ball save: lost in the first 4 s after a launch, it comes back.
       if (this.tick - this.launchedAt < SAVE_TICKS) {
