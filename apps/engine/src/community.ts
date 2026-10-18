@@ -18,7 +18,18 @@ const TRANSFER = parseAbiItem("event Transfer(address indexed from, address inde
 const V4_POOL_MANAGER = "0x000000000004444c5dc75cb358380d2e3de08a90";
 const MILESTONES = [10e3, 25e3, 50e3, 100e3, 250e3, 500e3, 1e6, 2.5e6, 5e6, 10e6, 25e6, 50e6, 100e6];
 
-type Market = { priceUsd: number; mcap: number; liquidity: number; pools: string[]; chart: string; at: number };
+type Market = { priceUsd: number; ethUsd: number; mcap: number; liquidity: number; pools: string[]; chart: string; at: number };
+
+/** The buyer's wallet tier, by what the wallet holds in USD after the buy. */
+const TIERS: [number, string][] = [[100_000, "👑 MEGA WHALE"], [30_000, "🐳 BIG WHALE"], [10_000, "🐋 WHALE"], [5_000, "🦈 SHARK"], [2_000, "🐬 DOLPHIN"], [1_000, "🐟 FISH"]];
+export const walletTier = (usd: number) => TIERS.find(([min]) => usd >= min)?.[1] ?? null;
+const STABLES: [`0x${string}`, number][] = [["0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", 6], ["0xdAC17F958D2ee523a2206206994597C13D831ec7", 6]];
+/** ETH, $SHIFT, IMD and the two big stablecoins on Ethereum, valued at live prices. */
+async function walletUsd(who: `0x${string}`, m: Market): Promise<number> {
+  const read = (address: `0x${string}`) => eth.readContract({ address, abi: erc20Abi, functionName: "balanceOf", args: [who] }).catch(() => 0n);
+  const [ethBal, shift, imd, ...st] = await Promise.all([eth.getBalance({ address: who }).catch(() => 0n), read(config.token.address as `0x${string}`), read(IMD_TOKEN as `0x${string}`), ...STABLES.map(([a]) => read(a))]);
+  return (Number(ethBal) / 1e18) * m.ethUsd + (Number(shift) / 1e18) * m.priceUsd + (Number(imd) / 1e18) * config.imdUsd + st.reduce((s, v, i) => s + Number(v) / 10 ** STABLES[i]![1], 0);
+}
 type State = { lastBlock?: number; milestone?: number; bskySeen?: string; buys?: number; eventsBlock?: number; burnedShift?: number; burnedImd?: number };
 
 const file = () => join(config.dataDir, "community.json");
@@ -33,12 +44,14 @@ export const burnTotals = () => { const s = load(); return { shift: s.burnedShif
 
 export const chats = () => config.telegramCommunity.split(",").map((x) => x.trim()).filter(Boolean);
 
-export type Buy = { usd: number; imd: number; tokens: number; buyer: string; tx: string; newHolder: boolean; position: number; mcap: number; liquidity: number; test?: boolean };
+export type Buy = { usd: number; imd: number; tokens: number; buyer: string; tx: string; newHolder: boolean; position: number; mcap: number; liquidity: number; wallet?: number; test?: boolean };
 
 /** The buy card: size tier, a bar that grows with the buy, and the numbers people look for. */
 export function buyCard(b: Buy): { text: string; buttons: Button[][] } {
   const sym = config.token.symbol;
-  const tier = b.usd >= 2500 ? "🐳 WHALE BUY" : b.usd >= 500 ? "🦈 BIG BUY" : b.usd >= 100 ? "🚀 BUY" : "🐸 BUY";
+  // The buyer's wallet decides the title; a big buy from a small wallet is still a big buy.
+  const wt = b.wallet ? walletTier(b.wallet) : null;
+  const tier = wt ? `${wt} BUY` : b.usd >= 2500 ? "🐳 WHALE BUY" : b.usd >= 500 ? "🦈 BIG BUY" : b.usd >= 100 ? "🚀 BUY" : "🐸 BUY";
   const bar = "🌙".repeat(Math.max(1, Math.min(40, Math.round(b.usd / config.buyEmojiUsd))));
   const text = [
     `${b.test ? "🧪 <b>TEST</b> · " : ""}<b>${tier} · $${esc(sym)}</b>`,
@@ -46,6 +59,7 @@ export function buyCard(b: Buy): { text: string; buttons: Button[][] } {
     `💵 <b>${usd(b.usd)}</b>${b.imd ? ` (${b.imd.toFixed(2)} IMD)` : ""}`,
     `🪙 <b>${num(b.tokens)}</b> ${esc(sym)}`,
     `👤 <a href="https://etherscan.io/address/${b.buyer}">${short(b.buyer)}</a> · ${b.newHolder ? "🆕 <b>New holder!</b>" : `position ${b.position > 0 ? `+${b.position.toFixed(0)}%` : "up"}`}`,
+    ...(b.wallet && b.wallet >= 1000 ? [`💼 Wallet ≈ <b>${usd(b.wallet)}</b>`] : []),
     `📈 Market cap <b>${usd(b.mcap)}</b>`,
     `💧 Liquidity ${usd(b.liquidity)}`, "",
     `<a href="https://etherscan.io/tx/${b.tx}">TX</a> · <a href="${config.publicUrl}/token">Every ${esc(sym)} trade pays IMD</a>`,
@@ -63,13 +77,13 @@ async function refreshMarket(): Promise<Market | null> {
   if (market && Date.now() - market.at < 60_000) return market;
   try {
     const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${config.token.address}`, { signal: AbortSignal.timeout(8000) });
-    const d = (await r.json()) as { pairs?: { chainId: string; pairAddress: string; url: string; priceUsd?: string; fdv?: number; marketCap?: number; liquidity?: { usd?: number }; baseToken: { address: string } }[] };
+    const d = (await r.json()) as { pairs?: { chainId: string; pairAddress: string; url: string; priceUsd?: string; priceNative?: string; fdv?: number; marketCap?: number; liquidity?: { usd?: number }; baseToken: { address: string } }[] };
     const pairs = (d.pairs ?? []).filter((p) => p.chainId === "ethereum" && p.baseToken.address.toLowerCase() === config.token.address.toLowerCase())
       .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
     if (!pairs.length) return market;
     const top = pairs[0]!;
     market = {
-      priceUsd: Number(top.priceUsd ?? 0), mcap: top.marketCap ?? top.fdv ?? 0, liquidity: pairs.reduce((a, p) => a + (p.liquidity?.usd ?? 0), 0),
+      priceUsd: Number(top.priceUsd ?? 0), ethUsd: Number(top.priceNative) > 0 ? Number(top.priceUsd ?? 0) / Number(top.priceNative) : 0, mcap: top.marketCap ?? top.fdv ?? 0, liquidity: pairs.reduce((a, p) => a + (p.liquidity?.usd ?? 0), 0),
       // v2/v3 pools are addresses; a v4 pool id is 32 bytes and its tokens sit in the pool manager
       pools: [...new Set(pairs.map((p) => (p.pairAddress.length === 42 ? p.pairAddress.toLowerCase() : V4_POOL_MANAGER)))],
       chart: top.url, at: Date.now(),
@@ -110,7 +124,8 @@ async function scanBuys(st: State): Promise<Buy[]> {
     const before = await bal(block - 1n);
     const value$ = tokens * m.priceUsd;
     if (value$ < config.buyMinUsd) continue;
-    buys.push({ usd: value$, imd: config.imdUsd ? value$ / config.imdUsd : 0, tokens, buyer, tx, newHolder: before === 0, position: before > 0 ? (tokens / before) * 100 : 0, mcap: m.mcap, liquidity: m.liquidity });
+    const wallet = await walletUsd(buyer as `0x${string}`, m).catch(() => 0);
+    buys.push({ usd: value$, imd: config.imdUsd ? value$ / config.imdUsd : 0, tokens, buyer, tx, newHolder: before === 0, position: before > 0 ? (tokens / before) * 100 : 0, mcap: m.mcap, liquidity: m.liquidity, wallet });
   }
   return buys;
 }
@@ -289,7 +304,7 @@ export function startCommunity(): void {
       if (config.token.address && !quiet) {
         for (const b of await scanBuys(st)) {
           const c = buyCard(b);
-          await toCommunity(c.text, c.buttons, b.usd >= 2500 ? "whale" : "buy");
+          await toCommunity(c.text, c.buttons, b.usd >= 2500 || (b.wallet ?? 0) >= 10_000 ? "whale" : "buy");
           st.buys = (st.buys ?? 0) + 1;
         }
         const m = market;

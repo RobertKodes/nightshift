@@ -949,7 +949,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     const sym = config.token.symbol;
     const shown: string[] = [];
     const say = async (what: string, p: Promise<boolean>) => { shown.push(`${(await p) ? "✅" : "❌"} ${what}`); };
-    const buy = (usdv: number) => buyCard({ test: true, usd: usdv, imd: usdv / config.imdUsd, tokens: usdv / 0.0000068, buyer: "0x8f3a1c2b4d5e6f708192a3b4c5d6e7f8091a2b3c", tx: `0x${"0".repeat(64)}`, newHolder: usdv < 1000, position: 35, mcap: 2500 * config.imdUsd, liquidity: 2250 * config.imdUsd });
+    const buy = (usdv: number, wallet = 0) => buyCard({ test: true, usd: usdv, wallet, imd: usdv / config.imdUsd, tokens: usdv / 0.0000068, buyer: "0x8f3a1c2b4d5e6f708192a3b4c5d6e7f8091a2b3c", tx: `0x${"0".repeat(64)}`, newHolder: usdv < 1000, position: 35, mcap: 2500 * config.imdUsd, liquidity: 2250 * config.imdUsd });
     const ready = this.launchReadyCard({ symbol: sym, token: "0x000000000000000000000000000000000000dEaD", launchId: "test", contracts: { hook: "0x000000000000000000000000000000000000dEaD" } }, [{ label: "Token is NIGHTSHIFT / SHIFT", ok: true, detail: "" }, { label: "Trading is still closed (only the first buyer can buy)", ok: true, detail: "" }, { label: "Splitter burns IMD at IMD's BurnExecutor 0xe293…c750", ok: true, detail: "" }]);
     await say("Launch ready (admin only)", this.adminCard(`${T}${ready.html}`, ready.buttons, "test-launch-ready"));
     await say("Launch DM (CA, before the treasury buy)", this.launchDm(`${T}🚀 <b>$${esc(sym)} is deployed and checked.</b> Waiting for the treasury buy.
@@ -957,8 +957,8 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
 CA: <code>0x0000…TEST</code>
 
 Trading is closed to everyone except the treasury <b>0x3322…4D69</b>.`, [[{ text: "🟢 First buy on Uniswap (treasury wallet)", url: "https://app.uniswap.org/swap?chain=mainnet" }]]));
-    const b1 = buy(180); await say("Buy", toCommunity(b1.text, b1.buttons, "buy"));
-    const b2 = buy(3200); await say("Whale buy", toCommunity(b2.text, b2.buttons, "whale"));
+    const b1 = buy(180, 2_400); await say("Buy (dolphin wallet)", toCommunity(b1.text, b1.buttons, "buy"));
+    const b2 = buy(3200, 125_000); await say("Mega whale buy", toCommunity(b2.text, b2.buttons, "whale"));
     await say("X raid", raid(`${config.xUrl}/status/1846000000000000000`, "TEST: this is how a raid looks"));
     await say("Token launch", toCommunity(`${T}🚀🌙 <b>$${esc(sym)} IS LIVE</b>\n\n<code>0x0000…TEST</code>\n\nTrading is open to everyone on Ethereum, paired with ETH.
 Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT and IMD).`, [[{ text: `🟢 Buy $${sym}`, url: `${config.publicUrl}/token` }]], "launch"));
