@@ -314,8 +314,8 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 .ns-app .docs { --s-bg: #0e0d15; --s-bg2: rgba(255, 255, 255, .03); --s-line: rgba(255, 255, 255, .08); --s-line2: rgba(255, 255, 255, .14); --s-text: #ecebf3; --s-dim: #a4a1b8; --s-faint: #74718a; --s-acc: #8b6dff; --s-acc-bg: rgba(139, 109, 255, .14); --s-ok: #5fd38a; --s-ok-bg: rgba(95, 211, 138, .12); --s-warn: #f2c27b; --s-warn-bg: rgba(242, 194, 123, .08);
   max-width: 1040px; gap: 24px; padding-top: 56px; font-family: Inter, system-ui, sans-serif; color: var(--s-text); }
 .ns-app .docs .eyebrow { font: 600 13px/1 Inter, sans-serif; letter-spacing: 0; text-transform: none; color: var(--s-acc); }
-.ns-app .docs h1 { margin: 0; max-width: 22ch; font: 700 clamp(34px, 4.4vw, 54px)/1.08 Inter, sans-serif; letter-spacing: -.035em; text-transform: none; }
-.ns-app .docs h1 em { font-style: normal; color: var(--s-dim); background: none; }
+.ns-app .docs h1 { margin: 0; max-width: 20ch; font: 400 clamp(40px, 5vw, 62px)/1.04 var(--serif, "Instrument Serif", Georgia, serif); letter-spacing: -.02em; text-transform: none; text-wrap: balance; }
+.ns-app .docs h1 em { font-style: italic; color: var(--uv-hi, #a48bff); background: none; }
 .ns-app .docs .lead { margin: 0; max-width: 680px; font-size: 18px; line-height: 1.6; color: var(--s-dim); }
 .ns-app .docs > h2, .ns-app .docs .guide-h2 { margin: 40px 0 0; font: 600 26px/1.2 Inter, sans-serif; letter-spacing: -.02em; }
 .ns-app .docs > h2 em, .ns-app .docs .guide-h2 em { font-style: normal; color: var(--s-dim); }
@@ -445,3 +445,9 @@ table.plain.addr a { overflow-wrap: anywhere; font-size: 12.5px; }
   .pb-promo .pb-promo-content { padding: 24px; }
 }
 @media (prefers-reduced-motion: reduce) { .pb-promo .pb-promo-play { transition: none; } }
+.pb-promo .pb-promo-logo { display: block; width: min(300px, 100%); height: auto; }
+.pb-promo .pb-promo-visual img { object-position: 50% 40%; }
+/* Long values (addresses, trait names) wrap inside their row instead of widening the page on phones. */
+.docs { grid-template-columns: minmax(0, 1fr); }
+.ns-app .docs :is(b, code, span, a) { overflow-wrap: anywhere; }
+.tkn-card, .card-b { grid-template-columns: minmax(0, 1fr); }

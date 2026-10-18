@@ -175,7 +175,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
             </div>
           )}
 
-          {health?.mode === "live" && c.isOwner && <FundCard id={c.id} wallet={c.wallet as `0x${string}`} onFunded={() => { void api.shift(c.id).catch(() => {}).then(load); }} />}
+          {health?.mode === "live" && c.isOwner && <FundCard id={c.id} wallet={c.wallet as `0x${string}`} first={c.cycle === 0} onFunded={() => { void api.shift(c.id).catch(() => {}).then(load); }} />}
 
           <div className="card">
             <div className="card-h"><h3>Traffic and revenue</h3><span className="faint mono" style={{ fontSize: 11 }}>{c.series.bucketMs === 60_000 ? "per minute" : "per hour"} · {health?.mode === "sim" ? "simulated" : "live"}</span></div>

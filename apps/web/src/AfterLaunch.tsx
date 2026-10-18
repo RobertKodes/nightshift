@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SHIFT } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
@@ -50,7 +51,7 @@ export function AfterLaunch({ call, token }: { call: Call; token: string }) {
         <div className="setup-tools">
           <button className="btn" disabled={busy || !k} onClick={() => void act(async () => {
             const { w, a } = await dev();
-            const h = await w.writeContract({ account: a, chain: mainnet, address: contracts.splitter as Address, abi: SPLITTER, functionName: "setKeeper", args: [k!.address as Address] });
+            const h = await w.writeContract({ account: a, chain: mainnet, address: SHIFT.splitter, abi: SPLITTER, functionName: "setKeeper", args: [k!.address as Address] });
             await rpc.waitForTransactionReceipt({ hash: h });
             return `The server is the keeper now. tx ${h}`;
           })}>Make the server the keeper (dev wallet)</button>
@@ -71,7 +72,7 @@ export function AfterLaunch({ call, token }: { call: Call; token: string }) {
                 {t.posted ? <a href={`https://etherscan.io/tx/${t.posted}`} target="_blank" rel="noreferrer">posted ↗</a>
                   : <button className="btn primary" disabled={busy} onClick={() => void act(async () => {
                     const { w, a } = await dev();
-                    const h = await w.writeContract({ account: a, chain: mainnet, address: contracts.rewards as Address, abi: REWARDS, functionName: "postRoot", args: [BigInt(e.epoch), t.root as `0x${string}`, t.token as Address, BigInt(t.total)] });
+                    const h = await w.writeContract({ account: a, chain: mainnet, address: SHIFT.rewards, abi: REWARDS, functionName: "postRoot", args: [BigInt(e.epoch), t.root as `0x${string}`, t.token as Address, BigInt(t.total)] });
                     await rpc.waitForTransactionReceipt({ hash: h });
                     await call(token, "frogpot/posted", { epoch: e.epoch, token: t.token, tx: h });
                     return `Epoch ${e.epoch} ${t.symbol} root posted.`;

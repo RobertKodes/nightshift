@@ -118,11 +118,12 @@ export function FrogsPage() {
                 </div>
                 <button className="ns-cta sm" onClick={mint} disabled={Boolean(step)}>MINT {qty} · {qty * price} IMD <span className="arr">→</span></button>
               </div>
-            ) : <p className="good">All 500 frogs are minted. Buy one on a marketplace.</p>}
+            ) : <p className="good">All 500 frogs are minted. <a href="https://opensea.io/collection/night-frogs-825445489" target="_blank" rel="noreferrer">Buy one on OpenSea ↗</a></p>}
             {step && <div className="launch-stage"><i className="pulse" /><span>{step}</span></div>}
             {err && <div className="bad">{err}</div>}
             {done && <div className="good">Minted. Welcome to the crew. <a href={`https://etherscan.io/tx/${done}`} target="_blank" rel="noreferrer">See the transaction</a></div>}
             <div className="tkn-addr"><span>CONTRACT</span><a href={`https://etherscan.io/address/${info.address}`} target="_blank" rel="noreferrer">{info.address}</a></div>
+            <div className="tkn-addr"><span>MARKET</span><a href="https://opensea.io/collection/night-frogs-825445489" target="_blank" rel="noreferrer">NIGHT FROGS on OpenSea ↗</a></div>
           </>
         ) : (
           <div className="tkn-addr">

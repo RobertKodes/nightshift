@@ -4,6 +4,8 @@ import { type Health, api } from "./api";
 import { CompanyPage } from "./CompanyPage";
 import { Home } from "./Home";
 import { type Active, NightFrog, SiteFooter, SiteHeader } from "./landing/chrome";
+import { AppTabs } from "./landing/app";
+import "./landing/app.css";
 import { Landing } from "./landing/Landing";
 import { McpPage } from "./McpPage";
 import { PublicPage } from "./PublicPage";
@@ -44,22 +46,35 @@ function App() {
   if (seg[0] === "token") page = <TokenPage />;
   if (seg[0] === "frogs") page = <FrogsPage />;
   if (seg[0] === "swap") page = <SwapPage />;
-  if (seg[0] === "stake") page = <StakePage />;
+  if (seg[0] === "stake" || seg[0] === "staking") page = <StakePage />;
   if (seg[0] === "impact") page = <ImpactPage />;
   if (seg[0] === "guide") page = <GuidePage />;
   if (seg[0] === "tokenomics") page = <TokenomicsPage />;
   if (seg[0] === "games") page = <GameRoomPage />;
   if (seg[0] === "launchpad") page = <LaunchpadPage />;
   const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "stake", "guide", "tokenomics", "games", "impact", "launchpad"];
-  const active: Active = seg[0] === "co" ? "company" : named.includes(seg[0] as Active) ? (seg[0] as Active) : "companies";
+  const key = seg[0] === "staking" ? "stake" : seg[0];
+  const active: Active = seg[0] === "co" ? "company" : named.includes(key as Active) ? (key as Active) : "companies";
+  // Each page names itself in the tab; pages that know more (a company, a product) set their own.
+  document.title = `${TITLES[key ?? ""] ?? "Companies"} · NIGHTSHIFT`;
   return (
     <div className="ns ns-app">
       <SiteHeader active={active} />
       <main>{page}</main>
       <SiteFooter />
       <NightFrog />
+      <AppTabs active={active} />
     </div>
   );
 }
+
+const TITLES: Record<string, string> = {
+  companies: "Companies", launch: "Launch a company", co: "Your company", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
+  market: "Market", token: "$SHIFT", frogs: "NIGHT FROGS", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
+  tokenomics: "Tokenomics", games: "Game Room", launchpad: "Launchpad",
+};
+
+// The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.
+if ("serviceWorker" in navigator && location.protocol === "https:") void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
 
 createRoot(document.getElementById("root")!).render(<StrictMode><SessionProvider><App /></SessionProvider></StrictMode>);

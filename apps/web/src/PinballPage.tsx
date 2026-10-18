@@ -3,17 +3,17 @@ import { createPublicClient, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
 import { Link } from "./router";
 import { Icon } from "./Icon";
-import { Crescent } from "./landing/chrome";
 import { PinballGame, type Rival } from "./pinball/PinballGame";
 import type { Attack, Input } from "./pinball/engine";
 import { useSession } from "./session";
 import { InstallButton, useGameApp } from "./pinball/install";
+import { AppTabs } from "./landing/app";
 import "./pinball/arcade.css";
 
 type Currency = "FREE" | "IMD" | "SHIFT";
 type Mode = "PRACTICE" | Currency;
 type PlayerView = { name: string; avatar: string | null; live: number; x: number; y: number; attacks: { kind: Attack; tick: number }[]; score: number | null; solo: number | null; stats: Record<string, number> | null; you: boolean; finished: boolean };
-type MatchView = { id: string; seed: number; currency: Currency; stake: number; startedAt: number | null; done: boolean; draw: boolean; winner: string | null; players: PlayerView[] };
+type MatchView = { id: string; seed: number; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; winner: string | null; players: PlayerView[] };
 /** What is on the table (it stays mounted under the result) and what is shown over it. */
 type Play = { kind: "practice"; seed: number; run: number } | { kind: "duel"; match: MatchView; player: string };
 type Over = { score: number; stats?: Record<string, number> };
@@ -89,6 +89,9 @@ export function PinballPage() {
   const [boardTab, setBoardTab] = useState<"board" | "best">("board");
   const board = leaderboard[boardTab];
   const es = useRef<EventSource | null>(null);
+  // server time minus ours; the smallest delivery delay gives the best estimate, so keep the largest sample
+  const clock = useRef(0);
+  const sync = (m: MatchView) => { if (m.now) clock.current = Math.max(clock.current === 0 ? -Infinity : clock.current, m.now - Date.now()); };
   const me = name.trim() || "Night crew";
 
   useGameApp();
@@ -104,6 +107,7 @@ export function PinballPage() {
     const s = new EventSource(`/api/pinball/match/${id}/events?player=${player}`);
     s.onmessage = (m) => {
       const match = JSON.parse(m.data) as MatchView;
+      sync(match);
       if (match.startedAt) { setWaiting(null); setPlay((p) => (p?.kind === "duel" && p.match.id === match.id ? { ...p, match } : { kind: "duel", match, player })); }
       else setWaiting((w) => (w ? { ...w, match } : w));
     };
@@ -115,7 +119,9 @@ export function PinballPage() {
     try { localStorage.setItem("pb-name", name); } catch { /* private window */ }
     if (mode === "PRACTICE") { es.current?.close(); setPlay({ kind: "practice", seed: Math.floor(Math.random() * 2 ** 32), run: Date.now() }); return; }
     try {
+      clock.current = 0;
       const r = await api<{ match: MatchView; player: string }>("queue", { name: me, currency: mode, stake, avatar: avatar ?? "/games/pinball/frog-0.webp" });
+      sync(r.match);
       if (r.match.startedAt) setPlay({ kind: "duel", match: r.match, player: r.player }); else setWaiting(r);
       follow(r.match.id, r.player);
     } catch (e) { setErr((e as Error).message); }
@@ -185,7 +191,7 @@ export function PinballPage() {
       <div className="arc-bg" aria-hidden="true" />
       <header className="arc-top">
         <Link to="/games" className="arc-back"><Icon name="arrow" size={17} /><span>GAME ROOM</span></Link>
-        <Link to="/" className="arc-logo"><Crescent size={28} /><span>NIGHTSHIFT<small>Space Pinball</small></span></Link>
+        <Link to="/games/pinball" className="arc-logo" aria-label="Space Pinball by NIGHTSHIFT"><img src="/brand/space-pinball-logo.svg" alt="Space Pinball by NIGHTSHIFT" width={410} height={156} /></Link>
         <div className="arc-who"><InstallButton />{address ? <span className="arc-addr" title={address}>{avatar ? <img src={avatar} alt="" /> : <Icon name="user" size={16} />}{address.slice(0, 6)}…{address.slice(-4)}</span> : <button type="button" className="arc-btn sm ghost" disabled={busy} onClick={() => void signIn()}><Icon name="user" size={15} /><span>{busy ? "SIGNING IN" : "SIGN IN"}</span></button>}</div>
       </header>
 
@@ -208,8 +214,11 @@ export function PinballPage() {
           <div className="arc-player">
             <div className="arc-face big"><img src={avatar ?? "/games/pinball/frog-0.webp"} alt="" /></div>
             <div>
-              <label className="arc-kicker" htmlFor="arc-name">YOUR PLAYER NAME</label>
-              <input id="arc-name" className="arc-name" maxLength={18} autoComplete="nickname" placeholder="Night crew" value={name} onChange={(e) => setName(e.target.value)} />
+              <label className="arc-kicker" htmlFor="arc-name">YOUR PLAYER NAME · TAP TO EDIT</label>
+              <label className="arc-name-field" htmlFor="arc-name">
+                <input id="arc-name" className="arc-name" maxLength={18} autoComplete="nickname" placeholder="Type your name" value={name} onChange={(e) => setName(e.target.value)} />
+                <Icon name="edit" size={16} />
+              </label>
               <span className="arc-player-note">{avatar ? "Your NIGHT FROG. Your seat at the table." : address ? "No NIGHT FROG in this wallet" : "Sign in to bring your NIGHT FROG"}</span>
             </div>
           </div>
@@ -238,7 +247,7 @@ export function PinballPage() {
           <div className="arc-how">
             <div><i><Icon name="black-hole" size={22} /></i><b>Black hole + orbit</b><span>+2,000 / +500. Send a meteor to your rival in 3 s.</span></div>
             <div><i><Icon name="frog" size={22} /></i><b>Frog crew ×3</b><span>+1,500, a multiplier and 5 s of heavy gravity for your rival.</span></div>
-            <div><i><Icon name="target" size={22} /></i><b>Skill shot</b><span>Release in the blue band. Collect +1,000.</span></div>
+            <div><i><Icon name="target" size={22} /></i><b>Skill shot</b><span>Release in the green band. Collect +1,000.</span></div>
             <div><i><Icon name="scales" size={22} /></i><b>Fair by replay</b><span>Both games replayed on the server. Every attack accounted for.</span></div>
           </div>
 
@@ -271,6 +280,7 @@ export function PinballPage() {
           key={play.kind === "practice" ? `p${play.run}` : play.match.id}
           seed={play.kind === "practice" ? play.seed : play.match.seed}
           startAt={play.kind === "duel" ? play.match.startedAt ?? undefined : undefined}
+          clockOffset={play.kind === "duel" ? clock.current : 0}
           name={me} avatar={avatar} rival={rival}
           onLive={play.kind === "duel" ? (s) => void api(`match/${play.match.id}/progress`, { player: play.player, ...s }).catch(() => {}) : undefined}
           onDone={(r) => void finished(r)}
@@ -278,6 +288,8 @@ export function PinballPage() {
         />
       </main>}
 
+      {/* the app's tabs in the lobby; while a game runs the touch controls take the bottom of the screen */}
+      {!play && <AppTabs active="games" />}
     </div>
   );
 }

@@ -11,15 +11,15 @@ const GAMES: [string, string, string][] = [
 export function GameRoomPage() {
   return (
     <div className="docs token-page games-page">
-      <span className="eyebrow">COMING SOON · GAME ROOM</span>
+      <span className="eyebrow">GAME ROOM · SPACE PINBALL IS LIVE</span>
       <h1>NIGHTSHIFT Game Room. <em>For awesome night breaks.</em></h1>
       <p className="lead">Short player-versus-player games between shifts. Two players put in the same amount of $SHIFT or IMD; the winner takes the pot, minus a 5% fee split by the one rule, so every game also burns $SHIFT and IMD.</p>
 
       <section className="tkn-card pb-promo" aria-labelledby="pb-promo-title">
-        <div className="pb-promo-visual" aria-hidden="true"><img src="/games/pinball/playfield.webp" alt="" /></div>
+        <div className="pb-promo-visual" aria-hidden="true"><img src="/games/pinball/key-art.webp" alt="" /></div>
         <div className="pb-promo-content">
           <div className="pb-promo-meta"><span className="pb-promo-label">NIGHTSHIFT ORIGINAL / 01</span><span className="pb-promo-status">LIVE</span></div>
-          <h2 id="pb-promo-title">Space <em>Pinball</em></h2>
+          <h2 id="pb-promo-title"><img className="pb-promo-logo" src="/brand/space-pinball-logo.svg" alt="Space Pinball by NIGHTSHIFT" width={410} height={156} /></h2>
           <p>Skill duels. Same table, same seed. Free to play now.</p>
           <a className="pb-promo-play" href="/games/pinball">Play now</a>
           <small>IMD and $SHIFT stakes open with the escrow</small>
@@ -27,7 +27,7 @@ export function GameRoomPage() {
       </section>
 
       <section className="tkn-card">
-        <div className="tkn-head"><div><b>HOW A MATCH WORKS</b><span>Ethereum · $SHIFT or IMD · one contract holds the pot</span></div><span className="tkn-state">COMING SOON</span></div>
+        <div className="tkn-head"><div><b>HOW A MATCH WORKS</b><span>Ethereum · $SHIFT or IMD · one contract holds the pot</span></div><span className="tkn-state">STAKES SOON</span></div>
         <div className="frogs-traits">
           <div><b>1</b><span>You open a match and set the amount, say 1,000 $SHIFT. It goes into the game contract, not to NIGHTSHIFT.</span></div>
           <div><b>2</b><span>Another player joins with the same amount. The pot is now 2,000 $SHIFT.</span></div>

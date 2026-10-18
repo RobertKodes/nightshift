@@ -31,7 +31,7 @@ export function Home({ health }: { health: Health | null }) {
     const off = events(() => load());
     const t = setInterval(() => tick((x) => x + 1), 1000);
     return () => { off(); clearInterval(t); };
-  }, []);
+  }, [address]);
 
   async function start() {
     setBusy(true);
@@ -93,8 +93,10 @@ export function Home({ health }: { health: Health | null }) {
         <div className="grid portfolio">
           {list.map((c) => {
             const profit = c.pnl.revenueUsd - c.pnl.spentUsd;
+            // With sign-in on, only the owner may open the dashboard; everyone else gets the public page.
+            const to = c.mine || !health?.requireAuth ? `/co/${c.id}` : `/c/${c.slug}`;
             return (
-              <Link key={c.id} to={`/co/${c.id}`} className="card co">
+              <Link key={c.id} to={to} className="card co">
                 <div className="co-h">
                   <div><h4>{c.name}</h4><p>{c.mission}</p></div>
                   <span className={`pill ${c.status}`}>{c.status === "active" ? `shift ${c.cycle}` : c.status}</span>

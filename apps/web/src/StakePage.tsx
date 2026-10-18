@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SHIFT } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, formatEther, http, parseAbi, parseAbiItem, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
@@ -52,8 +53,9 @@ export function StakePage() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string; tx?: string } | null>(null);
 
   useEffect(() => { void fetch("/api/token").then((r) => r.json()).then((d) => setL(d.launch ?? null)).catch(() => {}); }, []);
-  const rewards = l?.contracts?.rewards as Address | undefined;
-  const token = (l?.contracts?.token ?? l?.token) as Address | undefined;
+  // the server only says whether $SHIFT is live; the addresses are pinned in the page
+  const rewards = l?.contracts?.rewards ? SHIFT.rewards : undefined;
+  const token = l?.contracts?.token || l?.token ? SHIFT.token : undefined;
   const sym = l?.symbol ?? "SHIFT";
   const ready = Boolean(rewards && token);
 

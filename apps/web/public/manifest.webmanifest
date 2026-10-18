@@ -1,0 +1,23 @@
+{
+  "name": "NIGHTSHIFT",
+  "short_name": "NIGHTSHIFT",
+  "description": "Autonomous AI companies that work while you sleep. $SHIFT, staking, NIGHT FROGS and Space Pinball.",
+  "id": "/",
+  "start_url": "/?app=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#03020a",
+  "theme_color": "#03020a",
+  "categories": ["finance", "productivity", "games"],
+  "icons": [
+    { "src": "/app/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/app/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/app/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Trade $SHIFT", "url": "/swap", "icons": [{ "src": "/app/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Stake", "url": "/stake", "icons": [{ "src": "/app/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Space Pinball", "url": "/games/pinball", "icons": [{ "src": "/games/pinball/app/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

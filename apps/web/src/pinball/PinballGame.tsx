@@ -13,6 +13,8 @@ type Props = {
   seed: number;
   /** Wall-clock start (duels): the VS screen and countdown run until then. */
   startAt?: number;
+  /** Server time minus this device's time, in ms: a duel runs on the server's clock. */
+  clockOffset?: number;
   avatar?: string | null;
   name?: string;
   rival?: Rival | null;
@@ -61,7 +63,7 @@ function makeAudio() {
   };
 }
 
-export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, onLive, onDone, overlay }: Props) {
+export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "You", rival, demo, onLive, onDone, overlay }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
   const keys = useRef({ left: 0, right: 0, plunger: 0 });
@@ -102,7 +104,7 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
 
     const frame = (now: number) => {
       const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
-      const wait = startAt ? Math.max(0, startAt - Date.now()) : 0;
+      const wait = startAt ? Math.max(0, startAt - (Date.now() + clockOffset)) : 0;
       // the rival's attacks land ATTACK_DELAY after they were earned, as on the server
       for (const a of rivalRef.current?.attacks ?? []) {
         const k = `${a.kind}:${a.tick}`;
@@ -112,7 +114,10 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
         beep(180, 0.35, "sawtooth", 0.06);
       }
       if (wait <= 0 && !t.over) {
-        acc += dt;
+        // A duel follows the shared clock, not this device's frame rate: both tables reach every tick at
+        // the same moment, so attacks land where the server's replay puts them. Practice keeps frame time.
+        if (startAt) acc = Math.min(4800, Math.max(0, Math.floor((Date.now() + clockOffset - startAt) / (TICK * 1000)) - t.tick)) * TICK + 1e-9;
+        else acc += dt;
         while (acc >= TICK && !t.over) {
           if (demo) {
             // the attract-mode bot
@@ -132,20 +137,20 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
         const e = t.events[seen]!, b = t.ball;
         if (e.send) sent.push({ kind: e.send, tick: e.tick });
         switch (e.kind) {
-          case "bumper": beep(520 + Math.random() * 220, 0.07); burst(b.x, b.y, "#3FE6FF", 14); shake = Math.max(shake, 3); break;
+          case "bumper": beep(520 + Math.random() * 220, 0.07); burst(b.x, b.y, "#a48bff", 14); shake = Math.max(shake, 3); break;
           case "sling": beep(300, 0.05, "triangle"); slingFlash = 10; break;
           case "target": beep(880, 0.09, "sawtooth", 0.04); burst(b.x, b.y, "#B8FF4A", 22); break;
           case "targets": beep(1200, 0.3, "sawtooth", 0.05); say("FROG CREW!", "#B8FF4A", rival ? "+MULT · GRAVITY SURGE SENT" : "+1,500 · +MULT"); shake = 8; flash = 0.4; break;
-          case "hole": beep(110, 0.7, "sine", 0.12); burst(t.hole.x, t.hole.y, "#FF4FD8", 70, 440); shake = 12; holeFrog = 1.6; flash = 0.6; say(`BLACK HOLE · x${t.mult}`, "#FF4FD8", rival ? "METEOR SENT" : "+2,000"); break;
-          case "orbit": beep(660, 0.3, "triangle", 0.06); say("ORBIT!", "#FFC46B", rival ? "METEOR SENT" : "+500"); break;
-          case "skill": beep(990, 0.4, "triangle", 0.07); say("SKILL SHOT!", "#3FE6FF", "+1,000"); flash = 0.3; break;
+          case "hole": beep(110, 0.7, "sine", 0.12); burst(t.hole.x, t.hole.y, "#7c5cff", 70, 440); shake = 12; holeFrog = 1.6; flash = 0.6; say(`BLACK HOLE · x${t.mult}`, "#7c5cff", rival ? "METEOR SENT" : "+2,000"); break;
+          case "orbit": beep(660, 0.3, "triangle", 0.06); say("ORBIT!", "#e9e2ff", rival ? "METEOR SENT" : "+500"); break;
+          case "skill": beep(990, 0.4, "triangle", 0.07); say("SKILL SHOT!", "#b8ff4a", "+1,000"); flash = 0.3; break;
           case "save": beep(440, 0.3, "sine", 0.06); say("BALL SAVED", "#B8FF4A"); break;
           case "meteor-in": beep(70, 0.6, "sawtooth", 0.1); shake = 14; flash = 0.5; burst(t.meteors.at(-1)?.x ?? 290, t.meteors.at(-1)?.y ?? 300, "#FF7A3D", 50, 380); break;
           case "surge-in": beep(60, 0.8, "sawtooth", 0.08); say("GRAVITY SURGE", "#FF4F68", "5 s heavier"); shake = 10; break;
           case "drain": beep(90, 0.5, "sawtooth", 0.08); shake = 6; if (t.ballsLeft > 0) say(`BALL ${BALLS - t.ballsLeft + 1}`, "#F2EFFF", `${t.ballsLeft} left`); break;
           case "launch": beep(240, 0.2, "sine", 0.06); break;
         }
-        if (e.points > 0) pops.push({ x: b.x, y: b.y - 18, text: `+${e.points.toLocaleString()}`, life: 0.9, color: e.points >= 1000 ? "#FFC46B" : "#F2EFFF" });
+        if (e.points > 0) pops.push({ x: b.x, y: b.y - 18, text: `+${e.points.toLocaleString()}`, life: 0.9, color: e.points >= 1000 ? "#e9e2ff" : "#F2EFFF" });
       }
       draw(now, dt, wait);
       drawMini();
@@ -155,6 +160,7 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
       raf = requestAnimationFrame(frame);
     };
 
+    const rest = [new Table(seed).flipper(0), new Table(seed).flipper(1)];
     const drawMini = () => {
       const m = mini.current, r = rivalRef.current;
       if (!m || !r) return;
@@ -162,7 +168,13 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
       c.setTransform(s, 0, 0, s, 0, 0);
       c.fillStyle = "#03020A"; c.fillRect(0, 0, W, H);
       if (A.field.complete) { c.globalAlpha = 0.7; c.drawImage(A.field, 0, 0, W, H); c.globalAlpha = 1; }
-      c.fillStyle = "#FF4FD8"; c.shadowColor = "#FF4FD8"; c.shadowBlur = 30; c.beginPath(); c.arc(r.x, r.y, 22, 0, 7); c.fill(); c.shadowBlur = 0;
+      // the rival's table has the same layout: black hole, planets and flippers at rest, then their ball
+      const hs = t.hole.pull * 1.25;
+      if (A.hole.complete) c.drawImage(A.hole, t.hole.x - hs, t.hole.y - hs, hs * 2, hs * 2);
+      for (const b of t.bumpers) { const pi = A.planets[b.kind]!, rr = b.r * 1.34; if (pi.complete) c.drawImage(pi, b.x - rr, b.y - rr, rr * 2, rr * 2); }
+      c.strokeStyle = "#e9e2ff"; c.lineWidth = 14; c.lineCap = "round";
+      for (const f of rest) { c.beginPath(); c.moveTo(f.a.x, f.a.y); c.lineTo(f.b.x, f.b.y); c.stroke(); }
+      c.fillStyle = "#e9e2ff"; c.shadowColor = "#7c5cff"; c.shadowBlur = 30; c.beginPath(); c.arc(r.x, r.y, 22, 0, 7); c.fill(); c.shadowBlur = 0;
     };
 
     const draw = (now: number, dt: number, wait: number) => {
@@ -181,8 +193,8 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
       const pulse = 0.65 + 0.35 * Math.sin(now / 300);
       for (const w of t.walls) {
         const sling = w.tag === "sling";
-        g.strokeStyle = sling ? (slingFlash > 0 ? "#FFFFFF" : "#FF4FD8") : `rgba(63,230,255,${0.6 + pulse * 0.35})`;
-        g.lineWidth = sling ? 5 : 3; g.shadowColor = sling ? "#FF4FD8" : "#3FE6FF"; g.shadowBlur = sling ? 20 : 12;
+        g.strokeStyle = sling ? (slingFlash > 0 ? "#FFFFFF" : "#7c5cff") : `rgba(164,139,255,${0.6 + pulse * 0.35})`;
+        g.lineWidth = sling ? 5 : 3; g.shadowColor = sling ? "#7c5cff" : "#7c5cff"; g.shadowBlur = sling ? 20 : 12;
         g.beginPath(); g.moveTo(w.a.x, w.a.y); g.lineTo(w.b.x, w.b.y); g.stroke();
       }
       if (slingFlash > 0) slingFlash--;
@@ -197,7 +209,7 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
       t.bumpers.forEach((b, i) => {
         const pi = A.planets[b.kind]!, r = b.r * 1.34 + (b.flash ? 5 : 0);
         g.save(); g.translate(b.x, b.y); g.rotate(now / (2400 + i * 700));
-        g.shadowColor = ["#B07CFF", "#3FE6FF", "#FFC46B", "#FF4FD8"][b.kind]!; g.shadowBlur = b.flash ? 50 : 14;
+        g.shadowColor = ["#7c5cff", "#c9b8ff", "#b8ff4a", "#e9e2ff"][b.kind]!; g.shadowBlur = b.flash ? 50 : 14;
         if (pi.complete) g.drawImage(pi, -r, -r, r * 2, r * 2);
         g.restore();
         if (b.flash) { g.strokeStyle = `rgba(242,239,255,${b.flash / 18})`; g.lineWidth = 3; g.beginPath(); g.arc(b.x, b.y, b.r + 22 - b.flash, 0, 7); g.stroke(); }
@@ -221,32 +233,32 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
         const fi = A.frogs[i % A.frogs.length]!;
         g.save(); g.globalAlpha = x.down ? 0.16 : 1;
         g.shadowColor = "#B8FF4A"; g.shadowBlur = x.down ? 0 : 14 + pulse * 10;
-        g.beginPath(); g.arc(x.x, x.y, x.r + 4, 0, 7); g.fillStyle = "#08070D"; g.fill();
+        g.beginPath(); g.arc(x.x, x.y, x.r + 4, 0, 7); g.fillStyle = "#0d0a1f"; g.fill();
         if (fi.complete) g.drawImage(fi, x.x - x.r - 3, x.y - x.r - 3, (x.r + 3) * 2, (x.r + 3) * 2);
         g.restore();
       });
 
       for (const side of [0, 1] as const) {
         const f = t.flipper(side);
-        g.strokeStyle = "#FFC46B"; g.shadowColor = "#FFC46B"; g.shadowBlur = 16; g.lineWidth = 18;
+        g.strokeStyle = "#a48bff"; g.shadowColor = "#a48bff"; g.shadowBlur = 16; g.lineWidth = 18;
         g.beginPath(); g.moveTo(f.a.x, f.a.y); g.lineTo(f.b.x, f.b.y); g.stroke();
-        g.shadowBlur = 0; g.strokeStyle = "#FFF2AA"; g.lineWidth = 6; g.beginPath(); g.moveTo(f.a.x, f.a.y); g.lineTo(f.b.x, f.b.y); g.stroke();
-        g.fillStyle = "#08070D"; g.beginPath(); g.arc(f.a.x, f.a.y, 6, 0, 7); g.fill();
+        g.shadowBlur = 0; g.strokeStyle = "#f2efff"; g.lineWidth = 6; g.beginPath(); g.moveTo(f.a.x, f.a.y); g.lineTo(f.b.x, f.b.y); g.stroke();
+        g.fillStyle = "#0d0a1f"; g.beginPath(); g.arc(f.a.x, f.a.y, 6, 0, 7); g.fill();
       }
 
       const b = t.ball;
       if (t.held === 0) { trail.push({ x: b.x, y: b.y }); if (trail.length > 16) trail.shift(); } else trail.length = 0;
-      trail.forEach((p, i) => { g.fillStyle = `rgba(63,230,255,${(i / trail.length) * 0.35})`; g.beginPath(); g.arc(p.x, p.y, 11 * (i / trail.length), 0, 7); g.fill(); });
+      trail.forEach((p, i) => { g.fillStyle = `rgba(164,139,255,${(i / trail.length) * 0.35})`; g.beginPath(); g.arc(p.x, p.y, 11 * (i / trail.length), 0, 7); g.fill(); });
       if (t.held === 0) {
         const grd = g.createRadialGradient(b.x - 3, b.y - 3, 1, b.x, b.y, 12);
-        grd.addColorStop(0, "#FFFFFF"); grd.addColorStop(0.6, "#C8F6FF"); grd.addColorStop(1, "#3FE6FF");
-        g.fillStyle = grd; g.shadowColor = "#3FE6FF"; g.shadowBlur = 24; g.beginPath(); g.arc(b.x, b.y, 11, 0, 7); g.fill(); g.shadowBlur = 0;
+        grd.addColorStop(0, "#FFFFFF"); grd.addColorStop(0.6, "#e9e2ff"); grd.addColorStop(1, "#a48bff");
+        g.fillStyle = grd; g.shadowColor = "#7c5cff"; g.shadowBlur = 24; g.beginPath(); g.arc(b.x, b.y, 11, 0, 7); g.fill(); g.shadowBlur = 0;
       }
       if (t.inLane) {
         const p = t.plunge / 240;
-        g.fillStyle = "#08070D"; g.fillRect(546, 690, 24, 170);
-        g.fillStyle = "rgba(63,230,255,.25)"; g.fillRect(546, 860 - 170 * 0.82, 24, 170 * 0.12); // the skill-shot window
-        g.fillStyle = p >= 0.7 && p <= 0.82 ? "#3FE6FF" : p > 0.82 ? "#FF4FD8" : "#FFC46B"; g.fillRect(546, 860 - 170 * p, 24, 170 * p);
+        g.fillStyle = "#0d0a1f"; g.fillRect(546, 690, 24, 170);
+        g.fillStyle = "rgba(184,255,74,.25)"; g.fillRect(546, 860 - 170 * 0.82, 24, 170 * 0.12); // the skill-shot window
+        g.fillStyle = p >= 0.7 && p <= 0.82 ? "#b8ff4a" : p > 0.82 ? "#7c5cff" : "#a48bff"; g.fillRect(546, 860 - 170 * p, 24, 170 * p);
       }
       if (t.tick < t.surgeUntil) { const k = 0.25 + 0.15 * Math.sin(now / 90); const grd = g.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.75); grd.addColorStop(0, "rgba(255,79,104,0)"); grd.addColorStop(1, `rgba(255,79,104,${k})`); g.fillStyle = grd; g.fillRect(0, 0, W, H); }
 
@@ -268,7 +280,7 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
         holeFrog -= dt;
         const k = Math.min(1, (1.6 - holeFrog) * 4);
         g.save(); g.globalAlpha = Math.min(1, holeFrog * 2); g.translate(W / 2, H / 2 + 40); g.scale(k, k);
-        g.shadowColor = "#FF4FD8"; g.shadowBlur = 50; g.beginPath(); g.arc(0, 0, 64, 0, 7); g.fillStyle = "#08070D"; g.fill();
+        g.shadowColor = "#7c5cff"; g.shadowBlur = 50; g.beginPath(); g.arc(0, 0, 64, 0, 7); g.fillStyle = "#0d0a1f"; g.fill();
         if (A.me.complete) { g.save(); g.beginPath(); g.arc(0, 0, 60, 0, 7); g.clip(); g.drawImage(A.me, -60, -60, 120, 120); g.restore(); }
         g.restore();
       }
@@ -291,7 +303,7 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
         g.fillStyle = "rgba(3,2,10,.82)"; g.fillRect(0, 0, W, H);
         const secs = Math.ceil(wait / 1000), r = rivalRef.current;
         const face = (im: HTMLImageElement, x: number, color: string, label: string) => {
-          g.save(); g.shadowColor = color; g.shadowBlur = 40; g.beginPath(); g.arc(x, 330, 92, 0, 7); g.fillStyle = "#08070D"; g.fill();
+          g.save(); g.shadowColor = color; g.shadowBlur = 40; g.beginPath(); g.arc(x, 330, 92, 0, 7); g.fillStyle = "#0d0a1f"; g.fill();
           g.beginPath(); g.arc(x, 330, 88, 0, 7); g.clip(); if (im.complete) g.drawImage(im, x - 88, 242, 176, 176); g.restore();
           g.strokeStyle = color; g.lineWidth = 4; g.beginPath(); g.arc(x, 330, 90, 0, 7); g.stroke();
           g.fillStyle = "#F2EFFF"; g.font = "700 22px 'JetBrains Mono', monospace"; g.fillText(label, x, 460);
@@ -299,10 +311,10 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
         const slide = Math.min(1, (6000 - wait) / 600);
         face(A.me, 150 * slide, "#7C5CFF", name);
         if (r) face(A.rival, W - 150 * slide, "#FF4FD8", r.name);
-        g.font = "900 64px 'JetBrains Mono', monospace"; g.fillStyle = "#FFC46B"; g.shadowColor = "#FFC46B"; g.shadowBlur = 30; g.fillText("VS", W / 2, 350); g.shadowBlur = 0;
+        g.font = "900 64px 'JetBrains Mono', monospace"; g.fillStyle = "#e9e2ff"; g.shadowColor = "#7c5cff"; g.shadowBlur = 30; g.fillText("VS", W / 2, 350); g.shadowBlur = 0;
         g.font = "900 150px 'JetBrains Mono', monospace"; g.fillStyle = "#F2EFFF"; g.globalAlpha = 0.5 + 0.5 * ((wait % 1000) / 1000);
         g.fillText(secs > 3 ? "" : String(secs), W / 2, 700); g.globalAlpha = 1;
-        g.font = "600 16px 'JetBrains Mono', monospace"; g.fillStyle = "#C4B4FF"; g.fillText("Same table · same seed · meteors fly both ways", W / 2, 780);
+        g.font = "600 16px 'JetBrains Mono', monospace"; g.fillStyle = "#a48bff"; g.fillText("Same table · same seed · meteors fly both ways", W / 2, 780);
       }
       g.restore();
     };
@@ -368,7 +380,7 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
             <span className="arc-kicker">AT YOUR FINGERTIPS</span>
             <div><kbd>←</kbd><kbd>A</kbd><span>Left flipper</span></div>
             <div><kbd>→</kbd><kbd>L</kbd><span>Right flipper</span></div>
-            <div><kbd>SPACE</kbd><span>Hold to charge.<br />Release in the blue band.</span></div>
+            <div><kbd>SPACE</kbd><span>Hold to charge.<br />Release in the green band.</span></div>
           </div>
           <div className="arc-tools">
             <button type="button" onClick={() => setSound(!sound)} className={sound ? "on" : ""} aria-pressed={sound} aria-label={`Sound ${sound ? "on" : "off"}`} title={`Sound ${sound ? "on" : "off"}`}><svg className="icon" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><use href={`#arc-icon-${sound ? "sound" : "sound-off"}`} /></svg><span>Sound</span><small>{sound ? "ON" : "OFF"}</small></button>
@@ -403,7 +415,7 @@ export function PinballGame({ seed, startAt, avatar, name = "You", rival, demo, 
               <li><svg className="icon" width="21" height="21" viewBox="0 0 24 24" aria-hidden="true"><use href="#arc-icon-black-hole" /></svg><div><b>Black hole</b><span>+2,000 and +1 multiplier, up to ×5.</span></div></li>
               <li><svg className="icon" width="21" height="21" viewBox="0 0 24 24" aria-hidden="true"><use href="#arc-icon-frog" /></svg><div><b>Frog crew</b><span>All three: +1,500 and +1 multiplier.</span></div></li>
               <li><svg className="icon" width="21" height="21" viewBox="0 0 24 24" aria-hidden="true"><use href="#arc-icon-orbit" /></svg><div><b>Orbit</b><span>Sweep the top fast for +500.</span></div></li>
-              <li><svg className="icon" width="21" height="21" viewBox="0 0 24 24" aria-hidden="true"><use href="#arc-icon-target" /></svg><div><b>Skill shot</b><span>Release in the blue band for +1,000.</span></div></li>
+              <li><svg className="icon" width="21" height="21" viewBox="0 0 24 24" aria-hidden="true"><use href="#arc-icon-target" /></svg><div><b>Skill shot</b><span>Release in the green band for +1,000.</span></div></li>
               <li><svg className="icon" width="21" height="21" viewBox="0 0 24 24" aria-hidden="true"><use href="#arc-icon-shield" /></svg><div><b>Ball save</b><span>Your first 4 seconds are covered.</span></div></li>
             </ul>
             <p className="arc-lead arc-practice-note">In a duel, black holes and orbits send meteors. The frog crew sends a gravity surge.</p>

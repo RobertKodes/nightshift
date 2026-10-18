@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+<title id="title">SPACE PINBALL app icon</title>
+<defs><linearGradient id="moon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e9e2ff"/><stop offset="1" stop-color="#7c5cff"/></linearGradient><radialGradient id="ball" cx="30%" cy="24%" r="85%"><stop stop-color="#ffffff"/><stop offset=".25" stop-color="#e9e2ff"/><stop offset=".63" stop-color="#a48bff"/><stop offset="1" stop-color="#5534c7"/></radialGradient><linearGradient id="night" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0d0a1f"/><stop offset=".55" stop-color="#03020a"/><stop offset="1" stop-color="#171035"/></linearGradient><radialGradient id="aura"><stop stop-color="#7c5cff" stop-opacity=".2"/><stop offset="1" stop-color="#7c5cff" stop-opacity="0"/></radialGradient></defs>
+
+<rect width="1024" height="1024" rx="224" fill="url(#night)"/><circle cx="512" cy="512" r="460" fill="url(#aura)"/><circle cx="124" cy="218" r="2" fill="#a48bff" opacity="0.55"/><circle cx="215" cy="132" r="1.5" fill="#a48bff" opacity="0.35"/><circle cx="822" cy="207" r="2" fill="#a48bff" opacity="0.65"/><circle cx="875" cy="698" r="1.5" fill="#a48bff" opacity="0.45"/><circle cx="739" cy="866" r="2" fill="#a48bff" opacity="0.4"/><circle cx="159" cy="777" r="2" fill="#a48bff" opacity="0.5"/><circle cx="318" cy="845" r="1.5" fill="#a48bff" opacity="0.35"/><circle cx="751" cy="120" r="1.5" fill="#a48bff" opacity="0.5"/><circle cx="906" cy="420" r="2" fill="#a48bff" opacity="0.35"/><circle cx="108" cy="541" r="1.5" fill="#a48bff" opacity="0.4"/><circle cx="427" cy="117" r="1.5" fill="#a48bff" opacity="0.45"/><circle cx="591" cy="907" r="1.5" fill="#a48bff" opacity="0.35"/><circle cx="846" cy="834" r="1" fill="#a48bff" opacity="0.4"/><circle cx="227" cy="445" r="1" fill="#a48bff" opacity="0.35"/><g transform="translate(205 205) scale(19.1875)">
+<path d="M21.5 3.2A13 13 0 1 0 28.8 22 10.6 10.6 0 1 1 21.5 3.2Z" fill="url(#moon)"/>
+<circle cx="22.5" cy="12" r="4.9" fill="url(#ball)"/>
+<ellipse cx="20.9" cy="10.3" rx="1.45" ry=".8" transform="rotate(-35 20.9 10.3)" fill="#ffffff"/>
+<circle cx="25.45" cy="11.25" r=".6" fill="#b8ff4a"/>
+<path d="m11.2 26 3.1 1.5m7-1.5-3.1 1.5" fill="none" stroke="#e9e2ff" stroke-width="1.7" stroke-linecap="round"/>
+</g>
+</svg>

@@ -41,7 +41,7 @@ function record(list: Score[]): void {
 
 const emit = (m: Match) => { for (const f of listeners.get(m.id) ?? []) f(m); };
 const view = (m: Match, me?: string) => ({
-  id: m.id, seed: m.seed, currency: m.currency, stake: m.stake, startedAt: m.startedAt, done: m.done, draw: m.draw, winner: m.winner,
+  id: m.id, seed: m.seed, currency: m.currency, stake: m.stake, startedAt: m.startedAt, now: Date.now(), done: m.done, draw: m.draw, winner: m.winner,
   players: m.players.map((p) => ({ name: p.name, avatar: p.avatar, live: p.live, tick: p.tick, x: p.x, y: p.y, attacks: p.attacks, score: p.score, solo: p.solo, stats: p.stats ?? null, you: p.id === me, finished: p.inputs !== null })),
 });
 
@@ -113,10 +113,11 @@ export function finish(id: string, player: string, inputs: unknown): { solo: num
   if (p.inputs) return { solo: p.solo ?? 0 };
   if (!m.startedAt || Date.now() < m.startedAt) throw new Error("the match has not started");
   const clean = cleanInputs(inputs);
-  const r = replay(m.seed, clean);
   // Inputs carry their tick: nobody can send an input from the future of the match clock.
+  // Checked before the replay, so a refused finish costs the server nothing.
   const lastTick = clean.reduce((x, i) => Math.max(x, i[0]), 0);
   if (Date.now() - m.startedAt < (lastTick / 240) * 1000 - 3_000) throw new Error("inputs from later than the match has run");
+  const r = replay(m.seed, clean);
   p.inputs = clean; p.solo = r.score; p.live = Math.max(p.live, 0); p.finishedAt = Date.now();
   settle(m);
   return { solo: r.score };

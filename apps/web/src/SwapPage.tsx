@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { SHIFT, SHIFT_POOL } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, formatEther, http, maxUint160, maxUint256, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
@@ -15,8 +16,9 @@ const errText = (e: unknown) => ((e as { shortMessage?: string }).shortMessage ?
  * from your own wallet. The site adds no fee and holds nothing: one Universal Router call, quoted
  * first by Uniswap's own V4 Quoter, signed in your wallet.
  */
-export function SwapPage() {
-  const [l, setL] = useState<Launch>(null);
+export function SwapBox({ launch }: { launch?: Launch } = {}) {
+  const [fetchedLaunch, setFetchedLaunch] = useState<Launch>(null);
+  const l = launch === undefined ? fetchedLaunch : launch;
   const [me, setMe] = useState<Address | null>(null);
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
@@ -29,9 +31,13 @@ export function SwapPage() {
   const [err, setErr] = useState<string | null>(null);
   const seq = useRef(0);
 
-  useEffect(() => { void fetch("/api/token").then((r) => r.json()).then((d) => setL(d.launch ?? null)).catch(() => {}); }, []);
-  const pool = l?.pool ?? null;
-  const token = (l?.token ?? pool?.currency1) as Address | undefined;
+  useEffect(() => {
+    if (launch !== undefined) return;
+    void fetch("/api/token").then((r) => r.json()).then((d) => setFetchedLaunch(d.launch ?? null)).catch(() => {});
+  }, [launch]);
+  // the pool key and token are pinned in the page; the server only says whether trading is live
+  const pool = l?.pool ? SHIFT_POOL : null;
+  const token = pool ? SHIFT.token : undefined;
   const sym = l?.symbol ?? "SHIFT";
 
   const loadBal = async (who = me) => {
@@ -109,11 +115,6 @@ export function SwapPage() {
   const outSym = side === "buy" ? `$${sym}` : "ETH";
 
   return (
-    <div className="docs token-page swap-page">
-      <span className="eyebrow">{pool ? (l?.open ? "LIVE · ETHEREUM" : "DEPLOYED · OPENS WITH THE FIRST BUY") : "OPENS AT LAUNCH"}</span>
-      <h1>NIGHTSHIFT Swap. <em>${sym} for ETH, straight from its pool.</em></h1>
-      <p className="lead">Buy and sell ${sym} from your own wallet, through its Uniswap v4 pool and hook. No extra fee from us, nothing held by us: Uniswap's quoter prices it, Uniswap's router swaps it, your wallet signs it.</p>
-
       <section className="tkn-card swap-card" aria-label="Swap">
         <div className="tkn-head">
           <div><b>SWAP</b><span>Ethereum · Uniswap v4 · ${sym}/ETH</span></div>
@@ -142,6 +143,21 @@ export function SwapPage() {
         </div>}
         {!pool && <p className="tkn-warn">Not open yet. This page switches on by itself when $SHIFT is deployed; any other site or link offering $SHIFT before that is fake.</p>}
       </section>
+  );
+}
+
+export function SwapPage() {
+  const [l, setL] = useState<Launch>(null);
+  useEffect(() => { void fetch("/api/token").then((r) => r.json()).then((d) => setL(d.launch ?? null)).catch(() => {}); }, []);
+  const pool = l?.pool ?? null;
+  const sym = l?.symbol ?? "SHIFT";
+  return (
+    <div className="docs token-page swap-page">
+      <span className="eyebrow">{pool ? (l?.open ? "LIVE · ETHEREUM" : "DEPLOYED · OPENS WITH THE FIRST BUY") : "OPENS AT LAUNCH"}</span>
+      <h1>NIGHTSHIFT Swap. <em>${sym} for ETH, straight from its pool.</em></h1>
+      <p className="lead">Buy and sell ${sym} from your own wallet, through its Uniswap v4 pool and hook. No extra fee from us, nothing held by us: Uniswap's quoter prices it, Uniswap's router swaps it, your wallet signs it.</p>
+
+      <SwapBox launch={l} />
 
       <h2>How it works</h2>
       <ul className="frogs-util">

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-labelledby="title">
+<title id="title">SPACE PINBALL crescent, pinball and flippers</title>
+<defs><linearGradient id="moon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e9e2ff"/><stop offset="1" stop-color="#7c5cff"/></linearGradient><radialGradient id="ball" cx="30%" cy="24%" r="85%"><stop stop-color="#ffffff"/><stop offset=".25" stop-color="#e9e2ff"/><stop offset=".63" stop-color="#a48bff"/><stop offset="1" stop-color="#5534c7"/></radialGradient></defs>
+
+<g transform="translate(0 0) scale(1)">
+<path d="M21.5 3.2A13 13 0 1 0 28.8 22 10.6 10.6 0 1 1 21.5 3.2Z" fill="url(#moon)"/>
+<circle cx="22.5" cy="12" r="4.9" fill="url(#ball)"/>
+<ellipse cx="20.9" cy="10.3" rx="1.45" ry=".8" transform="rotate(-35 20.9 10.3)" fill="#ffffff"/>
+<circle cx="25.45" cy="11.25" r=".6" fill="#b8ff4a"/>
+<path d="m11.2 26 3.1 1.5m7-1.5-3.1 1.5" fill="none" stroke="#e9e2ff" stroke-width="1.7" stroke-linecap="round"/>
+</g>
+</svg>

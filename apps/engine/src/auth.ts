@@ -27,8 +27,10 @@ export class Auth {
   nonce(): { nonce: string; message: (address: string) => string } {
     const n = randomBytes(12).toString("hex");
     const issuedAt = new Date().toISOString();
-    this.#nonces.set(n, { exp: Date.now() + 5 * 60_000, issuedAt });
     for (const [k, v] of this.#nonces) if (v.exp < Date.now()) this.#nonces.delete(k);
+    // bounded: a flood of sign-in requests cannot grow memory without end
+    if (this.#nonces.size >= 20_000) throw new Error("Too many sign-ins right now; try again in a minute.");
+    this.#nonces.set(n, { exp: Date.now() + 5 * 60_000, issuedAt });
     return { nonce: n, message: (address) => Auth.message(address, n, issuedAt) };
   }
 

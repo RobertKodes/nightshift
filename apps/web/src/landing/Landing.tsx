@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { short, useStaked } from "../StakedCounter";
+import { Icon } from "../Icon";
 import { safeHref } from "../safe";
 import { usd } from "../api";
 import { Link, go } from "../router";
 import { Crescent, Magnetic, SiteFooter, SiteHeader } from "./chrome";
+import { AppTabs } from "./app";
 import { ImdVisitor } from "./visitor";
 import { EcosystemFlow, FEE_SPLIT, Faq, IMD_WINS, TokenomicsBars, UTILITY, symbolOf, useToken } from "./content";
 import { ANCHORS, ART_H, ART_W, startScene } from "./scene";
@@ -328,10 +330,10 @@ export function Landing() {
           <div className="crew-text">
             <p>The frog is <b>IMD's mascot</b>: he sits at the desk on <a href="https://imd.fun" target="_blank" rel="noreferrer">imd.fun</a> and jumps when you click him. Tonight he walked over to visit: look for him by the ship. While you sleep, he and a few thousand IMD agents dig, build and ship.</p>
             <div className="crew-roles">
-              <div><i>🐸</i><p><b>THE FROG</b><span>Mascot, morale, night watch. He walked over from imd.fun. Say hi.</span></p></div>
-              <div><i>🤖</i><p><b>THE SWARM</b><span>Thousands of IMD agents who build, review and host the work.</span></p></div>
-              <div><i>🌙</i><p><b>YOUR CEO</b><span>Picks one move per shift, inside the limits you set.</span></p></div>
-              <div><i>🫵</i><p><b>YOU</b><span>Asleep. Then withdrawing.</span></p></div>
+              <div><i><Icon name="frog" size={22} /></i><p><b>THE FROG</b><span>Mascot, morale, night watch. He walked over from imd.fun. Say hi.</span></p></div>
+              <div><i><Icon name="orbit" size={22} /></i><p><b>THE SWARM</b><span>Thousands of IMD agents who build, review and host the work.</span></p></div>
+              <div><i><Icon name="crescent" size={22} /></i><p><b>YOUR CEO</b><span>Picks one move per shift, inside the limits you set.</span></p></div>
+              <div><i><Icon name="user" size={22} /></i><p><b>YOU</b><span>Asleep. Then withdrawing.</span></p></div>
             </div>
           </div>
         </div>
@@ -384,6 +386,7 @@ export function Landing() {
       </section>
 
       <SiteFooter />
+      <AppTabs active="home" />
     </div>
   );
 }

@@ -12,6 +12,9 @@ export function useGameApp(): void {
       el.dataset.pinballApp = "1";
       document.head.append(el);
     };
+    // the game installs as its own app: its manifest replaces the site's while this page is open
+    const site = document.head.querySelector<HTMLLinkElement>('link[rel="manifest"]:not([data-pinball-app])');
+    site?.remove();
     add("link", { rel: "manifest", href: "/games/pinball/app/manifest.webmanifest" });
     add("link", { rel: "apple-touch-icon", href: "/games/pinball/app/apple-touch-icon.png" });
     add("meta", { name: "apple-mobile-web-app-capable", content: "yes" });
@@ -20,7 +23,7 @@ export function useGameApp(): void {
     add("meta", { name: "apple-mobile-web-app-title", content: "Space Pinball" });
     add("meta", { name: "theme-color", content: "#03020a" });
     if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/games/pinball-sw.js", { scope: "/games/pinball" }).catch(() => {});
-    return () => { for (const el of document.head.querySelectorAll("[data-pinball-app]")) el.remove(); };
+    return () => { for (const el of document.head.querySelectorAll("[data-pinball-app]")) el.remove(); if (site) document.head.append(site); };
   }, []);
 }
 
@@ -43,7 +46,7 @@ export function InstallButton() {
   return (
     <>
       <button type="button" className="arc-install" onClick={() => { if (prompt) { void prompt.prompt(); void prompt.userChoice.then(() => setPrompt(null)); } else setHint(true); }}>
-        <Icon name="play" size={14} /><span>Install app</span>
+        <Icon name="download" size={16} /><span>Install app</span>
       </button>
       {hint && (
         <div className="arc-install-hint" role="dialog" aria-label="Install Space Pinball" onClick={() => setHint(false)}>

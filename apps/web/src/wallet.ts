@@ -80,7 +80,11 @@ function pick(list: Detail[]): Promise<Detail | null> {
 /** The wallet to use: the only one, the remembered one, or the person's pick. */
 export async function chooseWallet(opts: { ask?: boolean } = {}): Promise<unknown> {
   const list = await discover();
-  if (!list.length) throw new Error("No wallet in this browser. Install the Uniswap Wallet, MetaMask or Rabby extension.");
+  if (!list.length) {
+    // A phone browser has no wallet inside it: open this page in a wallet app's own browser instead.
+    if (/android|iphone|ipad|ipod/i.test(navigator.userAgent)) { openInWalletApp(); throw new Error("Open NIGHTSHIFT in your wallet app to sign in."); }
+    throw new Error("No wallet in this browser. Install the Uniswap Wallet, MetaMask or Rabby extension.");
+  }
   if (list.length === 1) return open(list[0]!);
   const saved = list.find((d) => d.info.rdns === remembered());
   if (saved && !opts.ask) return open(saved);
@@ -88,6 +92,39 @@ export async function chooseWallet(opts: { ask?: boolean } = {}): Promise<unknow
   if (!d) throw new Error("No wallet chosen.");
   remember(d.info.rdns);
   return open(d);
+}
+
+/** The wallet apps that can open a page in their own browser, by their official links. */
+const APPS: { name: string; href: (url: string) => string }[] = [
+  { name: "MetaMask", href: (u) => `https://metamask.app.link/dapp/${u.replace(/^https?:\/\//, "")}` },
+  { name: "Trust Wallet", href: (u) => `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(u)}` },
+  { name: "Coinbase Wallet", href: (u) => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(u)}` },
+];
+
+/** A sheet with one button per wallet app; the page reopens there, signed-in flows work as on a computer. */
+function openInWalletApp(): void {
+  const url = location.href;
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(3,2,10,.72);display:grid;place-items:end center;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px));font-family:Inter,system-ui,sans-serif";
+  const box = document.createElement("div");
+  box.style.cssText = "width:min(420px,100%);background:#0d0a1f;border:1px solid #2c2550;border-radius:16px;padding:18px;color:#f2efff;box-shadow:0 20px 60px rgba(0,0,0,.6)";
+  box.innerHTML = `<div style="font:600 12px 'JetBrains Mono',monospace;letter-spacing:.2em;color:#a9a3c4;margin-bottom:6px">OPEN IN YOUR WALLET</div><p style="margin:0 0 12px;color:#a9a3c4;font-size:13px;line-height:1.5">Your phone's browser has no wallet. Open this page in your wallet app: you sign in there and nothing leaves your phone.</p>`;
+  for (const a of APPS) {
+    const l = document.createElement("a");
+    l.href = a.href(url);
+    l.rel = "noopener";
+    l.textContent = `Open in ${a.name}`;
+    l.style.cssText = "display:block;padding:13px 12px;margin:6px 0;background:#15112b;border:1px solid #2c2550;border-radius:12px;color:#f2efff;font:500 15px Inter,system-ui,sans-serif;text-decoration:none";
+    box.append(l);
+  }
+  const c = document.createElement("button");
+  c.textContent = "Cancel";
+  c.style.cssText = "margin-top:8px;background:none;border:0;color:#a9a3c4;cursor:pointer;font:500 13px Inter,system-ui,sans-serif";
+  c.onclick = () => wrap.remove();
+  box.append(c);
+  wrap.onclick = (e) => { if (e.target === wrap) wrap.remove(); };
+  wrap.append(box);
+  document.body.append(wrap);
 }
 
 /** Forget the remembered wallet so the next action asks again. */

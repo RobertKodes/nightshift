@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SHIFT } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, formatEther, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
@@ -36,8 +37,9 @@ export function FrogClaims() {
       const { a } = await wallet();
       setMe(a);
       const d = await fetch(`/api/frogs/claims?address=${a}`).then((r) => r.json());
-      setRewards(d.rewards ?? null);
-      setClaims(await withState(d.claims ?? [], a, d.rewards ?? null));
+      const at = d.rewards ? SHIFT.rewards : null;
+      setRewards(at);
+      setClaims(await withState(d.claims ?? [], a, at));
     } catch (e) { setMsg(errText(e)); }
   };
   const claim = async (c: Claim) => {

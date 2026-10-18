@@ -33,6 +33,8 @@ export interface CompanyCard {
   products: { id: string; name: string; priceUsd: number; sales: number; buyUrl: string; pitch: string; kind: string }[];
   pnl: { revenueUsd: number; spentUsd: number; sales: number }; nextShiftAt: number | null;
   working: { title: string; status: string; activity: string | null } | null; createdAt: number; wallet: string;
+  /** The signed-in viewer owns it: the card opens the owner's view instead of the public page. */
+  mine?: boolean;
 }
 
 export interface PublicCompany extends Omit<CompanyCard, "id" | "nextShiftAt" | "working"> {

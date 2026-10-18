@@ -17,7 +17,8 @@ const takeFlag = (id: string) => { try { const v = sessionStorage.getItem(flag);
  * Funds a company wallet from the owner's own wallet: up to three transfers, each confirmed in the
  * wallet (IMD and ETH on Ethereum, ETH on Base). Only what is missing is asked for.
  */
-export function FundCard({ id, wallet, onFunded }: { id: string; wallet: `0x${string}`; onFunded: () => void }) {
+/** `first`: nothing has run yet. Later the card is a top-up: the engine itself keeps working down to 0.5 IMD. */
+export function FundCard({ id, wallet, first = true, onFunded }: { id: string; wallet: `0x${string}`; first?: boolean; onFunded: () => void }) {
   const [bal, setBal] = useState<Bal | null>(null);
   const [step, setStep] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -73,7 +74,7 @@ export function FundCard({ id, wallet, onFunded }: { id: string; wallet: `0x${st
   const row = (label: string, have: string, need: string, ok: boolean) => <li><i className={`dot ${ok ? "ok" : "warn"}`} /><div><b>{label}</b><span>{have} of {need}</span></div></li>;
   return (
     <div className="card fund-card">
-      <div className="card-h"><h3>Fund the company</h3><span className="pill failed">needed before its first shift</span></div>
+      <div className="card-h"><h3>Fund the company</h3><span className="pill failed">{first ? "needed before its first shift" : "running low: top it up"}</span></div>
       <ul className="checks">
         {row("IMD for the swarm (Ethereum)", formatUnits(bal.imd, 18), "2 IMD", !missing!.imd)}
         {row("Gas on Ethereum", formatEther(bal.eth), "0.002 ETH", !missing!.eth)}

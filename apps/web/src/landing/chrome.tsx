@@ -80,7 +80,7 @@ export const UTILITIES: { to: string; label: string; note: string; soon?: boolea
   { to: "/swap", label: "Swap", note: "Buy and sell $SHIFT for ETH, from its pool" },
   { to: "/stake", label: "Stake", note: "Lock $SHIFT, earn from every sell" },
   { to: "/launchpad", label: "Launchpad", note: "Launch a token with the IMD swarm", soon: true },
-  { to: "/games", label: "Game Room", note: "PvP games in $SHIFT and IMD", soon: true },
+  { to: "/games", label: "Game Room", note: "Space Pinball is live: PvP duels" },
   { to: "/impact", label: "IMD Impact", note: "What NIGHTSHIFT gives the IMD network" },
   { to: "/mcp", label: "MCP for agents", note: "Let AI agents use NIGHTSHIFT" },
 ];

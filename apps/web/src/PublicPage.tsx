@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { safeHref } from "./safe";
 import { chooseWallet } from "./wallet";
 import { type Hex, createWalletClient, custom } from "viem";
+import { base, baseSepolia } from "viem/chains";
 import { type Health, type PublicCompany, api, events, short, usd } from "./api";
 
 interface Requirement { network: string; asset: `0x${string}`; amount: string; payTo: `0x${string}`; maxTimeoutSeconds: number; extra: { name: string; version: string } }
@@ -21,7 +22,11 @@ async function buyWithWallet(buyUrl: string): Promise<{ deliverable: string | nu
   const wallet = createWalletClient({ transport: custom(eth as never) });
   const [from] = await wallet.requestAddresses();
   if (!from) throw new Error("No account");
-  await wallet.switchChain({ id: chainId }).catch(() => { throw new Error(`Switch your wallet to chain ${chainId}.`); });
+  // A wallet that has never seen Base is offered the chain first.
+  await wallet.switchChain({ id: chainId }).catch(async () => {
+    await wallet.addChain({ chain: chainId === 8453 ? base : baseSepolia });
+    await wallet.switchChain({ id: chainId });
+  }).catch(() => { throw new Error(`Switch your wallet to ${chainId === 8453 ? "Base" : `chain ${chainId}`}.`); });
   const now = Math.floor(Date.now() / 1000);
   const authorization = {
     from, to: req.payTo, value: req.amount, validAfter: String(now - 5), validBefore: String(now + req.maxTimeoutSeconds),

@@ -39,7 +39,9 @@ export function canSpend(c: Company, costUsd: number, imdUsd: number, opts: { ap
 }
 
 export function validatePolicy(p: Partial<Policy>): Policy {
-  const out = { ...DEFAULT_POLICY, ...p };
+  // Only the four known fields, as numbers and a boolean: a request body cannot store anything else here.
+  const m = { ...DEFAULT_POLICY, ...p };
+  const out: Policy = { dailyBudgetUsd: Number(m.dailyBudgetUsd), approvalOverUsd: Number(m.approvalOverUsd), autopilot: m.autopilot === true || (m.autopilot as unknown) === "true", shiftMinutes: Number(m.shiftMinutes) };
   if (!(out.dailyBudgetUsd >= 0 && out.dailyBudgetUsd <= 10_000)) throw new Error("dailyBudgetUsd must be between 0 and 10000");
   if (!(out.approvalOverUsd >= 0)) throw new Error("approvalOverUsd must be 0 or more");
   if (!(out.shiftMinutes >= 1 && out.shiftMinutes <= 7 * 24 * 60)) throw new Error("shiftMinutes must be between 1 and 10080");

@@ -43,7 +43,7 @@ function walls(): Seg[] {
   s.push(seg(20, 300, 20, 690), seg(560, 300, 580, 330), seg(580, 330, 580, 900)); // left wall; right wall around the shooter lane
   s.push(seg(536, 900, 536, 360, 0.3)); // shooter lane's inner wall
   s.push(seg(20, 690, 192, 806, 0.4), seg(536, 690, 408, 806, 0.4)); // in-lane guides down to the flippers
-  s.push(seg(84, 600, 140, 712, 0.4, 520, "sling"), seg(84, 600, 84, 690, 0.4), seg(452, 600, 396, 712, 0.4, 520, "sling"), seg(452, 600, 452, 690, 0.4)); // slingshots
+  s.push(seg(84, 600, 140, 712, 0.4, 400, "sling"), seg(84, 600, 84, 690, 0.4), seg(452, 600, 396, 712, 0.4, 400, "sling"), seg(452, 600, 452, 690, 0.4)); // slingshots
   s.push(seg(150, 255, 175, 205, 0.5), seg(410, 205, 435, 255, 0.5)); // orbit lane posts
   return s;
 }

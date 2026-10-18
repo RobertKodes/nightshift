@@ -70,6 +70,8 @@ export class ProductFiles {
           { role: "user", content: `Product: ${p.name}\nPromise: ${p.pitch}\nAudience: ${c.audience}\n\nNOTES:\n${raw.slice(0, 60_000)}` },
         ],
       });
+      // A guide cut off by the model's length limit is worse than the full notes: sell those instead.
+      if (r.finishReason === "length") return head + raw;
       return head + (r.message.content?.trim() || raw);
     } catch {
       return head + raw;

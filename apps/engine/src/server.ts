@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
-import { extname, join, normalize } from "node:path";
+import { extname, join, normalize, resolve, sep } from "node:path";
 import type { Company } from "@nightshift/core";
 import { fromImd, fromUsdc } from "@nightshift/core";
 import { type PaymentPayload, USDC, challenge, decodeHeader, encodeHeader, requirement, settlePayment, verifyPayment } from "@nightshift/x402";
@@ -18,6 +18,7 @@ import { buybacks, checkLaunch, completeContracts, holderStatus, launchBody, lau
 import { verifyShift } from "./shift-verify.js";
 import { DEV_WALLET, FIRST_BUYER } from "./shift-launch.js";
 import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
+import { burnTotals, marketSnapshot } from "./community.js";
 import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
 import { impact } from "./impact.js";
 import { usdc } from "@nightshift/core";
@@ -114,7 +115,8 @@ async function landing(engine: Engine) {
     const h = await engine.reads.health().catch(() => null);
     swarmCache = { at: Date.now(), agents: h?.connectedDaemons ?? null, working: h?.workingNow ?? null };
   }
-  const companies = [...engine.store.companies.values()];
+  // Live: demo companies retired from simulation are not shown; their revenue was never real.
+  const companies = [...engine.store.companies.values()].filter((c) => config.mode !== "live" || !c.sim);
   const live = companies.flatMap((c) => c.products.filter((p) => p.status === "live").map((p) => ({ c, p })));
   const since = Date.now() - 24 * 3600_000;
   const featured = [...companies].sort((a, b) => b.products.reduce((x, p) => x + Number(p.revenueUsdc), 0) - a.products.reduce((x, p) => x + Number(p.revenueUsdc), 0))[0];
@@ -151,20 +153,87 @@ function series(visits: number[], sales: { at: number; usd: number }[]) {
   return { bucketMs: bucket, points: out };
 }
 
+/** On every response: no framing, no sniffing, no full URLs to other sites, HTTPS pinned. */
+const BASE_HEADERS: Record<string, string> = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+  ...(config.publicUrl.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
+};
+/** The app's pages: our own scripts only, and only the hosts the browser really talks to (RPCs, WalletConnect, Google Fonts). */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' blob:",
+  "connect-src 'self' https://ethereum-rpc.publicnode.com https://mainnet.base.org https://sepolia.base.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org https://*.reown.com wss://*.reown.com",
+  "frame-src https://verify.walletconnect.com https://verify.walletconnect.org",
+  "worker-src 'self'", "manifest-src 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+].join("; ");
+/** Pages made from company or model text (sim sites): no script at all, whatever they contain. */
+const SANDBOX_CSP = "sandbox allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; frame-ancestors 'none'";
+
+/** Browsers send Origin on cross-site POSTs: one from another site never acts with the visitor's session cookie. */
+function crossSite(req: IncomingMessage): boolean {
+  const origin = req.headers.origin;
+  if (!origin || !/(?:^|;\s*)ns_session=/.test(req.headers.cookie ?? "")) return false;
+  try { return new URL(origin).host !== req.headers.host && new URL(origin).origin !== new URL(config.publicUrl).origin; } catch { return true; }
+}
+
 const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".mp4": "video/mp4", ".webmanifest": "application/manifest+json" };
 
 function serveStatic(res: ServerResponse, path: string): boolean {
   if (!existsSync(config.webDist)) return false;
   const safe = normalize(path).replace(/^([/\\])+/, "").replace(/\.\.[/\\]?/g, "");
-  let f = join(config.webDist, safe);
-  if (!existsSync(f) || statSync(f).isDirectory()) f = join(config.webDist, "index.html");
+  let f = resolve(config.webDist, safe);
+  // never a file outside the built app, whatever the path says
+  if (!f.startsWith(resolve(config.webDist) + sep) || !existsSync(f) || statSync(f).isDirectory()) f = join(config.webDist, "index.html");
   if (!existsSync(f)) return false;
-  res.writeHead(200, { "Content-Type": MIME[extname(f)] ?? "application/octet-stream" });
+  const type = MIME[extname(f)] ?? "application/octet-stream";
+  res.writeHead(200, { "Content-Type": type, ...(type.startsWith("text/html") ? { "Content-Security-Policy": CSP } : {}) });
   res.end(readFileSync(f));
   return true;
 }
 
+const SUPPLY = 1_000_000_000;
+const DEAD = "0x000000000000000000000000000000000000dEaD";
 let stakedCache: { at: number; staked: number } | null = null;
+/** How much $SHIFT sits staked in ShiftRewards, read on chain at most once a minute. */
+async function stakedNow(): Promise<number | null> {
+  if (!stakedCache || Date.now() - stakedCache.at > 60_000) {
+    const r = launchState()?.contracts?.rewards as `0x${string}` | undefined;
+    const total = r ? await eth.readContract({ address: r, abi: [{ type: "function", name: "totalSupply", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }], functionName: "totalSupply" }).catch(() => null) : null;
+    if (total !== null) stakedCache = { at: Date.now(), staked: Number(total / 10n ** 18n) };
+  }
+  return stakedCache?.staked ?? null;
+}
+let overviewCache: { at: number; v: unknown } | null = null;
+/** Everything the token page shows, in one read: market, supply, burns, frogs. */
+async function tokenOverview(): Promise<unknown> {
+  if (overviewCache && Date.now() - overviewCache.at < 60_000) return overviewCache.v;
+  const token = config.token.address as `0x${string}` | "";
+  const [m, staked, dead, frogs] = await Promise.all([
+    marketSnapshot().catch(() => null),
+    stakedNow(),
+    token ? eth.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [DEAD] }).then((v) => Number(v / 10n ** 18n)).catch(() => null) : Promise.resolve(null),
+    frogStats().catch(() => null),
+  ]);
+  const burnedShift = dead ?? 0;
+  const v = {
+    symbol: config.token.symbol, address: token || null, supply: SUPPLY,
+    market: m ? { priceUsd: m.priceUsd, mcap: m.mcap, liquidity: m.liquidity, chart: m.chart } : null,
+    staked, stakedPct: staked === null ? null : (staked / SUPPLY) * 100,
+    burnedShift, burnedImd: burnTotals().imd,
+    circulating: SUPPLY - burnedShift - (staked ?? 0),
+    frogs: frogs ? { minted: Number(frogs.minted), max: 500 } : null,
+  };
+  overviewCache = { at: Date.now(), v };
+  return v;
+}
 
 export function serve(engine: Engine) {
   const server = createServer(async (req, res) => {
@@ -172,6 +241,8 @@ export function serve(engine: Engine) {
     const p = url.pathname;
     const seg = p.split("/").filter(Boolean);
     if (!p.startsWith("/api/admin") && !p.startsWith("/assets/") && !/\.(js|css|png|jpg|webp|svg|mp4|ico|woff2?)$/.test(p)) sawVisitor(clientIp(req), req.headers["user-agent"]);
+    for (const [k, v] of Object.entries(BASE_HEADERS)) res.setHeader(k, v);
+    if (req.method !== "GET" && req.method !== "HEAD" && crossSite(req)) return json(res, 403, { error: "cross-site request refused" });
     try {
       if (p === "/api/health") return json(res, 200, { ok: true, mode: config.mode, llm: Boolean(engine.llm), imdUsd: config.imdUsdPinned || Date.now() - config.imdUsdAt < 30 * 60_000 ? config.imdUsd : null, salesChainId: config.salesChainId, requireAuth: config.requireAuth, platformFeeBps: config.platformTreasury ? config.platformFeeBps : 0 });
 
@@ -268,6 +339,8 @@ export function serve(engine: Engine) {
       }
 
       const owner = engine.auth.owner(req);
+      // Reads that reach the chain or IMD when their cache is cold: plenty for pages, not for a loop.
+      if (["/api/staked", "/api/token/overview", "/api/token", "/api/frogs", "/api/frogs/claims", "/api/frogs/staking", "/api/impact", "/api/landing"].includes(p) && limited(req, "reads", 240, 60_000)) return json(res, 429, { error: "slow down" });
 
       // ---- the landing page's live numbers: real where they can be, labelled where simulated
       if (p === "/api/landing") return json(res, 200, await landing(engine));
@@ -291,15 +364,20 @@ export function serve(engine: Engine) {
             const me = url.searchParams.get("player") ?? undefined;
             const first = pinGet(id, me);
             if (!first) return json(res, 404, { error: "no such match" });
+            // match streams count against the same per-IP and total caps as the live events
+            const ipKey = `pb:${clientIp(req)}`;
+            if ((streams.get(ipKey) ?? 0) >= 4 || streamsTotal >= 2000) return json(res, 429, { error: "too many live connections" });
+            streams.set(ipKey, (streams.get(ipKey) ?? 0) + 1); streamsTotal++;
             res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
             res.write(`data: ${JSON.stringify(first)}\n\n`);
             const off = pinListen(id, () => res.write(`data: ${JSON.stringify(pinGet(id, me))}\n\n`));
             const ping = setInterval(() => res.write(": ping\n\n"), 20_000);
-            req.on("close", () => { off(); clearInterval(ping); });
+            req.on("close", () => { off(); clearInterval(ping); const n = (streams.get(ipKey) ?? 1) - 1; if (n > 0) streams.set(ipKey, n); else streams.delete(ipKey); streamsTotal--; });
             return;
           }
-          if (parts[4] === "progress" && req.method === "POST") { const b = await body(req); pinProgress(id, String(b.player ?? ""), b as never); return json(res, 200, { ok: true }); }
-          if (parts[4] === "leave" && req.method === "POST") { const b = await body(req); pinLeave(id, String(b.player ?? "")); return json(res, 200, { ok: true }); }
+          // the game sends its live view four times a second: room for two games, not a flood
+          if (parts[4] === "progress" && req.method === "POST") { if (limited(req, "pinball-progress", 600, 60_000)) return json(res, 429, { error: "slow down" }); const b = await body(req, 8_000); pinProgress(id, String(b.player ?? ""), b as never); return json(res, 200, { ok: true }); }
+          if (parts[4] === "leave" && req.method === "POST") { if (limited(req, "pinball-leave", 30, 60_000)) return json(res, 429, { error: "slow down" }); const b = await body(req, 2_000); pinLeave(id, String(b.player ?? "")); return json(res, 200, { ok: true }); }
           if (parts[4] === "finish" && req.method === "POST") {
             if (limited(req, `pinball-finish:${id}`, 4, 60_000)) return json(res, 429, { error: "slow down" });
             const b = await body(req, 400_000);
@@ -312,15 +390,10 @@ export function serve(engine: Engine) {
       }
       if (p === "/api/wallet-config") return json(res, 200, { walletConnect: config.walletConnect || null });
       if (p === "/api/staked") {
-        // How much $SHIFT sits staked in ShiftRewards, read on chain at most once a minute.
-        if (!stakedCache || Date.now() - stakedCache.at > 60_000) {
-          const r = launchState()?.contracts?.rewards as `0x${string}` | undefined;
-          const total = r ? await eth.readContract({ address: r, abi: [{ type: "function", name: "totalSupply", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }], functionName: "totalSupply" }).catch(() => null) : null;
-          if (total !== null) stakedCache = { at: Date.now(), staked: Number(total / 10n ** 18n) };
-        }
-        const supply = 1_000_000_000;
-        return json(res, 200, stakedCache ? { staked: stakedCache.staked, supply, pct: (stakedCache.staked / supply) * 100 } : { staked: null, supply, pct: null });
+        const staked = await stakedNow();
+        return json(res, 200, { staked, supply: SUPPLY, pct: staked === null ? null : (staked / SUPPLY) * 100 });
       }
+      if (p === "/api/token/overview") return json(res, 200, await tokenOverview());
       if (p === "/api/frogs/claims") {
         const a = url.searchParams.get("address") ?? "";
         if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return json(res, 400, { error: "address" });
@@ -365,6 +438,8 @@ export function serve(engine: Engine) {
       // ---- API keys for the MCP endpoint
       if (seg[0] === "api" && seg[1] === "keys") {
         if (!owner) return json(res, 401, { error: "sign in first" });
+        // Keys are managed from a signed-in wallet only: a leaked key cannot mint more keys for itself.
+        if ((req.headers.authorization ?? "").includes("nsk_")) return json(res, 403, { error: "Manage API keys from the dashboard, signed in with your wallet." });
         if (req.method === "GET") return json(res, 200, engine.auth.listKeys(owner));
         if (req.method === "POST") { const b = await body(req); return json(res, 201, engine.auth.createKey(owner, String(b.label ?? "MCP"))); }
         if (req.method === "DELETE" && seg[2]) return json(res, engine.auth.revokeKey(owner, seg[2]) ? 200 : 404, { ok: true });
@@ -405,10 +480,11 @@ export function serve(engine: Engine) {
 
       if (p === "/api/companies" && req.method === "GET") {
         const onlyMine = url.searchParams.get("mine") === "1";
-        const list = await Promise.all([...engine.store.companies.values()].filter((c) => !onlyMine || (owner !== null && c.owner === owner)).sort((a, b) => b.createdAt - a.createdAt).map(async (c) => {
+        // Live: retired demo companies stay in their owner's own list only.
+        const list = await Promise.all([...engine.store.companies.values()].filter((c) => onlyMine ? owner !== null && c.owner === owner : config.mode !== "live" || !c.sim).sort((a, b) => b.createdAt - a.createdAt).map(async (c) => {
           const v = publicView(engine, c);
           const working = c.tasks.find((t) => ["checking", "ordering", "building", "awaiting_approval"].includes(t.status));
-          return { id: c.id, ...v, nextShiftAt: c.nextShiftAt, working: working ? { title: working.title, status: working.status, activity: working.activity } : null };
+          return { id: c.id, ...v, nextShiftAt: c.nextShiftAt, working: working ? { title: working.title, status: working.status, activity: working.activity } : null, mine: owner !== null && c.owner === owner };
         }));
         return json(res, 200, list);
       }
@@ -509,6 +585,11 @@ export function serve(engine: Engine) {
         const value = BigInt(payment.payload.authorization.value);
         const bal = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [v.payer as `0x${string}`] }).catch(() => 0n);
         if (bal < value) return json(res, 402, challenge(req402, resource, "insufficient USDC balance"), { "PAYMENT-REQUIRED": encodeHeader(challenge(req402, resource, "insufficient USDC balance")) });
+        // The company pays the settlement gas on Base: without it, refuse before anything is sent.
+        if ((await sales.getBalance({ address: c.wallet }).catch(() => 0n)) < 20_000_000_000_000n) {
+          void engine.alert(`${c.name} cannot take a payment: its wallet has no ETH on Base for the settlement gas.`, `nogas-${c.id}`);
+          return json(res, 503, { error: "This company cannot take payments right now. Nothing was charged; try again later." });
+        }
         const account = engine.vault.account(c.id);
         const prev = settling.get(c.id) ?? Promise.resolve();
         const run = prev.catch(() => {}).then(() => settlePayment(payment, salesWallet(account) as never, sales as never, account));
@@ -526,7 +607,7 @@ export function serve(engine: Engine) {
         if (!c || !product || !engine.files.check(product.id, seg[3], seg[4], ref)) return json(res, 403, { error: "This download link is invalid or has expired." });
         const text = engine.files.read(product);
         if (text === null) return json(res, 404, { error: "not packaged yet" });
-        res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8", "Content-Disposition": `attachment; filename="${c.slug}-${product.id}.md"`, "Cache-Control": "private, no-store" });
+        res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8", "Content-Disposition": `attachment; filename="${c.slug}-${product.id.replace(/[^\w-]/g, "")}.md"`, "Cache-Control": "private, no-store", "Content-Security-Policy": SANDBOX_CSP });
         return res.end(text);
       }
 
@@ -537,7 +618,7 @@ export function serve(engine: Engine) {
         if (!c) return json(res, 404, { error: "no such site" });
         // one visit per visitor per 10 minutes, and a bounded history
         if (!limited(req, `visit:${c.id}`, 1, 600_000)) { const v = engine.store.metricsOf(c.id).visits; v.push(Date.now()); if (v.length > 5000) v.splice(0, v.length - 5000); }
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": SANDBOX_CSP });
         return res.end(engine.sim.site(c));
       }
       if (seg[0] === "files" && seg[1] && seg[2] && config.mode === "sim") {
@@ -547,7 +628,8 @@ export function serve(engine: Engine) {
         return res.end(text);
       }
 
-      if (req.method === "GET" && serveStatic(res, p)) return;
+      // an unknown API path is a 404, not the app's page
+      if (req.method === "GET" && !p.startsWith("/api/") && serveStatic(res, p)) return;
       return json(res, 404, { error: "not found" });
     } catch (err) {
       console.error(err);
