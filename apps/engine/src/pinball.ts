@@ -90,11 +90,18 @@ type Boards = { duel: Score[]; solo: Score[] };
 let boards: Boards = (() => {
   try {
     const d = existsSync(boardFile()) ? JSON.parse(readFileSync(boardFile(), "utf8")) : {};
-    return Array.isArray(d) ? { duel: d as Score[], solo: [] } : { duel: d.duel ?? [], solo: d.solo ?? [] }; // the first file held duels only
+    const b = Array.isArray(d) ? { duel: d as Score[], solo: [] as Score[] } : { duel: (d.duel ?? []) as Score[], solo: (d.solo ?? []) as Score[] }; // the first file held duels only
+    return { duel: best(b.duel), solo: best(b.solo) };
   } catch { return { duel: [], solo: [] }; }
 })();
+/** One spot per name (case-insensitive): it keeps that player's best score and when it was set. */
+function best(l: Score[]): Score[] {
+  const by = new Map<string, Score>();
+  for (const s of l) { const k = s.name.trim().toLowerCase(), o = by.get(k); if (!o || s.score > o.score) by.set(k, s); }
+  return [...by.values()].sort((x, y) => y.score - x.score).slice(0, 200);
+}
 function record(list: Score[], kind: keyof Boards = "duel"): void {
-  boards[kind] = [...boards[kind], ...list.filter((s) => s.score > 0)].sort((x, y) => y.score - x.score).slice(0, 200);
+  boards[kind] = best([...boards[kind], ...list.filter((s) => s.score > 0)]);
   try { writeFileSync(boardFile(), JSON.stringify(boards)); } catch (e) { console.error("pinball board", e); }
 }
 

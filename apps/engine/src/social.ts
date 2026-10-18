@@ -111,6 +111,8 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "ca", description: "The official contract address" },
     { command: "links", description: "Website, X, Telegram, Bluesky" },
     { command: "games", description: "The Game Room: Space Pinball and more" },
+    { command: "pinball", description: "Space Pinball and its best players" },
+    { command: "chess", description: "NIGHT CHESS" },
     { command: "frogs", description: "NIGHT FROGS on OpenSea" },
     { command: "memes", description: "Memes and art from the night crew" },
   ];

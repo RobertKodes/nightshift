@@ -41,6 +41,33 @@ Tests (Foundry): full flows for both tokens, draw, both refunds, wrong signer, e
     },
   },
   {
+    key: "pinball-escrow-v2",
+    title: "Game stakes escrow v2: any amount",
+    what: "A new version of the stakes escrow where players choose their own bet, any amount of IMD or $SHIFT between a minimum and a maximum, for Space Pinball, NIGHT CHESS and the next games. Built, tested, audited by 4 specialists and a judge, and deployed on Ethereum by IMD. Nobody, us included, can take a stake.",
+    action: "launch.open",
+    intake: "launch.open@launch-1",
+    body: {
+      objective: `Build and deploy GameEscrow, version 2 of NIGHTSHIFT's PinballEscrow (live at 0x908da27d2caa584133dfb41fec9d6362dca6bcdd), for player-versus-player skill games (Space Pinball, NIGHT CHESS and later games). Two players stake the same amount of the same token; the winner, as decided by the NIGHTSHIFT server's verified result, takes the pot minus a 5% fee. The only change from v1: players choose the amount.
+
+Tokens: only IMD (${IMD}) and $SHIFT (${SHIFT}), both plain ERC-20 with 18 decimals and no transfer fee. Any stake between a per-token minimum and maximum is allowed. Initial limits, set in the constructor: IMD min 0.5, max 1000; SHIFT min 10000, max 50000000 (whole tokens). The owner may change a token's min and max with setLimits(token, min, max) (event LimitsSet), but never above a hard cap fixed in the code (IMD 10000, SHIFT 1000000000) and never with min > max; changing limits never affects matches already opened.
+
+Flow:
+1. open(bytes32 matchId, address token, uint256 stake, bytes32 game): player A deposits the stake (transferFrom, exact amount, within the limits). game is a free label (e.g. "pinball", "chess"). Emits Opened(matchId, token, stake, game, playerA). matchId must be new.
+2. join(bytes32 matchId): player B deposits the same token and exact stake. Emits Joined(matchId, playerB). Exactly two players; A cannot join her own match.
+3. settle(bytes32 matchId, address winner, bool draw, uint256 deadline, bytes signature): anyone may submit the result signed by the result signer (EIP-712 typed data: domain name "NightshiftGames", version "2", chainId, this contract; struct Result(bytes32 matchId, address winner, bool draw, uint256 deadline)). The signature must be valid, not expired, for a joined, unsettled match, and winner must be one of the two players unless draw. Winner gets 95% of the pot; 5% goes to the fee splitter ${SPLITTER}. A draw refunds both players in full. Emits Settled(matchId, winner, draw, payout, fee).
+4. refund(bytes32 matchId): if a match is not joined within 1 hour of open, A gets her stake back; if a joined match is not settled within 24 hours, both get their stake back. Emits Refunded(matchId).
+5. cancel(bytes32 matchId): player A may cancel her own match before anyone joins and get her stake back at once. Emits Cancelled(matchId).
+6. Views: matches(matchId) returning token, stake, game, playerA, playerB, openedAt, joinedAt, settled; limits(token) returning min and max.
+
+Owner: ${DEV}. The owner can only change the result signer (setSigner, event), the limits within the hard caps (setLimits, event), and pause new opens and joins (pause/unpause; settle, refund and cancel keep working while paused). The owner can never move, take or redirect any stake, change the 5% fee, the fee recipient or the tokens. No upgradeability, no delegatecall, no selfdestruct. Reentrancy-safe (checks-effects-interactions plus a guard), SafeERC20, every state change emits an event. Initial result signer: a constructor argument equal to $owner.
+
+Tests (Foundry): full flows for both tokens with amounts at and between the limits, below/above limits refused, draw, both refunds, cancel, wrong signer, expired and replayed signatures, signature for the wrong contract or chain refused, winner not a player refused, double settle, joining your own match, wrong stake, paused opens/joins, fee exactly 5% to the splitter (including odd amounts and rounding), setLimits bounds and hard caps, fuzz on stakes and call orders.`,
+      onchain: "evm_contracts",
+      chainId: 1,
+      owner: DEV,
+    },
+  },
+  {
     key: "pinball-audit",
     title: "Space Pinball fairness audit",
     what: "An audit panel (4 specialists + judge) reviews the open-source game server: the deterministic engine, the server replay that decides every duel and solo score, and the anti-cheat rules. You get a report with findings and fixes.",

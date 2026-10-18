@@ -19,6 +19,7 @@ import { verifyShift } from "./shift-verify.js";
 import { DEV_WALLET, FIRST_BUYER } from "./shift-launch.js";
 import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
 import { burnTotals, marketSnapshot } from "./community.js";
+import { prices } from "./prices.js";
 import { checkOrder as checkSwarmOrder, orders as swarmOrders, placeOrder as placeSwarmOrder } from "./swarm.js";
 import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
 import { impact } from "./impact.js";
@@ -445,6 +446,7 @@ export function serve(engine: Engine) {
         return json(res, 200, { staked, supply: SUPPLY, pct: staked === null ? null : (staked / SUPPLY) * 100 });
       }
       if (p === "/api/token/overview") return json(res, 200, await tokenOverview());
+      if (p === "/api/prices") { const d = await prices(); return d ? json(res, 200, d) : json(res, 503, { error: "No price data right now." }); }
       if (p === "/api/frogs/claims") {
         const a = url.searchParams.get("address") ?? "";
         if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return json(res, 400, { error: "address" });

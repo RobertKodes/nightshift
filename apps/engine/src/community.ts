@@ -283,6 +283,14 @@ export async function publicCommand(cmd: string): Promise<{ text: string; button
   const sym = esc(config.token.symbol);
   const links: Button[][] = [[{ text: "🌐 Website", url: config.publicUrl }, { text: "𝕏 X", url: config.xUrl }], [{ text: "💬 Telegram", url: config.telegramUrl }, { text: "🦋 Bluesky", url: `https://bsky.app/profile/${config.blueskyHandle}` }], [{ text: "🌊 NIGHT FROGS on OpenSea", url: OPENSEA_URL }], [{ text: "👨‍💻 Developer · @probert_mihai", url: "https://x.com/probert_mihai" }]];
   if (cmd === "memes" || cmd === "meme" || cmd === "art") return { text: "🎨 <b>NIGHTSHIFT memes &amp; art</b>\nAll the memes and art from the night crew are posted here. Join and share yours 🐸", buttons: [[{ text: "🎨 Open memes & art", url: MEMES_URL }]] };
+  if (cmd === "pinball") {
+    const b = (() => { try { return pinballBoard() as { board?: { name: string; score: number }[]; best?: { name: string; score: number }[] }; } catch { return {}; } })();
+    const rows = (b.best ?? []).slice(0, 5).map((s, i) => `${["🥇", "🥈", "🥉", "4.", "5."][i]} ${esc(s.name)} · ${s.score.toLocaleString("en-US")}`);
+    return { text: ["🎱 <b>SPACE PINBALL</b>", "PvP duels on the same table and seed: black holes throw meteors at your rival, the frog crew sends heavy gravity. Every score is replayed and verified by the server.", "", rows.length ? "<b>All-time best</b>" : "The board is open: be the first.", ...rows].join("\n"), buttons: [[{ text: "🎱 Play Space Pinball", url: `${config.publicUrl}/games/pinball` }]] };
+  }
+  if (cmd === "chess") {
+    return { text: ["♟ <b>NIGHT CHESS</b>", "3D real-time chess with the NIGHT FROGS as pieces. Blitz 3+2 and 5+0, rapid 10+0, rated, with the clocks kept by the server. No rival online? Practise against Frog #7.", "", "Coming to the Game Room very soon."].join("\n"), buttons: [[{ text: "🎮 The Game Room", url: `${config.publicUrl}/games` }]] };
+  }
   if (cmd === "games" || cmd === "game" || cmd === "play" || cmd === "arcade") {
     // the Game Room: what is live, tonight's best, where to play
     const top = (() => { try { const b = pinballBoard() as { board?: { name: string; score: number }[] }; return b.board?.[0]; } catch { return undefined; } })();
