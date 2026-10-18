@@ -38,6 +38,7 @@ import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
+import { newFrogListings, newFrogSales, OPENSEA_SLUG } from "./frogmarket.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
@@ -136,6 +137,22 @@ export class Engine {
       const medal = ["🥇", "🥈", "🥉", "4.", "5."];
       void toCommunity(`🐸⏱ <b>NIGHT SHIFT HOURS · top of the crew</b>\n\n${top.map((t, i) => `${medal[i]} <a href="https://etherscan.io/address/${t.wallet}">${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}</a> · ${t.hours.toLocaleString("en-US")} h · ${t.frogs} frog${t.frogs === 1 ? "" : "s"}`).join("\n")}\n\nHold a frog, earn hours. Genesis 2×, #1 5×. No locking, no gas.`, [[{ text: "⏱ My shift hours", url: `${config.publicUrl}/frogs#staking` }]], "frog");
     }, 60_000);
+    // Frogs sold on OpenSea (read from Seaport on chain) and, with an OpenSea key, new listings.
+    const who = (a: string) => `<a href="https://etherscan.io/address/${a}">${a.slice(0, 6)}…${a.slice(-4)}</a>`;
+    const frogUrl = (id: number) => `https://opensea.io/assets/ethereum/${config.nft.address || "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c"}/${id}`;
+    setInterval(() => void newFrogSales().then(async (sales) => {
+      for (const s of sales) {
+        const usd = s.eth * ((await marketSnapshot().catch(() => null))?.ethUsd ?? 0);
+        await toCommunity(`🐸💰 <b>NIGHT FROG #${s.id} SOLD</b>\n\n💵 <b>${s.eth.toFixed(4)} ETH</b>${usd ? ` (≈ $${usd.toFixed(0)})` : ""}\n👤 Buyer ${who(s.buyer)}\n🏷 Seller ${who(s.seller)}\n\nWelcome to the night crew. Holders share half of every NIGHTSHIFT reward.\n\n<a href="https://etherscan.io/tx/${s.tx}">TX</a>`,
+          [[{ text: `🌊 See #${s.id} on OpenSea`, url: frogUrl(s.id) }], [{ text: "🐸 The collection", url: `https://opensea.io/collection/${OPENSEA_SLUG}` }]], "frog");
+      }
+    }).catch((e) => console.error("frog sales", e)), 60_000);
+    setInterval(() => void newFrogListings().then(async (list) => {
+      for (const x of list) {
+        await toCommunity(`🐸🏷 <b>NIGHT FROG #${x.id} LISTED</b>\n\n💵 <b>${x.eth.toFixed(4)} ETH</b>${x.seller ? `\n👤 ${who(x.seller)}` : ""}\n\nOne more frog looking for a night shift.`,
+          [[{ text: `🌊 Buy #${x.id} on OpenSea`, url: x.url }]], "frog");
+      }
+    }).catch((e) => console.error("frog listings", e)), 120_000);
     // Every frog minted, to the community chat.
     setInterval(() => void newMints().then(async (mints) => {
       for (const m of mints) {

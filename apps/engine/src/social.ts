@@ -81,7 +81,7 @@ export async function telegram(token: string, chatId: string, text: string, butt
   return tg(token, "sendMessage", { chat_id: chatId, text: text.slice(0, 3800), parse_mode: "HTML", disable_web_page_preview: true, reply_markup: kb(buttons) });
 }
 
-export const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]!));
+export const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 
 export type BotHandlers = {
   /** Operator commands, for the admin ids only. */
@@ -110,6 +110,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "price", description: "Price, market cap, liquidity" },
     { command: "ca", description: "The official contract address" },
     { command: "links", description: "Website, X, Telegram, Bluesky" },
+    { command: "frogs", description: "NIGHT FROGS on OpenSea" },
     { command: "memes", description: "Memes and art from the night crew" },
   ];
   void tg(token, "setMyCommands", { commands: open });

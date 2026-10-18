@@ -80,6 +80,8 @@ export const config = {
   telegramUrl: env.TELEGRAM_URL || "https://t.me/getnightshift",
   /** WalletConnect (Reown) project id: phones and the installed game connect a wallet app with it. */
   walletConnect: env.WALLETCONNECT_PROJECT_ID ?? "",
+  /** OpenSea API key (free): posts new NIGHT FROGS listings. Sales are read on chain without it. */
+  openseaKey: env.OPENSEA_API_KEY ?? "",
   blueskyHandle: (env.BLUESKY_HANDLE ?? "nightshifttech.bsky.social").replace(/^@/, ""),
   /** The project account's app password (Bluesky → Settings → Privacy and security → App passwords). */
   blueskyAppPassword: env.BLUESKY_APP_PASSWORD ?? "",
