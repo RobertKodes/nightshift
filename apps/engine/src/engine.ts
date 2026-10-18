@@ -376,7 +376,12 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
   /** One keeper run, told to the admins. */
   async keeperRun(): Promise<KeeperRun> {
     const l = launchState();
-    const r = await runKeeper(this.vault, l?.contracts ?? {}).catch((e) => ({ at: Date.now(), did: [], skipped: [], error: (e as Error).message }));
+    let n = l?.launchNumber;
+    if (!n && l?.launchId) {
+      n = await fetch(`https://api.imd.fun/launches/${l.launchId}`, { signal: AbortSignal.timeout(15000) }).then((x) => x.json() as Promise<{ launchNumber?: number }>).then((d) => d.launchNumber).catch(() => undefined);
+      if (n) patchLaunch({ launchNumber: n });
+    }
+    const r = await runKeeper(this.vault, l?.contracts ?? {}, { launchNumber: n, payer: DEV_WALLET }).catch((e) => ({ at: Date.now(), did: [], skipped: [], error: (e as Error).message }));
     this.lastKeeper = r;
     void this.adminCard(`🧹 <b>Keeper run</b>\n${r.error ? `⚠️ ${esc(r.error)}` : ""}${r.did.map((x) => `✅ ${esc(x)}`).join("\n")}${r.skipped.length ? `\n${r.skipped.map((x) => `· ${esc(x)}`).join("\n")}` : ""}`, [[{ text: "⚙️ Setup", url: `${config.publicUrl}/setup` }]], `keeper-${r.at}`, r.error ? "alert" : "report");
     return r;

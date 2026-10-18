@@ -45,14 +45,14 @@ export async function verifyShift(c: Record<string, string>): Promise<Check[]> {
   add("Hook contract deployed", hcode.length > 2, hook ?? "not found in the launch");
   if (hook) {
     const open = await eth.readContract({ address: hook, abi: OWNED, functionName: "tradingOpen" }).catch(() => null);
-    add("Trading is still closed (only the first buyer can buy)", open === false, String(open));
+    add(open ? "Trading is open to everyone (the treasury bought first)" : "Trading is still closed (only the first buyer can buy)", open === false || open === true, String(open));
     const owner = await eth.readContract({ address: hook, abi: OWNED, functionName: "owner" }).catch(() => null);
     add("Hook owner is your dev wallet", owner?.toLowerCase() === DEV_WALLET, String(owner));
     add("Hook names the first buyer 0x3322…4D69", has(hcode, FIRST_BUYER));
     // The gate, tried for real without spending: simulated swaps against today's chain.
     const pool = await findPool(eth, token, hook).catch(() => null);
     add("SHIFT/ETH pool exists with our hook", Boolean(pool), pool ? `fee ${pool.fee}, tick spacing ${pool.tickSpacing}` : "no Initialize event found");
-    if (pool) for (const r of await simulateGate(pool)) out.push(r);
+    if (pool) for (const r of await simulateGate(pool)) out.push(open && r.label.startsWith("A stranger") ? { label: "Anyone can buy now", ok: r.detail === "ok", detail: r.detail } : r);
   }
 
   // The fee split: every fixed address is in the splitter's code

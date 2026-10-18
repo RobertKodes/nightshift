@@ -102,7 +102,7 @@ async function scanBuys(st: State): Promise<Buy[]> {
   }
   const buys: Buy[] = [];
   for (const [tx, { value, block }] of byTx) {
-    const t = await eth.getTransaction({ hash: tx as `0x${string}` }).catch(() => null);
+    const t = await eth.getTransactionReceipt({ hash: tx as `0x${string}` }).catch(() => null);
     if (!t) continue;
     const buyer = t.from;
     const tokens = Number(value / 10n ** BigInt(Math.max(0, decimals - 6))) / 10 ** Math.min(6, decimals);

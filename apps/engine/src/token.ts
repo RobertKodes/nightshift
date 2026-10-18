@@ -65,6 +65,8 @@ export type LaunchState = {
   publicAt?: number; announced?: boolean;
   /** The SHIFT/ETH v4 pool key, found from the PoolManager once deployed: the site's swap uses it. */
   pool?: import("./v4.js").PoolKey;
+  /** IMD's number for this launch: the factory's fee calls take it. */
+  launchNumber?: number;
 };
 /** IMD lists only what it deployed itself; the hook's own helpers are read from the hook. */
 export async function completeContracts(): Promise<LaunchState | null> {
@@ -152,7 +154,7 @@ export async function followOpen(): Promise<LaunchState | null> {
       // Out of the pool manager, or through a router, but always in a transaction the first buyer sent.
       const logs = await eth.getLogs({ address: l.token as `0x${string}`, event: TRANSFER, args: { to: FIRST_BUYER }, fromBlock: BigInt(from), toBlock: BigInt(to) });
       for (const log of logs) {
-        const t = await eth.getTransaction({ hash: log.transactionHash! }).catch(() => null);
+        const t = await eth.getTransactionReceipt({ hash: log.transactionHash! }).catch(() => null);
         if (t?.from.toLowerCase() === FIRST_BUYER) {
           Object.assign(l, { open: true, openTx: log.transactionHash, stage: "Live: trading is open to everyone" });
           break;
