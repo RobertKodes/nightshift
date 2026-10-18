@@ -1,27 +1,33 @@
 import { useEffect, useRef, useState } from "react";
-import { ATTACK_DELAY, type Attack, BALLS, H, type Input, MAX_TICKS, TICK, Table, W } from "./engine";
+import { type Attack, BALLS, H, type Input, MAX_TICKS, TICK, Table, W } from "./engine";
 
 /**
  * The table on screen. Physics is the deterministic engine; everything here is looks and feel:
  * Codex-painted space art, NIGHT FROGS as targets and avatars, glow, trails, particles, shakes,
  * announcer banners, a live minimap of the rival's ball, meteors and surges from the rival,
- * synthesized sound and music. Inputs are recorded per tick for the server's lockstep replay.
+ * synthesized sound and music. Inputs are recorded per tick and streamed to the server while the
+ * game runs (it plays the same table with them), together with the tick each rival attack landed.
  */
 const ART = "/games/pinball";
-export type Rival = { name: string; avatar?: string | null; live: number; x: number; y: number; attacks: { kind: Attack; tick: number }[] };
+/** A rival's attack as the server relays it: its number, what it is, when it was earned and when it is due here. */
+export type Shot = { n: number; kind: Attack; tick: number; at: number };
+export type Landed = { n: number; at: number };
+export type Rival = { name: string; avatar?: string | null; live: number; x: number; y: number; attacks: Shot[] };
+/** One post of the stream: what changed since the last one that was taken. "stop": the server no longer counts this game. */
+export type Live = { tick: number; x: number; y: number; inputs: Input[]; from: number; landed: Landed[] };
 type Props = {
   seed: number;
-  /** Wall-clock start (duels): the VS screen and countdown run until then. */
+  /** Wall-clock start (duels and board runs): the VS screen and countdown of a duel run until then. */
   startAt?: number;
-  /** Server time minus this device's time, in ms: a duel runs on the server's clock. */
+  /** Server time minus this device's time, in ms: a duel or a board run runs on the server's clock. */
   clockOffset?: number;
   avatar?: string | null;
   name?: string;
   rival?: Rival | null;
   /** Attract mode: the table plays itself behind the lobby, no HUD, no sound. */
   demo?: boolean;
-  onLive?: (s: { score: number; tick: number; x: number; y: number; sent: { kind: Attack; tick: number }[] }) => void;
-  onDone?: (r: { score: number; inputs: Input[]; stats: Table["stats"] }) => void;
+  onLive?: (s: Live) => Promise<boolean | "stop">;
+  onDone?: (r: { score: number; inputs: Input[]; stats: Table["stats"]; landed: Landed[]; tick: number }) => void;
   /** Drawn over the table: the result, the rival search. */
   overlay?: React.ReactNode;
 };
@@ -88,10 +94,12 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
       me: avatar ? img(avatar) : img(`${ART}/frog-0.webp`),
       rival: rivalRef.current?.avatar ? img(rivalRef.current.avatar) : img(`${ART}/frog-3.webp`),
     };
-    const t = new Table(seed);
+    let t = new Table(seed);
     const inputs: Input[] = [];
-    const sent: { kind: Attack; tick: number }[] = [];
-    const scheduled = new Set<string>();
+    const landed: Landed[] = [];
+    const scheduled = new Set<number>();
+    // the stream: inputs and landings the server has taken, and whether a post is on its way
+    let streamed = 0, told = 0, posting = false, stopped = false;
     let last = "", acc = 0, prev = performance.now(), raf = 0, shake = 0, seen = 0, slingFlash = 0, holeFrog = 0, flash = 0, liveAt = 0, hudAt = 0;
     let demoL = 0, demoR = 0;
     const parts: Particle[] = [], pops: Popup[] = [], banners: Banner[] = [], trail: { x: number; y: number }[] = [];
@@ -105,12 +113,14 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
     const frame = (now: number) => {
       const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
       const wait = startAt ? Math.max(0, startAt - (Date.now() + clockOffset)) : 0;
-      // the rival's attacks land ATTACK_DELAY after they were earned, as on the server
+      // the rival's attacks, as the server found them in the rival's game: each lands when it is due,
+      // or at once if word of it came late, and the server is told the tick it landed on
       for (const a of rivalRef.current?.attacks ?? []) {
-        const k = `${a.kind}:${a.tick}`;
-        if (scheduled.has(k)) continue;
-        scheduled.add(k); t.receive(a.kind, a.tick + ATTACK_DELAY);
-        say(a.kind === "meteor" ? "INCOMING METEOR" : "GRAVITY SURGE INCOMING", "#FF4F68", `from ${rivalRef.current?.name ?? "your rival"} · 3 s`);
+        if (scheduled.has(a.n) || t.over) continue;
+        scheduled.add(a.n);
+        const at = Math.max(a.at, t.tick + 1);
+        t.receive(a.kind, at); landed.push({ n: a.n, at });
+        say(a.kind === "meteor" ? "INCOMING METEOR" : "GRAVITY SURGE INCOMING", "#FF4F68", `from ${rivalRef.current?.name ?? "your rival"} · ${Math.round((at - t.tick) * TICK)} s`);
         beep(180, 0.35, "sawtooth", 0.06);
       }
       if (wait <= 0 && !t.over) {
@@ -131,11 +141,10 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
           t.step();
           acc -= TICK;
         }
-        if (demo && t.over) { Object.assign(t, new Table(seed + Math.floor(now))); seen = 0; }
+        if (demo && t.over) { t = new Table(seed + Math.floor(now)); seen = 0; last = ""; }
       }
       for (; seen < t.events.length; seen++) {
         const e = t.events[seen]!, b = t.ball;
-        if (e.send) sent.push({ kind: e.send, tick: e.tick });
         switch (e.kind) {
           case "bumper": beep(520 + Math.random() * 220, 0.07); burst(b.x, b.y, "#a48bff", 14); shake = Math.max(shake, 3); break;
           case "sling": beep(300, 0.05, "triangle"); slingFlash = 10; break;
@@ -154,9 +163,19 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
       }
       draw(now, dt, wait);
       drawMini();
-      if (onLive && !demo && now - liveAt > 250) { liveAt = now; onLive({ score: t.score, tick: t.tick, x: t.ball.x, y: t.ball.y, sent: sent.slice(-20) }); }
+      // four times a second, one post at a time: what the server has not taken yet (a lost post is sent again)
+      if (onLive && !demo && wait <= 0 && !posting && !stopped && !t.over && now - liveAt > 250) {
+        liveAt = now; posting = true;
+        const chunk = inputs.slice(streamed, streamed + 300), news = landed.slice(told);
+        const tick = streamed + chunk.length < inputs.length ? inputs[streamed + chunk.length]![0] : t.tick;
+        void onLive({ tick, x: t.ball.x, y: t.ball.y, inputs: chunk, from: streamed, landed: news }).then((ok) => {
+          posting = false;
+          if (ok === "stop") stopped = true;
+          else if (ok) { streamed += chunk.length; told += news.length; }
+        });
+      }
       if (!demo && (now - hudAt > 120 || t.over)) { hudAt = now; setHud({ score: t.score, mult: t.mult, balls: t.ballsLeft, time: Math.max(0, (MAX_TICKS - t.tick) / 240) }); }
-      if (!demo && t.over && !done.current) { done.current = true; onDone?.({ score: t.score, inputs, stats: { ...t.stats } }); }
+      if (!demo && t.over && !done.current) { done.current = true; onDone?.({ score: t.score, inputs, stats: { ...t.stats }, landed, tick: t.tick }); }
       raf = requestAnimationFrame(frame);
     };
 
@@ -298,8 +317,8 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
       for (let i = banners.length - 1; i >= 0; i--) if (banners[i]!.life <= 0) banners.splice(i, 1);
       if (flash > 0) { g.fillStyle = `rgba(242,239,255,${flash * 0.35})`; g.fillRect(0, 0, W, H); flash = Math.max(0, flash - dt * 1.6); }
 
-      // the VS screen and the countdown
-      if (wait > 0) {
+      // the VS screen and the countdown (a duel's)
+      if (wait > 0 && rivalRef.current) {
         g.fillStyle = "rgba(3,2,10,.82)"; g.fillRect(0, 0, W, H);
         const secs = Math.ceil(wait / 1000), r = rivalRef.current;
         const face = (im: HTMLImageElement, x: number, color: string, label: string) => {

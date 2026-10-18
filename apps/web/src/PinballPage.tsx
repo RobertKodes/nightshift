@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { createPublicClient, http, parseAbi } from "viem";
-import { mainnet } from "viem/chains";
 import { Link } from "./router";
 import { Icon } from "./Icon";
-import { PinballGame, type Rival } from "./pinball/PinballGame";
-import type { Attack, Input } from "./pinball/engine";
+import { type Landed, type Live, PinballGame, type Rival, type Shot } from "./pinball/PinballGame";
+import type { Input } from "./pinball/engine";
 import { useSession } from "./session";
 import { InstallButton, useGameApp } from "./pinball/install";
 import { AppTabs } from "./landing/app";
@@ -12,16 +10,15 @@ import "./pinball/arcade.css";
 
 type Currency = "FREE" | "IMD" | "SHIFT";
 type Mode = "PRACTICE" | Currency;
-type PlayerView = { name: string; avatar: string | null; live: number; x: number; y: number; attacks: { kind: Attack; tick: number }[]; score: number | null; solo: number | null; stats: Record<string, number> | null; you: boolean; finished: boolean };
-type MatchView = { id: string; seed: number | null; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; winner: string | null; players: PlayerView[] };
-/** What is on the table (it stays mounted under the result) and what is shown over it. */
-type Play = { kind: "practice"; seed: number; run: number; id?: string } | { kind: "duel"; match: MatchView; player: string };
+/** A player as the server shows them; the rival's verified score, stats and finish only once the match is settled. Faces come in the first frame. */
+type PlayerView = { key: string; name: string; avatar?: string | null; live: number; x: number; y: number; attacks: Shot[]; score: number | null; solo: number | null; stats: Record<string, number> | null; you: boolean; finished: boolean; error?: string };
+type MatchView = { id: string; seed: number | null; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; void: string | null; winner: string | null; winnerIsYou: boolean; players: PlayerView[] };
+/** What is on the table (it stays mounted under the result) and what is shown over it. A board run runs on the server's clock. */
+type Play = { kind: "practice"; seed: number; run: number; id?: string; startAt?: number; offset?: number } | { kind: "duel"; match: MatchView; player: string };
 type Over = { score: number; stats?: Record<string, number>; rank?: number | null };
 type BoardEntry = { name: string; score: number; at: number };
 type Leaderboard = { board: BoardEntry[]; best: BoardEntry[]; solo?: BoardEntry[]; soloBest?: BoardEntry[] };
 
-const FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
 const MODES: { k: Mode; title: string; sub: string; icon: string }[] = [
   { k: "PRACTICE", title: "Practice", sub: "Solo · learn the table", icon: "play" },
   { k: "FREE", title: "Free duel", sub: "1 vs 1 · no stake", icon: "swords" },
@@ -32,29 +29,41 @@ const MODES: { k: Mode; title: string; sub: string; icon: string }[] = [
 // Shared SVG definitions let the game use the icon set entirely from its returned JSX.
 const GAME_ICONS = ["sound", "sound-off", "music", "black-hole", "frog", "orbit", "target", "shield", "bolt", "flipper", "radar"];
 
-/** The signed-in wallet's best NIGHT FROG (highest multiplier), drawn from its own onchain SVG. */
-function useFrogAvatar(wallet: string | null): string | null {
-  const [src, setSrc] = useState<string | null>(null);
+/**
+ * The signed-in wallet's best NIGHT FROG (highest multiplier). Its onchain image is served by the
+ * engine, which checks on chain that the wallet holds it before showing it to a rival.
+ */
+function useFrogAvatar(wallet: string | null): { id: number; src: string } | null {
+  const [frog, setFrog] = useState<{ id: number; src: string } | null>(null);
   useEffect(() => {
-    if (!wallet) { setSrc(null); return; }
+    setFrog(null);
+    if (!wallet) return;
+    let live = true;
     void (async () => {
       const d = await fetch(`/api/frogs/staking?wallet=${wallet}`).then((r) => r.json()).catch(() => null);
       const best = (d?.me?.frogs ?? []).sort((a: { multiplier: number }, b: { multiplier: number }) => b.multiplier - a.multiplier)[0];
       if (!best) return;
-      const uri = await rpc.readContract({ address: FROGS, abi: parseAbi(["function tokenURI(uint256) view returns (string)"]), functionName: "tokenURI", args: [BigInt(best.id)] }).catch(() => null);
-      if (!uri) return;
-      const meta = JSON.parse(uri.startsWith("data:application/json;base64,") ? atob(uri.split(",")[1]!) : decodeURIComponent(uri.split(",")[1]!));
-      setSrc(meta.image ?? null);
+      const src = `/api/pinball/frog/${Number(best.id)}`, im = new Image();
+      im.onload = () => { if (live) setFrog({ id: Number(best.id), src }); };
+      im.src = src;
     })();
+    return () => { live = false; };
   }, [wallet]);
-  return src;
+  return frog;
 }
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
   const r = await fetch(`/api/pinball/${path}`, { method: body ? "POST" : "GET", headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
+  if (!r.ok) throw Object.assign(new Error(j.error ?? `HTTP ${r.status}`), { status: r.status });
   return j as T;
+}
+/** A stream post: taken, to be sent again (network, rate limit), or refused for good (the server says why). */
+async function stream(path: string, body: unknown, refused: (why: string) => void): Promise<boolean | "stop"> {
+  try { await api(path, body); return true; } catch (e) {
+    if ((e as { status?: number }).status === 400) { refused((e as Error).message); return "stop"; }
+    return false;
+  }
 }
 
 function Confetti() {
@@ -76,7 +85,8 @@ function Confetti() {
 
 export function PinballPage() {
   const { address, signIn, busy } = useSession();
-  const avatar = useFrogAvatar(address ?? null);
+  const frog = useFrogAvatar(address ?? null);
+  const avatar = frog?.src ?? null;
   const [play, setPlay] = useState<Play | null>(null);
   const [waiting, setWaiting] = useState<{ match: MatchView; player: string } | null>(null);
   const [over, setOver] = useState<Over | null>(null);
@@ -93,6 +103,9 @@ export function PinballPage() {
   // server time minus ours; the smallest delivery delay gives the best estimate, so keep the largest sample
   const clock = useRef(0);
   const sync = (m: MatchView) => { if (m.now) clock.current = Math.max(clock.current === 0 ? -Infinity : clock.current, m.now - Date.now()); };
+  // faces come in a stream's first frame (and when the players change), by each player's public key
+  const faces = useRef(new Map<string, string | null>());
+  const withFaces = (m: MatchView): MatchView => ({ ...m, players: m.players.map((p) => { if (p.avatar !== undefined) faces.current.set(p.key, p.avatar); return { ...p, avatar: faces.current.get(p.key) ?? null }; }) });
   const me = name.trim() || "Night crew";
 
   useGameApp();
@@ -107,10 +120,14 @@ export function PinballPage() {
     es.current?.close();
     const s = new EventSource(`/api/pinball/match/${id}/events?player=${player}`);
     s.onmessage = (m) => {
-      const match = JSON.parse(m.data) as MatchView;
+      const match = withFaces(JSON.parse(m.data) as MatchView);
       sync(match);
+      const mine = match.players.find((p) => p.you);
+      if (mine?.error) setErr(mine.error);
+      // the rival never connected: back to the lobby, or (the match reopened) back to the search
+      if (match.void) { s.close(); setPlay(null); setWaiting(null); setErr(match.void); return; }
       if (match.startedAt) { setWaiting(null); setPlay((p) => (p?.kind === "duel" && p.match.id === match.id ? { ...p, match } : { kind: "duel", match, player })); }
-      else setWaiting((w) => (w ? { ...w, match } : w));
+      else { setPlay((p) => (p?.kind === "duel" && p.match.id === match.id ? null : p)); setWaiting({ match, player }); }
     };
     es.current = s;
   };
@@ -120,28 +137,32 @@ export function PinballPage() {
     try { localStorage.setItem("pb-name", name); } catch { /* private window */ }
     if (mode === "PRACTICE") {
       es.current?.close();
-      // the server deals the table so the run can go on the solo board; offline, practice still works
-      const r = await api<{ id: string; seed: number }>("solo", { name: me }).catch(() => null);
-      setPlay({ kind: "practice", seed: r?.seed ?? Math.floor(Math.random() * 2 ** 32), run: Date.now(), id: r?.id });
+      // the server deals the table and runs its clock so the run can go on the solo board; offline, practice still works
+      const r = await api<{ id: string; seed: number; startedAt: number; now: number }>("solo", { name: me }).catch((e) => { if ((e as { status?: number }).status === 409) setErr((e as Error).message); return null; });
+      setPlay({ kind: "practice", seed: r?.seed ?? Math.floor(Math.random() * 2 ** 32), run: Date.now(), id: r?.id, startAt: r?.startedAt, offset: r ? r.now - Date.now() : 0 });
       return;
     }
     try {
       clock.current = 0;
-      const r = await api<{ match: MatchView; player: string }>("queue", { name: me, currency: mode, stake, avatar: avatar ?? "/games/pinball/frog-0.webp" });
+      const r = await api<{ match: MatchView; player: string }>("queue", { name: me, currency: mode, stake, avatar: frog ? `frog:${frog.id}` : "/games/pinball/frog-0.webp" });
+      r.match = withFaces(r.match);
       sync(r.match);
       if (r.match.startedAt) setPlay({ kind: "duel", match: r.match, player: r.player }); else setWaiting(r);
       follow(r.match.id, r.player);
     } catch (e) { setErr((e as Error).message); }
   };
 
-  const finished = async (r: { score: number; inputs: Input[]; stats: Record<string, number> }) => {
+  const finished = async (r: { score: number; inputs: Input[]; stats: Record<string, number>; landed: Landed[]; tick: number }) => {
     setOver({ score: r.score, stats: r.stats });
     if (play?.kind === "practice" && play.id) {
-      const v = await api<{ score: number; rank: number | null }>(`solo/${play.id}/finish`, { inputs: r.inputs }).catch(() => null);
+      const v = await api<{ score: number; rank: number | null }>(`solo/${play.id}/finish`, { inputs: r.inputs }).catch((e) => { setErr((e as Error).message); return null; });
       if (v) { setOver({ score: v.score, stats: r.stats, rank: v.rank }); void api<Leaderboard>("board").then(setLeaderboard).catch(() => {}); }
     }
-    if (play?.kind === "duel") await api(`match/${play.match.id}/finish`, { player: play.player, inputs: r.inputs }).catch((e) => setErr((e as Error).message));
+    if (play?.kind === "duel") await api(`match/${play.match.id}/finish`, { player: play.player, inputs: r.inputs, landed: r.landed, tick: r.tick }).catch((e) => setErr((e as Error).message));
   };
+  // the inputs go to the server while the game runs: a duel's to its match, a board run's to its run
+  const onLive = play?.kind === "duel" ? (s: Live) => stream(`match/${play.match.id}/progress`, { player: play.player, ...s }, setErr)
+    : play?.kind === "practice" && play.id ? (s: Live) => stream(`solo/${play.id}/progress`, s, setErr) : undefined;
   const toLobby = () => { es.current?.close(); setPlay(null); setOver(null); setWaiting(null); };
 
   const opp = play?.kind === "duel" ? play.match.players.find((p) => !p.you) : null;
@@ -151,7 +172,7 @@ export function PinballPage() {
   const result = over && (() => {
     const m = play?.kind === "duel" ? play.match : null;
     const mine = m?.players.find((p) => p.you), other = m?.players.find((p) => !p.you);
-    const won = !!m?.done && !m.draw && m.winner === mine?.name;
+    const won = !!m?.done && !m.draw && m.winnerIsYou;
     const title = !m ? "GAME OVER" : !m.done ? "SCORE IS IN" : m.draw ? "DRAW" : won ? "VICTORY" : "DEFEAT";
     const stats = mine?.stats ?? over.stats;
     return (
@@ -238,7 +259,7 @@ export function PinballPage() {
           <div className="arc-modes" aria-label="Game mode">
             {MODES.map((x) => {
               const lk = (x.k === "IMD" || x.k === "SHIFT") && !stakes?.live;
-              return <button type="button" key={x.k} aria-pressed={mode === x.k} className={`arc-mode ${mode === x.k ? "on" : ""} ${lk ? "locked" : ""}`} onClick={() => { setMode(x.k); if (x.k === "IMD" || x.k === "SHIFT") setStake(stakes?.options[x.k]?.[0] ?? 0); }}>
+              return <button type="button" key={x.k} aria-pressed={mode === x.k} className={`arc-mode ${mode === x.k ? "on" : ""} ${lk ? "locked" : ""}`} onClick={() => { setMode(x.k); setStake(x.k === "IMD" || x.k === "SHIFT" ? stakes?.options[x.k]?.[0] ?? 0 : 0); }}>
                 <i className="arc-mode-icon"><Icon name={x.icon} size={23} /></i><b>{x.title}</b><span>{lk ? "Opens with the escrow" : x.sub}</span>
                 <i className="arc-mode-mark">{lk ? <Icon name="lock" size={13} /> : mode === x.k ? <Icon name="check" size={13} /> : null}</i>
               </button>;
@@ -293,10 +314,10 @@ export function PinballPage() {
         <PinballGame
           key={play.kind === "practice" ? `p${play.run}` : `${play.match.id}-${play.match.seed ?? "vs"}`}
           seed={play.kind === "practice" ? play.seed : play.match.seed ?? 0}
-          startAt={play.kind === "duel" ? play.match.startedAt ?? undefined : undefined}
-          clockOffset={play.kind === "duel" ? clock.current : 0}
+          startAt={play.kind === "duel" ? play.match.startedAt ?? undefined : play.startAt}
+          clockOffset={play.kind === "duel" ? clock.current : play.offset ?? 0}
           name={me} avatar={avatar} rival={rival}
-          onLive={play.kind === "duel" ? (s) => void api(`match/${play.match.id}/progress`, { player: play.player, ...s }).catch(() => {}) : undefined}
+          onLive={onLive}
           onDone={(r) => void finished(r)}
           overlay={search ?? result}
         />

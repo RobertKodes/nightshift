@@ -66,6 +66,8 @@ export type Input = [tick: number, left: 0 | 1, right: 0 | 1, plunger: 0 | 1];
 export type Event = { tick: number; kind: "bumper" | "sling" | "target" | "targets" | "hole" | "drain" | "launch" | "orbit" | "skill" | "save" | "meteor-in" | "surge-in"; points: number; send?: Attack };
 /** What a duel player sends to the other table: a meteor in the way, or heavier gravity. */
 export type Attack = "meteor" | "surge";
+/** An attack as it lands on a table: its kind and the tick it lands on. */
+export type Landing = { kind: Attack; at: number };
 /** An attack lands this many ticks (3 s) after it was earned, the same on every machine. */
 export const ATTACK_DELAY = 720;
 const METEOR_TICKS = 8 * 240;
@@ -88,6 +90,8 @@ export class Table {
   held = 0;
   /** Ticks the ball has sat still with both flippers down: past 3 s it gets a nudge, like a tilt. */
   still = 0;
+  /** Slingshot kicks in a row with nothing else touched: past 6 they stop kicking, so no ball can ping-pong forever. */
+  slingRun = 0;
   plunge = 0;
   ballsLeft = BALLS;
   score = 0;
@@ -104,14 +108,19 @@ export class Table {
   meteors: Meteor[] = [];
   surgeUntil = 0;
   launchedAt = 0;
+  /** This ball has used its save: the next save waits for a new ball (a real drain). */
+  saved = false;
   stats = { bumpers: 0, holes: 0, sent: 0, received: 0 };
   #meteorN = 0;
+  /** The tick the frog crew last reset: its targets cannot fall again in that same tick. */
+  #crewAt = -1;
   readonly #rand: () => number;
 
   readonly seed: number;
   constructor(seed: number) { this.seed = seed; this.#rand = rng(seed); }
 
   #add(kind: Event["kind"], points: number, send?: Attack) {
+    if (kind !== "sling") this.slingRun = 0;
     const p = points * (kind === "drain" || kind === "launch" || kind === "save" ? 1 : this.mult);
     this.score += p;
     this.events.push({ tick: this.tick, kind, points: p, ...(send ? { send } : {}) });
@@ -167,8 +176,8 @@ export class Table {
         const power = 900 + charge * 1300 + this.#rand() * 40;
         ball.vx = 0; ball.vy = -power; this.plunge = 0; this.inLane = false; this.launchedAt = this.tick;
         this.#add("launch", 0);
-        // The skill shot: let go between 70% and 82% of a full pull.
-        if (charge >= 0.7 && charge <= 0.82) this.#add("skill", 1000);
+        // The skill shot: let go between 70% and 82% of a full pull. Not again on the relaunch of a saved ball.
+        if (!this.saved && charge >= 0.7 && charge <= 0.82) this.#add("skill", 1000);
       } else return;
     }
     if (this.held > 0) {
@@ -181,19 +190,20 @@ export class Table {
       }
       return;
     }
-    for (let i = 0; i < SUB; i++) this.#move();
+    // a capture ends the tick: one black hole is one capture, whichever sub-step the ball crossed the core in
+    for (let i = 0; i < SUB && this.held === 0; i++) this.#move();
     // A ball that settles anywhere (a pocket, a post) while no flipper is held is nudged back into play.
     // A ball cradled on a raised flipper is the player's choice and is left alone.
     if (Math.abs(ball.vx) + Math.abs(ball.vy) < 8 && this.fl === 0 && this.fr === 0) {
       if (++this.still >= 720) { this.still = 0; ball.vy = -320; ball.vx = ball.x < W / 2 ? 160 : -160; }
     } else this.still = 0;
     if (ball.y > H + BALL_R) {
-      // Ball save: lost in the first 4 s after a launch, it comes back.
-      if (this.tick - this.launchedAt < SAVE_TICKS) {
-        Object.assign(ball, { x: 558, y: 860, vx: 0, vy: 0 }); this.inLane = true; this.#add("save", 0);
+      // Ball save: lost in the first 4 s after a launch, it comes back, once per ball.
+      if (!this.saved && this.tick - this.launchedAt < SAVE_TICKS) {
+        Object.assign(ball, { x: 558, y: 860, vx: 0, vy: 0 }); this.inLane = true; this.saved = true; this.#add("save", 0);
         return;
       }
-      this.ballsLeft--;
+      this.ballsLeft--; this.saved = false;
       this.#add("drain", 0);
       if (this.ballsLeft <= 0) { this.over = true; return; }
       Object.assign(ball, { x: 558, y: 860, vx: 0, vy: 0 });
@@ -245,12 +255,15 @@ export class Table {
       }
     }
     for (const t of this.targets) {
-      if (t.down) continue;
-      const dx = b.x - t.x, dy = b.y - t.y, rr = t.r + BALL_R;
-      if (dx * dx + dy * dy < rr * rr) {
+      if (t.down || this.#crewAt === this.tick) continue;
+      const dx = b.x - t.x, dy = b.y - t.y, d2 = dx * dx + dy * dy, rr = t.r + BALL_R;
+      if (d2 < rr * rr) {
+        // out to the target's rim, as a bumper does, so the ball is not still inside it next sub-step
+        const d = Math.sqrt(d2) + 1e-9;
+        b.x = t.x + (dx / d) * rr; b.y = t.y + (dy / d) * rr;
         t.down = true; b.vx = -b.vx * 0.8 + 140;
         this.#add("target", 250);
-        if (this.targets.every((x) => x.down)) { for (const x of this.targets) x.down = false; this.#add("targets", 1500, "surge"); this.mult = Math.min(5, this.mult + 1); }
+        if (this.targets.every((x) => x.down)) { for (const x of this.targets) x.down = false; this.#crewAt = this.tick; this.#add("targets", 1500, "surge"); this.mult = Math.min(5, this.mult + 1); }
       }
     }
     // the top orbit: crossing the top centre going sideways fast
@@ -276,14 +289,21 @@ export class Table {
     const vn = rvx * nx + rvy * ny;
     if (vn < 0) {
       b.vx = rvx - (1 + e) * vn * nx + sx; b.vy = rvy - (1 + e) * vn * ny + sy;
-      if (kick) { b.vx += nx * kick; b.vy += ny * kick; if (tag === "sling") this.#add("sling", 10); }
+      if (tag === "flipper") this.slingRun = 0;
+      if (kick && !(tag === "sling" && this.slingRun >= 6)) { b.vx += nx * kick; b.vy += ny * kick; if (tag === "sling") { this.#add("sling", 10); this.slingRun++; } }
     }
   }
 }
 
-/** Plays a whole game from its inputs: the score the server checks. */
-export function replay(seed: number, inputs: Input[]): { score: number; ticks: number; events: Event[] } {
+/**
+ * Plays a whole game from its inputs: the score the server checks. In a duel, `landings` are the
+ * rival's attacks as they landed on this table (the server checks each against the rival's game).
+ * When several land on one tick the result does not depend on their order: meteors are placed by
+ * how many have landed, not by which one.
+ */
+export function replay(seed: number, inputs: Input[], landings: Landing[] = []): { score: number; ticks: number; events: Event[]; stats: Table["stats"] } {
   const t = new Table(seed);
+  for (const l of landings) t.receive(l.kind, l.at);
   let i = 0;
   const sorted = inputs.filter((x) => Number.isInteger(x[0]) && x[0] >= 0 && x[0] <= MAX_TICKS).sort((p, q) => p[0] - q[0]);
   while (!t.over) {
@@ -291,10 +311,10 @@ export function replay(seed: number, inputs: Input[]): { score: number; ticks: n
     t.step();
     // a held plunger after the last input would never release: the game ends at MAX_TICKS anyway
   }
-  return { score: t.score, ticks: t.tick, events: t.events };
+  return { score: t.score, ticks: t.tick, events: t.events, stats: t.stats };
 }
 
-/** A duel, replayed: both tables step together; what one earns lands on the other ATTACK_DELAY later. */
+/** A duel on a perfect network: both tables step together; what one earns lands on the other ATTACK_DELAY later. */
 export function duelReplay(seed: number, a: Input[], b: Input[]): { scores: [number, number]; stats: [Table["stats"], Table["stats"]] } {
   const tables = [new Table(seed), new Table(seed)] as const;
   const logs = [a, b].map((x) => x.filter((y) => Number.isInteger(y[0]) && y[0] >= 0 && y[0] <= MAX_TICKS).sort((p, q) => p[0] - q[0]));

@@ -8,7 +8,7 @@ import { balances, eth, sales, salesWallet } from "./chain.js";
 import { findPool } from "./v4.js";
 import { liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
 import { keeperAccount } from "./keeper.js";
-import { board as pinBoard, soloFinish as pinSoloFinish, soloStart as pinSoloStart, finish as pinFinish, get as pinGet, leave as pinLeave, listen as pinListen, progress as pinProgress, queue as pinQueue, stakes as pinStakes } from "./pinball.js";
+import { board as pinBoard, frogImage as pinFrogImage, inMatch as pinInMatch, soloFinish as pinSoloFinish, soloProgress as pinSoloProgress, soloStart as pinSoloStart, finish as pinFinish, get as pinGet, leave as pinLeave, listen as pinListen, progress as pinProgress, queue as pinQueue, stakes as pinStakes } from "./pinball.js";
 import { claimsOf, epochs, markPosted } from "./frogpot.js";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
@@ -370,10 +370,25 @@ export function serve(engine: Engine) {
         const parts = p.split("/").filter(Boolean); // api pinball …
         if (p === "/api/pinball/stakes") return json(res, 200, pinStakes());
         if (p === "/api/pinball/board") return json(res, 200, pinBoard());
+        // a NIGHT FROG's onchain image, the only face from a wallet shown to a rival: never run as a page
+        if (parts[2] === "frog" && parts[3] && req.method === "GET") {
+          if (limited(req, "pinball-frog", 120, 60_000)) return json(res, 429, { error: "slow down" });
+          const svg = /^\d{1,5}$/.test(parts[3]) ? await pinFrogImage(Number(parts[3])) : null;
+          if (!svg) return json(res, 404, { error: "no such frog" });
+          res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox", "X-Content-Type-Options": "nosniff" });
+          res.end(svg);
+          return;
+        }
         if (p === "/api/pinball/solo" && req.method === "POST") {
           if (limited(req, "pinball-solo", 40, 600_000)) return json(res, 429, { error: "slow down" });
           const b = await body(req);
-          return json(res, 200, pinSoloStart(String(b.name ?? "")));
+          // one open run per player: the signed-in wallet, else the IP
+          try { return json(res, 200, pinSoloStart(String(b.name ?? ""), owner ?? `ip:${clientIp(req)}`)); } catch (e) { return json(res, 409, { error: (e as Error).message }); }
+        }
+        if (parts[2] === "solo" && parts[3] && parts[4] === "progress" && req.method === "POST") {
+          if (limited(req, "pinball-solo-progress", 600, 60_000)) return json(res, 429, { error: "slow down" });
+          const b = await body(req, 16_000);
+          try { pinSoloProgress(parts[3], b); return json(res, 200, { ok: true }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
         }
         if (parts[2] === "solo" && parts[3] && parts[4] === "finish" && req.method === "POST") {
           if (limited(req, "pinball-solo-finish", 40, 600_000)) return json(res, 429, { error: "slow down" });
@@ -383,32 +398,41 @@ export function serve(engine: Engine) {
         if (p === "/api/pinball/queue" && req.method === "POST") {
           if (limited(req, "pinball-queue", 20, 600_000)) return json(res, 429, { error: "slow down" });
           const b = await body(req);
-          try { return json(res, 200, pinQueue(String(b.name ?? ""), engine.auth.owner(req), String(b.currency ?? "FREE") as never, Number(b.stake ?? 0), typeof b.avatar === "string" ? b.avatar : null)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          try { return json(res, 200, await pinQueue(String(b.name ?? ""), owner, String(b.currency ?? "FREE") as never, Number(b.stake ?? 0), typeof b.avatar === "string" ? b.avatar : null)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
         }
         if (parts[2] === "match" && parts[3]) {
           const id = parts[3];
           if (parts[4] === "events") {
             const me = url.searchParams.get("player") ?? undefined;
-            const first = pinGet(id, me);
-            if (!first) return json(res, 404, { error: "no such match" });
+            if (!pinGet(id, me) || (me && !pinInMatch(id, me))) return json(res, 404, { error: "no such match" });
             // match streams count against the same per-IP and total caps as the live events
             const ipKey = `pb:${clientIp(req)}`;
             if ((streams.get(ipKey) ?? 0) >= 4 || streamsTotal >= 2000) return json(res, 429, { error: "too many live connections" });
             streams.set(ipKey, (streams.get(ipKey) ?? 0) + 1); streamsTotal++;
             res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
-            res.write(`data: ${JSON.stringify(first)}\n\n`);
-            const off = pinListen(id, () => res.write(`data: ${JSON.stringify(pinGet(id, me))}\n\n`));
-            const ping = setInterval(() => res.write(": ping\n\n"), 20_000);
+            // a reader that does not keep up is dropped, and frames wait for the socket to drain instead of piling up
+            let blocked = false;
+            const send = (v: unknown) => {
+              if (res.writableLength > 256_000) { res.destroy(); return; }
+              if (blocked) return;
+              if (!res.write(`data: ${JSON.stringify(v)}\n\n`)) { blocked = true; res.once("drain", () => { blocked = false; const v = pinGet(id, me); if (v) send(v); }); }
+            };
+            const off = pinListen(id, me, send);
+            const ping = setInterval(() => { if (!blocked) res.write(": ping\n\n"); }, 20_000);
             req.on("close", () => { off(); clearInterval(ping); const n = (streams.get(ipKey) ?? 1) - 1; if (n > 0) streams.set(ipKey, n); else streams.delete(ipKey); streamsTotal--; });
             return;
           }
-          // the game sends its live view four times a second: room for two games, not a flood
-          if (parts[4] === "progress" && req.method === "POST") { if (limited(req, "pinball-progress", 600, 60_000)) return json(res, 429, { error: "slow down" }); const b = await body(req, 8_000); pinProgress(id, String(b.player ?? ""), b as never); return json(res, 200, { ok: true }); }
+          // the game streams its inputs four times a second: room for two games, not a flood
+          if (parts[4] === "progress" && req.method === "POST") {
+            if (limited(req, "pinball-progress", 600, 60_000)) return json(res, 429, { error: "slow down" });
+            const b = await body(req, 16_000);
+            try { pinProgress(id, String(b.player ?? ""), b); return json(res, 200, { ok: true }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          }
           if (parts[4] === "leave" && req.method === "POST") { if (limited(req, "pinball-leave", 30, 60_000)) return json(res, 429, { error: "slow down" }); const b = await body(req, 2_000); pinLeave(id, String(b.player ?? "")); return json(res, 200, { ok: true }); }
           if (parts[4] === "finish" && req.method === "POST") {
             if (limited(req, `pinball-finish:${id}`, 4, 60_000)) return json(res, 429, { error: "slow down" });
             const b = await body(req, 400_000);
-            try { return json(res, 200, pinFinish(id, String(b.player ?? ""), b.inputs)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+            try { return json(res, 200, pinFinish(id, String(b.player ?? ""), b)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
           }
           const m = pinGet(id, url.searchParams.get("player") ?? undefined);
           return m ? json(res, 200, m) : json(res, 404, { error: "no such match" });

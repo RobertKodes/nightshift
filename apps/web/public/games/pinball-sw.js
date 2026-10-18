@@ -1,5 +1,5 @@
 // Space Pinball offline cache. Scope: /games/pinball only. The API is never cached.
-const CACHE = "pinball-v2";
+const CACHE = "pinball-v3";
 const ART = ["playfield.webp", "blackhole.webp", "planet-0.webp", "planet-1.webp", "planet-2.webp", "planet-3.webp", "frog-0.webp", "frog-1.webp", "frog-2.webp", "frog-3.webp", "frog-4.webp"].map((f) => `/games/pinball/${f}`);
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["/games/pinball", ...ART])).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k.startsWith("pinball-") && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
