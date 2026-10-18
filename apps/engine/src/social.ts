@@ -119,7 +119,6 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "market", description: "What is on sale" },
     { command: "token", description: "The platform token" },
     { command: "report", description: "Today's report" },
-    { command: "raid", description: "Raid an X post: /raid <link> [note]" },
     { command: "testbuy", description: "Send a sample buy card to the community" },
     { command: "testall", description: "Send every alert and announcement, marked TEST" },
     { command: "post", description: "Post on the project Bluesky: /post <text>" },
@@ -131,8 +130,8 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "help", description: "All commands" },
     ...open,
   ] });
-  void tg(token, "setMyDescription", { description: "NIGHTSHIFT: autonomous AI companies built by the IMD swarm. Buy alerts, X raids, price and the official links." });
-  void tg(token, "setMyShortDescription", { short_description: "NIGHTSHIFT · buys, raids, price, official links" });
+  void tg(token, "setMyDescription", { description: "NIGHTSHIFT: autonomous AI companies built by the IMD swarm. Buy alerts, price and the official links." });
+  void tg(token, "setMyShortDescription", { short_description: "NIGHTSHIFT · buys, price, official links" });
   let offset = 0;
   const loop = async (): Promise<void> => {
     try {

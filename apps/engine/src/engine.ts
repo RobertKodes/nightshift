@@ -41,7 +41,7 @@ import { ProductFiles, fetchDelivery } from "./products.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
-import { type Anim, burnTotals, buyCard, chats, marketSnapshot, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
+import { type Anim, burnTotals, buyCard, chats, marketSnapshot, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
 import { type Button, type CommandContext, type GroupMessage, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands, tgCall } from "./social.js";
 import { IMD_TOKEN, completeContracts, followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
@@ -90,13 +90,8 @@ export class Engine {
         open: (cmd) => publicCommand(cmd),
         guard: async (m) => { const removed = await this.#guard(m); if (!removed) void this.#ask(m).catch(() => {}); return removed; },
         ask: (m) => this.#ask(m),
-        // Share an X post to the bot and it raids it in the community chat.
-        adminText: async (text) => {
-          const url = text.match(/https?:\/\/(?:x|twitter)\.com\/\S+\/status\/\d+\S*/)?.[0];
-          if (!url) return null;
-          const note = text.replace(url, "").trim();
-          return { text: (await raid(url.split("?")[0]!, note)) ? "🚨 Raid posted in the community." : "⚠️ Could not post. Is the bot in the community chat?" };
-        },
+        // Raids are off: a shared X post is not reposted to the community.
+        adminText: async () => null,
         joined: (chat, names) => { const w = welcome(names); void sendCard(chat, "welcome", w.text, w.buttons); },
       });
       startCommunity();
@@ -246,12 +241,7 @@ export class Engine {
       return { text: `🪙 <b>Token</b>\n\n${body}`, buttons: [...btns, ...back] };
     }
     if (cmd === "report") return { text: await this.#report(), buttons: back };
-    if (cmd === "raid") {
-      const url = args.find((a) => /(?:x|twitter)\.com\/.+\/status\/\d+/.test(a));
-      if (!url) return { text: "Usage: /raid &lt;x.com post link&gt; [note]\nOr just share the X post to me.", buttons: back };
-      const ok = await raid(url.split("?")[0]!, args.filter((a) => a !== url).join(" "));
-      return { text: ok ? "🚨 Raid posted in the community." : `⚠️ Could not post to ${esc(config.telegramCommunity)}. Add the bot to the group (as admin in a channel).`, buttons: back };
-    }
+    if (cmd === "raid") return { text: "Raids are turned off.", buttons: back };
     if (cmd === "post") {
       const text = args.join(" ").trim();
       if (!text) return { text: "Usage: /post &lt;text&gt;\nPosts on the project's Bluesky now; the community chat hears about it by itself.", buttons: back };
@@ -959,7 +949,6 @@ CA: <code>0x0000…TEST</code>
 Trading is closed to everyone except the treasury <b>0x3322…4D69</b>.`, [[{ text: "🟢 First buy on Uniswap (treasury wallet)", url: "https://app.uniswap.org/swap?chain=mainnet" }]]));
     const b1 = buy(180, 2_400); await say("Buy (dolphin wallet)", toCommunity(b1.text, b1.buttons, "buy"));
     const b2 = buy(3200, 125_000); await say("Mega whale buy", toCommunity(b2.text, b2.buttons, "whale"));
-    await say("X raid", raid(`${config.xUrl}/status/1846000000000000000`, "TEST: this is how a raid looks"));
     await say("Token launch", toCommunity(`${T}🚀🌙 <b>$${esc(sym)} IS LIVE</b>\n\n<code>0x0000…TEST</code>\n\nTrading is open to everyone on Ethereum, paired with ETH.
 Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT and IMD).`, [[{ text: `🟢 Buy $${sym}`, url: `${config.publicUrl}/token` }]], "launch"));
     await say("Company sale", toCommunity(`${T}💰 <b>A NIGHTSHIFT company just made a sale</b>\n\nLetsBuild sold <b>Market report</b> for $9.00.\nBuilt by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See the market", url: `${config.publicUrl}/market` }]], "sale"));
