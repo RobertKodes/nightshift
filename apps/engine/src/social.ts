@@ -124,6 +124,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "post", description: "Post on the project Bluesky: /post <text>" },
     { command: "bluesky", description: "Bluesky account status" },
     { command: "stop", description: "Pause every company now" },
+    { command: "live", description: "How many people are on the site right now" },
     { command: "unmute", description: "Unmute someone: reply to them, or /unmute @user" },
     { command: "mute", description: "Mute someone: reply, or /mute @user [minutes]" },
     { command: "help", description: "All commands" },

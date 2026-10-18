@@ -6,6 +6,7 @@ import { fromImd, fromUsdc } from "@nightshift/core";
 import { type PaymentPayload, USDC, challenge, decodeHeader, encodeHeader, requirement, settlePayment, verifyPayment } from "@nightshift/x402";
 import { balances, eth, sales, salesWallet } from "./chain.js";
 import { findPool } from "./v4.js";
+import { liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
 import { keeperAccount } from "./keeper.js";
 import { claimsOf, epochs, markPosted } from "./frogpot.js";
 import { config } from "./config.js";
@@ -167,6 +168,7 @@ export function serve(engine: Engine) {
     const url = new URL(req.url ?? "/", config.publicUrl);
     const p = url.pathname;
     const seg = p.split("/").filter(Boolean);
+    if (!p.startsWith("/api/admin") && !p.startsWith("/assets/") && !/\.(js|css|png|jpg|webp|svg|mp4|ico|woff2?)$/.test(p)) sawVisitor(clientIp(req), req.headers["user-agent"]);
     try {
       if (p === "/api/health") return json(res, 200, { ok: true, mode: config.mode, llm: Boolean(engine.llm), imdUsd: config.imdUsdPinned || Date.now() - config.imdUsdAt < 30 * 60_000 ? config.imdUsd : null, salesChainId: config.salesChainId, requireAuth: config.requireAuth, platformFeeBps: config.platformTreasury ? config.platformFeeBps : 0 });
 
@@ -235,6 +237,7 @@ export function serve(engine: Engine) {
           void engine.alert(`🛠 ${c.title} ordered from IMD: https://etherscan.io/tx/${o.tx}`, `order-${o.tx}`);
           return json(res, 200, { ok: true, orders: orders() });
         }
+        if (p === "/api/admin/live" && req.method === "GET") return json(res, 200, liveStats());
         if (p === "/api/admin/keeper" && req.method === "GET") {
           const a = keeperAccount(engine.vault).address;
           return json(res, 200, { address: a, eth: (await eth.getBalance({ address: a }).catch(() => 0n)).toString(), last: engine.lastKeeper });
@@ -333,8 +336,8 @@ export function serve(engine: Engine) {
       if (p === "/api/events") {
         const ipKey = clientIp(req);
         if ((streams.get(ipKey) ?? 0) >= 6 || streamsTotal >= 2000) return json(res, 429, { error: "too many live connections" });
-        streams.set(ipKey, (streams.get(ipKey) ?? 0) + 1); streamsTotal++;
-        req.on("close", () => { const n = (streams.get(ipKey) ?? 1) - 1; if (n > 0) streams.set(ipKey, n); else streams.delete(ipKey); streamsTotal--; });
+        streams.set(ipKey, (streams.get(ipKey) ?? 0) + 1); streamsTotal++; pageOpened();
+        req.on("close", () => { const n = (streams.get(ipKey) ?? 1) - 1; if (n > 0) streams.set(ipKey, n); else streams.delete(ipKey); streamsTotal--; pageClosed(); });
         res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
         res.write(": ok\n\n");
         const only = url.searchParams.get("company");

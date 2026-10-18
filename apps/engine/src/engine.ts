@@ -27,6 +27,7 @@ import { balances, ensurePermit2, eth, ethWallet, sales, salesWallet } from "./c
 import { V4, findPool } from "./v4.js";
 import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
 import { forgive, judge, muteMinutes, strike, track } from "./moderation.js";
+import { liveStats } from "./live.js";
 import { type Facts, allowed, answer, spend, worthAsking } from "./assistant.js";
 import { type KeeperRun, runKeeper } from "./keeper.js";
 import { buildEpoch } from "./frogpot.js";
@@ -183,6 +184,10 @@ export class Engine {
   /** What the operator can do from Telegram: cards with buttons. */
   async #command(cmd: string, args: string[], ctx?: CommandContext): Promise<Reply> {
     if (cmd === "unmute" || cmd === "mute") return this.#muteCommand(cmd, args, ctx);
+    if (cmd === "live") {
+      const s = liveStats();
+      return { text: `👀 <b>On getnightshift.tech now</b>\n${s.visitors1m} in the last minute · ${s.visitors5m} in the last 5 minutes\n${s.openPages} pages open live\n\n<i>Counted since the last restart; nothing about visitors is stored.</i>` };
+    }
     const all = [...this.store.companies.values()];
     const find = (s?: string) => all.find((c) => c.slug === s || c.id === s);
     const menu: Button[][] = [
