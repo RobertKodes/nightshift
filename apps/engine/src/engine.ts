@@ -41,6 +41,7 @@ import { ProductFiles, fetchDelivery } from "./products.js";
 import { newFrogListings, newFrogSales, OPENSEA_SLUG } from "./frogmarket.js";
 import { type ArcadeEvent, onArcade } from "./pinball.js";
 import { followSwarm } from "./swarm.js";
+import { type ChessEvent, onChess } from "./chess.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
@@ -167,6 +168,16 @@ export class Engine {
         if (e.record) arcadePost(`🏆🌙 <b>NEW ALL-TIME SOLO RECORD</b>\n\n<b>${esc(e.run.name)}</b> scored <b>${n(e.run.score)}</b> alone at 3 AM.\n${pick(["No rival needed.", "The frogs are taking notes.", "Verified by replay, every flip."])}`, "milestone");
         else if (e.tonightTop) arcadePost(`🌙 <b>NEW #1 ON TONIGHT'S SOLO BOARD</b>\n\n<b>${esc(e.run.name)}</b> with <b>${n(e.run.score)}</b>. ${pick(["Beat it before sunrise.", "The board is open.", "Your move, night crew."])}`);
       }
+    });
+    // NIGHT CHESS: a checkmate in a real game (20+ half-moves) is worth telling the night crew about.
+    onChess((e: ChessEvent) => {
+      if (e.reason !== "checkmate" || e.moves < 20 || !e.winner || !room()) return;
+      const loser = e.winner === e.white ? e.black : e.white;
+      posts.push(Date.now());
+      void toCommunity(`♟🌙 <b>CHECKMATE</b>
+
+<b>${esc(e.winner)}</b> mated ${esc(loser)} in ${Math.ceil(e.moves / 2)} moves (${e.tc}).
+${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Somebody check the clocks."])}`, [[{ text: "♟ Play NIGHT CHESS", url: `${config.publicUrl}/games/chess` }]], "post");
     });
     setInterval(() => {
       if (!half.games) return;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { InstallButton } from "./app";
 import { createPortal } from "react-dom";
 import { short } from "../api";
 import { Link, go } from "../router";
@@ -173,6 +174,7 @@ export function SiteHeader({ active, home = false }: { active: Active; home?: bo
       ) : swarm?.mode === "live" ? (
         <button className="ns-acct" onClick={signIn} disabled={busy} title={error ?? "Sign in with your wallet"}>{busy ? "CHECK WALLET…" : "SIGN IN"}</button>
       ) : null}
+      <InstallButton compact />
       <Socials />
       <Magnetic className="ns-cta sm" onClick={() => go("/launch")} href="/launch">LAUNCH A COMPANY <span className="arr">→</span></Magnetic>
       <MobileMenu home={home} />

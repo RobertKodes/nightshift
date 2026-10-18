@@ -93,14 +93,28 @@ type Prompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outco
 let deferred: Prompt | null = null;
 if (typeof window !== "undefined") addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = e as Prompt; });
 
-/** Install the site as an app: the browser's prompt, or the iPhone steps. */
-function InstallSite() {
-  const [hint, setHint] = useState(false);
-  const standalone = matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
-  if (standalone) return null;
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  if (!deferred && !ios) return null;
-  return hint
-    ? <span className="app-hint">In Safari tap <b>Share</b>, then <b>Add to Home Screen</b>.</span>
-    : <button type="button" onClick={() => { if (deferred) { void deferred.prompt(); deferred = null; } else setHint(true); }}><Icon name="download" size={16} /> Install app</button>;
+const standalone = () => matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
+/** How to install on this device when the browser has no prompt of its own to offer. */
+function steps(): string {
+  const ua = navigator.userAgent;
+  if (/iphone|ipad|ipod/i.test(ua)) return "In Safari, tap Share, then Add to Home Screen.";
+  if (/android/i.test(ua)) return "Open the browser menu (⋮), then Install app or Add to Home screen.";
+  return "Click the install icon at the right of the address bar, or the browser menu, then Install NIGHTSHIFT.";
 }
+
+/** Install the site as an app: the browser's own prompt where it has one, the exact steps otherwise. Hidden once installed. */
+export function InstallButton({ compact = false }: { compact?: boolean }) {
+  const [hint, setHint] = useState(false);
+  if (typeof window === "undefined" || standalone()) return null;
+  return (
+    <span className="app-install">
+      <button type="button" className={compact ? "app-install-btn compact" : "app-install-btn"} aria-label="Install the NIGHTSHIFT app"
+        onClick={() => { if (deferred) { const d = deferred; deferred = null; void d.prompt(); } else setHint((h) => !h); }}>
+        <Icon name="download" size={16} />{!compact && <span>Install app</span>}
+      </button>
+      {hint && <span className="app-install-hint" role="status">{steps()}</span>}
+    </span>
+  );
+}
+
+function InstallSite() { return <InstallButton />; }

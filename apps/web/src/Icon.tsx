@@ -1,5 +1,15 @@
 /** A small, consistent line-icon set (24px grid, 1.75 stroke), used instead of emoji. */
 const PATHS: Record<string, string> = {
+  "imd-mark": "m12 3 9 9-9 9-9-9 9-9Z",
+  "chess-pawn": "M15 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm-6 5h6m-5 0-1 6h6l-1-6M7 17h10l1 4H6l1-4Z",
+  "chess-rook": "M6 3v5h12V3h-3v3h-3V3H9v3H6m2 2 1 9h6l1-9M7 17h10l1 4H6l1-4Z",
+  "chess-bishop": "m12 2-4 5a4 4 0 0 0 8 0l-4-5Zm0 0v5m-3 5h6m-5 0-1 5h6l-1-5M7 17h10l1 4H6l1-4Z",
+  "chess-knight": "M7 17V12l3-4-3 1-3-2 5-4 6 1 4 6-2 7H7Zm2-14 1-1 1 2m1 3h.01M7 17h10l1 4H6l1-4Z",
+  "chess-queen": "m6 6 2 6h8l2-6-4 3-2-6-2 6-4-3Zm2 6 1 5h6l1-5M7 17h10l1 4H6l1-4ZM5 4h.01M12 2h.01M19 4h.01",
+  "chess-king": "M12 2v6m-3-3h6M8 9h8l-1 4H9L8 9Zm1 4v4h6v-4M7 17h10l1 4H6l1-4Z",
+  clock: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-5v5l3 2",
+  flag: "M5 22V3m0 1c5-4 9 4 14 0v10c-5 4-9-4-14 0",
+  close: "m6 6 12 12M18 6 6 18",
   flame: "M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1.2-3.6 2.4-4.6.3 1.4 1 2.4 2.1 2.9C11 9 11 6 12 3Z",
   alert: "M12 4 2.8 19.5h18.4L12 4Zm0 6v4.5m0 2.8v.2",
   check: "m5 12.5 4.5 4.5L19 7.5",

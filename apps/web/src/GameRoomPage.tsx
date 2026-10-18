@@ -1,4 +1,6 @@
 import { RuleBar } from "./TokenomicsPage";
+import { Icon } from "./Icon";
+import "./chess/chess.css";
 
 const GAMES: [string, string, string][] = [
   ["Frog Flip", "Two players, one coin. The flip comes from Chainlink VRF, so neither player nor NIGHTSHIFT can pick it.", "First"],
@@ -23,6 +25,17 @@ export function GameRoomPage() {
           <p>Skill duels. Same table, same seed. Free to play now.</p>
           <a className="pb-promo-play" href="/games/pinball">Play now</a>
           <small>IMD and $SHIFT stakes open with the escrow</small>
+        </div>
+      </section>
+
+      <section className="tkn-card pb-promo nc-promo" aria-labelledby="nc-promo-title">
+        <div className="pb-promo-visual nc-promo-art" aria-hidden="true"><Icon name="chess-knight" size={130} /></div>
+        <div className="pb-promo-content">
+          <div className="pb-promo-meta"><span className="pb-promo-label">NIGHTSHIFT ORIGINAL / 02</span><span className="pb-promo-status">LIVE</span></div>
+          <h2 id="nc-promo-title"><span className="nc-wordmark"><span><b>Night <em>Chess</em></b><small>BY NIGHTSHIFT</small></span></span></h2>
+          <p>A quiet board. A real rival. Premium 3D chess, live duels and practice with Night Owl.</p>
+          <a className="pb-promo-play" href="/games/chess">Play now</a>
+          <small>Blitz and rapid. Free to play. No wallet required.</small>
         </div>
       </section>
 

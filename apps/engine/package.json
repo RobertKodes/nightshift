@@ -17,6 +17,7 @@
     "@nightshift/llm": "workspace:*",
     "@nightshift/x402": "workspace:*",
     "@openzeppelin/merkle-tree": "1.0.8",
+    "chess.js": "1.0.0-beta.8",
     "imd-mcp": "github:RobertKodes/imd-mcp#15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f",
     "viem": "^2.21.54",
     "zod": "^3.25.76"

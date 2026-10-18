@@ -298,14 +298,14 @@ export async function publicCommand(cmd: string): Promise<{ text: string; button
       "🎮 <b>NIGHTSHIFT GAME ROOM</b>", "",
       "🎱 <b>Space Pinball</b> · live, free", "PvP duels on the same table and seed, every score verified by replay. Solo board too.",
       top ? `🥇 Tonight's best: <b>${esc(top.name)}</b> · ${top.score.toLocaleString("en-US")}` : "🥇 Tonight's board is open: be the first.", "",
-      "♟ <b>NIGHT CHESS</b> · coming next", "3D real-time chess, blitz and rapid, rated.", "",
+      "♟ <b>NIGHT CHESS</b> · live, free", "3D real-time chess: blitz and rapid, rated, or practise against the bot.", "",
       "<b>Planned</b>",
       "🪙 Frog Flip · two players, one coin, randomness from Chainlink VRF",
       "✊ Rock, Paper, Frog · secret picks, then reveal",
       "🎲 Night Dice · highest roll takes the pot",
       "🏁 Moon Race · a short race of reflexes", "",
       "💎 Games with real IMD and $SHIFT stakes open once the IMD swarm's escrow contract is deployed and audited.",
-    ].join("\n"), buttons: [[{ text: "🎱 Play Space Pinball", url: `${config.publicUrl}/games/pinball` }], [{ text: "🎮 The Game Room", url: `${config.publicUrl}/games` }]] };
+    ].join("\n"), buttons: [[{ text: "🎱 Space Pinball", url: `${config.publicUrl}/games/pinball` }, { text: "♟ NIGHT CHESS", url: `${config.publicUrl}/games/chess` }], [{ text: "🎮 The Game Room", url: `${config.publicUrl}/games` }]] };
   }
   if (cmd === "frogs" || cmd === "opensea" || cmd === "nft" || cmd === "nfts") return { text: "🐸 <b>NIGHT FROGS</b>\n500 onchain frogs, the crew of the 3 AM shift. Holders share half of every NIGHTSHIFT reward, by shift hours.\n\nOnly trust this collection link.", buttons: [[{ text: "🌊 NIGHT FROGS on OpenSea", url: OPENSEA_URL }], [{ text: "🐸 Rewards and the crew", url: `${config.publicUrl}/frogs` }]] };
   if (cmd === "links" || cmd === "site") return { text: "🌙 <b>NIGHTSHIFT links</b>\nOnly trust these.", buttons: links };

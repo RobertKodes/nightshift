@@ -11,13 +11,16 @@
   "dependencies": {
     "@walletconnect/ethereum-provider": "2.17.0",
     "@walletconnect/modal": "2.7.0",
+    "chess.js": "1.0.0-beta.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "three": "0.169.0",
     "viem": "^2.21.54"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/three": "0.169.0",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^5.4.11"
   }

@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, Suspense, lazy, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { type Health, api } from "./api";
 import { CompanyPage } from "./CompanyPage";
@@ -27,6 +27,8 @@ import { LaunchpadPage } from "./LaunchpadPage";
 import "./styles.css";
 import "./landing/landing.css";
 
+const ChessPage = lazy(() => import("./ChessPage").then((x) => ({ default: x.ChessPage })));
+
 function App() {
   const path = useRoute();
   const [health, setHealth] = useState<Health | null>(null);
@@ -36,6 +38,8 @@ function App() {
   if (seg.length === 0) return <Landing />;
   // Space Pinball is a full-screen arcade with its own bar, like the landing.
   if (seg[0] === "games" && seg[1] === "pinball") return <PinballPage />;
+  // NIGHT CHESS brings three.js: its own chunk, loaded only on this page.
+  if (seg[0] === "games" && seg[1] === "chess") return <Suspense fallback={<div className="arc-boot" />}><ChessPage /></Suspense>;
   let page: React.ReactNode = <Home health={health} />;
   if (seg[0] === "co" && seg[1]) page = <CompanyPage id={seg[1]} health={health} />;
   if (seg[0] === "c" && seg[1]) page = <PublicPage slug={seg[1]} health={health} />;
