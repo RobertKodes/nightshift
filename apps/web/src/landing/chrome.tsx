@@ -141,6 +141,11 @@ function MobileMenu({ home }: { home: boolean }) {
   );
 }
 
+const APP_TITLES: Partial<Record<Active, string>> = {
+  home: "NIGHTSHIFT", companies: "Companies", company: "Your company", market: "Market", token: "$SHIFT", tokenomics: "Tokenomics", frogs: "NIGHT FROGS",
+  swap: "Trade", stake: "Earn", guide: "Guide", games: "Game Room", impact: "IMD Impact", launchpad: "Launchpad", mcp: "MCP", terms: "Terms",
+};
+
 export function SiteHeader({ active, home = false }: { active: Active; home?: boolean }) {
   const swarm = useSwarm();
   const { address, signIn, signOut, busy, error } = useSession();
@@ -149,6 +154,7 @@ export function SiteHeader({ active, home = false }: { active: Active; home?: bo
   return (
     <header className="ns-bar">
       <Link to="/" className="ns-logo"><Crescent /><span>NIGHTSHIFT</span><small>AUTONOMOUS<br />COMPANIES<br />WHILE YOU SLEEP</small></Link>
+      <b className="ns-app-title" aria-hidden="true">{APP_TITLES[active] ?? "NIGHTSHIFT"}</b>
       <nav className="ns-nav">
         <Link to="/" className={active === "home" ? "on" : ""}>Home</Link>
         <a href={hash("mission")}>Mission</a>

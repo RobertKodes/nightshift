@@ -67,9 +67,9 @@ export function Home({ health }: { health: Health | null }) {
             <label>Ask me over $<input className="field" type="number" min={0} value={limit} onChange={(e) => setLimit(Number(e.target.value))} /></label>
             {job ? <span className={budget < job ? "bad" : "dim"} style={{ fontSize: 12, gridColumn: "1 / -1" }}>One swarm job costs about ${job.toFixed(2)} now (0.5 IMD).{budget < job ? " This daily budget cannot buy any: raise it." : ""}</span> : null}
             {needSignIn ? (
-              <button className="btn primary" style={{ marginLeft: "auto" }} onClick={signIn}>Sign in to start</button>
+              <button className="btn primary app-cta" style={{ marginLeft: "auto" }} onClick={signIn}>Sign in to start</button>
             ) : (
-              <button className="btn primary" style={{ marginLeft: "auto" }} disabled={busy || idea.trim().length < 12} onClick={start}>
+              <button className="btn primary app-cta" style={{ marginLeft: "auto" }} disabled={busy || idea.trim().length < 12} onClick={start}>
                 {busy ? "Founding…" : "Start the company"}
               </button>
             )}

@@ -131,8 +131,8 @@ export function SwapBox({ launch }: { launch?: Launch } = {}) {
           <div className="swap-slip"><span>Slippage</span>{SLIPPAGE.map((s) => <button key={s} className={slip === s ? "on" : ""} onClick={() => setSlip(s)}>{s}%</button>)}</div>
           {qErr && <p className="dim" style={{ fontSize: 13, margin: 0 }}>{qErr}</p>}
           {side === "sell" && <p className="dim" style={{ fontSize: 13, margin: 0 }}>Sells pay 5% (2.5% in ${sym}, 2.5% in ETH), split by <a href="/tokenomics#rule">the one rule</a>; the quote already includes it.</p>}
-          {!me ? <button className="ns-cta sm" onClick={() => void connect()} disabled={!pool}>{pool ? "CONNECT WALLET" : "OPENS AT LAUNCH"}</button>
-            : <button className="ns-cta sm" onClick={() => void swap()} disabled={!pool || !quote || short || Boolean(step)}>{step ?? (short ? `NOT ENOUGH ${inSym}` : side === "buy" ? `BUY $${sym}` : `SELL $${sym}`)}</button>}
+          {!me ? <button className="ns-cta sm app-cta" onClick={() => void connect()} disabled={!pool}>{pool ? "CONNECT WALLET" : "OPENS AT LAUNCH"}</button>
+            : <button className="ns-cta sm app-cta" onClick={() => void swap()} disabled={!pool || !quote || short || Boolean(step)}>{step ?? (short ? `NOT ENOUGH ${inSym}` : side === "buy" ? `BUY $${sym}` : `SELL $${sym}`)}</button>}
           {err && <p className="bad" style={{ fontSize: 13, margin: 0 }}>{err}</p>}
           {done && <p className="good" style={{ fontSize: 13, margin: 0 }}>Done. <a href={`https://etherscan.io/tx/${done}`} target="_blank" rel="noreferrer">See it on Etherscan ↗</a></p>}
         </div>
