@@ -40,6 +40,7 @@ import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
 import { newFrogListings, newFrogSales, OPENSEA_SLUG } from "./frogmarket.js";
 import { type ArcadeEvent, onArcade } from "./pinball.js";
+import { followSwarm } from "./swarm.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
@@ -138,6 +139,8 @@ export class Engine {
       const medal = ["🥇", "🥈", "🥉", "4.", "5."];
       void toCommunity(`🐸⏱ <b>NIGHT SHIFT HOURS · top of the crew</b>\n\n${top.map((t, i) => `${medal[i]} <a href="https://etherscan.io/address/${t.wallet}">${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}</a> · ${t.hours.toLocaleString("en-US")} h · ${t.frogs} frog${t.frogs === 1 ? "" : "s"}`).join("\n")}\n\nHold a frog, earn hours. Genesis 2×, #1 5×. No locking, no gas.`, [[{ text: "⏱ My shift hours", url: `${config.publicUrl}/frogs#staking` }]], "frog");
     }, 60_000);
+    // Swarm orders from /setup: announced to the community when the swarm finishes them.
+    followSwarm((text, buttons) => toCommunity(text, buttons, "milestone"), (text) => Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => sendCard(id, "alert", text))));
     // Space Pinball in the community chat: records and crushing wins at once, the rest in a half-hourly report.
     const play = `${config.publicUrl}/games/pinball`;
     const pick = <T,>(l: T[]) => l[Math.floor(Math.random() * l.length)]!;

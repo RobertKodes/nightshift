@@ -53,9 +53,22 @@ Tests (Foundry): full flows for both tokens, draw, both refunds, wrong signer, e
       paths: ["apps/engine/src/pinball.ts", "apps/engine/src/pinball", "apps/web/src/pinball"],
     },
   },
+  {
+    key: "project-audit",
+    title: "Full NIGHTSHIFT security audit",
+    what: "An audit panel (4 specialists + judge) reviews the whole open-source project on GitHub: the engine and its money paths (company wallets, x402 sales, withdrawals, the keeper), sign-in and admin, the bot, the web app's wallet transactions, and the deployment. You get a ranked report with fixes.",
+    action: "job.open",
+    intake: "job.open@job-1",
+    body: {
+      objective: "Security audit of the whole NIGHTSHIFT repository (an autonomous AI company platform built on the IMD swarm, live at getnightshift.tech with real funds). Review: apps/engine (node:http API in server.ts, wallet sign-in and HMAC sessions in auth.ts, the AES-GCM key vault in vault.ts, company wallets and withdrawals, x402 USDC sales and signed download links, the admin dashboard and its token, the keeper that runs the fee splitter and IMD burns in keeper.ts, the Telegram bot and moderation, the MCP server and its API keys, Space Pinball's server replay), packages (core spending policy and shift loop, imd client and payments, x402 seller), and apps/web (every transaction the browser builds with viem: swap through Uniswap v4, staking, NFT claims, funding; the pinned contract addresses in shift.ts; the service workers; the CSP). Find anything that could move or lose funds, bypass ownership or admin checks, leak secrets or private data, enable XSS, SSRF or path traversal, or let a client cheat a game. Rank findings by severity with file and line and a concrete fix.",
+      template: "audit",
+      repoUrl: "https://github.com/RobertKodes/nightshift",
+      paths: ["apps/engine/src", "apps/web/src", "packages", "apps/web/public/sw.js", "deploy"],
+    },
+  },
 ];
 
-type Placed = { tx: string; at: number };
+type Placed = { tx: string; at: number; posted?: boolean };
 const file = () => join(config.dataDir, "swarm-orders.json");
 const load = (): Record<string, Placed> => { try { return existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : {}; } catch { return {}; } };
 
@@ -82,6 +95,43 @@ export function placeOrder(key: string, tx: string): Record<string, Placed> {
   all[key] = { tx, at: Date.now() };
   writeFileSync(file(), JSON.stringify(all, null, 2));
   return all;
+}
+
+type Job = { state?: string; launch?: { status?: string | null; id?: string | null } };
+const DONE = new Set(["done", "completed", "complete", "delivered", "succeeded", "success"]);
+
+/**
+ * Every 10 minutes: an order the swarm has finished is announced to the community once, with its
+ * public job page (and the audit report). Failures are told to the admins only.
+ */
+export function followSwarm(say: (text: string, buttons: { text: string; url: string }[][]) => Promise<unknown>, admin: (text: string) => Promise<unknown>): void {
+  const tick = async () => {
+    const all = load();
+    for (const o of ORDERS) {
+      const p = all[o.key];
+      if (!p || p.posted) continue;
+      const intake = await fetch(`https://api.imd.fun/intake/1/${p.tx}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as { entries?: { admission?: { result?: { jobId?: string } } }[] } | null;
+      const jobId = intake?.entries?.[0]?.admission?.result?.jobId;
+      if (!jobId) continue;
+      const job = await fetch(`https://api.imd.fun/jobs/${jobId}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as (Job & { job?: Job }) | null;
+      const j = job?.job ?? job;
+      const state = String(j?.state ?? "").toLowerCase();
+      const page = `https://explorer.imd.fun/jobs/${jobId}`;
+      if (DONE.has(state)) {
+        p.posted = true; writeFileSync(file(), JSON.stringify(all, null, 2));
+        const audit = o.action === "job.open";
+        await say(audit
+          ? `🛡✅ <b>AUDIT COMPLETE: ${o.title.toUpperCase()}</b>\n\nThe IMD swarm's audit panel (4 specialists and a judge) has finished. The full report is public: every finding, ranked, with the fixes.\n\nWe will go through it and ship the fixes in the open.`
+          : `🔐✅ <b>DONE BY THE SWARM: ${o.title.toUpperCase()}</b>\n\nBuilt, tested, audited by 4 specialists and a judge, and handed to deployment on Ethereum by IMD. The contract address is posted here as soon as it is checked on chain.`,
+          [[{ text: audit ? "📄 Read the report" : "🔎 See the job", url: audit ? `https://api.imd.fun/jobs/${jobId}/report.md` : page }], [{ text: "🐝 The job on IMD", url: page }]]);
+      } else if (["failed", "cancelled", "canceled", "rejected"].includes(state)) {
+        p.posted = true; writeFileSync(file(), JSON.stringify(all, null, 2));
+        await admin(`⚠️ Swarm order "${o.title}" ended as ${state}: ${page}`);
+      }
+    }
+  };
+  setInterval(() => void tick().catch((e) => console.error("swarm follow", e)), 10 * 60_000);
+  void tick().catch(() => {});
 }
 
 /** Every order with its state at IMD, read from the Intake follower. */
