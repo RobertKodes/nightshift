@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { erc20Abi, parseAbiItem } from "viem";
+import { erc20Abi, parseAbi, parseAbiItem } from "viem";
 import { eth } from "./chain.js";
 import { config } from "./config.js";
 import { FIRST_BUYER, SHIFT_LAUNCH } from "./shift-launch.js";
@@ -66,6 +66,20 @@ export type LaunchState = {
   /** The SHIFT/ETH v4 pool key, found from the PoolManager once deployed: the site's swap uses it. */
   pool?: import("./v4.js").PoolKey;
 };
+/** IMD lists only what it deployed itself; the hook's own helpers are read from the hook. */
+export async function completeContracts(): Promise<LaunchState | null> {
+  const l = launchState();
+  const c = l?.contracts;
+  if (!l || !c?.hook || (c.splitter && c.rewards)) return l;
+  const abi = parseAbi(["function feeSplitter() view returns (address)", "function rewards() view returns (address)"]);
+  const [s, r] = await Promise.all([
+    eth.readContract({ address: c.hook as `0x${string}`, abi, functionName: "feeSplitter" }).catch(() => null),
+    eth.readContract({ address: c.hook as `0x${string}`, abi, functionName: "rewards" }).catch(() => null),
+  ]);
+  const contracts = { ...c, ...(s ? { splitter: s.toLowerCase() } : {}), ...(r ? { rewards: r.toLowerCase() } : {}) };
+  patchLaunch({ contracts });
+  return { ...l, contracts };
+}
 export function patchLaunch(p: Partial<LaunchState>) { const l = launchState(); if (l) saveToken({ launch: { ...l, ...p } }); }
 export function launchState(): LaunchState | null {
   try { return existsSync(file()) ? (JSON.parse(readFileSync(file(), "utf8")).launch ?? null) : null; } catch { return null; }

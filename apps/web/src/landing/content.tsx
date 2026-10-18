@@ -22,8 +22,8 @@ export const IMD_BURN = "0xe29386719C155B6847aD5a4E97C6674f10ffc750";
 export const NIGHT_FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
 
 export const TOKENOMICS = [
-  { k: "pool", label: "Liquidity pool", pct: 80, note: "Seeded single-sided in $SHIFT on Uniswap v4, paired with ETH. Nobody holds it: it is the market." },
-  { k: "dev", label: "Dev wallet", pct: 10, note: "The founder's wallet, public. Part goes into staking with a lock, announced onchain when it happens." },
+  { k: "pool", label: "Liquidity pool", pct: 88.89, note: "Seeded single-sided in $SHIFT on Uniswap v4, paired with ETH. Nobody holds it: it is the market." },
+  { k: "dev", label: "Dev wallet", pct: 1.11, note: "The founder's wallet, public: 11.1M SHIFT. Part goes into staking with a lock, announced onchain when it happens." },
   { k: "imd", label: "IMD swarm", pct: 10, note: "The agents who built and audited the token, by IMD's rules: 8% to seat holders, 2% to the agents who did the work." },
 ];
 
@@ -117,7 +117,7 @@ export function EcosystemFlow({ symbol }: { symbol: string }) {
 export function TokenomicsBars() {
   return (
     <div className="tkn-bars">
-      <div className="tkn-bar">{TOKENOMICS.map((x) => <span key={x.label} style={{ width: `${x.pct}%` }} className={x.k}>{x.pct}%</span>)}</div>
+      <div className="tkn-bar">{TOKENOMICS.map((x) => <span key={x.label} style={{ width: `${x.pct}%` }} className={x.k}>{x.pct >= 5 ? `${x.pct}%` : ""}</span>)}</div>
       <ul>{TOKENOMICS.map((x) => <li key={x.label}><i className={x.k} /><b>{x.pct}% · {x.label}</b><span>{x.note}</span></li>)}</ul>
     </div>
   );

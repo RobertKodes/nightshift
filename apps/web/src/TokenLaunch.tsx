@@ -97,7 +97,7 @@ export function TokenLaunch({ call, token }: { call: (token: string, path: strin
       <div className="ls-what">
         <b>What launches</b>
         <ul>
-          <li><b>1,000,000,000 $SHIFT</b> on Ethereum, paired with ETH: 80% in the pool, <b>10% to your dev wallet</b> {short(DEV)}, 10% to the IMD swarm.</li>
+          <li><b>1,000,000,000 $SHIFT</b> on Ethereum, paired with ETH: 88.89% in the pool, <b>1.11% (11.1M) to your dev wallet</b> {short(DEV)}, 10% to the IMD swarm.</li>
           <li><b>Only {short(FIRST)} can buy first.</b> Right after its buy, trading opens to everyone, for good.</li>
           <li><b>Every sell pays 5%</b>: 40% rewards (stakers and NIGHT FROGS), 20% you, 20% treasury {short(FIRST)}, 20% burned (SHIFT, and IMD at IMD's BurnExecutor).</li>
           <li>You own every contract. IMD only deploys it. Costs 0.5 IMD{usd ? ` (${inUsd(0.5, usd)})` : ""} plus gas.</li>

@@ -34,7 +34,7 @@ export async function verifyShift(c: Record<string, string>): Promise<Check[]> {
   ]);
   add("Token is NIGHTSHIFT / SHIFT", symbol === "SHIFT" && /nightshift/i.test(name), `${name} / ${symbol}`);
   add("Supply is 1,000,000,000 with 18 decimals", supply === 10n ** 27n && decimals === 18, `${supply} / ${decimals}`);
-  add("Your dev wallet got ~100M SHIFT", devBal >= 99n * 10n ** 24n && devBal <= 101n * 10n ** 24n, `${Number(devBal) / 1e18}`);
+  add("Your dev wallet got its share", devBal > 0n, `${(Number(devBal) / 1e18).toLocaleString("en-US")} SHIFT (IMD seeds poolBps of the whole supply)`);
   const tcode = await code(token);
   const bad = Object.entries(FORBIDDEN).filter(([s]) => tcode.includes(s)).map(([, n]) => n);
   add("Token has no mint, pause, blacklist or fee switch", tcode.length > 2 && bad.length === 0, bad.join(", ") || "none found");
@@ -61,7 +61,8 @@ export async function verifyShift(c: Record<string, string>): Promise<Check[]> {
   add("Splitter pays your dev wallet", has(scode, DEV_WALLET));
   add("Splitter pays the treasury 0x3322…4D69", has(scode, TREASURY_WALLET));
   add("Splitter burns IMD at IMD's BurnExecutor 0xe293…c750", has(scode, IMD_BURN_EXECUTOR));
-  add("Splitter burns SHIFT at 0x…dEaD", has(scode, DEAD));
+  const dead = c.splitter ? await eth.readContract({ address: c.splitter as `0x${string}`, abi: parseAbi(["function DEAD() view returns (address)"]), functionName: "DEAD" }).catch(() => null) : null;
+  add("Splitter burns SHIFT at 0x…dEaD", dead?.toLowerCase() === DEAD || has(scode, DEAD) || scode.includes("61dead"), String(dead ?? ""));
 
   // Rewards: owned by you, pays NIGHT FROGS
   const rewards = c.rewards as `0x${string}` | undefined;

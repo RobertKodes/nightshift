@@ -43,7 +43,7 @@ import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { type Anim, burnTotals, buyCard, chats, marketSnapshot, raid, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
 import { type Button, type CommandContext, type GroupMessage, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands, tgCall } from "./social.js";
-import { IMD_TOKEN, followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
+import { IMD_TOKEN, completeContracts, followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { writeSettings } from "./settings.js";
 
@@ -314,6 +314,7 @@ export class Engine {
       if (l && l.stage !== before.stage) void this.alert(`🪙 ${l.symbol} launch: ${l.stage}`, `launch-${l.stage}`);
       // Deployed: check it against what we asked for, privately, before anyone can buy.
       if (l?.done && l.contracts) {
+        Object.assign(l, (await completeContracts()) ?? {});
         const pool = l.contracts.hook ? await findPool(eth, l.contracts.token as `0x${string}`, l.contracts.hook as `0x${string}`).catch(() => null) : null;
         if (pool) patchLaunch({ pool });
         const checks = await verifyShift(l.contracts).catch((e) => [{ label: "Verification could not run", ok: false, detail: (e as Error).message }]);
@@ -330,6 +331,7 @@ export class Engine {
       return;
     }
     // Deployed and checked: wait for the treasury's first buy.
+    if (before.contracts?.hook && (!before.contracts.splitter || !before.contracts.rewards)) await completeContracts();
     if (!before.open) {
       const l = await followOpen();
       if (!l?.open || !l.token) return;
@@ -355,6 +357,19 @@ export class Engine {
 Trading is open to everyone on Ethereum, paired with ETH.
 Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT and IMD).`, [[{ text: `🌙 Buy on NIGHTSHIFT`, url: `${config.publicUrl}/swap` }, { text: "🦄 Uniswap", url: buyUrl(before.token) }], [{ text: "📊 Chart", url: `https://dexscreener.com/ethereum/${before.token}` }, { text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch");
     void this.adminCard(`🚀 <b>$${esc(before.symbol)} is public.</b> The main group was told.`, [[{ text: "🪙 Token page", url: `${config.publicUrl}/token` }]], "launch-live");
+  }
+
+  /** After a re-check before the first buy: the admins and the launch chat get the fresh result. */
+  async relaunchCard(l: { symbol: string; token?: string; launchId?: string; contracts?: Record<string, string> }, checks: { label: string; ok: boolean; detail: string }[]): Promise<void> {
+    const ok = checks.length > 0 && checks.every((c) => c.ok);
+    const card = this.launchReadyCard(l, checks);
+    this.#lastAlert.delete("launch-verified");
+    await this.adminCard(`🔁 <b>Re-checked.</b>\n${card.html}`, card.buttons, "launch-verified", ok ? "launch" : "alert");
+    const t = l.token ?? "";
+    await this.launchDm(ok
+      ? `🔁 <b>Re-checked: everything matches.</b> $${esc(l.symbol)} is deployed and safe to open. Waiting for the treasury buy.\n\nCA: <code>${esc(t)}</code>\n\nTrading is closed to everyone except the treasury <b>0x3322…4D69</b>.`
+      : `🔁 <b>Re-checked: still not matching. Do NOT buy.</b>\n\nCA: <code>${esc(t)}</code>`,
+      ok ? [[{ text: "🌙 First buy on NIGHTSHIFT (treasury wallet)", url: `${config.publicUrl}/swap` }], [{ text: "📊 Etherscan", url: `https://etherscan.io/token/${t}` }]] : [[{ text: "📊 Etherscan", url: `https://etherscan.io/token/${t}` }]]);
   }
 
   lastKeeper: KeeperRun | null = null;
@@ -418,7 +433,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       token: live
         ? { symbol: "$SHIFT", status: "LIVE on Ethereum", contractAddress: config.token.address, buy: `${u}/swap (or Uniswap, paired with ETH)`, chart: `https://dexscreener.com/ethereum/${config.token.address}`, priceUsd: m?.priceUsd ?? null, marketCapUsd: m?.mcap ?? null, liquidityUsd: m?.liquidity ?? null }
         : { symbol: "$SHIFT", status: l ? "being launched through IMD right now, not trading yet" : "not launched yet, launch is coming soon (no date announced here)", network: "Ethereum mainnet, paired with ETH on Uniswap v4", howToBuyAfterLaunch: `with ETH on Ethereum, at ${u}/swap or on Uniswap, once the official CA is posted`, contractAddress: "not published yet: the only CA will be posted on getnightshift.tech, this Telegram and X after launch; anything earlier is fake" },
-      supply: "1,000,000,000 fixed, 18 decimals. No mint, no pause, no blacklist. 80% in the Uniswap v4 pool, 10% dev wallet (public), 10% to the IMD swarm. No presale, no private round, no unlock schedule.",
+      supply: "1,000,000,000 fixed, 18 decimals. No mint, no pause, no blacklist. 88.89% in the Uniswap v4 pool, 1.11% (11.1M) dev wallet (public), 10% to the IMD swarm. No presale, no private round, no unlock schedule.",
       launch: "Launched through IMD's swarm: built, tested twice and audited by 4 specialist agents and a judge, deployed by IMD on Ethereum. Not audited by an outside firm. The pool opened at a 10 ETH market cap. Launch was gated: only the treasury could make the first buy, against sniper bots.",
       fees: "Buys pay only the 1.25% pool fee (1% to the launch payer, the dev wallet; 0.25% to the IMD network). Sells also pay 5% (2.5% in SHIFT, 2.5% in ETH), which can only go down, never up.",
       oneRule: "Every NIGHTSHIFT fee is split the same way, hard-coded: 40% rewards (half to SHIFT stakers, half to NIGHT FROGS holders), 20% dev wallet, 20% treasury, 20% burned. SHIFT is burned to 0x...dEaD; every day at 03:00 UTC the NIGHTSHIFT keeper buys IMD with the ETH part and burns it at IMD's BurnExecutor 0xe29386719c155b6847ad5a4e97c6674f10ffc750. The keeper only pays gas and cannot move funds anywhere else.",
