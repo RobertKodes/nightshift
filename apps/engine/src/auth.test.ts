@@ -1,7 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { describe, expect, it } from "vitest";
-import { Auth, type ApiKey } from "./auth.js";
+import { Auth, type ApiKey, MAX_KEYS_PER_OWNER } from "./auth.js";
 
 const req = (token: string) => ({ headers: { authorization: `Bearer ${token}` } }) as unknown as IncomingMessage;
 
@@ -38,5 +38,22 @@ describe("wallet sign-in and API keys", () => {
     expect(auth.owner(req(key))).toBe("0xabc0000000000000000000000000000000000001");
     expect(auth.revokeKey("0xabc0000000000000000000000000000000000001", record.id)).toBe(true);
     expect(auth.owner(req(key))).toBeNull();
+  });
+
+  it("caps the keys one wallet holds, and finds keys loaded from the state file", () => {
+    const keys: ApiKey[] = [];
+    const auth = new Auth("s3cret", keys, () => {});
+    const me = "0xabc0000000000000000000000000000000000002";
+    const made = Array.from({ length: MAX_KEYS_PER_OWNER }, () => auth.createKey(me, "agent"));
+    expect(() => auth.createKey(me, "one more")).toThrow(/revoke one first/);
+    expect(auth.createKey("0xabc0000000000000000000000000000000000003", "other").key).toMatch(/^nsk_/); // per wallet, not in all
+    expect(auth.revokeKey(me, made[0]!.record.id)).toBe(true);
+    expect(auth.createKey(me, "again").key).toMatch(/^nsk_/);
+    // after a restart the same records are indexed again, also when they are loaded after the start
+    const loaded: ApiKey[] = [];
+    const reloaded = new Auth("s3cret", loaded, () => {});
+    loaded.push(...keys);
+    expect(reloaded.owner(req(made[1]!.key))).toBe(me);
+    expect(reloaded.owner(req(made[0]!.key))).toBeNull();
   });
 });

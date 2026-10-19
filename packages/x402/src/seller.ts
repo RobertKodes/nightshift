@@ -4,6 +4,7 @@ import {
   type LocalAccount,
   type PublicClient,
   type WalletClient,
+  encodeFunctionData,
   parseSignature,
   verifyTypedData,
 } from "viem";
@@ -55,6 +56,8 @@ export interface PaymentPayload {
 export function requirement(chainId: number, payTo: Address, amountUsdc: bigint, maxTimeoutSeconds = 300): Requirement {
   const usdc = USDC[chainId];
   if (!usdc) throw new Error(`no USDC configured for chain ${chainId}`);
+  // a zero or negative price would be met by an authorization for nothing
+  if (amountUsdc <= 0n) throw new Error("price must be more than zero");
   return {
     scheme: "exact",
     network: `eip155:${chainId}`,
@@ -109,7 +112,7 @@ export async function verifyPayment(p: PaymentPayload, req: Requirement, nowSec 
   return valid ? { ok: true, payer: a.from, value: BigInt(a.value) } : { ok: false, reason: "invalid_signature" };
 }
 
-const USDC_ABI = [
+export const USDC_ABI = [
   {
     type: "function",
     name: "transferWithAuthorization",
@@ -127,7 +130,30 @@ const USDC_ABI = [
     ],
     outputs: [],
   },
+  {
+    type: "function",
+    name: "authorizationState",
+    stateMutability: "view",
+    inputs: [{ name: "authorizer", type: "address" }, { name: "nonce", type: "bytes32" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "event",
+    name: "AuthorizationUsed",
+    inputs: [{ name: "authorizer", type: "address", indexed: true }, { name: "nonce", type: "bytes32", indexed: true }],
+  },
 ] as const;
+
+/** The calldata that settles a payment: transferWithAuthorization with the buyer's signature. */
+export function settlementData(p: PaymentPayload): Hex {
+  const a = p.payload.authorization;
+  const { v, r, s, yParity } = parseSignature(p.payload.signature);
+  return encodeFunctionData({
+    abi: USDC_ABI,
+    functionName: "transferWithAuthorization",
+    args: [a.from, a.to, BigInt(a.value), BigInt(a.validAfter), BigInt(a.validBefore), a.nonce, Number(v ?? BigInt(yParity + 27)), r, s],
+  });
+}
 
 /** Submits the authorization from the seller's own wallet and waits for it to land. */
 export async function settlePayment(p: PaymentPayload, wallet: WalletClient, publicClient: PublicClient, account: LocalAccount): Promise<Hex> {

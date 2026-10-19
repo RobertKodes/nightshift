@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { SHIFT, SHIFT_POOL } from "./shift";
-import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, formatEther, http, maxUint160, maxUint256, parseEther } from "viem";
+import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, formatEther, http, maxUint256, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
 import { type PoolKey, V4, permit2Abi, quoteArgs, quoterAbi, routerAbi, swapCall } from "./v4";
@@ -84,17 +84,19 @@ export function SwapBox({ launch }: { launch?: Launch } = {}) {
       setStep("Switch to Ethereum…");
       await w.switchChain({ id: 1 });
       if (side === "sell") {
-        // Selling goes through Permit2: one approval for the token, one for the router, both once.
+        // Selling goes through Permit2: one approval for the token (once), then for the router exactly
+        // this amount for 30 minutes, so no standing permission to pull SHIFT is left behind.
         const toPermit2 = await rpc.readContract({ address: token, abi: erc20Abi, functionName: "allowance", args: [a, V4.permit2] });
         if (toPermit2 < amt) {
           setStep(`Approve ${sym} for Uniswap's Permit2 (once)…`);
           const h = await w.writeContract({ account: a, chain: mainnet, address: token, abi: erc20Abi, functionName: "approve", args: [V4.permit2, maxUint256] });
           await rpc.waitForTransactionReceipt({ hash: h });
         }
-        const [p2] = await rpc.readContract({ address: V4.permit2, abi: permit2Abi, functionName: "allowance", args: [a, token, V4.router] });
-        if (p2 < amt) {
-          setStep("Let the Uniswap router use it (once)…");
-          const h = await w.writeContract({ account: a, chain: mainnet, address: V4.permit2, abi: permit2Abi, functionName: "approve", args: [token, V4.router, maxUint160, 2 ** 48 - 1] });
+        const [p2, until] = await rpc.readContract({ address: V4.permit2, abi: permit2Abi, functionName: "allowance", args: [a, token, V4.router] });
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (p2 < amt || until <= nowSec + 60) {
+          setStep("Let the Uniswap router use this amount…");
+          const h = await w.writeContract({ account: a, chain: mainnet, address: V4.permit2, abi: permit2Abi, functionName: "approve", args: [token, V4.router, amt, nowSec + 30 * 60] });
           await rpc.waitForTransactionReceipt({ hash: h });
         }
       }

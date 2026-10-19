@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { writeAtomic } from "./atomic.js";
 import { join } from "node:path";
 import { config } from "./config.js";
 import { NIGHT_FROGS } from "./order-night-frogs.js";
@@ -26,7 +27,7 @@ export type Order = {
 };
 const file = () => join(config.dataDir, "orders.json");
 export function orders(): Order[] { try { return existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : []; } catch { return []; } }
-const save = (o: Order[]) => writeFileSync(file(), JSON.stringify(o, null, 2));
+const save = (o: Order[]) => writeAtomic(file(), JSON.stringify(o, null, 2));
 
 export async function checkOrder(c: Catalog): Promise<unknown> {
   const r = await fetch("https://api.imd.fun/requests/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: c.action, input: c.body }), signal: AbortSignal.timeout(180_000) });

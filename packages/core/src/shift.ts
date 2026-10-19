@@ -25,6 +25,7 @@ export interface ShiftDeps {
 }
 
 const ACTIVE = new Set(["checking", "ordering", "building"]);
+const DAY = 24 * 60 * 60 * 1000;
 const now = (d: ShiftDeps) => (d.now ?? Date.now)();
 
 export function note(c: Company, d: ShiftDeps, kind: JournalEntry["kind"], text: string): void {
@@ -96,7 +97,7 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
     updatedAt: now(d),
   };
   c.tasks.push(t);
-  if (c.tasks.length > 300) c.tasks.splice(0, c.tasks.length - 300);
+  trimTasks(c, d);
 
   if (!order) {
     doInHouse(c, t, decision, d);
@@ -114,7 +115,8 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
 
   if (decision.kind === "build_product" && decision.product) {
     const p: Product = {
-      id: randomUUID().slice(0, 8),
+      // the full UUID: a product's private file and its download links are keyed on it
+      id: randomUUID(),
       name: decision.product.name,
       kind: decision.product.kind,
       pitch: decision.product.pitch,
@@ -152,7 +154,7 @@ async function buy(c: Company, t: Task, d: ShiftDeps, approved: boolean): Promis
   if (!gate.allow) {
     if (gate.wait === "approval") {
       touch(c, t, d, { status: "awaiting_approval", activity: gate.reason });
-      note(c, d, "note", `Waiting for your approval: ${t.title} (${gate.reason}).`);
+      note(c, d, "note", `Waiting for your approval: ${t.title} (${gate.reason}; ${fromImd(caps.price)} IMD at $${d.imdUsd().toFixed(2)} per IMD).`);
     } else {
       touch(c, t, d, { status: "failed", error: gate.reason, activity: null });
       dropProduct(c, t);
@@ -201,6 +203,18 @@ async function buy(c: Company, t: Task, d: ShiftDeps, approved: boolean): Promis
   }
 }
 
+/**
+ * The task list keeps its newest 300, but never evicts spend from the last 24 hours or work still
+ * waiting: the daily budget is summed from it, so free moves cannot push paid ones out and reopen it.
+ */
+function trimTasks(c: Company, d: ShiftDeps): void {
+  for (let i = 0; c.tasks.length > 300 && i < c.tasks.length - 1;) {
+    const x = c.tasks[i]!;
+    if ((x.costImd > 0n && now(d) - x.updatedAt < DAY) || x.status === "awaiting_approval") i++;
+    else c.tasks.splice(i, 1);
+  }
+}
+
 function dropProduct(c: Company, t: Task): void {
   if (!t.productId) return;
   const i = c.products.findIndex((p) => p.id === t.productId && p.status === "building");
@@ -230,8 +244,12 @@ export async function advance(c: Company, d: ShiftDeps): Promise<void> {
       if (!t.imd.jobId) {
         const o = await d.imd.order(t.imd.orderId);
         if (o.state === "refused" || o.state === "payment_failed" || o.state === "expired") {
-          touch(c, t, d, { status: "failed", error: `order ${o.state}${o.problems ? `: ${o.problems.join("; ")}` : ""}`, activity: null });
+          // No settlement transaction: IMD never took the IMD, so the budget and the books get it back.
+          const charged = Boolean(o.txHash ?? t.imd.txHash);
+          if (!charged) await reverseOrder(c, t, d);
+          touch(c, t, d, { status: "failed", ...(charged ? {} : { costImd: 0n }), error: `order ${o.state}${o.problems ? `: ${o.problems.join("; ")}` : ""}`, activity: null });
           dropProduct(c, t);
+          if (!charged) note(c, d, "note", `"${t.title}": IMD reports the order ${o.state.replace(/_/g, " ")} with no payment, so nothing was spent. Its budget is back.`);
           continue;
         }
         if (!o.jobId) { touch(c, t, d, { activity: o.state.replace(/_/g, " ") }); continue; }
@@ -255,6 +273,7 @@ export async function advance(c: Company, d: ShiftDeps): Promise<void> {
     } catch (err) {
       // An order IMD never received was never charged.
       if (!t.imd.jobId && (err as { status?: number }).status === 404) {
+        await reverseOrder(c, t, d);
         touch(c, t, d, { status: "failed", costImd: 0n, error: "IMD has no such order; nothing was charged", activity: null });
         dropProduct(c, t);
         continue;
@@ -262,6 +281,14 @@ export async function advance(c: Company, d: ShiftDeps): Promise<void> {
       touch(c, t, d, { activity: `retrying: ${(err as Error).message.slice(0, 80)}` });
     }
   }
+}
+
+/** Takes back the IMD posting of an order IMD never charged for. */
+async function reverseOrder(c: Company, t: Task, d: ShiftDeps): Promise<void> {
+  const id = t.imd?.orderId;
+  const paid = id ? await d.ledger.store.get(`imd:${id}`) : undefined;
+  if (!paid) return;
+  await d.ledger.post({ id: `imd-reversal:${id}`, at: new Date(now(d)), kind: "imd_reversal", memo: `${t.title} (never charged)`, postings: paid.postings.map((p) => ({ ...p, amount: -p.amount })) });
 }
 
 function deliver(c: Company, t: Task, r: { siteUrl: string | null; files: Record<string, string>; repoUrl: string | null }, d: ShiftDeps): void {
@@ -296,6 +323,10 @@ function doInHouse(c: Company, t: Task, decision: Decision, d: ShiftDeps): void 
     if (p?.priceByOwner) {
       touch(c, t, d, { status: "done", result: { note: "price set by the owner; kept" } });
       note(c, d, "note", `${p.name}: the owner set its price, so it stays at $${(Number(p.priceUsdc) / 1e6).toFixed(2)}.`);
+    } else if (p && !(Number(decision.priceUsd) >= 0.5 && Number(decision.priceUsd) <= 500)) {
+      // the same bounds as the owner's own price: never a giveaway, never a negative amount
+      touch(c, t, d, { status: "failed", error: `price ${String(decision.priceUsd)} is outside $0.50 to $500` });
+      note(c, d, "warning", `${p.name}: refused to reprice to $${String(decision.priceUsd)}; prices stay between $0.50 and $500.`);
     } else if (p && decision.priceUsd) {
       const before = Number(p.priceUsdc) / 1e6;
       p.priceUsdc = usdc(decision.priceUsd);

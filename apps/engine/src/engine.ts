@@ -9,6 +9,7 @@ import {
   type ShiftDeps,
   advance,
   approve,
+  budgetPrice,
   found,
   fromUsdc,
   note,
@@ -19,11 +20,13 @@ import {
 import { HttpImdPlane, type ImdAction, type ImdPlane, SimImdPlane } from "@nightshift/imd";
 import { Ledger } from "@nightshift/ledger";
 import { ImdReads } from "imd-mcp/lib";
-import { erc20Abi } from "viem";
-import { USDC } from "@nightshift/x402";
+import { encodeFunctionData, erc20Abi, parseAbiItem } from "viem";
+import { type PaymentPayload, USDC, USDC_ABI, settlementData } from "@nightshift/x402";
 import { Auth } from "./auth.js";
 import { LlmClient } from "@nightshift/llm";
-import { balances, ensurePermit2, eth, ethWallet, sales, salesWallet } from "./chain.js";
+import { balances, broadcastSales, ensurePermit2, eth, ethWallet, refusedByNode, sales, salesTxState, salesWallet, signSales } from "./chain.js";
+import { FEE_PARTS, Payouts } from "./payout.js";
+import { Checkout, type Settlement } from "./checkout.js";
 import { V4, findPool } from "./v4.js";
 import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
 import { forgive, judge, muteMinutes, strike, track } from "./moderation.js";
@@ -69,9 +72,28 @@ export class Engine {
   readonly #busy = new Set<string>();
   readonly auth: Auth;
   readonly reads = new ImdReads("https://api.imd.fun");
+  /** Withdrawals, leg by leg, and x402 settlements: both saved before broadcast and booked once they land. */
+  readonly payouts: Payouts;
+  readonly checkout: Checkout;
 
   constructor() {
     this.auth = new Auth(this.vault.material, this.store.apiKeys, () => this.store.markDirty());
+    const usdcAddr = () => USDC[config.salesChainId]!.address;
+    const from = (id: string) => this.vault.account(id).address;
+    this.payouts = new Payouts(this.ledger, this.store.payouts, () => this.store.save(), config.mode === "live" ? {
+      sign: (id, to, amount) => signSales(this.vault.account(id), usdcAddr(), encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [to, amount] })),
+      broadcast: broadcastSales,
+      state: (id, hash, nonce, ms) => salesTxState(from(id), hash, nonce, ms),
+      refused: refusedByNode,
+    } : null);
+    this.checkout = new Checkout(this.store.settlements, () => this.store.save(), {
+      used: (a, n) => sales.readContract({ address: usdcAddr(), abi: USDC_ABI, functionName: "authorizationState", args: [a, n] }),
+      find: (a, n, to, value) => findSettlement(a, n, to, value),
+      sign: (id, p: PaymentPayload) => signSales(this.vault.account(id), p.accepted.asset, settlementData(p)),
+      broadcast: broadcastSales,
+      state: (id, hash, nonce, ms) => salesTxState(from(id), hash, nonce, ms),
+      refused: refusedByNode,
+    }, (x) => this.#bookSale(x));
     this.sim = new SimDeliveries(config.publicUrl, this.llm, config.model, (input) => {
       const id = typeof input === "object" && input ? this.#inputOwner.get(input) : undefined;
       return id ? this.store.companies.get(id) : undefined;
@@ -85,7 +107,23 @@ export class Engine {
     this.#recover();
     if (config.mode === "live") await this.#retireSim();
     setInterval(() => void this.#tick().catch((e) => console.error("tick", e)), 4000);
-    setInterval(() => void this.store.flush(), 3000);
+    setInterval(() => void this.store.flush().catch(() => {}), 3000);
+    // Transfers and settlements whose answer never came: booked when they land, after a restart too.
+    if (config.mode === "live") {
+      const follow = async () => {
+        await this.checkout.resolve().catch((e) => console.error("settlements", e));
+        for (const id of new Set([...this.store.payouts.values()].map((l) => l.companyId))) await this.payouts.resolve(id).catch((e) => console.error("payouts", e));
+        // a platform fee left owed by a failed fee transfer is paid without waiting for the next withdrawal
+        for (const c of this.store.companies.values()) {
+          if (c.sim || this.#withdrawing.has(c.id) || !(await this.payouts.feesOwed(c.id)) || this.payouts.pendingOf(c.id).length) continue;
+          this.#withdrawing.add(c.id);
+          const r = await this.payouts.payFees(c.id, { dev: config.platformDev, treasury: config.platformTreasury }).catch((e: Error) => ({ txs: [], error: e.message })).finally(() => this.#withdrawing.delete(c.id));
+          if (r.error) console.error("fees", c.id, r.error);
+        }
+      };
+      void follow();
+      setInterval(() => void follow(), 60_000);
+    }
     void this.alert(`Engine started in ${config.mode.toUpperCase()} mode · ${config.publicUrl}`, "start");
     if (config.telegramToken && config.moderation) void this.#guardRights();
     if (config.telegramToken) {
@@ -599,22 +637,26 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     return sent.some(Boolean);
   }
 
-  /** The IMD price from its deepest Ethereum pool on DexScreener, else GeckoTerminal; keeps the last good value on failure. */
+  /** The IMD price from its deepest Ethereum pool on DexScreener and from GeckoTerminal, checked against each other (budgetPrice). */
   async #refreshImdPrice(): Promise<void> {
-    const keep = (price: number) => { if (price > 0.01 && price < 10_000) { config.imdUsd = price; config.imdUsdAt = Date.now(); return true; } return false; };
-    try {
+    const dex = async () => {
       const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/0xD34a99Bc0f67aE1bbd63C660e6d0b0dd03E263B7", { signal: AbortSignal.timeout(8000) });
       const d = (await r.json()) as { pairs?: { chainId: string; baseToken: { address: string }; priceUsd?: string; liquidity?: { usd?: number } }[] };
       const best = (d.pairs ?? [])
         .filter((p) => p.chainId === "ethereum" && p.baseToken.address.toLowerCase() === "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7")
         .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
-      if (keep(Number(best?.priceUsd))) return;
-    } catch { /* try the next source */ }
-    try {
+      return Number(best?.priceUsd);
+    };
+    const gecko = async () => {
       const r = await fetch("https://api.geckoterminal.com/api/v2/simple/networks/eth/token_price/0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7", { signal: AbortSignal.timeout(8000) });
       const d = (await r.json()) as { data?: { attributes?: { token_prices?: Record<string, string> } } };
-      keep(Number(d.data?.attributes?.token_prices?.["0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7"]));
-    } catch { /* keep the last price */ }
+      return Number(d.data?.attributes?.token_prices?.["0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7"]);
+    };
+    const readings = await Promise.all([dex().catch(() => NaN), gecko().catch(() => NaN)]);
+    const price = budgetPrice(readings, config.imdUsdAt ? config.imdUsd : null);
+    if (price === null) { if (readings.some((x) => x > 0)) console.warn("IMD price kept: the sources disagree or jumped", readings); return; }
+    config.imdUsd = price;
+    config.imdUsdAt = Date.now();
   }
 
   on(fn: (e: EngineEvent) => void): () => void {
@@ -832,8 +874,18 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
 
   /** A sale, real (settled on chain) or simulated. Revenue lands in the company's own wallet. */
   async recordSale(c: Company, productId: string, amount: bigint, payer: string, tx: string | null, sim: boolean): Promise<void> {
+    // once per settlement: a retry or the background follow-up of the same payment books nothing new
+    if (tx && (await this.ledger.store.get(`sale:${tx}`))) return;
     const p = c.products.find((x) => x.id === productId);
-    if (!p) return;
+    // money that arrived is booked even for a product removed since
+    if (!p) {
+      await this.ledger.post({ id: `sale:${tx ?? randomUUID()}`, at: new Date(), kind: sim ? "sale_sim" : "sale", memo: productId, ref: tx ? { chainTx: tx } : undefined, postings: [
+        { account: `co:${c.id}:usdc`, asset: "USDC", amount },
+        { account: sim ? "ext:buyers-sim" : "ext:buyers", asset: "USDC", amount: -amount },
+      ] });
+      if (!sim) await this.store.save();
+      return;
+    }
     const pub = !sim && payer.toLowerCase() !== c.owner && fromUsdc(amount) >= Math.max(1, config.buyMinUsd);
     if (pub) void toCommunity(`💰 <b>A NIGHTSHIFT company just made a sale</b>
 
@@ -850,6 +902,8 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
       { account: `co:${c.id}:usdc`, asset: "USDC", amount },
       { account: sim ? "ext:buyers-sim" : "ext:buyers", asset: "USDC", amount: -amount },
     ] });
+    // on disk before the buyer gets the link: a crash now cannot lose a settled sale
+    if (!sim) await this.store.save();
     note(c, this.#deps(c), "sale", `${sim ? "[sim] " : ""}Sold ${p.name} for $${fromUsdc(amount).toFixed(2)} to ${payer.slice(0, 6)}…${payer.slice(-4)}.`);
     this.#emit(c.id, "sale", { productId, amount: amount.toString(), sim });
   }
@@ -883,7 +937,10 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     };
     // Base: USDC that is not revenue (sent by hand), then the gas ETH (an L1 data fee rides on top there).
     const sw = salesWallet(account);
-    const leftUsdc = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [c.wallet] });
+    // the platform fee still owed from a withdrawal stays in the wallet for its own transfer
+    const inWallet = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [c.wallet] });
+    const owed = await this.payouts.feesOwed(c.id);
+    const leftUsdc = inWallet > owed ? inWallet - owed : 0n;
     if (leftUsdc > 0n) {
       const hash = await sw.writeContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "transfer", args: [to, leftUsdc] });
       await sales.waitForTransactionReceipt({ hash });
@@ -914,7 +971,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
    * rewards and burn parts (60%) until those contracts take USDC. In sim mode only the books move.
    */
   readonly #withdrawing = new Set<string>();
-  /** One withdrawal at a time per company; the fee leaves first; perks are read fresh from the chain. */
+  /** One withdrawal at a time per company; the owner's share leaves first; perks are read fresh from the chain. */
   async withdraw(c: Company, to: `0x${string}`, amount?: bigint): Promise<{ sent: bigint; fee: bigint; txs: string[] }> {
     if (this.#withdrawing.has(c.id)) throw new Error("A withdrawal for this company is already running.");
     this.#withdrawing.add(c.id);
@@ -922,45 +979,32 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
   }
   async #withdraw(c: Company, to: `0x${string}`, amount?: bigint): Promise<{ sent: bigint; fee: bigint; txs: string[] }> {
     if (c.sim && config.mode === "live") throw new Error("A simulated company has no real revenue to withdraw.");
+    const dest = { dev: config.platformDev, treasury: config.platformTreasury };
+    if (config.mode === "live" && (await this.payouts.resolve(c.id))) throw new Error("An earlier transfer from this wallet is still waiting for Base. Try again in a few minutes.");
     const available = await this.withdrawable(c);
     const total = amount ?? available;
     if (total <= 0n || total > available) throw new Error(`Nothing to withdraw, or more than the $${fromUsdc(available).toFixed(2)} available.`);
     const holder = (await holderStatus(c.owner, true)).holds || (await frogCount(c.owner, true)) > 0;
-    const fee = config.platformTreasury && !holder ? (total * BigInt(config.platformFeeBps)) / 10_000n : 0n;
-    const sent = total - fee;
-    const devFee = (fee * 2000n) / 10_000n;
-    const parts = ([[config.platformDev, devFee, "ext:platform:dev"], [config.platformTreasury as `0x${string}`, fee - devFee, "ext:platform:treasury"]] as const).filter(([, v]) => v > 0n);
-    const txs: string[] = [];
+    const feeBps = config.platformTreasury && !holder ? config.platformFeeBps : 0;
     if (config.mode === "live") {
-      const account = this.vault.account(c.id);
-      const wallet = salesWallet(account);
-      const usdcAddr = USDC[config.salesChainId]!.address;
-      const send = async (dest: `0x${string}`, v: bigint) => {
-        const hash = await wallet.writeContract({ address: usdcAddr, abi: erc20Abi, functionName: "transfer", args: [dest, v] });
-        const r = await sales.waitForTransactionReceipt({ hash });
-        if (r.status !== "success") throw new Error(`transfer reverted: ${hash}`);
-        txs.push(hash);
-      };
-      try {
-        for (const [dest, v] of parts) await send(dest, v);
-        await send(to, sent);
-      } catch (e) {
-        // fee parts that already left: book them so the ledger matches the wallet, then report the failure
-        const left = parts.slice(0, txs.length);
-        if (left.length) await this.ledger.post({ id: `withdraw-fee:${txs[0]}`, at: new Date(), kind: "withdrawal", memo: "platform fee (owner transfer failed)", ref: { chainTx: txs[0]! }, postings: [
-          { account: `co:${c.id}:usdc`, asset: "USDC", amount: -left.reduce((a, [, v]) => a + v, 0n) }, ...left.map(([, v, acc]) => ({ account: acc, asset: "USDC" as const, amount: v }))] });
-        throw e;
-      }
+      // gas for every transfer of this withdrawal (owner, dev, treasury) before the first one leaves
+      const legs = 1 + (feeBps > 0 || (await this.payouts.feesOwed(c.id)) > 0n ? FEE_PARTS.length : 0);
+      const gas = await sales.getBalance({ address: c.wallet });
+      if (gas < BigInt(legs) * 20_000_000_000_000n) throw new Error(`The company wallet needs a little ETH on Base for ${legs} transfers (has ${Number(gas) / 1e18}). Nothing was sent.`);
     }
-    const id = txs[txs.length - 1] ?? randomUUID();
-    await this.ledger.post({ id: `withdraw:${id}`, at: new Date(), kind: "withdrawal", memo: `to ${to}`, ref: txs[0] ? { chainTx: txs[0] } : undefined, postings: [
-      { account: `co:${c.id}:usdc`, asset: "USDC", amount: -total },
-      { account: `ext:owner:${to.toLowerCase()}`, asset: "USDC", amount: sent },
-      ...parts.map(([, v, acc]) => ({ account: acc, asset: "USDC" as const, amount: v })),
-    ] });
-    note(c, this.#deps(c), "note", `Withdrew $${fromUsdc(sent).toFixed(2)} to ${to.slice(0, 6)}…${to.slice(-4)}${fee > 0n ? ` (platform fee $${fromUsdc(fee).toFixed(2)})` : ""}${config.mode === "sim" ? " [sim]" : ""}.`);
+    // The owner's share first; a fee left owed by this or an earlier withdrawal is paid after it, never charged twice.
+    const r = await this.payouts.withdraw(c.id, to, total, feeBps, dest);
+    if (r.feeError) void this.alert(`${c.name}: a platform fee transfer failed and stays owed (retried on the next withdrawal): ${r.feeError}`, `fee-${c.id}`);
+    note(c, this.#deps(c), "note", `Withdrew $${fromUsdc(r.sent).toFixed(2)} to ${to.slice(0, 6)}…${to.slice(-4)}${r.fee > 0n ? ` (platform fee $${fromUsdc(r.fee).toFixed(2)})` : ""}${config.mode === "sim" ? " [sim]" : ""}.`);
     this.#emit(c.id, "company", null);
-    return { sent, fee, txs };
+    return { sent: r.sent, fee: r.fee, txs: config.mode === "live" ? [r.tx, ...r.feeTxs] : [] };
+  }
+
+  /** A settled x402 payment, booked once. */
+  async #bookSale(s: Settlement & { hash: `0x${string}` }): Promise<void> {
+    const c = this.store.companies.get(s.companyId);
+    if (!c) throw new Error(`no company ${s.companyId} for sale ${s.hash}`);
+    await this.recordSale(c, s.productId, s.value, s.payer, s.hash, false);
   }
 
   readonly #lastAlert = new Map<string, number>();
@@ -1069,7 +1113,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
   market(q = ""): { company: string; slug: string; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; featured: boolean; buyUrl: string; page: string }[] {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return [...this.store.companies.values()]
-      .flatMap((c) => c.products.filter((p) => p.status === "live" && this.files.has(p)).map((p) => ({
+      .flatMap((c) => c.products.filter((p) => p.status === "live" && this.files.has(c, p)).map((p) => ({
         company: c.name, slug: c.slug, id: p.id, name: p.name, kind: p.kind, pitch: p.pitch,
         priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, featured: holdsCached(c.owner) || frogCached(c.owner),
         buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, page: `${config.publicUrl}/c/${c.slug}#${p.id}`,
@@ -1103,7 +1147,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       }
       if (c.owner) { void holderStatus(c.owner); void frogCount(c.owner); }
       for (const p of c.products) {
-        if (p.status !== "live" || this.files.has(p)) continue;
+        if (p.status !== "live" || this.files.has(c, p)) continue;
         const t = c.tasks.find((x) => x.id === p.taskId);
         void this.files.ensure(c, p, async () => {
           if (!t?.result) return null;
@@ -1124,4 +1168,23 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       }
     }
   }
+}
+
+const AUTH_USED = parseAbiItem("event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)");
+const TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
+/** The settlement of an authorization used without our record of it: the last day of blocks, checked for the transfer itself. */
+async function findSettlement(from: `0x${string}`, nonce: `0x${string}`, to: `0x${string}`, value: bigint): Promise<`0x${string}` | null> {
+  const usdc = USDC[config.salesChainId]!.address;
+  const head = await sales.getBlockNumber();
+  for (let hi = head, n = 0; n < 9 && hi > 0n; n++, hi -= 5_000n) {
+    const lo = hi > 4_999n ? hi - 4_999n : 0n;
+    const logs = await sales.getLogs({ address: usdc, event: AUTH_USED, args: { authorizer: from, nonce }, fromBlock: lo, toBlock: hi });
+    for (const l of logs) {
+      const r = await sales.getTransactionReceipt({ hash: l.transactionHash! });
+      if (r.status !== "success") continue;
+      const paid = (await sales.getLogs({ address: usdc, event: TRANSFER, args: { from, to }, blockHash: r.blockHash })).some((t) => t.transactionHash === r.transactionHash && t.args.value === value);
+      if (paid) return r.transactionHash;
+    }
+  }
+  return null;
 }

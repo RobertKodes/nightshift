@@ -6,13 +6,14 @@ import type { Input } from "./pinball/engine";
 import { useSession } from "./session";
 import { InstallButton, useGameApp } from "./pinball/install";
 import { AppTabs } from "./landing/app";
+import { type Seat, StakeLobby, StakeResult, useEscrow } from "./stakes";
 import "./pinball/arcade.css";
 
 type Currency = "FREE" | "IMD" | "SHIFT";
 type Mode = "PRACTICE" | Currency;
 /** A player as the server shows them; the rival's verified score, stats and finish only once the match is settled. Faces come in the first frame. */
 type PlayerView = { key: string; name: string; avatar?: string | null; live: number; x: number; y: number; attacks: Shot[]; score: number | null; solo: number | null; stats: Record<string, number> | null; you: boolean; finished: boolean; error?: string };
-type MatchView = { id: string; seed: number | null; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; void: string | null; winner: string | null; winnerIsYou: boolean; players: PlayerView[] };
+type MatchView = { id: string; escrow: string | null; seed: number | null; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; void: string | null; winner: string | null; winnerIsYou: boolean; players: PlayerView[] };
 /** What is on the table (it stays mounted under the result) and what is shown over it. A board run runs on the server's clock. */
 type Play = { kind: "practice"; seed: number; run: number; id?: string; startAt?: number; offset?: number } | { kind: "duel"; match: MatchView; player: string };
 type Over = { score: number; stats?: Record<string, number>; rank?: number | null };
@@ -92,8 +93,7 @@ export function PinballPage() {
   const [over, setOver] = useState<Over | null>(null);
   const [name, setName] = useState(() => { try { return localStorage.getItem("pb-name") ?? ""; } catch { return ""; } });
   const [mode, setMode] = useState<Mode>("FREE");
-  const [stakes, setStakes] = useState<{ live: boolean; options: Record<Currency, number[]> } | null>(null);
-  const [stake, setStake] = useState(0);
+  const escrow = useEscrow();
   const [err, setErr] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<Leaderboard>({ board: [], best: [] });
   const [boardTab, setBoardTab] = useState<"board" | "best">("board");
@@ -111,7 +111,6 @@ export function PinballPage() {
   useGameApp();
   useEffect(() => { document.title = "Space Pinball · NIGHTSHIFT"; }, []);
   useEffect(() => {
-    void api<{ live: boolean; options: Record<Currency, number[]> }>("stakes").then(setStakes).catch(() => {});
     void api<Leaderboard>("board").then(setLeaderboard).catch(() => {});
   }, [play === null]);
   useEffect(() => () => es.current?.close(), []);
@@ -144,7 +143,7 @@ export function PinballPage() {
     }
     try {
       clock.current = 0;
-      const r = await api<{ match: MatchView; player: string }>("queue", { name: me, currency: mode, stake, avatar: frog ? `frog:${frog.id}` : "/games/pinball/frog-0.webp" });
+      const r = await api<{ match: MatchView; player: string }>("queue", { name: me, currency: "FREE", stake: 0, avatar: frog ? `frog:${frog.id}` : "/games/pinball/frog-0.webp" });
       r.match = withFaces(r.match);
       sync(r.match);
       if (r.match.startedAt) setPlay({ kind: "duel", match: r.match, player: r.player }); else setWaiting(r);
@@ -163,11 +162,13 @@ export function PinballPage() {
   // the inputs go to the server while the game runs: a duel's to its match, a board run's to its run
   const onLive = play?.kind === "duel" ? (s: Live) => stream(`match/${play.match.id}/progress`, { player: play.player, ...s }, setErr)
     : play?.kind === "practice" && play.id ? (s: Live) => stream(`solo/${play.id}/progress`, s, setErr) : undefined;
+  /** Both stakes are in: take the seat the lobby gave this wallet, as any duel. */
+  const seat = (s: Seat) => { setErr(null); setOver(null); clock.current = 0; follow(s.id, s.player); };
   const toLobby = () => { es.current?.close(); setPlay(null); setOver(null); setWaiting(null); };
 
   const opp = play?.kind === "duel" ? play.match.players.find((p) => !p.you) : null;
   const rival: Rival | null = opp ? { name: opp.name, avatar: opp.avatar, live: opp.score ?? opp.live, x: opp.x, y: opp.y, attacks: opp.attacks } : null;
-  const locked = (mode === "IMD" || mode === "SHIFT") && !stakes?.live;
+  const staked = mode === "IMD" || mode === "SHIFT";
 
   const result = over && (() => {
     const m = play?.kind === "duel" ? play.match : null;
@@ -191,7 +192,8 @@ export function PinballPage() {
             <div><b>{stats.bumpers ?? 0}</b><span>planet hits</span></div><div><b>{stats.holes ?? 0}</b><span>black holes</span></div>
             <div><b>{stats.sent ?? 0}</b><span>attacks sent</span></div><div><b>{stats.received ?? 0}</b><span>attacks taken</span></div>
           </div>}
-          <div className="arc-actions"><button type="button" className="arc-btn" onClick={() => void start()}><Icon name={m ? "swords" : "play"} size={17} />{m ? "REMATCH" : "PLAY AGAIN"}</button><button type="button" className="arc-btn ghost" onClick={toLobby}>LOBBY</button></div>
+          {m?.escrow && <StakeResult matchId={m.escrow} address={address ?? null} />}
+          <div className="arc-actions">{m?.escrow ? <button type="button" className="arc-btn" onClick={toLobby}><Icon name="swords" size={17} />NEW CHALLENGE</button> : <button type="button" className="arc-btn" onClick={() => void start()}><Icon name={m ? "swords" : "play"} size={17} />{m ? "REMATCH" : "PLAY AGAIN"}</button>}<button type="button" className="arc-btn ghost" onClick={toLobby}>LOBBY</button></div>
           {err && <p className="arc-err" role="alert">{err}</p>}
         </div>
       </div>
@@ -201,8 +203,8 @@ export function PinballPage() {
   const search = waiting && <div className="arc-overlay arc-search" role="region" aria-label="Finding a rival">
     <div className="arc-result">
       <div className="arc-radar"><Icon name="radar" size={32} /></div>
-      <span className="arc-kicker" role="status">Matchmaking · searching</span>
-      <h2>Finding<br />your rival</h2>
+      <span className="arc-kicker" role="status">{waiting.match.escrow ? "Staked duel · both stakes in" : "Matchmaking · searching"}</span>
+      <h2>{waiting.match.escrow ? <>Waiting for<br />your rival</> : <>Finding<br />your rival</>}</h2>
       <div className="arc-vs">
         <div><div className="arc-face"><img src={avatar ?? "/games/pinball/frog-0.webp"} alt="" /></div><span>{me}</span></div>
         <i>VS</i>
@@ -212,8 +214,10 @@ export function PinballPage() {
         <div><b>1 / 2</b><span>players</span></div><div><b>{waiting.match.currency === "FREE" ? "Free" : waiting.match.currency === "SHIFT" ? "$SHIFT" : "IMD"}</b><span>duel</span></div>
         <div><b>{waiting.match.stake.toLocaleString()}</b><span>stake</span></div><div><b>3 s</b><span>attack delay</span></div>
       </div>
-      <p>Invite a friend to this page. The next player to find a rival joins your table.</p>
-      <button type="button" autoFocus className="arc-btn ghost" onClick={() => { es.current?.close(); void api(`match/${waiting.match.id}/leave`, { player: waiting.player }).catch(() => {}); setWaiting(null); }}>CANCEL SEARCH</button>
+      {waiting.match.escrow ? <p>The duel starts as soon as your rival connects, or within 5 minutes. A player who never plays scores 0. Keep this page open.</p> : <>
+        <p>Invite a friend to this page. The next player to find a rival joins your table.</p>
+        <button type="button" autoFocus className="arc-btn ghost" onClick={() => { es.current?.close(); void api(`match/${waiting.match.id}/leave`, { player: waiting.player }).catch(() => {}); setWaiting(null); }}>CANCEL SEARCH</button>
+      </>}
     </div>
   </div>;
 
@@ -258,21 +262,16 @@ export function PinballPage() {
           <div className="arc-section-head"><span className="arc-kicker">01 / CHOOSE YOUR MODE</span><span>Solo or head-to-head</span></div>
           <div className="arc-modes" aria-label="Game mode">
             {MODES.map((x) => {
-              const lk = (x.k === "IMD" || x.k === "SHIFT") && !stakes?.live;
-              return <button type="button" key={x.k} aria-pressed={mode === x.k} className={`arc-mode ${mode === x.k ? "on" : ""} ${lk ? "locked" : ""}`} onClick={() => { setMode(x.k); setStake(x.k === "IMD" || x.k === "SHIFT" ? stakes?.options[x.k]?.[0] ?? 0 : 0); }}>
-                <i className="arc-mode-icon"><Icon name={x.icon} size={23} /></i><b>{x.title}</b><span>{lk ? "Opens with the escrow" : x.sub}</span>
+              const lk = (x.k === "IMD" || x.k === "SHIFT") && !escrow?.live;
+              return <button type="button" key={x.k} aria-pressed={mode === x.k} className={`arc-mode ${mode === x.k ? "on" : ""} ${lk ? "locked" : ""}`} onClick={() => setMode(x.k)}>
+                <i className="arc-mode-icon"><Icon name={x.icon} size={23} /></i><b>{x.title}</b><span>{lk ? "Opens with the signer" : x.sub}</span>
                 <i className="arc-mode-mark">{lk ? <Icon name="lock" size={13} /> : mode === x.k ? <Icon name="check" size={13} /> : null}</i>
               </button>;
             })}
           </div>
 
-          {(mode === "IMD" || mode === "SHIFT") && <div className="arc-stake">
-            <span className="arc-kicker">STAKE / {mode === "SHIFT" ? "$SHIFT" : "IMD"}</span>
-            <div className="arc-chips" aria-label="Stake amount">{(stakes?.options[mode] ?? []).map((v) => <button type="button" key={v} aria-pressed={stake === v} className={stake === v ? "on" : ""} onClick={() => setStake(v)}>{v >= 1e6 ? `${v / 1e6}M` : v >= 1e3 ? `${v / 1e3}K` : v}</button>)}</div>
-            <p>{locked ? "Stake tiers open with the escrow. Both players stake equally; the winner receives 95% of the pot." : <>Each player stakes {stake.toLocaleString()} {mode === "SHIFT" ? "$SHIFT" : "IMD"}. Winner receives <b>{(stake * 1.9).toLocaleString()}</b>. The 5% fee supports stakers, NIGHT FROGS holders and SHIFT + IMD burns.</>}</p>
-          </div>}
-
-          <button type="button" className="arc-btn play" disabled={locked || !!waiting} onClick={() => void start()}><Icon name={locked ? "lock" : waiting ? "radar" : mode === "PRACTICE" ? "play" : "swords"} size={20} /><span>{waiting ? "FINDING YOUR RIVAL" : mode === "PRACTICE" ? "PLAY PRACTICE" : locked ? "OPENS WITH THE ESCROW" : "FIND A RIVAL"}</span>{!locked && !waiting && <Icon name="arrow" size={18} />}</button>
+          {staked ? <StakeLobby game="pinball" token={mode} name={me} address={address ?? null} signIn={signIn} onSeat={seat} theme="arc" />
+            : <button type="button" className="arc-btn play" disabled={!!waiting} onClick={() => void start()}><Icon name={waiting ? "radar" : mode === "PRACTICE" ? "play" : "swords"} size={20} /><span>{waiting ? "FINDING YOUR RIVAL" : mode === "PRACTICE" ? "PLAY PRACTICE" : "FIND A RIVAL"}</span>{!waiting && <Icon name="arrow" size={18} />}</button>}
           {err && <p className="arc-err" role="alert">{err}</p>}
 
           <div className="arc-section-head"><span className="arc-kicker">02 / HOW IT PLAYS</span><span>Same table. Same seed.</span></div>

@@ -3,8 +3,9 @@ import { type IncomingMessage, type ServerResponse, createServer } from "node:ht
 import { extname, join, normalize, resolve, sep } from "node:path";
 import type { Company } from "@nightshift/core";
 import { fromImd, fromUsdc } from "@nightshift/core";
-import { type PaymentPayload, USDC, challenge, decodeHeader, encodeHeader, requirement, settlePayment, verifyPayment } from "@nightshift/x402";
-import { balances, eth, sales, salesWallet } from "./chain.js";
+import { type PaymentPayload, USDC, challenge, decodeHeader, encodeHeader, requirement, verifyPayment } from "@nightshift/x402";
+import { balances, eth, sales } from "./chain.js";
+import { PendingError } from "./checkout.js";
 import { findPool } from "./v4.js";
 import { liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
 import { keeperAccount } from "./keeper.js";
@@ -13,13 +14,15 @@ import { claimsOf, epochs, markPosted } from "./frogpot.js";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { handleMcp } from "./mcp.js";
-import { isAdmin, saveSetup, setupState } from "./admin.js";
+import { ANNOUNCED, checkSetup, isAdmin, pendingChanges, setupState } from "./admin.js";
+import { writeSettings } from "./settings.js";
 import { buybacks, checkLaunch, completeContracts, holderStatus, launchBody, launchState, patchLaunch, recordBuyback, recordLaunch, saveVerification, tokenOn, verification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { DEV_WALLET, FIRST_BUYER } from "./shift-launch.js";
 import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
 import { burnTotals, marketSnapshot } from "./community.js";
 import { chessRoutes } from "./chess-routes.js";
+import { gamesRoutes } from "./games-routes.js";
 import { prices } from "./prices.js";
 import { checkOrder as checkSwarmOrder, orders as swarmOrders, placeOrder as placeSwarmOrder } from "./swarm.js";
 import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
@@ -256,11 +259,14 @@ export function serve(engine: Engine) {
         if (p === "/api/admin/setup" && req.method === "GET") return json(res, 200, await setupState(engine));
         if (p === "/api/admin/setup" && req.method === "POST") {
           const patch = await body(req);
-          const err = saveSetup(patch);
-          // Settings that move money or trust are announced, so a leaked admin token cannot act quietly.
-          const touched = ["NIGHTSHIFT_MODE", "PLATFORM_TREASURY", "PLATFORM_FEE_BPS", "ETH_RPC", "SALES_RPC", "SALES_CHAIN_ID", "TOKEN_ADDRESS", "NFT_ADDRESS", "REQUIRE_AUTH"].filter((k) => k in patch);
-          if (!err && touched.length) void engine.alert(`⚠️ /setup changed: ${touched.join(", ")}. If this was not you, rotate the admin token now.`, `setup-${Date.now()}`);
-          return err ? json(res, 400, { error: err }) : json(res, 200, await setupState(engine));
+          const err = checkSetup(patch);
+          if (err) return json(res, 400, { error: err });
+          // Settings that move money or trust are announced, so a leaked admin token cannot act quietly:
+          // before they are saved, to the alert chat that runs now (a new chat only applies after a restart).
+          const touched = ANNOUNCED.filter((k) => k in patch);
+          if (touched.length) await engine.alert(`⚠️ /setup changed: ${touched.join(", ")}. If this was not you, rotate the admin token now.`, `setup-${Date.now()}`);
+          writeSettings(patch);
+          return json(res, 200, await setupState(engine));
         }
         if (p === "/api/admin/buyback" && req.method === "POST") {
           const b = await body(req);
@@ -350,8 +356,10 @@ export function serve(engine: Engine) {
         }
         if (p === "/api/admin/restart" && req.method === "POST") {
           if (process.env.NIGHTSHIFT_SUPERVISED !== "1") return json(res, 409, { error: "Not running under a supervisor; restart the process yourself to apply." });
+          const applies = pendingChanges().filter((k) => ANNOUNCED.includes(k));
+          await engine.alert(`⚠️ /setup restart${applies.length ? `, applying: ${applies.join(", ")}` : ""}. If this was not you, rotate the admin token now.`, `restart-${Date.now()}`);
           json(res, 200, { ok: true });
-          setTimeout(() => { void engine.store.flush().finally(() => process.exit(0)); }, 400);
+          setTimeout(() => { void engine.store.flush().catch(() => {}).finally(() => process.exit(0)); }, 400);
           return;
         }
         return json(res, 404, { error: "not found" });
@@ -369,6 +377,7 @@ export function serve(engine: Engine) {
         return json(res, 200, { board: stakingBoard(20), me: /^0x[0-9a-fA-F]{40}$/.test(w) ? stakingOf(w) : null });
       }
       if (p.startsWith("/api/chess/") && await chessRoutes(req, res, p, { json, body, limited, owner: engine.auth.owner(req), url })) return;
+      if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner: engine.auth.owner(req), url, vault: engine.vault })) return;
       if (p.startsWith("/api/pinball/")) {
         const parts = p.split("/").filter(Boolean); // api pinball …
         if (p === "/api/pinball/stakes") return json(res, 200, pinStakes());
@@ -496,7 +505,11 @@ export function serve(engine: Engine) {
         // Keys are managed from a signed-in wallet only: a leaked key cannot mint more keys for itself.
         if ((req.headers.authorization ?? "").includes("nsk_")) return json(res, 403, { error: "Manage API keys from the dashboard, signed in with your wallet." });
         if (req.method === "GET") return json(res, 200, engine.auth.listKeys(owner));
-        if (req.method === "POST") { const b = await body(req); return json(res, 201, engine.auth.createKey(owner, String(b.label ?? "MCP"))); }
+        if (req.method === "POST") {
+          if (limited(req, "keys", 10, 3600_000) || limited(req, `keys-owner:${owner}`, 10, 3600_000)) return json(res, 429, { error: "Too many new keys; try again in an hour." });
+          const b = await body(req);
+          try { return json(res, 201, engine.auth.createKey(owner, String(b.label ?? "MCP"))); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
         if (req.method === "DELETE" && seg[2]) return json(res, engine.auth.revokeKey(owner, seg[2]) ? 200 : 404, { ok: true });
       }
 
@@ -564,7 +577,7 @@ export function serve(engine: Engine) {
         }
         if (action === "products" && seg[4] && seg[5] === "download") {
           const product = c.products.find((x) => x.id === seg[4]);
-          if (!product || !engine.files.has(product)) return json(res, 409, { error: "Not packaged yet." });
+          if (!product || !engine.files.has(c, product)) return json(res, 409, { error: "Not packaged yet." });
           res.writeHead(302, { Location: engine.files.link(c, product, `owner-${Date.now()}`, 1) });
           return res.end();
         }
@@ -618,7 +631,7 @@ export function serve(engine: Engine) {
         const product = c?.products.find((x) => x.id === seg[2] && x.status === "live");
         if (!c || !product) return json(res, 404, { error: "no such product" });
         // Never take money for something that cannot be handed over yet.
-        if (!engine.files.has(product)) return json(res, 409, { error: "This product is being packaged. Try again in a few minutes." });
+        if (!engine.files.has(c, product)) return json(res, 409, { error: "This product is being packaged. Try again in a few minutes." });
         const req402 = requirement(config.salesChainId, c.wallet, product.priceUsdc);
         const resource = { url: `${config.publicUrl}/buy/${c.slug}/${product.id}`, description: `${product.name}: ${product.pitch}`, mimeType: "application/json" };
         const sig = req.headers["payment-signature"] ?? req.headers["x-payment"];
@@ -631,26 +644,35 @@ export function serve(engine: Engine) {
           return json(res, 402, ch, { "PAYMENT-REQUIRED": encodeHeader(ch) });
         }
         const payment = decodeHeader<PaymentPayload>(sig);
-        const v = await verifyPayment(payment, req402);
+        const auth = payment?.payload?.authorization;
+        // A retry of a payment already settled is checked as of its first try, at the price paid then.
+        const prior = auth?.from && auth.nonce ? engine.checkout.recordOf(auth.from, auth.nonce) : undefined;
+        const reqPay = prior ? requirement(config.salesChainId, c.wallet, prior.value) : req402;
+        const v = await verifyPayment(payment, reqPay, prior ? Math.floor(prior.at / 1000) : undefined);
         if (!v.ok) return json(res, 402, challenge(req402, resource, v.reason), { "PAYMENT-REQUIRED": encodeHeader(challenge(req402, resource, v.reason)) });
         if (config.mode === "sim") return json(res, 400, { error: "sim mode does not settle real payments" });
         // Settling costs the company gas: limit it per caller and per payer, check the payer can
         // actually pay, and settle one payment at a time per company.
         if (limited(req, "settle", 6, 60_000) || limited(req, `settle-payer:${v.payer.toLowerCase()}`, 3, 60_000)) return json(res, 429, { error: "Too many payments at once; try again in a minute." });
-        const value = BigInt(payment.payload.authorization.value);
-        const bal = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [v.payer as `0x${string}`] }).catch(() => 0n);
-        if (bal < value) return json(res, 402, challenge(req402, resource, "insufficient USDC balance"), { "PAYMENT-REQUIRED": encodeHeader(challenge(req402, resource, "insufficient USDC balance")) });
-        // The company pays the settlement gas on Base: without it, refuse before anything is sent.
-        if ((await sales.getBalance({ address: c.wallet }).catch(() => 0n)) < 20_000_000_000_000n) {
-          void engine.alert(`${c.name} cannot take a payment: its wallet has no ETH on Base for the settlement gas.`, `nogas-${c.id}`);
-          return json(res, 503, { error: "This company cannot take payments right now. Nothing was charged; try again later." });
+        if (await engine.checkout.fresh(auth.from, auth.nonce)) {
+          const value = BigInt(auth.value);
+          const bal = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [v.payer as `0x${string}`] }).catch(() => 0n);
+          if (bal < value) return json(res, 402, challenge(req402, resource, "insufficient USDC balance"), { "PAYMENT-REQUIRED": encodeHeader(challenge(req402, resource, "insufficient USDC balance")) });
+          // The company pays the settlement gas on Base: without it, refuse before anything is sent.
+          if ((await sales.getBalance({ address: c.wallet }).catch(() => 0n)) < 20_000_000_000_000n) {
+            void engine.alert(`${c.name} cannot take a payment: its wallet has no ETH on Base for the settlement gas.`, `nogas-${c.id}`);
+            return json(res, 503, { error: "This company cannot take payments right now. Nothing was charged; try again later." });
+          }
         }
-        const account = engine.vault.account(c.id);
+        // Saved before it is broadcast and booked once it lands; the same header again never pays twice.
         const prev = settling.get(c.id) ?? Promise.resolve();
-        const run = prev.catch(() => {}).then(() => settlePayment(payment, salesWallet(account) as never, sales as never, account));
+        const run = prev.catch(() => {}).then(() => engine.checkout.settle(c.id, c.wallet, product.id, payment));
         settling.set(c.id, run.catch(() => {}));
-        const tx = await run;
-        await engine.recordSale(c, product.id, BigInt(payment.payload.authorization.value), v.payer, tx, false);
+        let tx: `0x${string}`;
+        try { tx = await run; } catch (e) {
+          if (e instanceof PendingError) return json(res, 202, { ok: false, pending: true, error: e.message });
+          throw e;
+        }
         return json(res, 200, { ok: true, tx, deliverable: engine.files.link(c, product, tx) }, { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network: req402.network, payer: v.payer }) });
       }
 
@@ -659,8 +681,8 @@ export function serve(engine: Engine) {
         const c = engine.get(seg[1]);
         const product = c?.products.find((x) => x.id === seg[2]);
         const ref = url.searchParams.get("ref") ?? "";
-        if (!c || !product || !engine.files.check(product.id, seg[3], seg[4], ref)) return json(res, 403, { error: "This download link is invalid or has expired." });
-        const text = engine.files.read(product);
+        if (!c || !product || !engine.files.check(c, product.id, seg[3], seg[4], ref)) return json(res, 403, { error: "This download link is invalid or has expired." });
+        const text = engine.files.read(c, product);
         if (text === null) return json(res, 404, { error: "not packaged yet" });
         res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8", "Content-Disposition": `attachment; filename="${c.slug}-${product.id.replace(/[^\w-]/g, "")}.md"`, "Cache-Control": "private, no-store", "Content-Security-Policy": SANDBOX_CSP });
         return res.end(text);

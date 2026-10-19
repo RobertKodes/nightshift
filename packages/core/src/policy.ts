@@ -66,3 +66,19 @@ export function budgetFreesAt(c: Company, costUsd: number, imdUsd: number, now =
   // Still too big even with nothing spent: it needs a larger budget, so look again in a day.
   return spent + costUsd <= c.policy.dailyBudgetUsd + 1e-9 ? now : now + DAY;
 }
+
+/**
+ * The IMD price budgets are valued at, from market readings (USD per IMD). Two sources that agree
+ * within 10% set it; one source alone may move it at most 30% from the last kept live price, and
+ * never sets the first one. Anything else keeps the last price (null): a wrong feed cannot make
+ * IMD look cheap enough to spend far past the owner's USD limits.
+ */
+export function budgetPrice(readings: number[], last: number | null): number | null {
+  const ok = readings.filter((x) => Number.isFinite(x) && x > 0.01 && x < 10_000);
+  if (ok.length >= 2) {
+    const [a, b] = [Math.min(...ok), Math.max(...ok)];
+    if ((b - a) / a <= 0.1) return (a + b) / 2;
+  }
+  if (last === null) return null;
+  return ok.find((x) => Math.abs(x - last) / last <= 0.3) ?? null;
+}

@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { writeAtomic } from "./atomic.js";
 import { join } from "node:path";
 import { erc20Abi, parseAbi, parseAbiItem } from "viem";
 import { eth } from "./chain.js";
@@ -88,7 +89,7 @@ export function launchState(): LaunchState | null {
 }
 function saveToken(patch: Record<string, unknown>) {
   const cur = existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : {};
-  writeFileSync(file(), JSON.stringify({ ...cur, ...patch }, null, 2));
+  writeAtomic(file(), JSON.stringify({ ...cur, ...patch }, null, 2));
 }
 /** The last check of the deployed contracts against our spec (shift-verify.ts). */
 export type Verification = { at: number; checks: { label: string; ok: boolean; detail: string }[] };

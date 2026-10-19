@@ -13,8 +13,9 @@ import { ATTACK_DELAY, type Attack, type Input, type Landing, MAX_TICKS, Table, 
  * while they play and the server plays both tables with them on its own copies, with the very
  * engine the browser runs: only the attacks those copies send reach the rival, and each player says
  * where each one landed on their table (checked against what was really sent). The result is the
- * replay of each table with its inputs and those landings. Stakes in IMD or $SHIFT are held by an
- * escrow contract (not live yet): until it is, every duel is free.
+ * replay of each table with its inputs and those landings. A duel found through the queue is free;
+ * a duel for IMD or $SHIFT is made by the challenge lobby (games-routes.ts) once both stakes are in
+ * GameEscrow, for exactly those two wallets (createStaked), and its verdict goes to the escrow.
  */
 export type Currency = "FREE" | "IMD" | "SHIFT";
 /** An attack a table really sent (found by the server's copy) and the tick it is due on the rival's. */
@@ -39,14 +40,15 @@ export type Match = {
   /** Changes when a player joins or leaves, so each stream sends the faces again. */
   roster: number;
   players: Player[]; winner: string | null; draw: boolean; done: boolean; void: string | null;
+  /** A staked duel: the escrow match id, when it starts without a missing player, and who hears the verdict. */
+  escrow?: string; showBy?: number; onResult?: (r: { draw: boolean; winner: string | null }) => void;
 };
 
 const matches = new Map<string, Match>();
 const waiting = new Map<string, string>(); // queue key → match id
 const listeners = new Map<string, Set<() => void>>();
-const STAKES: Record<Currency, number[]> = { FREE: [0], IMD: [1, 5, 10, 25], SHIFT: [100_000, 500_000, 1_000_000, 5_000_000] };
-/** Escrow not deployed yet: stakes are accepted only as FREE until it is. */
-export const STAKES_LIVE = false;
+/** A staked duel starts once both players are connected, or this long after it was made, whoever is there. */
+export const STAKED_SHOW_MS = 5 * 60_000;
 
 /** Ticks per second. */
 const TPS = 240;
@@ -167,7 +169,7 @@ const rivalOf = (m: Match, p: Player) => m.players.find((x) => x !== p);
  * asked (a stream's first frame, or after the players changed).
  */
 const view = (m: Match, me?: string, faces = true) => ({
-  id: m.id, seed: m.go && !m.void && m.startedAt && Date.now() >= m.startedAt - SEED_LEAD ? m.seed : null, currency: m.currency, stake: m.stake, startedAt: m.startedAt, now: Date.now(),
+  id: m.id, escrow: m.escrow ?? null, seed: m.go && !m.void && m.startedAt && Date.now() >= m.startedAt - SEED_LEAD ? m.seed : null, currency: m.currency, stake: m.stake, startedAt: m.startedAt, now: Date.now(),
   done: m.done, draw: m.draw, void: m.void, winner: m.players.find((p) => p.id === m.winner)?.name ?? null, winnerIsYou: !!me && m.winner === me,
   players: m.players.map((p) => {
     const mine = p.id === me, open = mine || m.done;
@@ -187,6 +189,7 @@ export function listen(id: string, me: string | undefined, f: (v: View) => void)
   if (!m) return () => {};
   const p = m.players.find((x) => x.id === me);
   if (p) p.watching++;
+  if (m.escrow && !m.startedAt && !m.done && m.players.every((x) => x.watching > 0)) countdown(m);
   let roster = -1;
   const send = () => { const cur = matches.get(id); if (!cur) return; const faces = cur.roster !== roster; roster = cur.roster; f(view(cur, me, faces)); };
   const s = listeners.get(id) ?? new Set();
@@ -200,11 +203,34 @@ const fresh = (id: string, name: string, wallet: string | null, avatar: string |
   id, key: randomBytes(4).toString("hex"), name, wallet, avatar, watching: 0, x: 558, y: 860, s: stream(seed), sent: [], landed: new Map(), broken: null, inputs: null, solo: null, score: null,
 });
 
-/** Join the queue for a currency and stake; pairs with whoever waits there, else opens a match. */
+/** The VS screen and a countdown, the same for both. */
+function countdown(m: Match): void {
+  m.startedAt = Date.now() + 6_000;
+  setTimeout(() => ready(m), 6_000 - SEED_LEAD).unref?.();
+  emit(m);
+}
+
+/**
+ * A duel for a stake held in GameEscrow, for exactly these two wallets (the escrow's player A and
+ * B). Each attaches with the seat the lobby gives only to that wallet's signed-in session. The seed
+ * stays hidden until the start, as in every duel. A player who never streams a game scores 0.
+ */
+export function createStaked(o: { escrow: string; currency: "IMD" | "SHIFT"; stake: number; a: { wallet: string; name: string }; b: { wallet: string; name: string }; onResult: (r: { draw: boolean; winner: string | null }) => void }): { id: string; seats: Record<string, string> } {
+  const id = randomBytes(5).toString("hex"), seed = randomBytes(4).readUInt32BE(0), pa = randomUUID(), pb = randomUUID();
+  const m: Match = {
+    id, seed, currency: o.currency, stake: o.stake, createdAt: Date.now(), startedAt: null, go: false, roster: 0, winner: null, draw: false, done: false, void: null,
+    players: [fresh(pa, cleanName(o.a.name), o.a.wallet, "/games/pinball/frog-0.webp", seed), fresh(pb, cleanName(o.b.name), o.b.wallet, "/games/pinball/frog-3.webp", seed)],
+    escrow: o.escrow, showBy: Date.now() + STAKED_SHOW_MS, onResult: o.onResult,
+  };
+  matches.set(id, m);
+  setTimeout(() => { if (!m.startedAt && !m.done) countdown(m); }, STAKED_SHOW_MS).unref?.();
+  return { id, seats: { [o.a.wallet.toLowerCase()]: pa, [o.b.wallet.toLowerCase()]: pb } };
+}
+
+/** Join the free queue; pairs with whoever waits there, else opens a match. Staked duels come from the challenge lobby. */
 export async function queue(name: string, wallet: string | null, currency: Currency, stake: number, avatar: string | null): Promise<{ match: View; player: string }> {
-  if (currency === "FREE") stake = 0; // a free duel never carries a stake, whatever an old page sends
-  if (!STAKES[currency]?.includes(stake)) throw new Error("unknown stake");
-  if (currency !== "FREE" && !STAKES_LIVE) throw new Error("Stakes open when the escrow contract is live. Play a free duel meanwhile.");
+  if (currency !== "FREE") throw new Error("Duels for IMD or $SHIFT are made through the challenge lobby.");
+  stake = 0; // a free duel never carries a stake, whatever an old page sends
   const clean = cleanName(name), pic = await face(avatar, wallet);
   const key = `${currency}:${stake}`;
   const pid = randomUUID();
@@ -212,10 +238,8 @@ export async function queue(name: string, wallet: string | null, currency: Curre
   const m = open ? matches.get(open) : undefined;
   if (m && !m.startedAt && !m.done && m.players.length === 1 && Date.now() - m.createdAt < 10 * 60_000 && m.players[0]!.watching > 0) {
     m.players.push(fresh(pid, clean, wallet, pic, m.seed)); m.roster++;
-    m.startedAt = Date.now() + 6_000; // the VS screen and a countdown, the same for both
-    setTimeout(() => ready(m), 6_000 - SEED_LEAD).unref?.();
     waiting.delete(key);
-    emit(m);
+    countdown(m);
     return { match: view(m, pid), player: pid };
   }
   const id = randomBytes(5).toString("hex"), seed = randomBytes(4).readUInt32BE(0);
@@ -231,6 +255,8 @@ export async function queue(name: string, wallet: string | null, currency: Curre
  */
 function ready(m: Match): void {
   if (m.done || !m.startedAt || m.go) return;
+  // a staked duel is played whoever came: a missing player's table simply scores 0
+  if (m.escrow) { m.go = true; emit(m); return; }
   const here = m.players.filter((p) => p.watching > 0);
   if (here.length === 2) { m.go = true; emit(m); return; }
   const key = `${m.currency}:${m.stake}`;
@@ -247,7 +273,7 @@ function ready(m: Match): void {
 
 export function leave(id: string, player: string): void {
   const m = matches.get(id);
-  if (m && !m.startedAt && m.players[0]?.id === player) { matches.delete(id); for (const [k, v] of waiting) if (v === id) waiting.delete(k); }
+  if (m && !m.escrow && !m.startedAt && m.players[0]?.id === player) { matches.delete(id); for (const [k, v] of waiting) if (v === id) waiting.delete(k); }
 }
 
 export function get(id: string, me?: string) { const m = matches.get(id); return m ? view(m, me) : null; }
@@ -439,6 +465,8 @@ function settle(m: Match): void {
     record([a, b].map((p) => ({ name: p.name, score: p.score ?? 0, at: p.finishedAt ?? Date.now() })));
     tell({ kind: "duel", a: { name: a.name, score: a.score, at: Date.now() }, b: { name: b.name, score: b.score, at: Date.now() }, winner: m.players.find((p) => p.id === m.winner)?.name ?? null, draw: m.draw, ...flags });
   }
+  // the verified verdict of a staked duel, by wallet, to the escrow (signed there after its own checks)
+  if (m.onResult) try { m.onResult({ draw: m.draw, winner: m.draw ? null : m.players.find((p) => p.id === m.winner)?.wallet ?? null }); } catch (e) { console.error("pinball stake result", e); }
   emit(m);
 }
 
@@ -510,4 +538,5 @@ export function soloFinish(id: string, inputs: unknown): { score: number; rank: 
   const i = boards.solo.findIndex((s) => s.score === g.score && s.name === r.name);
   return { score: g.score, rank: i >= 0 ? i + 1 : null };
 }
-export const stakes = () => ({ live: STAKES_LIVE, options: STAKES });
+/** Free duels here; staked duels have their own lobby (GET /api/games/escrow for the limits). */
+export const stakes = () => ({ free: true, staked: "/api/games/escrow" });

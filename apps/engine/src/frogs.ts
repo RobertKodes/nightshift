@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { writeAtomic } from "./atomic.js";
 import { join } from "node:path";
 import { parseAbi, parseAbiItem } from "viem";
 import { eth } from "./chain.js";
@@ -56,7 +57,7 @@ type State = { lastBlock?: number; milestone?: number; revealAnnounced?: boolean
 const file = () => join(config.dataDir, "frogs.json");
 const load = (): State => { try { return existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : {}; } catch { return {}; } };
 const st = load();
-const saveSt = () => writeFileSync(file(), JSON.stringify(st));
+const saveSt = () => writeAtomic(file(), JSON.stringify(st));
 /** The countdown milestone last announced (every 50 frogs) and whether the reveal was announced. */
 export const milestoneSeen = () => st.milestone ?? 0;
 export const setMilestone = (n: number) => { st.milestone = n; saveSt(); };
@@ -65,12 +66,12 @@ export const markRevealAnnounced = () => { st.revealAnnounced = true; saveSt(); 
 export async function newMints(): Promise<{ payer: string; first: number; quantity: number; paid: number; tx: string }[]> {
   if (!frogsOn()) return [];
   const head = Number(await eth.getBlockNumber());
-  if (!st.lastBlock) { st.lastBlock = head; writeFileSync(file(), JSON.stringify(st)); return []; }
+  if (!st.lastBlock) { st.lastBlock = head; writeAtomic(file(), JSON.stringify(st)); return []; }
   const from = Math.max(st.lastBlock + 1, head - 300);
   if (from > head) return [];
   const logs = await eth.getLogs({ address: addr(), event: MINTED, fromBlock: BigInt(from), toBlock: BigInt(head) });
   st.lastBlock = head;
-  writeFileSync(file(), JSON.stringify(st));
+  writeAtomic(file(), JSON.stringify(st));
   return logs.map((l) => ({ payer: l.args.payer!, first: Number(l.args.firstTokenId), quantity: Number(l.args.quantity), paid: Number(l.args.paid!) / 1e18, tx: l.transactionHash! }));
 }
 
@@ -109,7 +110,7 @@ export async function accrueStaking(): Promise<void> {
     staking.holders[id] = owner;
   });
   staking.at = now;
-  writeFileSync(sFile(), JSON.stringify(staking));
+  writeAtomic(sFile(), JSON.stringify(staking));
 }
 
 export function stakingBoard(limit = 20): { wallet: string; hours: number; frogs: number }[] {

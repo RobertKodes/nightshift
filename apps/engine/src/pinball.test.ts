@@ -108,11 +108,19 @@ describe("space pinball server", () => {
     const id = A.match.id;
     expect(B.match.id).toBe(id);
     vi.advanceTimersByTime(6_000);
+    const r = play(id, A.player, B.player, o);
+    offA(); offB();
+    return r;
+  }
+  /** The two clients' loop, from the end of the countdown until the match is settled. */
+  function play(id: string, pa: string, pbl: string, o: { cheat?: "fake" | "silent" | "keep"; slow?: boolean; absent?: boolean } = {}) {
+    const A = { player: pa }, B = { player: pbl };
     const m0 = pb.get(id, A.player)!;
     expect(m0.seed).not.toBeNull();
     const seed = m0.seed!, startedAt = m0.startedAt!;
     const mk = (me: string, pull: number): Client => ({ ...bot(seed, pull), me, landed: [], got: new Set(), streamed: 0, told: 0, done: false });
     const a = mk(A.player, 175), b = mk(B.player, 150);
+    if (o.absent) b.done = true;
     for (let step = 0; step < 900 && !pb.get(id)!.done; step++) {
       vi.advanceTimersByTime(250);
       const clock = Math.floor(((Date.now() - startedAt) * 240) / 1000);
@@ -140,7 +148,6 @@ describe("space pinball server", () => {
         try { pb.progress(id, c.me, { inputs: chunk, from: c.streamed, tick: c.t.tick, landed: news, x: c.t.ball.x, y: c.t.ball.y, ...junk }); c.streamed += chunk.length; c.told += news.length; } catch (e) { c.error = (e as Error).message; }
       }
     }
-    offA(); offB();
     const m = pb.get(id, a.me)!, mb = pb.get(id, b.me)!;
     expect(m.done).toBe(true);
     return { id, seed, a, b, m, mb, va: m.players.find((p) => p.you)!, vb: mb.players.find((p) => p.you)! };
@@ -199,6 +206,70 @@ describe("space pinball server", () => {
     expect(d.vb.name).toBe("Night crew");
     expect([d.m.winnerIsYou, d.mb.winnerIsYou].filter(Boolean)).toHaveLength(d.m.draw ? 0 : 1);
     expect(d.m.winnerIsYou).toBe(d.a.t.score > d.b.t.score);
+  });
+  /** A pinball challenge from wallet A accepted by wallet B on a fake escrow; the lobby deals the duel. */
+  async function staked() {
+    const E = await import("./escrow.js"), { fakeChain } = await import("./escrow.fake.js"), { Lobby } = await import("./games-routes.js");
+    const { privateKeyToAccount, generatePrivateKey } = await import("viem/accounts");
+    const signer = privateKeyToAccount(generatePrivateKey()), f = fakeChain({ signer: signer.address });
+    const escrow = new E.Escrow({ file: null, client: f.client, signer, relay: f.relay });
+    const lobby = new Lobby(escrow, { pinball: pb.createStaked, chess: () => { throw new Error("no chess here"); } });
+    const wa = "0x1111111111111111111111111111111111111111", wb = "0x2222222222222222222222222222222222222222";
+    const r = await escrow.create(wa, { game: "pinball", token: "IMD", amount: "3", name: "Alice" }), id = r.matchId as `0x${string}`;
+    const now = Math.floor(Date.now() / 1000);
+    f.open(id, E.TOKENS.IMD, 3n * 10n ** 18n, E.GAMES.pinball, wa, now);
+    await escrow.sync();
+    escrow.intend(id, wb, "Bob");
+    f.join(id, wb, now);
+    await escrow.sync();
+    const sa = lobby.seat(id, wa) as { game: string; id: string; player: string }, sb = lobby.seat(id, wb) as typeof sa;
+    return { E, f, escrow, lobby, id, sa, sb, wa, wb, signer };
+  }
+  it("a staked duel is dealt to exactly the two wallets, and the verified winner is signed and relayed once", async () => {
+    const s = await staked();
+    expect(s.sa.game).toBe("pinball");
+    expect(s.sa.id).toBe(s.sb.id);
+    expect(() => s.lobby.seat(s.id, "0x3333333333333333333333333333333333333333")).toThrow(/No such match/);
+    const offA = pb.listen(s.sa.id, s.sa.player, () => {});
+    // no countdown, no seed and no leaving until both are at the table
+    vi.advanceTimersByTime(10_000);
+    expect(pb.get(s.sa.id, s.sa.player)).toMatchObject({ startedAt: null, seed: null, escrow: s.id, currency: "IMD", stake: 3 });
+    pb.leave(s.sa.id, s.sa.player);
+    expect(pb.get(s.sa.id, s.sa.player)).not.toBeNull();
+    const offB = pb.listen(s.sb.id, s.sb.player, () => {});
+    expect(pb.get(s.sa.id, s.sa.player)!.seed).toBeNull();
+    vi.advanceTimersByTime(6_000);
+    const d = play(s.sa.id, s.sa.player, s.sb.player);
+    offA(); offB();
+    expect(d.va.name).toBe("Alice"); expect(d.vb.name).toBe("Bob");
+    await vi.advanceTimersByTimeAsync(0);
+    const c = s.escrow.challenges.get(s.id)!;
+    const winner = d.m.draw ? null : d.m.winnerIsYou ? s.wa : s.wb;
+    expect(c.outcome).toMatchObject({ draw: d.m.draw, winner });
+    expect(c.result).toMatchObject({ draw: d.m.draw, winner: d.m.draw ? s.wa : winner });
+    expect(s.f.s.relayed).toHaveLength(1);
+    const { recoverTypedDataAddress, getAddress } = await import("viem");
+    const r = s.f.s.relayed[0]!;
+    expect(r.winner).toBe(getAddress(d.m.draw ? s.wa : winner!));
+    expect(await recoverTypedDataAddress({ domain: s.E.DOMAIN, types: s.E.RESULT_TYPES, primaryType: "Result", message: { matchId: r.matchId, winner: r.winner, draw: r.draw, deadline: r.deadline }, signature: r.signature })).toBe(s.signer.address);
+    await s.escrow.sync();
+    expect(s.f.s.relayed).toHaveLength(1);
+  });
+  it("a staked duel starts without a player who never comes, who scores 0 and loses", async () => {
+    const s = await staked();
+    const offA = pb.listen(s.sa.id, s.sa.player, () => {});
+    vi.advanceTimersByTime(pb.STAKED_SHOW_MS + 6_000);
+    expect(pb.get(s.sa.id, s.sa.player)!.seed).not.toBeNull();
+    const d = play(s.sa.id, s.sa.player, s.sb.player, { absent: true });
+    offA();
+    expect(d.m.winnerIsYou).toBe(true);
+    expect(d.vb.score).toBe(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.escrow.challenges.get(s.id)!.result).toMatchObject({ winner: s.wa, draw: false });
+    expect(s.f.s.relayed).toHaveLength(1);
+  });
+  it("refuses staked duels through the free queue", async () => {
+    await expect(pb.queue("X", null, "IMD", 1, null)).rejects.toThrow(/challenge lobby/);
   });
   it("hides the rival's verified score until the match is settled (finding 6)", async () => {
     const A = await pb.queue("P", null, "FREE", 0, null), off = pb.listen(A.match.id, A.player, () => {});

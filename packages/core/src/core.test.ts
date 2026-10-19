@@ -116,3 +116,65 @@ describe("the saver inside a company", () => {
     expect(c.restUntil).toBeGreaterThan(now.t);
   });
 });
+
+import { spentTodayUsd } from "./policy.js";
+describe("money edge cases", () => {
+  const llmSays = (decision: unknown) => ({ chat: async () => ({ message: { role: "assistant", content: JSON.stringify(decision) }, costUsd: 0, servedModel: "m", finishReason: "stop" }) }) as never;
+  const live = (c: Company) => { c.products.push({ id: "p1", name: "P", kind: "report", pitch: "x", priceUsdc: 9_000_000n, status: "live", deliverableUrl: null, taskId: "t", sales: 0, revenueUsdc: 0n, createdAt: 0 }); c.site = { url: "http://s", jobId: "j" }; };
+
+  it("holds a CEO reprice to the price bounds: no micro-cent, negative or non-number price", async () => {
+    for (const [asked, want] of [[0.000001, 1_000_000n], [-5, 1_000_000n], [100_000, 499_000_000n]] as const) {
+      const c = company();
+      live(c);
+      await runShift(c, { ...deps({ t: 1_000_000 }), llm: llmSays({ kind: "reprice", title: "x", why: "y", productId: "p1", priceUsd: asked }) });
+      expect(c.products[0]!.priceUsdc, String(asked)).toBe(want);
+    }
+    const c = company();
+    live(c);
+    await runShift(c, { ...deps({ t: 1_000_000 }), llm: llmSays({ kind: "reprice", title: "x", why: "y", productId: "p1", priceUsd: "lots" }) });
+    expect(c.products[0]!.priceUsdc).toBe(9_000_000n); // not a decision: the playbook moved instead
+  });
+
+  it("gives the budget and the books back when IMD reports a payment that never happened", async () => {
+    const now = { t: 1_000_000 };
+    const sim = new SimImdPlane({ jobMs: 10_000, now: () => now.t });
+    const imd = { ...sim, mode: "sim" as const, capabilities: () => sim.capabilities(), check: (a: never, i: unknown) => sim.check(a, i),
+      open: async (a: never) => ({ orderId: "o1", action: a, state: "payment_pending" as const }),
+      order: async () => ({ orderId: "o1", action: "research" as never, state: "payment_failed" as const }),
+      job: (j: string) => sim.job(j), result: (j: string) => sim.result(j) };
+    const d = deps(now, imd as never);
+    const c = company();
+    const t = await runShift(c, d);
+    expect(await d.ledger.balance("co:c1:imd", "IMD")).toBe(-500000000000000000n);
+    await advance(c, d);
+    expect(t?.status).toBe("failed");
+    expect(t?.costImd).toBe(0n);
+    expect(await d.ledger.balance("co:c1:imd", "IMD")).toBe(0n);
+    expect(spentTodayUsd(c, 6, now.t)).toBe(0);
+  });
+
+  it("free moves cannot push today's paid work out of the task list and reopen the budget", async () => {
+    const now = { t: 10_000_000 };
+    const c = company();
+    live(c);
+    const task = (i: number, costImd: bigint) => ({ id: `t${i}`, cycle: i, kind: "marketing" as const, title: "t", why: "", status: "done" as const, stepsDone: 0, stepsTotal: 0, activity: null, costImd, result: null, error: null, createdAt: now.t, updatedAt: now.t });
+    c.tasks.push(task(0, 5n * 10n ** 17n), task(1, 5n * 10n ** 17n));
+    for (let i = 2; i < 302; i++) c.tasks.push(task(i, 0n));
+    const before = spentTodayUsd(c, 6, now.t);
+    await runShift(c, { ...deps(now), llm: llmSays({ kind: "marketing", title: "post", why: "y", post: "hello" }) });
+    expect(c.tasks.length).toBeLessThanOrEqual(302);
+    expect(spentTodayUsd(c, 6, now.t)).toBe(before);
+  });
+});
+
+import { budgetPrice } from "./policy.js";
+describe("the IMD price budgets are valued at", () => {
+  it("moves with two agreeing sources, but not on one wrong feed", () => {
+    expect(budgetPrice([6.9, 7.1], null)).toBeCloseTo(7);
+    expect(budgetPrice([0.02, 6.9], 6.87)).toBeCloseTo(6.9); // the dumped reading is ignored
+    expect(budgetPrice([0.02, NaN], 6.87)).toBeNull(); // one source, 99% off: keep the last price
+    expect(budgetPrice([0.02, NaN], null)).toBeNull(); // and never the first price from one source
+    expect(budgetPrice([6.0, NaN], 6.87)).toBe(6.0);
+    expect(budgetPrice([3, 3.1], 6.87)).toBeCloseTo(3.05); // a real move, seen by both
+  });
+});

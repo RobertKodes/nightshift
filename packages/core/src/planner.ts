@@ -96,7 +96,7 @@ export function heuristicDecision(c: Company, s: CompanyStats): Decision {
       title: `Sell more to the buyers of ${best.name}`,
       why: `${best.name} sold ${best.sales} times. The same buyers will pay for the next step.`,
       brief: `A follow-up to "${best.name}" for ${c.audience}: the advanced version, with templates they can copy.`,
-      product: { name: `${best.name} — Advanced`, kind: "template", pitch: "The next step, with templates you can copy.", priceUsd: Math.max(15, fromUsdc(best.priceUsdc) * 2) },
+      product: { name: `${best.name} — Advanced`, kind: "template", pitch: "The next step, with templates you can copy.", priceUsd: Math.min(499, Math.max(15, fromUsdc(best.priceUsdc) * 2)) },
     };
   }
   const stale = live.find((p) => !p.priceByOwner && p.sales === 0 && Date.now() - p.createdAt > 5 * 24 * 60 * 60 * 1000);
@@ -138,6 +138,12 @@ export async function llmDecision(llm: LlmClient, model: string, c: Company, s: 
     if ((d.kind === "reprice" || d.kind === "retire_product") && !c.products.some((p) => p.id === d.productId)) return null;
     if (d.kind === "build_site" && c.site) return null;
     if ((d.kind === "build_site" || d.kind === "improve_site") && c.products.length === 0) return null;
+    // a reprice is held to the same bounds as a new product's price; a number that is not one is no decision
+    if (d.kind === "reprice") {
+      const v = Number(d.priceUsd);
+      if (!Number.isFinite(v)) return null;
+      d.priceUsd = Math.min(499, Math.max(1, v));
+    }
     if (d.product) {
       d.product.priceUsd = Math.min(499, Math.max(1, Number(d.product.priceUsd) || 9));
       if (!["report", "template", "dataset"].includes(d.product.kind)) d.product.kind = "template";

@@ -4,7 +4,7 @@ export type TimeControl = "3+2" | "5+0" | "10+0";
 export const CONTROLS = { "3+2": { time: 180_000, increment: 2_000, label: "Blitz", note: "2 seconds back per move" }, "5+0": { time: 300_000, increment: 0, label: "Blitz", note: "Five minutes. Trust yourself." }, "10+0": { time: 600_000, increment: 0, label: "Rapid", note: "A little room to think" } };
 export type PlayerView = { name: string; color: Color; rating: number; you: boolean; connected: boolean };
 export type MatchView = {
-  id: string; tc: TimeControl; currency: "FREE"; version: number; now: number; startedAt: number | null;
+  id: string; tc: TimeControl; currency: "FREE" | "IMD" | "SHIFT"; stake: string | null; escrow: string | null; version: number; now: number; startedAt: number | null;
   status: "waiting" | "countdown" | "playing" | "finished"; fen: string; turn: Color; check: boolean;
   clocks: Record<Color, number>; lastMove: Move | null; moves: Move[]; ply: number; done: boolean; reason: string | null;
   winner: Color | null; you: Color | null; winnerIsYou: boolean; drawOffer: "you" | "rival" | null;

@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { writeAtomic } from "./atomic.js";
 import { join } from "node:path";
 import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 import { type Address, parseAbiItem } from "viem";
@@ -18,11 +19,12 @@ const TYPES = ["uint256", "address", "address", "uint256"];
 
 type TokenEpoch = { token: string; symbol: string; total: string; root: string; tree: unknown; posted?: string };
 export type Epoch = { epoch: number; at: number; fromBlock: number; toBlock: number; wallets: number; tokens: TokenEpoch[] };
-type State = { epochs: Epoch[]; hours: Record<string, number>; block?: number };
+/** `carry`: pot already read from the chain but not paid out yet (no hours that week, or rounding), per token. */
+type State = { epochs: Epoch[]; hours: Record<string, number>; block?: number; carry?: Record<string, string> };
 
 const file = () => join(config.dataDir, "frogpot.json");
 const load = (): State => { try { return existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : { epochs: [], hours: {} }; } catch { return { epochs: [], hours: {} }; } };
-const save = (s: State) => writeFileSync(file(), JSON.stringify(s));
+const save = (s: State) => writeAtomic(file(), JSON.stringify(s));
 
 export const epochs = (): Omit<Epoch, "tokens">[] & { tokens: Omit<TokenEpoch, "tree">[] }[] =>
   load().epochs.map((e) => ({ ...e, tokens: e.tokens.map(({ tree: _t, ...t }) => t) })) as never;
@@ -49,8 +51,11 @@ export async function buildEpoch(c: { splitter?: string; token?: string }, start
   const pot = await potSince(c.splitter as Address, BigInt(from), BigInt(head));
   const epoch = (s.epochs.at(-1)?.epoch ?? 0) + 1;
   const tokens: TokenEpoch[] = [];
+  // The logs up to head are read once: whatever this epoch does not pay out is carried, never dropped.
+  const carry: Record<string, string> = { ...(s.carry ?? {}) };
   for (const [token, symbol] of [[ETH, "ETH"], [c.token.toLowerCase(), "SHIFT"]] as const) {
-    const total = pot.get(token) ?? 0n;
+    const total = (pot.get(token) ?? 0n) + BigInt(carry[token] ?? "0");
+    if (total > 0n) carry[token] = total.toString();
     if (total <= 0n || sum <= 0) continue;
     const values = earned.map(([w, h]) => [String(epoch), w, token, ((total * BigInt(Math.floor(h * 1e6))) / (BigInt(Math.floor(sum * 1e6)))).toString()] as [string, string, string, string])
       .filter((v) => v[3] !== "0");
@@ -58,10 +63,13 @@ export async function buildEpoch(c: { splitter?: string; token?: string }, start
     const tree = StandardMerkleTree.of(values, TYPES);
     const posted = values.reduce((a, v) => a + BigInt(v[3]), 0n);
     tokens.push({ token, symbol, total: posted.toString(), root: tree.root, tree: tree.dump() });
+    if (total - posted > 0n) carry[token] = (total - posted).toString(); else delete carry[token];
   }
-  s.hours = now;
   s.block = head;
+  s.carry = carry;
+  // Hours are used up only by an epoch that pays them; in a week without a pot they keep counting.
   if (!tokens.length) { save(s); return null; }
+  s.hours = now;
   const e: Epoch = { epoch, at: Date.now(), fromBlock: from, toBlock: head, wallets: earned.length, tokens };
   s.epochs.push(e);
   save(s);

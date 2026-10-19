@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { writeAtomic } from "./atomic.js";
 
 /**
  * Settings the operator changes from the /setup dashboard. They are stored next to the data and
@@ -37,7 +38,7 @@ export function writeSettings(patch: Record<string, unknown>): Partial<Record<Se
     else cur[k] = String(v).trim();
   }
   mkdirSync(dataDir, { recursive: true });
-  writeFileSync(file, JSON.stringify(cur, null, 2), { mode: 0o600 });
+  writeAtomic(file, JSON.stringify(cur, null, 2), { mode: 0o600 });
   return cur;
 }
 

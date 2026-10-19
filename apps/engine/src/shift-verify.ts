@@ -13,8 +13,39 @@ export type Check = { label: string; ok: boolean; detail: string };
 
 const FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
 const OWNED = parseAbi(["function owner() view returns (address)", "function tradingOpen() view returns (bool)"]);
-/** Selectors a plain fixed-supply token must not have: mint, pause, blacklist, setFee. */
-const FORBIDDEN: Record<string, string> = { "40c10f19": "mint(address,uint256)", "a0712d68": "mint(uint256)", "8456cb59": "pause()", "f9f92be4": "blacklist(address)", "69fe0e2d": "setFee(uint256)" };
+/**
+ * Every function a plain fixed-supply token may have: ERC-20, permit, burning your own tokens, and
+ * read-only constants. Anything else in its dispatcher (a mint under any name, a tax, a blocklist,
+ * a pause, an owner switch) fails the check, whatever it is called.
+ */
+const ALLOWED = new Set([
+  "name()", "symbol()", "decimals()", "totalSupply()", "balanceOf(address)", "transfer(address,uint256)", "transferFrom(address,address,uint256)",
+  "approve(address,uint256)", "allowance(address,address)", "increaseAllowance(address,uint256)", "decreaseAllowance(address,uint256)",
+  "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)", "nonces(address)", "DOMAIN_SEPARATOR()", "eip712Domain()",
+  "burn(uint256)", "SUPPLY()", "MAX_SUPPLY()", "TOTAL_SUPPLY()", "supportsInterface(bytes4)",
+].map((x) => toFunctionSelector(x).slice(2)));
+/** Names for the selectors that matter most, in the report. */
+const KNOWN: Record<string, string> = { "40c10f19": "mint(address,uint256)", "a0712d68": "mint(uint256)", "449a52f8": "mintTo(address,uint256)", "8456cb59": "pause()", "f9f92be4": "blacklist(address)", "69fe0e2d": "setFee(uint256)", "8da5cb5b": "owner()", "f2fde38b": "transferOwnership(address)" };
+
+/**
+ * The function selectors in a contract's dispatcher: each `PUSH4 <selector>` that is compared with
+ * the call's selector (EQ, also after a DUP/SWAP, or the GT/LT of a split dispatcher).
+ */
+export function dispatcherSelectors(code: string): string[] {
+  const b = Buffer.from(code.replace(/^0x/, ""), "hex");
+  const out = new Set<string>();
+  for (let i = 0; i < b.length; i++) {
+    const op = b[i]!;
+    if (op === 0x63 && i + 5 < b.length) {
+      const next = b[i + 5]!, after = b[i + 6];
+      const compared = next === 0x14 || next === 0x11 || next === 0x10 || ((next >= 0x80 && next <= 0x9f) && after === 0x14);
+      const sel = b.subarray(i + 1, i + 5).toString("hex");
+      if (compared && sel !== "ffffffff") out.add(sel); // not the uint32 mask of a range check
+    }
+    if (op >= 0x60 && op <= 0x7f) i += op - 0x5f; // skip push data
+  }
+  return [...out];
+}
 
 const has = (code: string, addr: string) => code.toLowerCase().includes(addr.toLowerCase().slice(2));
 
@@ -36,8 +67,9 @@ export async function verifyShift(c: Record<string, string>): Promise<Check[]> {
   add("Supply is 1,000,000,000 with 18 decimals", supply === 10n ** 27n && decimals === 18, `${supply} / ${decimals}`);
   add("Your dev wallet got its share", devBal > 0n, `${(Number(devBal) / 1e18).toLocaleString("en-US")} SHIFT (IMD seeds poolBps of the whole supply)`);
   const tcode = await code(token);
-  const bad = Object.entries(FORBIDDEN).filter(([s]) => tcode.includes(s)).map(([, n]) => n);
-  add("Token has no mint, pause, blacklist or fee switch", tcode.length > 2 && bad.length === 0, bad.join(", ") || "none found");
+  const sels = dispatcherSelectors(tcode);
+  const bad = sels.filter((x) => !ALLOWED.has(x)).map((x) => KNOWN[x] ?? `0x${x}`);
+  add("Token has no mint, pause, blacklist or fee switch", tcode.length > 2 && sels.length > 0 && bad.length === 0, bad.length ? `functions beyond a plain ERC-20: ${bad.join(", ")}` : `${sels.length} functions, all plain ERC-20`);
 
   // The hook: closed, owned by you, gated on the first buyer
   const hook = c.hook as `0x${string}` | undefined;

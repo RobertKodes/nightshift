@@ -4,17 +4,24 @@ import { dirname, join } from "node:path";
 import { Chess, type Color, type Move } from "chess.js";
 import { config } from "./config.js";
 
-/** Free chess duels. Moves, elapsed time and results are decided here, never by a browser. */
-export const STAKES_LIVE = false;
+/**
+ * Chess duels. Moves, elapsed time and results are decided here, never by a browser. Queue games
+ * are free; a game for IMD or $SHIFT is made by the challenge lobby once both stakes are in
+ * GameEscrow (createStaked), and its result goes to the escrow.
+ */
+/** A staked game starts once both players are connected, or this long after it was made. */
+export const STAKED_SHOW_MS = 5 * 60_000;
 export const CONTROLS = { "3+2": { time: 180_000, increment: 2_000 }, "5+0": { time: 300_000, increment: 0 }, "10+0": { time: 600_000, increment: 0 } };
 export type TimeControl = keyof typeof CONTROLS;
 export type Reason = "checkmate" | "stalemate" | "repetition" | "insufficient material" | "50-move rule" | "resignation" | "agreement" | "abandonment" | "timeout";
 type Player = { id: string; name: string; wallet: string | null; color: Color; rating: number; moves: number; streams: number; offlineAt: number | null };
 type Match = {
-  id: string; tc: TimeControl; currency: "FREE"; createdAt: number; startedAt: number | null; turnAt: number;
+  id: string; tc: TimeControl; currency: "FREE" | "IMD" | "SHIFT"; createdAt: number; startedAt: number | null; turnAt: number;
   game: Chess; players: Player[]; clocks: Record<Color, number>; moves: Move[]; version: number;
   done: boolean; winner: string | null; reason: Reason | null; drawOffer: string | null;
   rematch: Set<string>; rematchId: string | null; endedAt: number | null;
+  /** A staked game: the escrow match id, the stake shown, when it starts regardless, who hears the result. */
+  escrow?: string; stake?: string; showBy?: number; onResult?: (r: { draw: boolean; winner: string | null }) => void;
 };
 type Rating = { key: string; name: string; rating: number; games: number; wins: number; at: number };
 type NightResult = { key: string; at: number; win: boolean };
@@ -51,13 +58,29 @@ export class ChessGames {
   }
   private match(id: string) { const m = this.matches.get(id); if (!m) throw new Error("No such match"); return m; }
   private rating(p: Pick<Player, "name" | "wallet">) { return this.boards.ratings.find((r) => r.key === keyOf(p))?.rating ?? 1200; }
-  private create(tc: TimeControl, players: Player[]): Match {
+  private create(tc: TimeControl, players: Player[], staked?: Pick<Match, "currency" | "escrow" | "stake" | "showBy" | "onResult">): Match {
     const now = this.now();
-    const m: Match = { id: randomBytes(10).toString("hex"), tc, currency: "FREE", createdAt: now, startedAt: null, turnAt: now, game: new Chess(), players,
+    const m: Match = { ...staked, id: randomBytes(10).toString("hex"), tc, currency: staked?.currency ?? "FREE", createdAt: now, startedAt: null, turnAt: now, game: new Chess(), players,
       clocks: { w: CONTROLS[tc].time, b: CONTROLS[tc].time }, moves: [], version: 0, done: false, winner: null, reason: null, drawOffer: null, rematch: new Set(), rematchId: null, endedAt: null };
     this.matches.set(m.id, m);
-    if (players.length === 2) this.start(m);
+    if (players.length === 2 && !m.escrow) this.start(m);
     return m;
+  }
+  /**
+   * A game for a stake held in GameEscrow, for exactly these two wallets. Each attaches with the
+   * seat the lobby gives only to that wallet's signed-in session. A player who never comes loses by
+   * abandonment on their turn; if neither comes, it is a draw (both stakes go back).
+   */
+  createStaked(o: { escrow: string; tc: TimeControl; currency: "IMD" | "SHIFT"; stake: string; a: { wallet: string; name: string }; b: { wallet: string; name: string }; onResult: (r: { draw: boolean; winner: string | null }) => void }): { id: string; seats: Record<string, string> } {
+    if (!Object.hasOwn(CONTROLS, o.tc)) throw new Error("Choose 3+2, 5+0 or 10+0");
+    const seat = (s: { wallet: string; name: string }, color: Color): Player => {
+      const p: Player = { id: randomUUID(), name: cleanName(s.name), wallet: s.wallet.toLowerCase(), color, rating: 1200, moves: 0, streams: 0, offlineAt: this.now() };
+      p.rating = this.rating(p);
+      return p;
+    };
+    const colorA: Color = randomInt(2) ? "w" : "b", a = seat(o.a, colorA), b = seat(o.b, opposite(colorA));
+    const m = this.create(o.tc, [a, b], { currency: o.currency, escrow: o.escrow, stake: o.stake, showBy: this.now() + STAKED_SHOW_MS, onResult: o.onResult });
+    return { id: m.id, seats: { [a.wallet!]: a.id, [b.wallet!]: b.id } };
   }
   private start(m: Match) { m.startedAt = this.now() + 5_000; m.turnAt = m.startedAt; this.emit(m); }
   queue(name: string, wallet: string | null, tc: TimeControl) {
@@ -84,7 +107,7 @@ export class ChessGames {
   }
   private view(m: Match, me: string, compact = false) {
     const now = this.now();
-    return { id: m.id, tc: m.tc, currency: m.currency, version: m.version, now, startedAt: m.startedAt,
+    return { id: m.id, tc: m.tc, currency: m.currency, stake: m.stake ?? null, escrow: m.escrow ?? null, version: m.version, now, startedAt: m.startedAt,
       status: m.done ? "finished" as const : !m.startedAt ? "waiting" as const : now < m.startedAt ? "countdown" as const : "playing" as const,
       fen: m.game.fen(), turn: m.game.turn(), check: m.game.isCheck(), clocks: this.clocks(m), lastMove: m.moves.at(-1) ?? null,
       ply: m.moves.length, ...(!compact ? { moves: m.moves } : {}), done: m.done, reason: m.reason,
@@ -98,12 +121,14 @@ export class ChessGames {
   listen(id: string, me: string, f: () => void): () => void {
     const m = this.match(id), p = this.player(m, me);
     const set = this.listeners.get(id) ?? new Set(); set.add(f); this.listeners.set(id, set);
-    p.streams++; p.offlineAt = null; this.emit(m);
+    p.streams++; p.offlineAt = null;
+    if (m.escrow && !m.startedAt && !m.done && m.players.every((x) => x.streams > 0)) this.start(m); else this.emit(m);
     let closed = false;
     return () => { if (closed) return; closed = true; set.delete(f); p.streams = Math.max(0, p.streams - 1); if (!p.streams) p.offlineAt = this.now(); this.emit(m); };
   }
   leave(id: string, me: string) {
     const m = this.match(id); this.player(m, me);
+    if (m.escrow) throw new Error("A staked game starts once both players are here, or within 5 minutes. Stay at the table.");
     if (m.startedAt) throw new Error("The rival joined. Resign to leave this game.");
     m.done = true; this.waiting.get(m.tc)?.delete(id); this.emit(m);
   }
@@ -149,6 +174,7 @@ export class ChessGames {
   rematch(id: string, me: string) {
     const m = this.match(id); this.player(m, me);
     if (!m.done || !m.startedAt) throw new Error("Finish this game first");
+    if (m.escrow) throw new Error("A staked game has no rematch: open a new challenge.");
     if (!m.rematchId) {
       m.rematch.add(me);
       if (m.rematch.size === 2) {
@@ -166,6 +192,8 @@ export class ChessGames {
     if (m.players.every((p) => p.moves >= 2)) this.record(m);
     const white = m.players.find((p) => p.color === "w")!, black = m.players.find((p) => p.color === "b")!;
     for (const f of arcade) try { f({ kind: "result", white: white.name, black: black.name, winner: m.winner === white.id ? white.name : m.winner === black.id ? black.name : null, reason, moves: m.moves.length, tc: m.tc }); } catch (err) { console.error("chess arcade", err); }
+    // the server's verdict of a staked game, by wallet, to the escrow (signed there after its own checks)
+    if (m.onResult) try { m.onResult({ draw: m.winner === null, winner: m.players.find((p) => p.id === m.winner)?.wallet ?? null }); } catch (err) { console.error("chess stake result", err); }
     this.emit(m);
   }
   private record(m: Match) {
@@ -193,6 +221,11 @@ export class ChessGames {
   }
   tick() {
     for (const m of this.matches.values()) {
+      // a staked game not started by its deadline: played by whoever came, a draw if nobody did
+      if (m.escrow && !m.startedAt && !m.done && m.showBy !== undefined && this.now() >= m.showBy) {
+        if (m.players.some((p) => p.streams > 0)) this.start(m);
+        else { m.startedAt = this.now(); this.end(m, null, "abandonment"); }
+      }
       this.check(m);
       if (!m.done && m.startedAt) this.emit(m);
       if ((!m.startedAt && this.now() - m.createdAt > 600_000) || (m.endedAt !== null && this.now() - m.endedAt > 3_600_000)) {

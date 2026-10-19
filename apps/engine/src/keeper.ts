@@ -39,17 +39,6 @@ export function keeperAccount(vault: Vault) {
   try { return vault.account("keeper"); } catch { vault.create("keeper"); return vault.account("keeper"); }
 }
 
-/** ETH per IMD from IMD's deepest ETH pool on DexScreener, for the burn's minimum. */
-async function ethPerImd(): Promise<number> {
-  const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${IMD_TOKEN}`, { signal: AbortSignal.timeout(8000) });
-  const d = (await r.json()) as { pairs?: { chainId: string; baseToken: { address: string }; quoteToken: { symbol: string }; priceNative?: string; liquidity?: { usd?: number } }[] };
-  const best = (d.pairs ?? []).filter((p) => p.chainId === "ethereum" && p.baseToken.address.toLowerCase() === IMD_TOKEN && /^W?ETH$/.test(p.quoteToken.symbol))
-    .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0))[0];
-  const v = Number(best?.priceNative);
-  if (!(v > 0)) throw new Error("no IMD/ETH price");
-  return v;
-}
-
 export async function runKeeper(vault: Vault, c: { splitter?: string; token?: string; hook?: string }, launch?: { launchNumber?: number; payer?: string }): Promise<KeeperRun> {
   const run: KeeperRun = { at: Date.now(), did: [], skipped: [] };
   const splitter = c.splitter as Address | undefined;
@@ -103,9 +92,11 @@ export async function runKeeper(vault: Vault, c: { splitter?: string; token?: st
     await send(`distribute ${label}`, "distribute", [t]);
   }
   // 2. Burn the ETH reserve: buy IMD with it and send it to IMD's BurnExecutor (inside the splitter).
-  // The spec's reserve(token) view; the splitter's ETH balance if the view is missing.
-  const reserve = await eth.readContract({ address: splitter, abi: SPLITTER, functionName: "reserve", args: [ETH] }).catch(() => bal(ETH));
-  if (reserve >= DUST.burn) {
+  // The spec's reserve(token) view, and nothing else: the splitter's balance also holds ETH owed to
+  // rewards, dev and treasury, so when the view does not answer nothing is burned this run.
+  const reserve = await eth.readContract({ address: splitter, abi: SPLITTER, functionName: "reserve", args: [ETH] }).catch(() => null);
+  if (reserve === null) run.skipped.push("burn: reserve unknown (the reserve view did not answer); nothing burned");
+  else if (reserve >= DUST.burn) {
     // The price is the pool's own, from Uniswap's v4 Quoter, and at most 3% may be lost to price movement.
     const quoted = await eth.simulateContract({ address: V4.quoter, abi: quoterAbi, functionName: "quoteExactInputSingle", args: quoteArgs(IMD_POOL as never, true, reserve) as never })
       .then((q) => (q.result as readonly [bigint, bigint])[0]).catch(() => 0n);

@@ -43,10 +43,14 @@ async function buyWithWallet(buyUrl: string): Promise<{ deliverable: string | nu
     message: { ...authorization, value: BigInt(authorization.value), validAfter: BigInt(authorization.validAfter), validBefore: BigInt(authorization.validBefore) },
   });
   const payment = { x402Version: 2, accepted: req, payload: { signature, authorization } };
-  const res = await fetch(buyUrl, { headers: { "PAYMENT-SIGNATURE": btoa(JSON.stringify(payment)) } });
-  const j = await res.json();
-  if (!res.ok) throw new Error(j.error ?? "payment refused");
-  return j;
+  // Still waiting for Base (202): the same signed header again, never a new signature, so it is paid once.
+  for (let i = 0; ; i++) {
+    const res = await fetch(buyUrl, { headers: { "PAYMENT-SIGNATURE": btoa(JSON.stringify(payment)) } });
+    const j = await res.json();
+    if (res.status === 202 && i < 8) { await new Promise((r) => setTimeout(r, 15_000)); continue; }
+    if (!res.ok || res.status === 202) throw new Error(j.error ?? "payment refused");
+    return j;
+  }
 }
 
 export function PublicPage({ slug, health }: { slug: string; health: Health | null }) {

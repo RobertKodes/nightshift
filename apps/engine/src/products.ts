@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { safeFetch } from "./net.js";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { writeAtomic } from "./atomic.js";
 import { join } from "node:path";
 import type { Company, Product } from "@nightshift/core";
 import type { LlmClient } from "@nightshift/llm";
@@ -22,38 +23,47 @@ export class ProductFiles {
     this.#key = createHmac("sha256", secretMaterial).update("nightshift-downloads-v1").digest("hex");
   }
 
-  #file(p: Product) { return join(this.#dir, `${p.id.replace(/[^a-zA-Z0-9-]/g, "")}.md`); }
-  has(p: Product): boolean { return existsSync(this.#file(p)); }
-  read(p: Product): string | null { return this.has(p) ? readFileSync(this.#file(p), "utf8") : null; }
+  /**
+   * File and signature belong to the company and the product together, so two products never share
+   * either. Products from before (8-character ids, made before ids became full UUIDs) keep their file.
+   */
+  #file(c: Company, p: Product) {
+    const clean = (x: string) => x.replace(/[^a-zA-Z0-9-]/g, "");
+    return join(this.#dir, legacy(p.id) ? `${clean(p.id)}.md` : `${clean(c.id)}-${clean(p.id)}.md`);
+  }
+  has(c: Company, p: Product): boolean { return existsSync(this.#file(c, p)); }
+  read(c: Company, p: Product): string | null { return this.has(c, p) ? readFileSync(this.#file(c, p), "utf8") : null; }
 
   /** A link that opens this product for 7 days. `ref` ties it to one sale (a tx hash or a buyer). */
   link(c: Company, p: Product, ref: string, days = 7): string {
     const exp = Math.floor(Date.now() / 1000) + days * 86400;
-    return `${this.publicUrl}/download/${c.slug}/${p.id}/${exp}/${this.#sig(p.id, exp, ref)}?ref=${encodeURIComponent(ref)}`;
+    return `${this.publicUrl}/download/${c.slug}/${p.id}/${exp}/${this.#sig(`${c.id}/${p.id}`, exp, ref)}?ref=${encodeURIComponent(ref)}`;
   }
-  check(productId: string, exp: string, sig: string, ref: string): boolean {
+  check(c: Company, productId: string, exp: string, sig: string, ref: string): boolean {
     const e = Number(exp);
     if (!Number.isFinite(e) || e < Date.now() / 1000) return false;
-    const want = Buffer.from(this.#sig(productId, e, ref));
     const got = Buffer.from(sig);
-    return want.length === got.length && timingSafeEqual(want, got);
+    const ok = (signed: string) => { const want = Buffer.from(this.#sig(signed, e, ref)); return want.length === got.length && timingSafeEqual(want, got); };
+    // links sold before links named the company still open, for the old 8-character products only
+    return ok(`${c.id}/${productId}`) || (legacy(productId) && ok(productId));
   }
   #sig(id: string, exp: number, ref: string) { return createHmac("sha256", this.#key).update(`${id}|${exp}|${ref}`).digest("base64url").slice(0, 32); }
 
   /** Builds the private copy once the swarm has delivered. Safe to call every tick. */
   async ensure(c: Company, p: Product, source: () => Promise<string | null>): Promise<void> {
-    if (p.status !== "live" || this.has(p) || this.#inflight.has(p.id)) return;
-    this.#inflight.add(p.id);
+    const f = this.#file(c, p);
+    if (p.status !== "live" || this.has(c, p) || this.#inflight.has(f)) return;
+    this.#inflight.add(f);
     try {
       const raw = await source();
       if (!raw) return;
       const body = await this.#package(c, p, raw);
       const checked = await checkLinks(body);
-      writeFileSync(this.#file(p), `${body.trim()}\n\n---\n\n${checked}\n`, { mode: 0o600 });
+      writeAtomic(f, `${body.trim()}\n\n---\n\n${checked}\n`, { mode: 0o600 });
     } catch (e) {
       console.error("package", c.slug, p.id, (e as Error).message);
     } finally {
-      this.#inflight.delete(p.id);
+      this.#inflight.delete(f);
     }
   }
 
@@ -78,6 +88,9 @@ export class ProductFiles {
     }
   }
 }
+
+/** Ids from before products got full UUIDs (randomUUID().slice(0, 8)). */
+const legacy = (id: string) => id.length <= 8;
 
 /** Tests every http(s) link in the text and reports which answered. */
 async function checkLinks(text: string): Promise<string> {

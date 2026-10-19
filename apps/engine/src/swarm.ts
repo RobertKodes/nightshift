@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { writeAtomic } from "./atomic.js";
 import { join } from "node:path";
 import { config } from "./config.js";
 
@@ -120,7 +121,7 @@ export function placeOrder(key: string, tx: string): Record<string, Placed> {
   if (!ORDERS.some((x) => x.key === key)) throw new Error("unknown order");
   const all = load();
   all[key] = { tx, at: Date.now() };
-  writeFileSync(file(), JSON.stringify(all, null, 2));
+  writeAtomic(file(), JSON.stringify(all, null, 2));
   return all;
 }
 
@@ -145,14 +146,14 @@ export function followSwarm(say: (text: string, buttons: { text: string; url: st
       const state = String(j?.state ?? "").toLowerCase();
       const page = `https://explorer.imd.fun/jobs/${jobId}`;
       if (DONE.has(state)) {
-        p.posted = true; writeFileSync(file(), JSON.stringify(all, null, 2));
+        p.posted = true; writeAtomic(file(), JSON.stringify(all, null, 2));
         const audit = o.action === "job.open";
         await say(audit
           ? `🛡✅ <b>AUDIT COMPLETE: ${o.title.toUpperCase()}</b>\n\nThe IMD swarm's audit panel (4 specialists and a judge) has finished. The full report is public: every finding, ranked, with the fixes.\n\nWe will go through it and ship the fixes in the open.`
           : `🔐✅ <b>DONE BY THE SWARM: ${o.title.toUpperCase()}</b>\n\nBuilt, tested, audited by 4 specialists and a judge, and handed to deployment on Ethereum by IMD. The contract address is posted here as soon as it is checked on chain.`,
           [[{ text: audit ? "📄 Read the report" : "🔎 See the job", url: audit ? `https://api.imd.fun/jobs/${jobId}/report.md` : page }], [{ text: "🐝 The job on IMD", url: page }]]);
       } else if (["failed", "cancelled", "canceled", "rejected"].includes(state)) {
-        p.posted = true; writeFileSync(file(), JSON.stringify(all, null, 2));
+        p.posted = true; writeAtomic(file(), JSON.stringify(all, null, 2));
         await admin(`⚠️ Swarm order "${o.title}" ended as ${state}: ${page}`);
       }
     }

@@ -4,6 +4,7 @@ import { SwarmOrders } from "./SwarmOrders";
 import { ImdOrders } from "./ImdOrders";
 import { FrogsAdmin } from "./FrogsAdmin";
 import { AfterLaunch } from "./AfterLaunch";
+import { GameStakes } from "./GameStakes";
 
 type Check = { id: string; label: string; state: "ok" | "warn" | "block"; detail: string };
 type State = {
@@ -172,6 +173,11 @@ export function SetupPage() {
       <section className="card">
         <div className="card-h"><h3>After launch: keeper and frog rewards</h3><span className="faint" style={{ fontSize: 12 }}>daily split and IMD burn · weekly NIGHT FROGS roots</span></div>
         <AfterLaunch call={call} token={token} />
+      </section>
+
+      <section className="card">
+        <div className="card-h"><h3>Game stakes</h3><span className="faint" style={{ fontSize: 12 }}>GameEscrow v2 · real IMD and $SHIFT duels</span></div>
+        <GameStakes token={token} />
       </section>
 
       <section className="card">

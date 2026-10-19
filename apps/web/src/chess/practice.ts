@@ -10,7 +10,7 @@ export class Practice {
   constructor(name: string, tc: TimeControl) {
     const now = Date.now(), start = now + 1_500;
     this.turnAt = start;
-    this.state = { id: `practice-${now}`, tc, currency: "FREE", version: 0, now, startedAt: start, status: "countdown", fen: this.game.fen(), turn: "w", check: false,
+    this.state = { id: `practice-${now}`, tc, currency: "FREE", stake: null, escrow: null, version: 0, now, startedAt: start, status: "countdown", fen: this.game.fen(), turn: "w", check: false,
       clocks: { w: CONTROLS[tc].time, b: CONTROLS[tc].time }, lastMove: null, moves: [], ply: 0, done: false, reason: null, winner: null, you: "w", winnerIsYou: false,
       drawOffer: null, rematchRequested: false, rivalWantsRematch: false, rematchId: null,
       players: [{ name: cleanName(name), color: "w", rating: 1200, you: true, connected: true }, { name: "Frog #7 (bot)", color: "b", rating: 1200, you: false, connected: true }] };

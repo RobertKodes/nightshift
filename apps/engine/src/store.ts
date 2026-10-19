@@ -1,8 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Company } from "@nightshift/core";
 import { type LedgerStore, type LedgerTx, MemoryLedgerStore } from "@nightshift/ledger";
 import type { ApiKey } from "./auth.js";
+import { writeAtomic } from "./atomic.js";
+import type { Settlement } from "./checkout.js";
+import type { Leg } from "./payout.js";
 
 export interface Metrics {
   visits: number[];
@@ -15,6 +18,8 @@ interface Snapshot {
   ledger: LedgerTx[];
   requestTokens: Record<string, string>;
   apiKeys?: ApiKey[];
+  payouts?: Leg[];
+  settlements?: Settlement[];
 }
 
 // bigint and Date survive the round trip as tagged strings.
@@ -32,8 +37,12 @@ export class Store {
   metrics = new Map<string, Metrics>();
   requestTokens = new Map<string, string>();
   apiKeys: ApiKey[] = [];
+  /** Withdrawal legs and x402 settlements that were signed and not booked yet, so a restart finishes them. */
+  payouts = new Map<string, Leg>();
+  settlements = new Map<string, Settlement>();
   readonly ledgerStore: LedgerStore = new MemoryLedgerStore();
   #dirty = false;
+  #writing: Promise<void> = Promise.resolve();
 
   constructor(dataDir: string) {
     mkdirSync(dataDir, { recursive: true });
@@ -47,6 +56,8 @@ export class Store {
     for (const [k, m] of Object.entries(s.metrics ?? {})) this.metrics.set(k, m);
     for (const [k, t] of Object.entries(s.requestTokens ?? {})) this.requestTokens.set(k, t);
     this.apiKeys.push(...(s.apiKeys ?? []));
+    for (const l of s.payouts ?? []) this.payouts.set(l.hash, l);
+    for (const x of s.settlements ?? []) this.settlements.set(x.key, x);
     for (const tx of s.ledger ?? []) await this.ledgerStore.insert({ ...tx, at: new Date(tx.at) });
   }
 
@@ -58,18 +69,33 @@ export class Store {
 
   markDirty(): void { this.#dirty = true; }
 
-  async flush(): Promise<void> {
+  /** Writes now if anything changed. Writes run one after another, so an awaited flush is on disk when it returns. */
+  flush(): Promise<void> {
+    const run = this.#writing.then(() => this.#write());
+    this.#writing = run.catch((e) => console.error("state", e));
+    return run;
+  }
+
+  /** Marks the state changed and writes it now: after every booking that mirrors money on chain. */
+  save(): Promise<void> { this.#dirty = true; return this.flush(); }
+
+  async #write(): Promise<void> {
     if (!this.#dirty) return;
     this.#dirty = false;
-    const snap: Snapshot = {
-      companies: [...this.companies.values()],
-      metrics: Object.fromEntries(this.metrics),
-      ledger: await this.ledgerStore.list(""),
-      requestTokens: Object.fromEntries(this.requestTokens),
-      apiKeys: this.apiKeys,
-    };
-    const tmp = `${this.#file}.tmp`;
-    writeFileSync(tmp, JSON.stringify(snap, replacer));
-    renameSync(tmp, this.#file);
+    try {
+      const snap: Snapshot = {
+        companies: [...this.companies.values()],
+        metrics: Object.fromEntries(this.metrics),
+        ledger: await this.ledgerStore.list(""),
+        requestTokens: Object.fromEntries(this.requestTokens),
+        apiKeys: this.apiKeys,
+        payouts: [...this.payouts.values()],
+        settlements: [...this.settlements.values()],
+      };
+      writeAtomic(this.#file, JSON.stringify(snap, replacer));
+    } catch (e) {
+      this.#dirty = true;
+      throw e;
+    }
   }
 }

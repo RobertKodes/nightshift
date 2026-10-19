@@ -11,6 +11,8 @@ import { config } from "./config.js";
  */
 
 const SESSION_DAYS = 7;
+/** Keys one wallet may hold at once: plenty for every agent it runs, not a way to grow the state file. */
+export const MAX_KEYS_PER_OWNER = 20;
 
 export interface ApiKey { hash: string; owner: string; label: string; createdAt: number; lastUsedAt: number | null }
 
@@ -19,6 +21,8 @@ export class Auth {
   readonly #nonces = new Map<string, { exp: number; issuedAt: string }>();
   /** Sessions ended by sign-out (by MAC), until they would have expired anyway. */
   readonly #revoked = new Map<string, number>();
+  /** The same keys by hash: an nsk_ lookup is one map read, not a scan. Rebuilt when the list was loaded from disk. */
+  readonly #byHash = new Map<string, ApiKey>();
 
   constructor(secret: string, private readonly keys: ApiKey[], private readonly onChange: () => void) {
     this.#secret = createHash("sha256").update(`nightshift-session:${secret}`).digest();
@@ -84,7 +88,8 @@ export class Auth {
     }
     if (token.startsWith("nsk_")) {
       const hash = createHash("sha256").update(token).digest("hex");
-      const k = this.keys.find((x) => x.hash === hash);
+      if (this.#byHash.size !== this.keys.length) { this.#byHash.clear(); for (const x of this.keys) this.#byHash.set(x.hash, x); }
+      const k = this.#byHash.get(hash);
       if (!k) return null;
       k.lastUsedAt = Date.now();
       return k.owner;
@@ -93,9 +98,11 @@ export class Auth {
   }
 
   createKey(owner: string, label: string): { key: string; record: Omit<ApiKey, "hash"> & { id: string } } {
+    if (this.keys.filter((k) => k.owner === owner.toLowerCase()).length >= MAX_KEYS_PER_OWNER) throw new Error(`One wallet can hold ${MAX_KEYS_PER_OWNER} API keys; revoke one first.`);
     const key = `nsk_${randomBytes(24).toString("base64url")}`;
     const rec: ApiKey = { hash: createHash("sha256").update(key).digest("hex"), owner: owner.toLowerCase(), label: label.slice(0, 60) || "MCP", createdAt: Date.now(), lastUsedAt: null };
     this.keys.push(rec);
+    this.#byHash.set(rec.hash, rec);
     this.onChange();
     return { key, record: { id: rec.hash.slice(0, 12), owner: rec.owner, label: rec.label, createdAt: rec.createdAt, lastUsedAt: null } };
   }
@@ -107,6 +114,7 @@ export class Auth {
   revokeKey(owner: string, id: string): boolean {
     const i = this.keys.findIndex((k) => k.owner === owner.toLowerCase() && k.hash.startsWith(id));
     if (i < 0) return false;
+    this.#byHash.delete(this.keys[i]!.hash);
     this.keys.splice(i, 1);
     this.onChange();
     return true;
