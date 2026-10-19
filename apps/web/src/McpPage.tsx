@@ -14,7 +14,7 @@ function Code({ children }: { children: string }) {
 
 /** Both products in one place: NIGHTSHIFT's own MCP endpoint, and imd-mcp for hiring the swarm directly. */
 export function McpPage({ health }: { health: Health | null }) {
-  const { address, signIn } = useSession();
+  const { address, signIn, signOutEverywhere } = useSession();
   const [keys, setKeys] = useState<ApiKeyView[]>([]);
   const [fresh, setFresh] = useState<string | null>(null);
   const [label, setLabel] = useState("Claude");
@@ -53,6 +53,7 @@ export function McpPage({ health }: { health: Health | null }) {
                     <td className="r"><button className="btn ghost danger" style={{ height: 30 }} onClick={async () => { await api.revokeKey(k.id); setKeys(await api.keys()); }}>Revoke</button></td></tr>
                 ))}</tbody></table>
               )}
+              <p className="dim" style={{ fontSize: 13 }}>Lost a device or signed in somewhere shared? <button className="btn ghost" style={{ height: 30 }} onClick={() => void signOutEverywhere()}>Sign out everywhere</button> ends every session of this wallet. API keys are separate: revoke them above.</p>
             </div>
           ) : (
             <p className="dim">This instance runs as an open demo, so no key is needed.</p>

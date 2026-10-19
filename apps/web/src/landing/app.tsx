@@ -37,7 +37,7 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 /** The phone app: a tab bar at the bottom and a More sheet. Hidden on wide screens by CSS. */
 export function AppTabs({ active }: { active: Active }) {
   const [more, setMore] = useState(false);
-  const { address, signIn, signOut, busy } = useSession();
+  const { address, signIn, signOut, signOutEverywhere, busy } = useSession();
   useEffect(() => { document.body.classList.toggle("app-sheet-open", more); return () => document.body.classList.remove("app-sheet-open"); }, [more]);
   useEffect(() => { if (!more) return; const k = (e: KeyboardEvent) => { if (e.key === "Escape") setMore(false); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [more]);
   const open = (to: string) => { setMore(false); go(to); scrollTo(0, 0); };
@@ -64,7 +64,7 @@ export function AppTabs({ active }: { active: Active }) {
             <div className="app-acct">
               <Icon name="wallet" size={20} />
               {address
-                ? <><div><b>{short(address)}</b><span>Signed in</span></div><button type="button" className="app-btn ghost" onClick={() => { void signOut(); setMore(false); }}>Sign out</button></>
+                ? <><div><b>{short(address)}</b><span>Signed in</span></div><button type="button" className="app-btn ghost" onClick={() => { void signOut(); setMore(false); }}>Sign out</button><button type="button" className="app-btn ghost" title="Sign out on every device" onClick={() => { void signOutEverywhere(); setMore(false); }}>Everywhere</button></>
                 : <><div><b>Your wallet</b><span>Sign in to run companies and stake</span></div><button type="button" className="app-btn" disabled={busy} onClick={() => { setMore(false); void signIn(); }}>{busy ? "Check wallet…" : "Sign in"}</button></>}
             </div>
             <a className="app-launch" href="/launch" onClick={(e) => { e.preventDefault(); open("/launch"); }}>

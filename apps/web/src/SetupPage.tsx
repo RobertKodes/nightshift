@@ -32,6 +32,22 @@ async function call(token: string, path: string, body?: unknown) {
   return j;
 }
 
+type Flag = { game: string; escrow: string; player: string; wallet: string | null; moves: number; meanMs: number; sdMs: number; at: number };
+/** Staked chess games whose move times look machine-even: nothing happens on its own, the operator looks. */
+function FairPlay({ token }: { token: string }) {
+  const [flags, setFlags] = useState<Flag[] | null>(null);
+  useEffect(() => { void call(token, "fairplay").then((r: { flags: Flag[] }) => setFlags(r.flags)).catch(() => setFlags([])); }, [token]);
+  if (!flags) return null;
+  return (
+    <div className="card-b">
+      <p className="faint" style={{ fontSize: 12, margin: 0 }}>Fair play: {flags.length ? `${flags.length} staked game${flags.length > 1 ? "s" : ""} with machine-even move times (look before you void anything)` : "no staked game flagged"}</p>
+      {flags.length > 0 && <table><tbody>{flags.slice(0, 20).map((f) => (
+        <tr key={f.game + f.player}><td className="mono">{f.wallet ? `${f.wallet.slice(0, 6)}…${f.wallet.slice(-4)}` : f.player}</td><td className="dim">{f.moves} moves · {(f.meanMs / 1000).toFixed(1)} s ± {(f.sdMs / 1000).toFixed(2)} s</td><td className="mono faint">match {f.escrow.slice(0, 10)}…</td><td className="dim">{new Date(f.at).toLocaleString()}</td></tr>
+      ))}</tbody></table>}
+    </div>
+  );
+}
+
 /** Fields of the form, in the order an operator goes live. */
 const GROUPS: { title: string; note?: string; fields: { k: string; label: string; hint?: string; options?: [string, string][]; secret?: boolean }[] }[] = [
   { title: "Mode", note: "Simulation is safe: nothing leaves the server. Live places real IMD orders and sells for real USDC.", fields: [
@@ -182,6 +198,7 @@ export function SetupPage() {
       <section className="card">
         <div className="card-h"><h3>Game stakes</h3><span className="faint" style={{ fontSize: 12 }}>GameEscrow v2 · real IMD and $SHIFT duels</span></div>
         <GameStakes token={token} />
+        <FairPlay token={token} />
       </section>
 
       <section className="card">

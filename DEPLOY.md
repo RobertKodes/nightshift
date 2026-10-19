@@ -44,7 +44,22 @@ The service is capped at 384 MB and half a CPU so it cannot starve the other app
 
 ## Operations
 
-- **Data**: `/data` (volume `nightshift-data`): `state.json` (companies, ledger), `vault.json` (encrypted keys), `sim-files/`. Back it up daily together with `NIGHTSHIFT_SECRET`.
+- **Data**: `/data` (volume `nightshift-data`): `state.json` (companies, ledger), `vault.json` (encrypted keys), `settings.json` (API keys in plain text), `admin-token`, `sessions.json`, `sim-files/`. Back it up daily, encrypted (`BACKUP_AGE_RECIPIENT`), and keep `NIGHTSHIFT_SECRET` somewhere else: the backup and the secret together open every wallet.
 - **Health**: `GET /api/health`.
 - **Stop a company**: the owner presses Pause (or `nightshift_pause` over MCP). Paused companies spend nothing.
 - **Scale**: one engine per data folder. The JSON store is fine for hundreds of companies; move to Postgres before thousands.
+
+## Security settings
+
+| Variable | What it does |
+|---|---|
+| `TRUSTED_PROXIES` | IPs, CIDRs or container names whose `X-Forwarded-For` is believed (default `127.0.0.0/8,::1,caddy`: loopback and the `caddy` container, looked up every minute). The client's IP is the rightmost hop that is not a trusted proxy. Behind another proxy, list it here, or every visitor shares one rate limit. |
+| `SESSION_SECRET` | Signs sign-in sessions. Unset, it is derived from `NIGHTSHIFT_SECRET` as before. Setting or changing it signs everyone out once, without touching the wallets. |
+| `ADMIN_TOKEN` | At least 24 characters, or the engine refuses to start. Unset, a random one is written to `/data/admin-token`. |
+| `BACKUP_AGE_RECIPIENT` | An `age` public key: `deploy/vps-takeover.sh` encrypts the daily backups to it (mode 600, folder 700). Keep the private key off the server. |
+| `IMAGE_TAG` | The image tag the compose files pull (default `latest`). Deploy a commit's full git sha (CI pushes `:latest` and `:<sha>`) to know exactly what runs. |
+| `CONFIRM_TAKEOVER=yes` | Required by `deploy/vps-takeover.sh`, which stops every other project on the box. |
+
+- Sign out everywhere: `POST /api/auth/logout-all` (also on the MCP page and in the phone menu).
+- API keys (`nsk_`) reach `/mcp` and a few read-only routes; anything that changes money or settings needs a wallet session.
+- Report a vulnerability through GitHub private reporting (see `SECURITY.md`).

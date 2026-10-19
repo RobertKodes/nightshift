@@ -25,6 +25,7 @@ import { DEV_WALLET, FIRST_BUYER } from "./shift-launch.js";
 import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
 import { burnTotals, marketSnapshot } from "./community.js";
 import { chessRoutes } from "./chess-routes.js";
+import { chess } from "./chess.js";
 import { gamesRoutes } from "./games-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
 import { spectateRoutes } from "./spectate.js";
@@ -288,6 +289,7 @@ export function serve(engine: Engine) {
           engine.store.markDirty(); await engine.store.flush();
           return json(res, 200, { removed: gone, left: engine.store.companies.size });
         }
+        if (p === "/api/admin/fairplay" && req.method === "GET") return json(res, 200, { flags: chess.flags() });
         if (p === "/api/admin/swarm" && req.method === "GET") return json(res, 200, { orders: await swarmOrders() });
         if (p === "/api/admin/swarm/check" && req.method === "POST") { const b = await body(req); try { return json(res, 200, await checkSwarmOrder(String(b.key ?? ""))); } catch (e) { return json(res, 400, { error: (e as Error).message }); } }
         if (p === "/api/admin/swarm/placed" && req.method === "POST") {
