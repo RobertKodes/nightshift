@@ -274,8 +274,11 @@ export function serve(engine: Engine) {
         }
         if (p === "/api/admin/buyback" && req.method === "POST") {
           const b = await body(req);
-          const tx = String(b.tx ?? "");
-          if (!/^0x[0-9a-fA-F]{64}$/.test(tx)) return json(res, 400, { error: "tx must be a transaction hash" });
+          // a payment hash, or the job of an order paid on explorer.imd.fun (its link or id), checked at IMD
+          const raw = String(b.tx ?? "").trim(), job = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0]?.toLowerCase();
+          const tx = job ?? raw;
+          if (!job && !/^0x[0-9a-fA-F]{64}$/.test(tx)) return json(res, 400, { error: "Paste a payment transaction hash or an IMD job link." });
+          if (job && !(await fetch(`https://api.imd.fun/jobs/${job}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.ok).catch(() => false))) return json(res, 400, { error: "IMD does not know this job." });
           recordBuyback({ at: Date.now(), tx, usd: Number(b.usd) || 0, amount: Number(b.amount) || 0, note: b.note ? String(b.note).slice(0, 200) : undefined });
           return json(res, 200, { ok: true, buybacks: buybacks() });
         }

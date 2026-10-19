@@ -20,6 +20,12 @@ export function SwarmOrders({ call, token }: { call: (token: string, path: strin
   const [checks, setChecks] = useState<Record<string, { check: Check; body: unknown } | { error: string }>>({});
   const [busy, setBusy] = useState<Record<string, string | null>>({});
   const [err, setErr] = useState<Record<string, string | null>>({});
+  const [jobLink, setJobLink] = useState<Record<string, string>>({});
+  const attach = async (key: string) => {
+    setErr((x) => ({ ...x, [key]: null }));
+    try { const d = await call(token, "swarm/placed", { key, tx: jobLink[key] ?? "" }); if (d.error) throw new Error(d.error); setOrders(d.orders ?? []); setJobLink((x) => ({ ...x, [key]: "" })); }
+    catch (e) { setErr((x) => ({ ...x, [key]: (e as Error).message })); }
+  };
 
   const refresh = () => call(token, "swarm").then((d) => setOrders(d.orders ?? [])).catch(() => {});
   useEffect(() => { void refresh(); const t = setInterval(refresh, 20_000); return () => clearInterval(t); }, [token]);
@@ -96,6 +102,12 @@ export function SwarmOrders({ call, token }: { call: (token: string, path: strin
                   <button className="btn primary" disabled={!ok || Boolean(busy[o.key])} onClick={() => void pay(o)}>{o.placed ? "Pay 0.5 IMD again" : "Pay 0.5 IMD and start"}</button>
                 </div>
               </>
+            )}
+            {!o.state?.jobId && (
+              <div className="swarm-actions">
+                <input className="field" style={{ flex: 1, minWidth: 0 }} placeholder="Ordered on explorer.imd.fun? Paste the job link" value={jobLink[o.key] ?? ""} onChange={(e) => setJobLink((x) => ({ ...x, [o.key]: e.target.value }))} />
+                <button className="btn" disabled={!(jobLink[o.key] ?? "").trim()} onClick={() => void attach(o.key)}>Follow this job</button>
+              </div>
             )}
             {busy[o.key] && <p className="dim">{busy[o.key]}</p>}
             {err[o.key] && <p className="bad">{err[o.key]}</p>}
