@@ -1,4 +1,4 @@
-import { LIVE_LAUNCH } from "./shift";
+import { LIVE_LAUNCH, SHIFT } from "./shift";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { SwapBox } from "./SwapPage";
@@ -111,6 +111,15 @@ function CheckList({ checks, id, hidden = false }: { checks: NonNullable<NonNull
 }
 
 /** A live token hub. The shared app shell owns the header and footer. */
+/** IMD's distributor of the swarm's 10% of $SHIFT (100,000,000 at launch #2124), claimed by seat holders and agents. */
+const IMD_DISTRIBUTOR = "0x0d4dd35026087e720033786578a7e718c8b34897";
+/** The largest $SHIFT balances, which are all contracts: shown so nobody mistakes them for a wallet that could dump. */
+const BIG_HOLDERS: [string, string, string][] = [
+  ["Uniswap v4 PoolManager", "0x000000000004444c5dc75cB358380D2e3dE08A90", "The SHIFT/ETH pool's liquidity. It is the market itself: nobody owns it."],
+  ["ShiftRewards (staking)", SHIFT.rewards, "Every staker's $SHIFT plus the rewards waiting to be paid. Staked tokens stay their stakers': nobody, the owner included, can take them or unlock them early. Etherscan counts both, so it shows more than the staked counter."],
+  ["IMD swarm distributor", IMD_DISTRIBUTOR, "The 10% of the supply that IMD's rules give to the swarm: 8% to seat holders, 2% to the agents who built and audited $SHIFT. It received 100,000,000 at launch and pays out as seat holders claim, so it shrinks over time."],
+];
+
 export function TokenPage() {
   const overview = useLiveData<Overview>("/api/token/overview");
   const token = useLiveData<Token>("/api/token");
@@ -137,6 +146,7 @@ export function TokenPage() {
     ["Fee splitter", live ? address(contracts?.splitter) : null],
     ["Staking & rewards", live ? address(contracts?.rewards) : null],
     ["NIGHT FROGS", FROGS],
+    ["IMD swarm distributor", live ? IMD_DISTRIBUTOR : null],
   ];
   const swapLaunch = live && l ? { ...l, token: ca ?? l.token, symbol: t?.symbol ?? l.symbol ?? "SHIFT", pool: l.pool ?? undefined } : null;
   const uniswap = ca ? safeHref(t?.buyUrl) ?? `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=NATIVE&outputCurrency=${ca}` : null;
@@ -224,6 +234,13 @@ export function TokenPage() {
       <section className="tk-contracts tk-section" aria-labelledby="tk-contracts-title">
         <div className="tk-section-heading tk-heading-row"><div><span className="tk-label">EVERY ADDRESS, IN THE OPEN</span><h2 id="tk-contracts-title">The <em>contracts.</em></h2></div><a className="tk-text-link" href="/tokenomics">Full tokenomics<Icon name="arrow" size={15} /></a></div>
         <table><caption className="tk-sr-only">NIGHTSHIFT contracts on Ethereum</caption><thead><tr><th scope="col">Contract</th><th scope="col">Ethereum address</th></tr></thead><tbody>{contractRows.map(([label, value]) => <tr key={label}><th scope="row">{label}</th><td><div>{value ? <><a className="tk-contract-link" href={etherscan(value)} target="_blank" rel="noreferrer"><span>{value}</span><Icon name="external" size={13} /></a><CopyButton value={value} label={label} /></> : <span className="tk-address-empty">{token.loading ? "…" : prelaunch ? "announced at launch" : "not available"}</span>}</div></td></tr>)}</tbody></table>
+      </section>
+      <section className="tk-contracts tk-section" aria-labelledby="tk-holders-title">
+        <div className="tk-section-heading"><span className="tk-label">THE BIG HOLDERS, EXPLAINED</span><h2 id="tk-holders-title">Nobody's <em>whale bag.</em></h2></div>
+        <p className="dim" style={{ marginTop: 12 }}>The largest $SHIFT balances on Etherscan are contracts, not people. Each one is listed here so you can check it.</p>
+        <table><caption className="tk-sr-only">The largest $SHIFT holders</caption><thead><tr><th scope="col">Holder</th><th scope="col">What it is</th></tr></thead><tbody>
+          {BIG_HOLDERS.map(([name, addr, what]) => <tr key={addr}><th scope="row"><a href={`https://etherscan.io/token/${SHIFT.token}?a=${addr}`} target="_blank" rel="noreferrer">{name}</a><br /><code>{addr.slice(0, 6)}…{addr.slice(-4)}</code></th><td>{what}</td></tr>)}
+        </tbody></table>
       </section>
       <p className="tk-legal">$SHIFT is a utility token, not an investment. Its price can go to zero.</p>
     </div>
