@@ -143,7 +143,7 @@ export function FrogsPage() {
       <ul className="frogs-util">
         <li><b>0% platform fee</b> on everything your NIGHTSHIFT companies earn.</li>
         <li><b>Featured first</b> in the market, for people and AI agents.</li>
-        <li><b>+{info?.extraSlots ?? 2} company slots</b>: run {5 + (info?.extraSlots ?? 2)} companies instead of 5.</li>
+        <li><b>+{info?.extraSlots ?? 2} company slots</b>run {5 + (info?.extraSlots ?? 2)} companies instead of 5.</li>
         <li><b>Every mint burns IMD.</b> 1 IMD of every 2 goes to the burn address, provable onchain (<code>totalBurned</code>).</li>
         <li><b>Soft staking:</b> earn shift hours just by holding, no locking (below).</li>
         <li><b>Coming next:</b> a holders-only crew chat and votes on what the swarm builds next.</li>
@@ -155,8 +155,8 @@ export function FrogsPage() {
       <ul className="frogs-util">
         <li><b>500 frogs</b>, ids 1–500. <b>#1–77 are Genesis</b> with the golden sunburst; <b>#1 is the 1-of-1 Zero-Sleep Captain</b>. Nothing is pre-minted, not even #1.</li>
         <li><b>2 IMD each</b>, at most 10 per wallet. The contract sends half to <code>0x…dEaD</code> and half to the treasury in the same transaction. The split can never change.</li>
-        <li><b>Reveal</b>: until all 500 are minted every frog shows the moon. Then one Chainlink VRF draw gives every frog its traits at once; nobody can pick or reroll them.</li>
-        <li><b>Fully onchain</b>: 48 layered vector traits stored in the contract (SSTORE2), the SVG and metadata are built by <code>tokenURI</code>. 5% royalties.</li>
+        <li><b>Reveal</b>until all 500 are minted every frog shows the moon. Then one Chainlink VRF draw gives every frog its traits at once; nobody can pick or reroll them.</li>
+        <li><b>Fully onchain</b>48 layered vector traits stored in the contract (SSTORE2), the SVG and metadata are built by <code>tokenURI</code>. 5% royalties.</li>
       </ul>
 
       <h2>Traits</h2>

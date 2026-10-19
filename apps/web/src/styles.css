@@ -282,6 +282,8 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 .frogs-grid img { display: block; width: 100%; height: auto; aspect-ratio: 1; }
 .frogs-grid figcaption { padding: 6px 8px; font: 500 11px var(--mono); color: var(--dim); }
 .frogs-util { display: grid; gap: 10px; padding-left: 18px; }
+.frogs-util li b { display: block; }
+.stake-rows { width: 100%; } .stake-rows td span { display: block; margin-top: 4px; font-size: 13px; } .stake-rows td:last-child { width: 1%; white-space: nowrap; text-align: right; } .stake-rows .btn { padding: 8px 14px; }
 .frogs-traits { display: grid; gap: 8px; }
 .frogs-traits div { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 10px 12px; border: 1px solid var(--edge); background: rgba(3, 2, 10, .4); font-size: 14px; }
 .frogs-traits b { font: 600 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--moon, #c4b4ff); }

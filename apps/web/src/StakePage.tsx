@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SHIFT } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, fallback, formatEther, http, parseAbi, parseAbiItem, parseEther } from "viem";
 import { mainnet } from "viem/chains";
@@ -25,6 +25,13 @@ type Launch = { token?: string; symbol: string; scanFrom?: number; contracts?: R
 type Stake = { amount: bigint; unlockAt: number; tx: string };
 const fmt = (v: bigint) => Number(formatEther(v)).toLocaleString("en-US", { maximumFractionDigits: 2 });
 const errText = (e: unknown) => ((e as { shortMessage?: string }).shortMessage ?? (e as Error).message ?? "").split("\n")[0]!.slice(0, 160);
+
+/** Reads the stake history, retrying: free nodes drop a request now and then. */
+async function historyRetry(rewards: Address, who: Address, from: bigint) {
+  for (let i = 0; ; i++) {
+    try { return await history(rewards, who, from); } catch (e) { if (i >= 2) throw e; await new Promise((r) => setTimeout(r, 1500 * (i + 1))); }
+  }
+}
 
 /** Your stakes are read from the contract's own events, so the page needs no extra view function. */
 async function history(rewards: Address, who: Address, from: bigint) {
@@ -63,15 +70,43 @@ export function StakePage() {
   const sym = l?.symbol ?? "SHIFT";
   const ready = Boolean(rewards && token);
 
-  const load = async (who = me) => {
-    if (!who || !rewards || !token) return;
-    setBal(await rpc.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [who] }).catch(() => null));
-    setHErr(false);
-    setH(await history(rewards, who, BigInt(Math.max(0, (l?.scanFrom ?? 0) - 100))).catch(() => { setHErr(true); return null; }));
+  // only the latest read may update the page, so a slow old read never overwrites a newer one
+  const seq = useRef(0);
+  const meRef = useRef<Address | null>(null);
+  meRef.current = me;
+  const load = async (who = meRef.current) => {
+    if (!who || !rewards || !token) return null;
+    const n = ++seq.current;
     const read = (functionName: "balanceOf" | "earned", args: readonly unknown[]) => rpc.readContract({ address: rewards, abi: REWARDS, functionName, args } as never).then((x) => x as bigint, () => null);
-    setOnChain({ staked: await read("balanceOf", [who]), eth: await read("earned", [who, "0x0000000000000000000000000000000000000000"]), shift: await read("earned", [who, token]) });
+    const [b, hist, st, eth, sh] = await Promise.all([
+      rpc.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [who] }).catch(() => null),
+      historyRetry(rewards, who, BigInt(Math.max(0, (l?.scanFrom ?? 0) - 100))).catch(() => null),
+      read("balanceOf", [who]), read("earned", [who, "0x0000000000000000000000000000000000000000"]), read("earned", [who, token]),
+    ]);
+    if (n !== seq.current || who.toLowerCase() !== meRef.current?.toLowerCase()) return hist;
+    if (b !== null) setBal(b);
+    if (hist) { setH(hist); setHErr(false); } else if (!h) setHErr(true);
+    setOnChain({ staked: st, eth, shift: sh });
+    return hist;
   };
   useEffect(() => { void load(); }, [me, rewards]);
+  // while the page is open: refresh every 20 s (when visible) and when you come back to it
+  useEffect(() => {
+    if (!me || !rewards) return;
+    const t = setInterval(() => { if (document.visibilityState === "visible") void load(); }, 20_000);
+    const back = () => { if (document.visibilityState === "visible") void load(); };
+    document.addEventListener("visibilitychange", back);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", back); };
+  }, [me, rewards]);
+  // a wallet that already allowed this site reconnects silently, and a switched account is followed
+  useEffect(() => {
+    const eth = (window as { ethereum?: { request: (a: { method: string }) => Promise<unknown>; on?: (e: string, f: (a: string[]) => void) => void; removeListener?: (e: string, f: (a: string[]) => void) => void } }).ethereum;
+    if (!eth) return;
+    void eth.request({ method: "eth_accounts" }).then((a) => { const x = (a as string[])?.[0]; if (x && !meRef.current) setMe(x as Address); }).catch(() => {});
+    const changed = (a: string[]) => { setH(null); setOnChain({ staked: null, eth: null, shift: null }); setMe((a?.[0] as Address) ?? null); };
+    eth.on?.("accountsChanged", changed);
+    return () => eth.removeListener?.("accountsChanged", changed);
+  }, []);
 
   const wallet = async () => {
     const w = createWalletClient({ chain: mainnet, transport: custom((await chooseWallet()) as never) });
@@ -91,7 +126,8 @@ export function StakePage() {
       const r = await rpc.waitForTransactionReceipt({ hash: tx });
       setMsg(r.status === "success" ? { ok: true, text: "Done.", tx } : { ok: false, text: "It reverted. Nothing moved but gas.", tx });
       if (r.status === "success") window.dispatchEvent(new Event("ns-staked")); // the staked total refreshes now, not in a minute
-      void load(x.a);
+      // nodes can be a block or two behind the receipt: read now and again shortly after
+      void load(x.a); for (const ms of [4_000, 12_000, 30_000]) setTimeout(() => void load(x.a), ms);
     } catch (e) { setMsg({ ok: false, text: errText(e) }); } finally { setStep(null); }
   };
 
@@ -122,6 +158,13 @@ export function StakePage() {
   })();
   const outAmt = (() => { try { return out && Number(out) > 0 ? parseEther(out) : 0n; } catch { return 0n; } })();
   const withdraw = (v: bigint) => run(`Confirm the withdrawal of ${fmt(v)} $${sym}…`, async ({ w, a }) => {
+    // re-read the locks right before sending, so what was unlocked a minute ago is still true
+    const fresh = await load(a);
+    if (fresh) {
+      const t = Date.now() / 1000, free = fresh.stakes.filter((x) => x.unlockAt <= t).reduce((s, x) => s + x.amount, 0n) - fresh.out;
+      if (free <= 0n) throw new Error("Nothing is unlocked right now.");
+      if (v > free) v = free;
+    }
     // a dry run first: a locked stake is refused here with a clear message, before any gas is spent
     await rpc.simulateContract({ account: a, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [v] }).catch(() => { throw new Error("The contract refused the withdrawal: part of this stake may still be locked."); });
     return w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [v] });
@@ -142,7 +185,7 @@ export function StakePage() {
             <div><input className="swap-in" inputMode="decimal" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value.replace(",", "."))} disabled={!ready} /><i>${sym}</i></div></label>
           <div className="swap-slip"><span>Lock</span>{LOCKS.map(([d, t]) => <button key={d} className={lock === d ? "on" : ""} onClick={() => setLock(d)}>{t}</button>)}</div>
           <p className="dim" style={{ fontSize: 13, margin: 0 }}>{lock === 0 ? "No lock: withdraw any time." : `Locked until ${new Date(Date.now() + lock * 86_400_000).toLocaleDateString("en-GB")}. It cannot be withdrawn early, by anyone.`} Every stake is announced in the community with its lock.</p>
-          <button className="ns-cta sm app-cta" disabled={!ready || !amt || Boolean(step) || (bal !== null && amt > bal)} onClick={() => void stake()}>{step ?? (!ready ? "OPENS AT LAUNCH" : bal !== null && amt > bal ? `NOT ENOUGH $${sym}` : `STAKE $${sym}`)}</button>
+          <button className="ns-cta sm" disabled={!ready || !amt || Boolean(step) || (bal !== null && amt > bal)} onClick={() => void stake()}>{step ?? (!ready ? "OPENS AT LAUNCH" : bal !== null && amt > bal ? `NOT ENOUGH $${sym}` : `STAKE $${sym}`)}</button>
           {msg && <p className={msg.ok ? "good" : "bad"} style={{ fontSize: 13, margin: 0 }}>{msg.text} {msg.tx && <a href={`https://etherscan.io/tx/${msg.tx}`} target="_blank" rel="noreferrer">Etherscan ↗</a>}</p>}
         </div>
       </section>
@@ -167,9 +210,11 @@ export function StakePage() {
             <div><span>Claimable now</span><b>{onChain.eth !== null ? `${Number(formatEther(onChain.eth)).toFixed(6)} ETH` : "…"}{onChain.shift !== null ? ` + ${fmt(onChain.shift)} $${sym}` : ""}</b></div>
             <div><span>ETH rewards claimed</span><b>{h ? fmt(h.paidEth) : "…"} ETH</b></div>
           </div>
-          {rows.length > 0 && <table className="plain"><thead><tr><th>Stake</th><th>Left</th><th>Unlocks</th><th></th></tr></thead><tbody>
-            {rows.map((s) => <tr key={s.tx}><td>{fmt(s.amount)} ${sym} <a href={`https://etherscan.io/tx/${s.tx}`} target="_blank" rel="noreferrer">↗</a></td><td>{s.left > 0n ? `${fmt(s.left)} $${sym}` : "withdrawn"}</td><td>{s.unlockAt <= now ? "unlocked" : `🔒 ${new Date(s.unlockAt * 1000).toLocaleDateString("en-GB")}`}</td>
-              <td>{s.unlockAt <= now && s.left > 0n && <button type="button" className="swap-max" disabled={Boolean(step)} onClick={() => void withdraw(s.left > withdrawable ? withdrawable : s.left)}>Withdraw this</button>}</td></tr>)}
+          {rows.length > 0 && <table className="plain stake-rows"><thead><tr><th>Your stakes</th><th></th></tr></thead><tbody>
+            {rows.map((s) => <tr key={s.tx}>
+              <td><b>{fmt(s.amount)} ${sym}</b> <a href={`https://etherscan.io/tx/${s.tx}`} target="_blank" rel="noreferrer">↗</a>
+                <span className="dim">{s.unlockAt <= now ? "unlocked" : `🔒 until ${new Date(s.unlockAt * 1000).toLocaleDateString("en-GB")}`}{s.left === 0n ? " · withdrawn" : s.left < s.amount ? ` · ${fmt(s.left)} left` : ""}</span></td>
+              <td>{s.unlockAt <= now && s.left > 0n && <button type="button" className="btn" disabled={Boolean(step)} onClick={() => void withdraw(s.left > withdrawable ? withdrawable : s.left)}>Withdraw</button>}</td></tr>)}
           </tbody></table>}
           {withdrawable > 0n && <div className="swap-box" style={{ marginTop: 10 }}>
             <label className="swap-leg"><span>Withdraw an amount <button type="button" className="swap-max" onClick={() => setOut(formatEther(withdrawable))}>max {fmt(withdrawable)}</button></span>
@@ -185,10 +230,10 @@ export function StakePage() {
 
       <h2>How staking pays</h2>
       <ul className="frogs-util">
-        <li><b>From every fee</b>: 40% of every NIGHTSHIFT fee goes to rewards. Half of that streams to stakers over 7 days, half to NIGHT FROGS holders.</li>
-        <li><b>Bigger and longer earns more</b>: your share grows with the amount staked and the time it stays staked.</li>
-        <li><b>Locks are real</b>: a locked stake cannot be withdrawn before its date, not even by the owner of the contract. The dev wallet's own stake is announced with its lock.</li>
-        <li><b>Claim any time</b>: rewards you earned are yours to claim whenever you like, in ETH and ${sym}.</li>
+        <li><b>From every fee</b>40% of every NIGHTSHIFT fee goes to rewards. Half of that streams to stakers over 7 days, half to NIGHT FROGS holders.</li>
+        <li><b>Bigger and longer earns more</b>your share grows with the amount staked and the time it stays staked.</li>
+        <li><b>Locks are real</b>a locked stake cannot be withdrawn before its date, not even by the owner of the contract. The dev wallet's own stake is announced with its lock.</li>
+        <li><b>Claim any time</b>rewards you earned are yours to claim whenever you like, in ETH and ${sym}.</li>
       </ul>
     </div>
   );

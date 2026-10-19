@@ -204,7 +204,7 @@ function serveStatic(res: ServerResponse, path: string): boolean {
   if (!f.startsWith(resolve(config.webDist) + sep) || !existsSync(f) || statSync(f).isDirectory()) f = join(config.webDist, "index.html");
   if (!existsSync(f)) return false;
   const type = MIME[extname(f)] ?? "application/octet-stream";
-  res.writeHead(200, { "Content-Type": type, ...(type.startsWith("text/html") ? { "Content-Security-Policy": CSP } : {}) });
+  res.writeHead(200, { "Content-Type": type, ...(type.startsWith("text/html") ? { "Content-Security-Policy": CSP, "Cache-Control": "no-cache" } : {}) });
   res.end(readFileSync(f));
   return true;
 }
