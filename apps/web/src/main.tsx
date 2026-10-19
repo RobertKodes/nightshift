@@ -1,4 +1,4 @@
-import { StrictMode, Suspense, lazy, useEffect, useState } from "react";
+import { Component, type ReactNode, StrictMode, Suspense, lazy, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { type Health, api } from "./api";
 import { CompanyPage } from "./CompanyPage";
@@ -84,4 +84,22 @@ const TITLES: Record<string, string> = {
 // The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.
 if ("serviceWorker" in navigator && location.protocol === "https:") void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
 
-createRoot(document.getElementById("root")!).render(<StrictMode><SessionProvider><App /></SessionProvider></StrictMode>);
+/** One page failing (an old browser, a blocked script, no WebGL) shows a way out instead of a blank screen. */
+class Crash extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error) { console.error("page crashed", error); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="docs" style={{ maxWidth: 560, margin: "16vh auto", textAlign: "center" }}>
+        <h1>Something went wrong on this page.</h1>
+        <p className="lead">Reload to try again. If it keeps happening, update your browser or open the site in a current Chrome, Safari, Firefox, Edge or Brave.</p>
+        <p><button className="btn primary" onClick={() => location.reload()}>Reload</button> <a className="btn" href="/">Home</a></p>
+        <p className="dim" style={{ fontSize: 12 }}>{String(this.state.error.message).slice(0, 160)}</p>
+      </div>
+    );
+  }
+}
+
+createRoot(document.getElementById("root")!).render(<StrictMode><Crash><SessionProvider><App /></SessionProvider></Crash></StrictMode>);
