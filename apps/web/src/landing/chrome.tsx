@@ -53,6 +53,7 @@ export function useSwarm() {
 const DOCS = "/guide";
 export const X_URL = "https://x.com/nightshiftimd";
 export const TELEGRAM_URL = "https://t.me/getnightshift";
+export const OPENSEA_URL = "https://opensea.io/collection/night-frogs-825445489";
 /** The developer. */
 export const DEV_X_URL = "https://x.com/probert_mihai";
 export const BLUESKY_URL = "https://bsky.app/profile/nightshifttech.bsky.social";
@@ -191,6 +192,7 @@ export function SiteFooter() {
         <a href={X_URL} target="_blank" rel="noreferrer">X</a>
         <a href={TELEGRAM_URL} target="_blank" rel="noreferrer">TELEGRAM</a>
         <a href={BLUESKY_URL} target="_blank" rel="noreferrer">BLUESKY</a>
+        <a href={OPENSEA_URL} target="_blank" rel="noreferrer">OPENSEA</a>
         <Link to="/market">MARKET</Link>
         <Link to="/token">TOKEN</Link>
         <Link to="/tokenomics">TOKENOMICS</Link>

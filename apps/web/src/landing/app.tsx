@@ -80,6 +80,7 @@ export function AppTabs({ active }: { active: Active }) {
             <div className="app-social">
               <a href={X_URL} target="_blank" rel="noreferrer">X</a>
               <a href={TELEGRAM_URL} target="_blank" rel="noreferrer">Telegram</a>
+              <a href="https://opensea.io/collection/night-frogs-825445489" target="_blank" rel="noreferrer">OpenSea</a>
               <InstallSite />
             </div>
           </div>
