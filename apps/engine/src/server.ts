@@ -33,6 +33,7 @@ import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
 import { impact } from "./impact.js";
 import { usdc } from "@nightshift/core";
 import { erc20Abi, getAddress } from "viem";
+import { ecosystemRoutes } from "./ecosystem-routes.js";
 
 /** The caller's IP. X-Forwarded-For is trusted only when the request comes from the local proxy. */
 function clientIp(req: IncomingMessage): string {
@@ -373,6 +374,7 @@ export function serve(engine: Engine) {
       }
 
       const owner = engine.auth.owner(req);
+      if (await ecosystemRoutes(req, res, p, { json, body, limited, owner, url })) return;
       // Reads that reach the chain or IMD when their cache is cold: plenty for pages, not for a loop.
       if (["/api/staked", "/api/token/overview", "/api/token", "/api/frogs", "/api/frogs/claims", "/api/frogs/staking", "/api/impact", "/api/landing"].includes(p) && limited(req, "reads", 240, 60_000)) return json(res, 429, { error: "slow down" });
 

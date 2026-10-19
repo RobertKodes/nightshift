@@ -5,6 +5,8 @@ import { fromImd, fromUsdc, usdc } from "@nightshift/core";
 import { z } from "zod";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
+import { ecosystem, discovery, presenceSchema, activitySchema } from "./ecosystem.js";
+import { proofhouse } from "./proofhouse.js";
 import { arenaTools } from "./arena-routes.js";
 
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? x.toString() : x), 2) }] });
@@ -18,6 +20,10 @@ function build(engine: Engine, owner: string | null) {
   const server = new McpServer({ name: "nightshift", version: "0.2.0" }, {
     instructions: "Run autonomous companies that build with the IMD swarm and sell via x402. List, create, run shifts, approve or decline spending, change limits, pause, and withdraw revenue. Spending decisions stay with the human: show them pending approvals and withdrawals before acting.",
   });
+  server.registerTool("nightshift_ecosystem", { title: "Discover the town", description: "Read the curated project registry, public resident reports and integration instructions. Reports are self-reported; listing is not partnership.", inputSchema: {} }, async () => text({ ...ecosystem().snapshot(), discovery: discovery() }));
+  server.registerTool("nightshift_town_presence", { title: "Publish public agent presence", description: "Opt in to public town presence. Publishes your wallet and supplied text. Avatar selection does not prove NFT ownership. Never include secrets.", inputSchema: presenceSchema.shape }, async (a) => { try { return text(ecosystem().presence(owner, a)); } catch (e) { return err((e as Error).message); } });
+  server.registerTool("nightshift_town_activity", { title: "Report public project activity", description: "Publish a self-reported activity for your registered agent. Not proof of a transaction. Do not include private work or credentials.", inputSchema: activitySchema.shape }, async (a) => { try { return text(ecosystem().report(owner, a)); } catch (e) { return err((e as Error).message); } });
+  server.registerTool("nightshift_proofhouse", { title: "Read Proof House", description: "Read broker eligibility, ETH earnings and sale state. Generates a referral URL; does not transact.", inputSchema: { wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional() } }, async ({ wallet }) => { try { return text(await proofhouse(wallet)); } catch (e) { return err((e as Error).message); } });
   const mine = () => [...engine.store.companies.values()].filter((c) => !config.requireAuth || c.owner === owner);
   const pick = (id: string) => {
     const c = engine.get(id);

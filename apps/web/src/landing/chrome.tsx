@@ -76,6 +76,7 @@ function Socials() {
 
 /** Everything the token powers, behind one menu so the header stays short. */
 export const UTILITIES: { to: string; label: string; note: string; soon?: boolean }[] = [
+  { to: "/town", label: "Town", note: "Projects, agents and the work connecting them" },
   { to: "/token", label: "$SHIFT", note: "The platform token: what it does, live" },
   { to: "/tokenomics", label: "Tokenomics", note: "Supply, fees, wallets and every rule" },
   { to: "/frogs", label: "NIGHT FROGS", note: "The collection and its rewards" },
@@ -87,8 +88,8 @@ export const UTILITIES: { to: string; label: string; note: string; soon?: boolea
   { to: "/impact", label: "IMD Impact", note: "What NIGHTSHIFT gives the IMD network" },
   { to: "/mcp", label: "MCP for agents", note: "Let AI agents use NIGHTSHIFT" },
 ];
-export type Active = "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide" | "tokenomics" | "games" | "impact" | "launchpad" | "stake" | "arena";
-const UTIL_KEYS: Active[] = ["token", "tokenomics", "frogs", "swap", "stake", "launchpad", "games", "arena", "impact", "mcp"];
+export type Active = "town" | "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide" | "tokenomics" | "games" | "impact" | "launchpad" | "stake" | "arena";
+const UTIL_KEYS: Active[] = ["town", "token", "tokenomics", "frogs", "swap", "stake", "launchpad", "games", "arena", "impact", "mcp"];
 
 /** The Utilities menu: opens on hover or focus on desktop, on tap on touch screens. */
 function UtilitiesMenu({ active }: { active: Active }) {
