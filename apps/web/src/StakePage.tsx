@@ -104,6 +104,8 @@ export function StakePage() {
   const now = Date.now() / 1000;
   const staked = onChain.staked ?? (h ? h.stakes.reduce((s, x) => s + x.amount, 0n) - h.out : 0n);
   const unlocked = h ? h.stakes.filter((x) => x.unlockAt <= now).reduce((s, x) => s + x.amount, 0n) - h.out : 0n;
+  // when the stake history could not be read, offer the whole stake: the dry run catches a lock
+  const withdrawable = h ? (unlocked > 0n ? (unlocked > staked ? staked : unlocked) : 0n) : staked;
 
   return (
     <div className="docs token-page stake-page">
@@ -125,6 +127,14 @@ export function StakePage() {
         </div>
       </section>
 
+      {ready && !me && (
+        <section className="tkn-card">
+          <div className="tkn-head"><div><b>YOUR STAKE</b><span>Withdraw, claim and see your locks</span></div></div>
+          <button className="btn primary" disabled={Boolean(step)} onClick={() => void wallet().catch((e) => setMsg({ ok: false, text: errText(e) }))}>Connect wallet to see your stake</button>
+          {msg && !msg.ok && <p className="bad" style={{ fontSize: 13 }}>{msg.text}</p>}
+        </section>
+      )}
+
       {me && ready && (
         <section className="tkn-card">
           <div className="tkn-head"><div><b>YOUR STAKE</b><span>{me.slice(0, 6)}…{me.slice(-4)}</span></div></div>
@@ -139,11 +149,14 @@ export function StakePage() {
           </tbody></table>}
           <div className="setup-tools" style={{ marginTop: 10 }}>
             <button className="btn primary" disabled={Boolean(step)} onClick={() => void run("Confirm the claim…", ({ w, a }) => w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "getReward" }))}>Claim rewards</button>
-            <button className="btn" disabled={Boolean(step) || unlocked <= 0n} onClick={() => void run("Confirm the withdrawal…", ({ w, a }) => w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [unlocked] }))}>Withdraw unlocked ({fmt(unlocked > 0n ? unlocked : 0n)})</button>
+            <button className="btn" disabled={Boolean(step) || withdrawable <= 0n} onClick={() => void run("Confirm the withdrawal…", async ({ w, a }) => {
+              // a dry run first: a locked stake is refused here with a clear message, before any gas is spent
+              await rpc.simulateContract({ account: a, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [withdrawable] }).catch(() => { throw new Error(h ? "The contract refused the withdrawal: part of this stake may still be locked." : "The contract refused: some of your stake is still locked. Reload to read your locks and withdraw the unlocked part."); });
+              return w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [withdrawable] });
+            })}>Withdraw unlocked ({fmt(withdrawable)})</button>
           </div>
         </section>
       )}
-      {!me && ready && <button className="btn" onClick={() => void wallet().catch((e) => setMsg({ ok: false, text: errText(e) }))}>Connect wallet to see your stake</button>}
 
       <h2>How staking pays</h2>
       <ul className="frogs-util">
