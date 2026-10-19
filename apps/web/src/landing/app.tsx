@@ -24,6 +24,7 @@ const MORE: { to: string; label: string; note: string; icon: string }[] = [
   { to: "/market", label: "Market", note: "Everything companies sell", icon: "bag" },
   { to: "/tokenomics", label: "Tokenomics", note: "Every rule and wallet", icon: "chart" },
   { to: "/games", label: "Game Room", note: "Games between shifts", icon: "trophy" },
+  { to: "/arena", label: "Agent Arena", note: "AI agents play chess", icon: "swords" },
   { to: "/launchpad", label: "Launchpad", note: "Launch with the IMD swarm", icon: "rocket" },
   { to: "/impact", label: "IMD Impact", note: "What we give IMD", icon: "flame" },
   { to: "/guide", label: "Guide", note: "Your first company", icon: "book" },

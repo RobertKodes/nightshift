@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Link } from "./router";
 import { Icon } from "./Icon";
 import { type Landed, type Live, PinballGame, type Rival, type Shot } from "./pinball/PinballGame";
@@ -8,6 +8,9 @@ import { InstallButton, useGameApp } from "./pinball/install";
 import { AppTabs } from "./landing/app";
 import { type Seat, StakeLobby, StakeResult, useEscrow } from "./stakes";
 import "./pinball/arcade.css";
+
+/** Spectator mode (/games/pinball?watch=<id>): its own chunk, loaded only when someone watches. */
+const PinballWatch = lazy(() => import("./pinball/Watch").then((x) => ({ default: x.PinballWatch })));
 
 type Currency = "FREE" | "IMD" | "SHIFT";
 type Mode = "PRACTICE" | Currency;
@@ -107,9 +110,12 @@ export function PinballPage() {
   const faces = useRef(new Map<string, string | null>());
   const withFaces = (m: MatchView): MatchView => ({ ...m, players: m.players.map((p) => { if (p.avatar !== undefined) faces.current.set(p.key, p.avatar); return { ...p, avatar: faces.current.get(p.key) ?? null }; }) });
   const me = name.trim() || "Night crew";
+  const [watchId, setWatchId] = useState(() => new URLSearchParams(location.search).get("watch"));
+  // the path stays /games/pinball between watching and playing: follow the query instead
+  useEffect(() => { const on = () => setWatchId(new URLSearchParams(location.search).get("watch")); addEventListener("popstate", on); return () => removeEventListener("popstate", on); }, []);
 
   useGameApp();
-  useEffect(() => { document.title = "Space Pinball · NIGHTSHIFT"; }, []);
+  useEffect(() => { if (!watchId) document.title = "Space Pinball · NIGHTSHIFT"; }, [watchId]);
   useEffect(() => {
     void api<Leaderboard>("board").then(setLeaderboard).catch(() => {});
   }, [play === null]);
@@ -220,6 +226,21 @@ export function PinballPage() {
       </>}
     </div>
   </div>;
+
+  // a spectator: both tables read-only, no seat, nothing to post
+  if (watchId) return (
+    <div className="arc arc-watching">
+      <svg className="arc-icon-defs" width="0" height="0" aria-hidden="true"><defs>{GAME_ICONS.map((icon) => <g id={`arc-icon-${icon}`} key={icon}><Icon name={icon} size={24} /></g>)}</defs></svg>
+      <div className="arc-bg" aria-hidden="true" />
+      <header className="arc-top">
+        <Link to="/games/live" className="arc-back"><Icon name="arrow" size={17} /><span>LIVE GAMES</span></Link>
+        <Link to="/games/pinball" className="arc-logo" aria-label="Space Pinball by NIGHTSHIFT"><img src="/brand/space-pinball-logo.svg" alt="Space Pinball by NIGHTSHIFT" width={410} height={156} /></Link>
+        <div className="arc-who"><InstallButton /></div>
+      </header>
+      <Suspense fallback={<div className="arc-boot" />}><PinballWatch id={watchId} /></Suspense>
+      <AppTabs active="games" />
+    </div>
+  );
 
   return (
     <div className={`arc ${play ? "arc-is-playing" : ""}`}>

@@ -1,0 +1,80 @@
+/* Watch live: the list of games being played (Game Room strip, /games/live) and the spectator views. */
+.lv-strip { margin: 28px 0 8px; }
+.lv-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.lv-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid rgba(164, 139, 255, .16); background: rgba(255, 255, 255, .02); }
+.lv-row:hover { border-color: rgba(164, 139, 255, .4); background: rgba(124, 92, 255, .06); }
+.lv-game { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid rgba(164, 139, 255, .35); background: rgba(124, 92, 255, .1); color: var(--uv-hi, #a48bff); }
+.lv-game.pinball { border-color: rgba(255, 79, 216, .4); background: rgba(255, 79, 216, .07); color: #ff8ae6; }
+.lv-who { display: grid; gap: 3px; min-width: 0; }
+.lv-kind { color: var(--faint, #6c6688); font: 600 9.5px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .16em; }
+.lv-who b { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; color: var(--ink, #f2efff); font: 600 14.5px/1.35 Inter, system-ui, sans-serif; }
+.lv-who em { color: var(--dim, #a9a3c4); font: italic 400 15px var(--serif, Georgia, serif); }
+.lv-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.lv-agent { padding: 2px 5px; border: 1px solid rgba(184, 255, 74, .45); color: var(--acid, #b8ff4a); font: 600 8.5px/1 var(--mono, "JetBrains Mono", monospace); font-style: normal; letter-spacing: .12em; }
+.lv-stake { padding: 5px 9px; border: 1px solid rgba(164, 139, 255, .3); color: var(--dim, #a9a3c4); font: 600 10px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .1em; white-space: nowrap; }
+.lv-stake.on { border-color: rgba(255, 196, 107, .55); color: #ffc46b; background: rgba(255, 196, 107, .06); }
+.lv-meta { display: inline-flex; gap: 12px; color: var(--dim, #a9a3c4); font: 500 11px/1 var(--mono, "JetBrains Mono", monospace); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lv-meta > span { display: inline-flex; align-items: center; gap: 5px; }
+.lv-watch { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border: 1px solid #a48bff; background: linear-gradient(180deg, #6d4dff, #4a2fd6); color: #fff !important; font: 600 10.5px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .12em; text-decoration: none; }
+.lv-watch:hover { box-shadow: 0 8px 30px -10px rgba(124, 92, 255, .8); }
+.lv-watch:focus-visible, .lv-all:focus-visible, .lv-filters button:focus-visible { outline: 2px solid var(--uv-hi, #a48bff); outline-offset: 2px; }
+.lv-empty { margin: 0; color: var(--dim, #a9a3c4); font: 400 14px/1.6 Inter, system-ui, sans-serif; }
+.lv-empty a { color: var(--uv-hi, #a48bff); }
+.lv-all { display: inline-flex; align-items: center; gap: 8px; justify-self: start; color: var(--uv-hi, #a48bff); font: 600 11px var(--mono, "JetBrains Mono", monospace); letter-spacing: .1em; text-transform: uppercase; text-decoration: none; }
+.lv-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.lv-filters button { min-height: 36px; padding: 0 14px; border: 1px solid rgba(164, 139, 255, .25); background: none; color: var(--dim, #a9a3c4); font: 600 10.5px var(--mono, "JetBrains Mono", monospace); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+.lv-filters button.on { border-color: rgba(164, 139, 255, .6); background: rgba(124, 92, 255, .14); color: var(--ink, #f2efff); }
+.lv-note { color: var(--faint, #6c6688); font: 400 12.5px/1.5 Inter, system-ui, sans-serif; }
+@media (max-width: 700px) {
+  .lv-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "g who who" "stake meta watch"; gap: 10px 12px; padding: 12px; }
+  .lv-game { grid-area: g; width: 36px; height: 36px; }
+  .lv-who { grid-area: who; }
+  .lv-stake { grid-area: stake; justify-self: start; }
+  .lv-meta { grid-area: meta; justify-self: end; }
+  .lv-watch { grid-area: watch; min-height: 44px; }
+}
+
+/* NIGHT CHESS, spectating: the read-only note where the game actions are for a player. */
+.nc-spectate-banner { display: flex; gap: 12px; align-items: flex-start; padding: 14px 15px; border: 1px solid rgba(184, 255, 74, .35); background: rgba(184, 255, 74, .05); color: var(--dim); }
+.nc-spectate-banner > .icon { flex: none; color: #b8ff4a; }
+.nc-spectate-banner p { margin: 0; font-size: 12px; line-height: 1.6; }
+.nc-spectate-banner b { display: block; color: var(--moon); font: 600 10px/1.8 var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+
+/* Space Pinball, spectating: both tables side by side. */
+.arc .pw { position: relative; z-index: 1; display: grid; gap: 18px; width: min(1080px, 100%); margin: 0 auto; padding: 22px clamp(16px, 3vw, 40px) 40px; }
+.arc .pw-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.arc .pw-head > .arc-kicker { color: var(--uv-hi); }
+.arc .pw-badges { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.arc .pw-status { padding: 5px 9px; border: 1px solid var(--edge); color: var(--dim); font: 600 10px/1 var(--mono); letter-spacing: .12em; }
+.arc .pw-status.live { border-color: rgba(184, 255, 74, .5); color: var(--acid); }
+.arc .pw-tables { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(12px, 3vw, 44px); }
+.arc .pw-seat { display: grid; gap: 12px; align-content: start; min-width: 0; padding: 14px; border: 1px solid var(--edge); background: var(--glass); }
+.arc .pw-seat.won { border-color: rgba(255, 196, 107, .6); box-shadow: 0 0 40px -12px rgba(255, 196, 107, .5); }
+.arc .pw-who { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.arc .pw-who .arc-face { width: 44px; height: 44px; }
+.arc .pw-who .arc-score { font-size: clamp(20px, 3vw, 32px); }
+.arc .pw-table { width: 100%; max-width: 360px; height: auto; max-height: none; place-self: center; }
+.arc .pw-foot { display: flex; justify-content: space-between; gap: 10px; color: var(--dim); font: 500 10px/1 var(--mono); letter-spacing: .1em; }
+.arc .pw-foot > span { display: inline-flex; align-items: center; gap: 6px; }
+.arc .pw-vs { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); color: var(--dim); font: italic 400 22px var(--serif); pointer-events: none; }
+.arc .pw-bar { height: 4px; background: rgba(255, 79, 216, .55); }
+.arc .pw-bar > span { display: block; height: 100%; background: var(--uv); transition: width .4s ease; }
+.arc .pw-note, .arc .pw-help { margin: 0; color: var(--dim); font: 400 13px/1.6 Inter, system-ui, sans-serif; text-align: center; }
+.arc .pw-help { display: flex; justify-content: center; align-items: center; gap: 8px; color: var(--faint); font-size: 12px; }
+.arc .pw-result, .arc .pw-gone { max-width: 520px; padding: 24px 18px; border: 1px solid var(--edge); background: var(--glass); }
+.arc .pw-result h2 { font-size: clamp(32px, 5vw, 56px); }
+.arc .pw-result p, .arc .pw-gone p { margin: 0; color: var(--dim); }
+.arc .pw-gone { margin-top: 40px; }
+.arc .pw .arc-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.arc .pw .arc-actions a { text-decoration: none; }
+@media (max-width: 700px) {
+  .arc .pw { padding-bottom: calc(var(--tabs-h, 64px) + 24px); }
+  .arc .pw-tables { gap: 8px; }
+  .arc .pw-seat { padding: 8px; gap: 8px; }
+  .arc .pw-who { grid-template-columns: auto minmax(0, 1fr); }
+  .arc .pw-who .arc-face { width: 32px; height: 32px; padding: 2px; }
+  .arc .pw-who .arc-score { grid-column: 1 / -1; font-size: 22px; }
+  .arc .pw-who .arc-identity .arc-kicker { display: none; }
+  .arc .pw-vs { display: none; }
+  .arc .pw-foot { font-size: 9px; }
+}

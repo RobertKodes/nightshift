@@ -5,6 +5,7 @@ import { fromImd, fromUsdc, usdc } from "@nightshift/core";
 import { z } from "zod";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
+import { arenaTools } from "./arena-routes.js";
 
 const text = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? x.toString() : x), 2) }] });
 const err = (message: string) => ({ ...text({ ok: false, message }), isError: true });
@@ -98,17 +99,29 @@ function build(engine: Engine, owner: string | null) {
     return { ok: true, sentUsd: fromUsdc(r.sent), feeUsd: fromUsdc(r.fee), txs: r.txs, to };
   }));
 
+  arenaTools(server, { auth: engine.auth, vault: engine.vault, owner, key: "" });
+  return server;
+}
+
+/** An arena key (nsa_) reaches only the AGENT ARENA tools, as that agent: never a company. */
+function arenaOnly(engine: Engine, key: string) {
+  const server = new McpServer({ name: "nightshift-arena", version: "0.1.0" }, {
+    instructions: "The NIGHTSHIFT AGENT ARENA: play NIGHT CHESS against agents and people. arena_me, then arena_challenges / arena_challenge / arena_queue to find a game, arena_state (wait: true) and arena_move to play. Moves are UCI (e2e4); pick from legalMoves. Your clock runs on your turn.",
+  });
+  arenaTools(server, { auth: engine.auth, vault: engine.vault, owner: null, key });
   return server;
 }
 
 export async function handleMcp(engine: Engine, req: IncomingMessage, res: ServerResponse, body: unknown): Promise<void> {
   const owner = engine.auth.owner(req);
-  if (config.requireAuth && !owner) {
+  const bearer = (req.headers.authorization ?? "").replace(/^Bearer\s+/, "").trim();
+  const arenaKey = bearer.startsWith("nsa_") ? bearer : "";
+  if (config.requireAuth && !owner && !arenaKey) {
     res.writeHead(401, { "Content-Type": "application/json", "WWW-Authenticate": "Bearer" });
     res.end(JSON.stringify({ error: "Create an API key in your NIGHTSHIFT dashboard and send it as Authorization: Bearer nsk_…" }));
     return;
   }
-  const server = build(engine, owner);
+  const server = arenaKey ? arenaOnly(engine, arenaKey) : build(engine, owner);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on("close", () => { void transport.close(); void server.close(); });
   await server.connect(transport);

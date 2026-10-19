@@ -24,6 +24,8 @@ type Sent = { kind: Attack; tick: number; due: number };
 type Stream = { table: Table; log: Input[]; at: number; tick: number; seen: number };
 type Player = {
   id: string; key: string; name: string; wallet: string | null; avatar: string | null; watching: number;
+  /** An AI player (the arena's), shown as such to spectators. */
+  agent?: boolean;
   x: number; y: number; s: Stream;
   /** What this table sent, found by the server: only these are relayed. */
   sent: Sent[];
@@ -182,6 +184,13 @@ const view = (m: Match, me?: string, faces = true) => ({
   }),
 });
 export type View = ReturnType<typeof view>;
+/**
+ * What a spectator sees: both tables as a rival sees them (live score, ball, attacks sent), the
+ * verified scores once settled. The seed only after the match is over, so nobody can work out the
+ * table ahead of the players (or for one of them).
+ */
+const watchView = (m: Match) => { const v = view(m); return { ...v, seed: m.done ? m.seed : null, players: v.players.map((p) => ({ ...p, you: false })) }; };
+export type WatchView = ReturnType<typeof watchView>;
 
 /** A live stream of one match for one player; the first frame at once. Being connected is being ready. */
 export function listen(id: string, me: string | undefined, f: (v: View) => void): () => void {
@@ -196,6 +205,24 @@ export function listen(id: string, me: string | undefined, f: (v: View) => void)
   s.add(send); listeners.set(id, s);
   send();
   return () => { s.delete(send); if (p) p.watching--; };
+}
+
+/** A spectator's stream: the same frames as the players get, without counting as a player being there. */
+export function watch(id: string, f: (v: WatchView) => void): (() => void) | null {
+  if (!matches.has(id)) return null;
+  const send = () => { const cur = matches.get(id); if (cur) f(watchView(cur)); };
+  const s = listeners.get(id) ?? new Set();
+  s.add(send); listeners.set(id, s);
+  send();
+  return () => { s.delete(send); };
+}
+export function getWatch(id: string): WatchView | null { const m = matches.get(id); return m ? watchView(m) : null; }
+/** The duels being played now (the countdown included), for the spectators' list. No seat ever leaves here. */
+export function live() {
+  return [...matches.values()].filter((m) => !m.done && !m.void && m.startedAt !== null && m.players.length === 2).map((m) => ({
+    id: m.id, currency: m.currency, stake: m.stake, startedAt: m.startedAt!,
+    players: m.players.map((p) => ({ name: p.name, avatar: p.avatar, ...(p.agent ? { agent: true } : {}) })),
+  }));
 }
 
 const stream = (seed: number): Stream => ({ table: new Table(seed), log: [], at: 0, tick: 0, seen: 0 });
@@ -215,11 +242,11 @@ function countdown(m: Match): void {
  * B). Each attaches with the seat the lobby gives only to that wallet's signed-in session. The seed
  * stays hidden until the start, as in every duel. A player who never streams a game scores 0.
  */
-export function createStaked(o: { escrow: string; currency: "IMD" | "SHIFT"; stake: number; a: { wallet: string; name: string }; b: { wallet: string; name: string }; onResult: (r: { draw: boolean; winner: string | null }) => void }): { id: string; seats: Record<string, string> } {
+export function createStaked(o: { escrow: string; currency: "IMD" | "SHIFT"; stake: number; a: { wallet: string; name: string; agent?: boolean }; b: { wallet: string; name: string; agent?: boolean }; onResult: (r: { draw: boolean; winner: string | null }) => void }): { id: string; seats: Record<string, string> } {
   const id = randomBytes(5).toString("hex"), seed = randomBytes(4).readUInt32BE(0), pa = randomUUID(), pb = randomUUID();
   const m: Match = {
     id, seed, currency: o.currency, stake: o.stake, createdAt: Date.now(), startedAt: null, go: false, roster: 0, winner: null, draw: false, done: false, void: null,
-    players: [fresh(pa, cleanName(o.a.name), o.a.wallet, "/games/pinball/frog-0.webp", seed), fresh(pb, cleanName(o.b.name), o.b.wallet, "/games/pinball/frog-3.webp", seed)],
+    players: [{ ...fresh(pa, cleanName(o.a.name), o.a.wallet, "/games/pinball/frog-0.webp", seed), ...(o.a.agent ? { agent: true } : {}) }, { ...fresh(pb, cleanName(o.b.name), o.b.wallet, "/games/pinball/frog-3.webp", seed), ...(o.b.agent ? { agent: true } : {}) }],
     escrow: o.escrow, showBy: Date.now() + STAKED_SHOW_MS, onResult: o.onResult,
   };
   matches.set(id, m);
@@ -227,8 +254,8 @@ export function createStaked(o: { escrow: string; currency: "IMD" | "SHIFT"; sta
   return { id, seats: { [o.a.wallet.toLowerCase()]: pa, [o.b.wallet.toLowerCase()]: pb } };
 }
 
-/** Join the free queue; pairs with whoever waits there, else opens a match. Staked duels come from the challenge lobby. */
-export async function queue(name: string, wallet: string | null, currency: Currency, stake: number, avatar: string | null): Promise<{ match: View; player: string }> {
+/** Join the free queue; pairs with whoever waits there, else opens a match. Staked duels come from the challenge lobby. `agent` marks an AI player. */
+export async function queue(name: string, wallet: string | null, currency: Currency, stake: number, avatar: string | null, agent = false): Promise<{ match: View; player: string }> {
   if (currency !== "FREE") throw new Error("Duels for IMD or $SHIFT are made through the challenge lobby.");
   stake = 0; // a free duel never carries a stake, whatever an old page sends
   const clean = cleanName(name), pic = await face(avatar, wallet);
@@ -237,13 +264,13 @@ export async function queue(name: string, wallet: string | null, currency: Curre
   const open = waiting.get(key);
   const m = open ? matches.get(open) : undefined;
   if (m && !m.startedAt && !m.done && m.players.length === 1 && Date.now() - m.createdAt < 10 * 60_000 && m.players[0]!.watching > 0) {
-    m.players.push(fresh(pid, clean, wallet, pic, m.seed)); m.roster++;
+    m.players.push({ ...fresh(pid, clean, wallet, pic, m.seed), ...(agent ? { agent: true } : {}) }); m.roster++;
     waiting.delete(key);
     countdown(m);
     return { match: view(m, pid), player: pid };
   }
   const id = randomBytes(5).toString("hex"), seed = randomBytes(4).readUInt32BE(0);
-  const nm: Match = { id, seed, currency, stake, createdAt: Date.now(), startedAt: null, go: false, roster: 0, players: [fresh(pid, clean, wallet, pic, seed)], winner: null, draw: false, done: false, void: null };
+  const nm: Match = { id, seed, currency, stake, createdAt: Date.now(), startedAt: null, go: false, roster: 0, players: [{ ...fresh(pid, clean, wallet, pic, seed), ...(agent ? { agent: true } : {}) }], winner: null, draw: false, done: false, void: null };
   matches.set(id, nm);
   waiting.set(key, id);
   return { match: view(nm, pid), player: pid };

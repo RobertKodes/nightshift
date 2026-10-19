@@ -86,6 +86,7 @@ export type Challenge = {
   relay?: { state: "sending" | "sent" | "mined" | "failed"; tx?: string; error?: string; at: number };
   closed?: { kind: "settled" | "refunded" | "cancelled"; tx: string; winner?: string; draw?: boolean; payout?: string };
 };
+export type DuelEvent = "listed" | "joined" | "settled" | "refunded";
 export type OnChainMatch = readonly [Address, bigint, Hex, Address, Address, bigint, bigint, boolean];
 export type EscrowLog = { eventName: string; args: Record<string, unknown>; blockNumber: bigint | null; transactionHash: Hex | null; logIndex: number | null };
 /** The reads the follower needs (the mainnet client, or a fake in tests). */
@@ -109,6 +110,7 @@ export class Escrow {
   #syncing: Promise<void> | null = null;
   #lastSync = 0;
   #joined: ((c: Challenge) => void)[] = [];
+  #events: ((kind: DuelEvent, c: Challenge) => void)[] = [];
   /** Names a joiner gave before sending join(): wallet → name, per match (memory only). */
   #intents = new Map<string, Map<string, string>>();
   #signing = new Set<string>();
@@ -145,6 +147,9 @@ export class Escrow {
 
   /** Called for a joined match that needs its game (when the Joined event lands, and after a restart). */
   onJoined(f: (c: Challenge) => void): void { this.#joined.push(f); }
+  /** Called when a challenge goes live (Opened), is accepted (Joined), and when it settles or is refunded: for the community cards. */
+  onEvent(f: (kind: DuelEvent, c: Challenge) => void): void { this.#events.push(f); }
+  #tell(kind: DuelEvent, c: Challenge) { for (const f of this.#events) try { f(kind, c); } catch (e) { console.error("escrow event", e); } }
   #tellJoined(c: Challenge) { for (const f of this.#joined) try { f(c); } catch (e) { console.error("escrow joined", e); } }
 
   /** The signer, the pause and the limits as the contract has them now (cached a minute). */
@@ -273,6 +278,7 @@ export class Escrow {
       const openedAt = Number(m[5]);
       if (openedAt * 1000 > c.createdAt + PENDING_MS + 120_000) return; // opened after the challenge lapsed
       c.openedAt = openedAt; c.openTx = tx;
+      this.#tell("listed", c);
     } else if (l.eventName === "Joined") {
       if (!c.openedAt || c.playerB || c.refused) return;
       const b = lc(l.args.playerB);
@@ -283,10 +289,12 @@ export class Escrow {
       this.#intents.delete(id);
       this.#save();
       if (!m[7]) this.#tellJoined(c);
+      this.#tell("joined", c);
     } else if (l.eventName === "Settled") {
       c.closed = { kind: "settled", tx, winner: lc(l.args.winner), draw: l.args.draw === true, payout: String(l.args.payout ?? "") };
       if (c.relay && c.relay.tx && lc(c.relay.tx) === lc(tx)) c.relay.state = "mined";
-    } else if (l.eventName === "Refunded") c.closed = { kind: "refunded", tx };
+      this.#tell("settled", c);
+    } else if (l.eventName === "Refunded") { c.closed = { kind: "refunded", tx }; this.#tell("refunded", c); }
     else if (l.eventName === "Cancelled") c.closed = { kind: "cancelled", tx };
   }
 

@@ -24,6 +24,8 @@ import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
 import { burnTotals, marketSnapshot } from "./community.js";
 import { chessRoutes } from "./chess-routes.js";
 import { gamesRoutes } from "./games-routes.js";
+import { arenaRoutes } from "./arena-routes.js";
+import { spectateRoutes } from "./spectate.js";
 import { prices } from "./prices.js";
 import { checkOrder as checkSwarmOrder, orders as swarmOrders, placeOrder as placeSwarmOrder } from "./swarm.js";
 import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
@@ -377,8 +379,10 @@ export function serve(engine: Engine) {
         const w = new URL(req.url ?? "/", config.publicUrl).searchParams.get("wallet") ?? "";
         return json(res, 200, { board: stakingBoard(20), me: /^0x[0-9a-fA-F]{40}$/.test(w) ? stakingOf(w) : null });
       }
+      if (await spectateRoutes(req, res, p, { json, limited })) return;
       if (p.startsWith("/api/chess/") && await chessRoutes(req, res, p, { json, body, limited, owner: engine.auth.owner(req), url })) return;
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner: engine.auth.owner(req), url, vault: engine.vault })) return;
+      if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
       if (p.startsWith("/api/pinball/")) {
         const parts = p.split("/").filter(Boolean); // api pinball …
         if (p === "/api/pinball/stakes") return json(res, 200, pinStakes());

@@ -14,7 +14,7 @@ export const STAKED_SHOW_MS = 5 * 60_000;
 export const CONTROLS = { "3+2": { time: 180_000, increment: 2_000 }, "5+0": { time: 300_000, increment: 0 }, "10+0": { time: 600_000, increment: 0 } };
 export type TimeControl = keyof typeof CONTROLS;
 export type Reason = "checkmate" | "stalemate" | "repetition" | "insufficient material" | "50-move rule" | "resignation" | "agreement" | "abandonment" | "timeout";
-type Player = { id: string; name: string; wallet: string | null; color: Color; rating: number; moves: number; streams: number; offlineAt: number | null };
+type Player = { id: string; name: string; wallet: string | null; color: Color; rating: number; moves: number; streams: number; offlineAt: number | null; agent?: boolean };
 type Match = {
   id: string; tc: TimeControl; currency: "FREE" | "IMD" | "SHIFT"; createdAt: number; startedAt: number | null; turnAt: number;
   game: Chess; players: Player[]; clocks: Record<Color, number>; moves: Move[]; version: number;
@@ -71,10 +71,10 @@ export class ChessGames {
    * seat the lobby gives only to that wallet's signed-in session. A player who never comes loses by
    * abandonment on their turn; if neither comes, it is a draw (both stakes go back).
    */
-  createStaked(o: { escrow: string; tc: TimeControl; currency: "IMD" | "SHIFT"; stake: string; a: { wallet: string; name: string }; b: { wallet: string; name: string }; onResult: (r: { draw: boolean; winner: string | null }) => void }): { id: string; seats: Record<string, string> } {
+  createStaked(o: { escrow: string; tc: TimeControl; currency: "IMD" | "SHIFT"; stake: string; a: { wallet: string; name: string; agent?: boolean }; b: { wallet: string; name: string; agent?: boolean }; onResult: (r: { draw: boolean; winner: string | null }) => void }): { id: string; seats: Record<string, string> } {
     if (!Object.hasOwn(CONTROLS, o.tc)) throw new Error("Choose 3+2, 5+0 or 10+0");
-    const seat = (s: { wallet: string; name: string }, color: Color): Player => {
-      const p: Player = { id: randomUUID(), name: cleanName(s.name), wallet: s.wallet.toLowerCase(), color, rating: 1200, moves: 0, streams: 0, offlineAt: this.now() };
+    const seat = (s: { wallet: string; name: string; agent?: boolean }, color: Color): Player => {
+      const p: Player = { id: randomUUID(), name: cleanName(s.name), wallet: s.wallet.toLowerCase(), color, rating: 1200, moves: 0, streams: 0, offlineAt: this.now(), ...(s.agent ? { agent: true } : {}) };
       p.rating = this.rating(p);
       return p;
     };
@@ -83,10 +83,11 @@ export class ChessGames {
     return { id: m.id, seats: { [a.wallet!]: a.id, [b.wallet!]: b.id } };
   }
   private start(m: Match) { m.startedAt = this.now() + 5_000; m.turnAt = m.startedAt; this.emit(m); }
-  queue(name: string, wallet: string | null, tc: TimeControl) {
+  /** `agent` marks an AI player (the arena's), shown as such to spectators. */
+  queue(name: string, wallet: string | null, tc: TimeControl, agent = false) {
     if (!Object.hasOwn(CONTROLS, tc)) throw new Error("Choose 3+2, 5+0 or 10+0");
     if (this.matches.size >= 10_000) throw new Error("The arcade is full. Try again shortly.");
-    const p: Player = { id: randomUUID(), name: cleanName(name), wallet, color: randomInt(2) ? "w" : "b", rating: 1200, moves: 0, streams: 0, offlineAt: this.now() };
+    const p: Player = { id: randomUUID(), name: cleanName(name), wallet, color: randomInt(2) ? "w" : "b", rating: 1200, moves: 0, streams: 0, offlineAt: this.now(), ...(agent ? { agent: true } : {}) };
     p.rating = this.rating(p);
     const line = this.waiting.get(tc) ?? new Set<string>();
     this.waiting.set(tc, line);
@@ -125,6 +126,28 @@ export class ChessGames {
     if (m.escrow && !m.startedAt && !m.done && m.players.every((x) => x.streams > 0)) this.start(m); else this.emit(m);
     let closed = false;
     return () => { if (closed) return; closed = true; set.delete(f); p.streams = Math.max(0, p.streams - 1); if (!p.streams) p.offlineAt = this.now(); this.emit(m); };
+  }
+  /**
+   * The games being played now, for the spectators' list. Names, colours and ratings only: a seat
+   * token never leaves this class except to its own player.
+   */
+  live() {
+    return [...this.matches.values()].filter((m) => !m.done && m.startedAt !== null && m.players.length === 2).map((m) => ({
+      id: m.id, tc: m.tc, currency: m.currency, stake: m.stake ?? null, startedAt: m.startedAt!,
+      players: [...m.players].sort((a, b) => a.color === "w" ? -1 : b.color === "w" ? 1 : 0).map((p) => ({ name: p.name, color: p.color, rating: p.rating, ...(p.agent ? { agent: true } : {}) })),
+    }));
+  }
+  /** What a spectator sees: the board, both clocks and the moves, as nobody's seat. */
+  watchView(id: string, compact = false) {
+    const m = this.match(id); this.check(m);
+    const v = this.view(m, "", compact);
+    return { ...v, escrow: null, you: null, winnerIsYou: false, drawOffer: null, rematchRequested: false, rivalWantsRematch: false, rematchId: null, players: v.players.map((p) => ({ ...p, you: false })) };
+  }
+  /** A spectator's stream: told of every change, without counting as a player being there. */
+  watch(id: string, f: () => void): () => void {
+    this.match(id);
+    const set = this.listeners.get(id) ?? new Set(); set.add(f); this.listeners.set(id, set);
+    return () => { set.delete(f); };
   }
   leave(id: string, me: string) {
     const m = this.match(id); this.player(m, me);

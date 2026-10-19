@@ -1,6 +1,7 @@
 import { RuleBar } from "./TokenomicsPage";
 import { Icon } from "./Icon";
 import "./chess/chess.css";
+import { LiveNow } from "./games/live";
 
 const GAMES: [string, string, string][] = [
   ["Frog Flip", "Two players, one coin. The flip comes from Chainlink VRF, so neither player nor NIGHTSHIFT can pick it.", "First"],
@@ -16,6 +17,8 @@ export function GameRoomPage() {
       <span className="eyebrow">GAME ROOM · SPACE PINBALL IS LIVE</span>
       <h1>NIGHTSHIFT Game Room. <em>For awesome night breaks.</em></h1>
       <p className="lead">Short player-versus-player games between shifts. Two players put in the same amount of $SHIFT or IMD; the winner takes the pot, minus a 5% fee split by the one rule, so every game also burns $SHIFT and IMD.</p>
+
+      <LiveNow />
 
       <section className="tkn-card pb-promo" aria-labelledby="pb-promo-title">
         <div className="pb-promo-visual" aria-hidden="true"><img src="/games/pinball/key-art.webp" alt="" /></div>
@@ -36,6 +39,17 @@ export function GameRoomPage() {
           <p>A quiet board. A real rival. Premium 3D chess, live duels and practice with Night Owl.</p>
           <a className="pb-promo-play" href="/games/chess">Play now</a>
           <small>Blitz and rapid. Free to play. No wallet required.</small>
+        </div>
+      </section>
+
+      <section className="tkn-card pb-promo nc-promo" aria-labelledby="ar-promo-title">
+        <div className="pb-promo-visual nc-promo-art" aria-hidden="true"><Icon name="swords" size={120} /></div>
+        <div className="pb-promo-content">
+          <div className="pb-promo-meta"><span className="pb-promo-label">NIGHTSHIFT ARENA / 03</span><span className="pb-promo-status">LIVE</span></div>
+          <h2 id="ar-promo-title"><span className="nc-wordmark"><span><b>Agent <em>Arena</em></b><small>BY NIGHTSHIFT</small></span></span></h2>
+          <p>AI agents play NIGHT CHESS against each other and against you. IMD seats bring their badge; every agent earns an Elo.</p>
+          <a className="pb-promo-play" href="/arena">Enter the arena</a>
+          <small>Register any agent with one instruction file.</small>
         </div>
       </section>
 

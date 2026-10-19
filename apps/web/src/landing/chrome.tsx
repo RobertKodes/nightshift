@@ -82,11 +82,12 @@ export const UTILITIES: { to: string; label: string; note: string; soon?: boolea
   { to: "/stake", label: "Stake", note: "Lock $SHIFT, earn from every sell" },
   { to: "/launchpad", label: "Launchpad", note: "Launch a token with the IMD swarm", soon: true },
   { to: "/games", label: "Game Room", note: "Space Pinball is live: PvP duels" },
+  { to: "/arena", label: "Agent Arena", note: "AI agents play chess, rated and live" },
   { to: "/impact", label: "IMD Impact", note: "What NIGHTSHIFT gives the IMD network" },
   { to: "/mcp", label: "MCP for agents", note: "Let AI agents use NIGHTSHIFT" },
 ];
-export type Active = "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide" | "tokenomics" | "games" | "impact" | "launchpad" | "stake";
-const UTIL_KEYS: Active[] = ["token", "tokenomics", "frogs", "swap", "stake", "launchpad", "games", "impact", "mcp"];
+export type Active = "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide" | "tokenomics" | "games" | "impact" | "launchpad" | "stake" | "arena";
+const UTIL_KEYS: Active[] = ["token", "tokenomics", "frogs", "swap", "stake", "launchpad", "games", "arena", "impact", "mcp"];
 
 /** The Utilities menu: opens on hover or focus on desktop, on tap on touch screens. */
 function UtilitiesMenu({ active }: { active: Active }) {
@@ -144,7 +145,7 @@ function MobileMenu({ home }: { home: boolean }) {
 
 const APP_TITLES: Partial<Record<Active, string>> = {
   home: "NIGHTSHIFT", companies: "Companies", company: "Your company", market: "Market", token: "$SHIFT", tokenomics: "Tokenomics", frogs: "NIGHT FROGS",
-  swap: "Trade", stake: "Earn", guide: "Guide", games: "Game Room", impact: "IMD Impact", launchpad: "Launchpad", mcp: "MCP", terms: "Terms",
+  swap: "Trade", stake: "Earn", guide: "Guide", games: "Game Room", arena: "Agent Arena", impact: "IMD Impact", launchpad: "Launchpad", mcp: "MCP", terms: "Terms",
 };
 
 export function SiteHeader({ active, home = false }: { active: Active; home?: boolean }) {
@@ -197,6 +198,7 @@ export function SiteFooter() {
         <Link to="/swap">SWAP</Link>
         <Link to="/launchpad">LAUNCHPAD</Link>
         <Link to="/games">GAME ROOM</Link>
+        <Link to="/arena">AGENT ARENA</Link>
         <Link to="/impact">IMD IMPACT</Link>
         <Link to="/guide">GUIDE</Link>
         <Link to="/mcp">MCP</Link>

@@ -9,6 +9,7 @@ import { ChessSound } from "./chess/sound";
 import { Practice } from "./chess/practice";
 import { api, clockText, CONTROLS, type Leaderboard, type MatchView, type PlayerView, type TimeControl } from "./chess/types";
 import "./chess/chess.css";
+import "./games/live.css";
 import { type Seat, StakeLobby, StakeResult, tokenLabel, useEscrow } from "./stakes";
 
 const OPENING = new Chess().fen();
@@ -26,10 +27,10 @@ function Wordmark() {
 function ImdSignature() {
   return <span className="nc-imd">BUILT ON IMD <Icon name="imd-mark" size={13}/></span>;
 }
-function PlayerCard({ player, ms, active, captured, advantage }: { player: PlayerView; ms: number; active: boolean; captured: PieceSymbol[]; advantage: number }) {
+function PlayerCard({ player, ms, active, captured, advantage, label }: { player: PlayerView; ms: number; active: boolean; captured: PieceSymbol[]; advantage: number; label?: string }) {
   return <div className={`nc-player ${active ? "running" : ""} ${ms < 20_000 ? "low" : ""}`}>
     <FrogPortrait frog={player.name === "Frog #7 (bot)" ? "007" : player.color === "w" ? "001" : "002"} className={`nc-avatar ${player.color}`}/>
-    <div className="nc-player-info"><b>{player.name}<small>{player.you ? "YOU" : "RIVAL"}</small></b><span>{player.rating} ELO{!player.connected && " · reconnecting"}</span>
+    <div className="nc-player-info"><b>{player.name}<small>{label ?? (player.you ? "YOU" : "RIVAL")}</small></b><span>{player.rating} ELO{!player.connected && " · reconnecting"}</span>
       <div className="nc-captured" aria-label={`Captured ${captured.map((p)=>PIECES[p]).join(", ") || "none"}${advantage > 0 ? `, up ${advantage}` : ""}`}>{captured.map((p,i)=><Icon name={`chess-${PIECES[p]}`} size={15} key={i}/>)}{advantage>0 && <strong>+{advantage}</strong>}</div>
     </div><div className="nc-clock" aria-label={`${player.name}: ${clockText(ms)}`}><span className="nc-clock-dot"/>{clockText(ms)}</div>
   </div>;
@@ -54,6 +55,12 @@ export function ChessPage() {
   const [leaderboard,setLeaderboard] = useState<Leaderboard>({board:[],best:[]});
   const [tab,setTab] = useState<"board" | "best">("board");
   const [time,setTime] = useState(Date.now());
+  // Spectator mode (/games/chess?watch=<id>): a read-only stream of someone else's game, white at the bottom unless flipped.
+  const [watchId,setWatchId] = useState(()=>new URLSearchParams(location.search).get("watch"));
+  const [flipped,setFlipped] = useState(false);
+  const [viewers,setViewers] = useState(0);
+  const watching = useRef(watchId);
+  const spectate = !!watchId;
   const source = useRef<EventSource | null>(null), current = useRef<MatchView | null>(null), playerToken = useRef(""), offset = useRef(0);
   const practice = useRef<Practice | null>(null), sound = useRef<ChessSound | null>(null), mounted = useRef(true), history = useRef<HTMLDivElement>(null);
   const shownPly = useRef(0), lastTick = useRef(0), actionPending = useRef(false), refreshStream = useRef<(id: string, player: string)=>void>(()=>{});
@@ -74,12 +81,21 @@ export function ChessPage() {
   },[]);
   const follow = useCallback((id: string, player: string) => {
     source.current?.close();playerToken.current=player;setToken(player);setConnected(false);
-    const es=new EventSource(`/api/chess/match/${id}/events?player=${encodeURIComponent(player)}`);source.current=es;
+    const watch=!!watching.current;
+    const es=new EventSource(watch ? `/api/chess/match/${id}/watch` : `/api/chess/match/${id}/events?player=${encodeURIComponent(player)}`);source.current=es;
     es.onopen=()=>{if(mounted.current)setConnected(true);};
-    es.onmessage=(event)=>{if(source.current!==es)return;try {receive(JSON.parse(event.data) as MatchView);}catch {setErr("The live update could not be read. Reconnecting…");es.close();refreshStream.current(id,player);}};
+    es.onmessage=(event)=>{if(source.current!==es)return;try {
+      const frame=JSON.parse(event.data) as MatchView & {viewers?: number};
+      if(watch && typeof frame.viewers==="number")setViewers(frame.viewers);
+      receive(frame);
+      // a finished game has nothing more to show: free the spectator's place in the stands
+      if(watch && frame.done){es.close();source.current=null;}
+    }catch {setErr("The live update could not be read. Reconnecting…");es.close();refreshStream.current(id,player);}};
     es.onerror=()=>{
       if(source.current!==es || !mounted.current)return;
       setConnected(false);
+      // a spectator's stream reconnects by itself; refused (gone, full) it stops here
+      if(watch){if(es.readyState===EventSource.CLOSED){source.current=null;setConnected(true);if(!current.current?.done)setErr(current.current ? "This game has closed." : "This game is not live any more, or the stands are full. Pick another one.");}return;}
       // A restart or expired table must not leave a saved seat reconnecting forever.
       void fetch(`/api/chess/match/${id}?player=${encodeURIComponent(player)}`).then(async r=>{
         if(source.current!==es || !mounted.current)return;
@@ -94,10 +110,11 @@ export function ChessPage() {
 
   useEffect(()=>{
     mounted.current=true;sound.current=new ChessSound();
-    const title=document.title;document.title="NIGHT CHESS · NIGHTSHIFT";
+    const title=document.title;document.title=watching.current ? "Watching live · NIGHT CHESS" : "NIGHT CHESS · NIGHTSHIFT";
     const update=()=>void api<Leaderboard>("board").then((b)=>{if(mounted.current)setLeaderboard(b);}).catch(()=>{});update();
     // Restoring the private token reconnects an ongoing match after a refresh.
-    try {const saved=JSON.parse(sessionStorage.getItem("nc-match") ?? "null") as {id:string;player:string} | null;if(saved){setMode("online");follow(saved.id,saved.player);}}catch { /* no saved seat */ }
+    if(watching.current)follow(watching.current,"");
+    else try {const saved=JSON.parse(sessionStorage.getItem("nc-match") ?? "null") as {id:string;player:string} | null;if(saved){setMode("online");follow(saved.id,saved.player);}}catch { /* no saved seat */ }
     const timer=setInterval(()=>{if(document.hidden)return;setTime(Date.now());const p=practice.current;if(p?.flag())receive(p.state);},100);
     const boardTimer=setInterval(update,30_000);
     return()=>{mounted.current=false;source.current?.close();clearInterval(timer);clearInterval(boardTimer);sound.current?.close();document.title=title;};
@@ -114,7 +131,7 @@ export function ChessPage() {
   const running=!!match && !match.done && !!match.startedAt && now>=match.startedAt;
   const clocks=match ? {...match.clocks} : {w:0,b:0};
   if(match && running)clocks[match.turn]=Math.max(0,clocks[match.turn]-Math.max(0,now-Math.max(match.now,match.startedAt!)));
-  const myColor=match?.you ?? "w";
+  const myColor=spectate ? flipped ? "b" : "w" : match?.you ?? "w";
   useEffect(()=>{
     if(mode!=="practice" || !practice.current || !match || match.done || match.turn!=="b")return;
     const id=setTimeout(()=>{const p=practice.current;if(p)receive(p.bot());},650+Math.random()*350);
@@ -122,7 +139,7 @@ export function ChessPage() {
   },[mode,match?.id,match?.ply,match?.done,match?.turn,receive]);
   useEffect(()=>{
     const seconds=Math.ceil(clocks[myColor]/1000);
-    if(running && match?.turn===myColor && seconds>0 && seconds<=20 && lastTick.current!==seconds){lastTick.current=seconds;sound.current?.play("tick");}
+    if(!spectate && running && match?.turn===myColor && seconds>0 && seconds<=20 && lastTick.current!==seconds){lastTick.current=seconds;sound.current?.play("tick");}
   },[time,running,match?.turn,myColor]);
   const start = async (practiceMode=false) => {
     if(actionPending.current)return;actionPending.current=true;setBusy(true);setErr(null);sound.current?.unlock();
@@ -151,7 +168,7 @@ export function ChessPage() {
   },[selected,move]);
   /** Both stakes are in: take the seat the lobby gave this wallet. */
   const seat=(s: Seat)=>{source.current?.close();practice.current=null;current.current=null;offset.current=0;shownPly.current=0;setErr(null);setMode("online");follow(s.id,s.player);};
-  const lobby=()=>{source.current?.close();source.current=null;practice.current=null;current.current=null;setMatch(null);setToken("");setSelected(null);setPromotion(null);setConfirm(null);setErr(null);setConnected(true);try{sessionStorage.removeItem("nc-match");}catch { /* private window */ }};
+  const lobby=()=>{if(watching.current){watching.current=null;setWatchId(null);setViewers(0);window.history.replaceState(null,"","/games/chess");document.title="NIGHT CHESS · NIGHTSHIFT";}source.current?.close();source.current=null;practice.current=null;current.current=null;setMatch(null);setToken("");setSelected(null);setPromotion(null);setConfirm(null);setErr(null);setConnected(true);try{sessionStorage.removeItem("nc-match");}catch { /* private window */ }};
   const cancelSearch=async()=>{
     if(!match || actionPending.current)return;actionPending.current=true;setBusy(true);
     try {await api(`match/${match.id}/leave`,{player:token});lobby();}
@@ -169,8 +186,12 @@ export function ChessPage() {
   for(const m of match?.moves ?? [])if(m.captured)captures[m.color].push(m.captured);
   const material:Record<Color,number>={w:0,b:0};
   for(const row of game.board())for(const p of row)if(p)material[p.color]+=VALUES[p.type];
-  const mine=match?.players.find(p=>p.you),rival=match?.players.find(p=>!p.you);
-  const playerCard=(p:PlayerView)=> <PlayerCard player={p} ms={clocks[p.color]} active={running && match?.turn===p.color} captured={captures[p.color]} advantage={material[p.color]-material[p.color==="w" ? "b":"w"]}/>;
+  // a spectator sees the board from white (or black, flipped): that side's card at the bottom
+  const mine=spectate ? match?.players.find(p=>p.color===myColor) : match?.players.find(p=>p.you),rival=spectate ? match?.players.find(p=>p.color!==myColor) : match?.players.find(p=>!p.you);
+  const playerCard=(p:PlayerView)=> <PlayerCard player={p} ms={clocks[p.color]} active={running && match?.turn===p.color} captured={captures[p.color]} advantage={material[p.color]-material[p.color==="w" ? "b":"w"]} label={spectate ? p.color==="w" ? "WHITE" : "BLACK" : undefined}/>;
+  const mineWon=spectate ? !!match?.winner && match.winner===mine?.color : !!match?.winnerIsYou;
+  const turnName=match?.players.find(p=>p.color===match.turn)?.name ?? "";
+  const watchAnother=()=>{source.current?.close();source.current=null;go("/games/live");};
   const error=err && <div className="nc-error" role="alert"><Icon name="alert" size={16}/><span>{err}</span><button type="button" onClick={()=>setErr(null)} aria-label="Dismiss error"><Icon name="close" size={16}/></button></div>;
   useEffect(()=>{
     const dialogs=document.querySelectorAll<HTMLElement>(".nc [role='dialog']"),dialog=dialogs[dialogs.length-1];
@@ -186,8 +207,8 @@ export function ChessPage() {
   return <div className={`nc ${inGame ? "nc-playing" : ""}`}>
     <div className="nc-backdrop" aria-hidden="true"/>
     <header className="nc-top">
-      <a href="/games" className="nc-back" onClick={(e)=>{e.preventDefault();if(match && !match.done){if(inGame)setConfirm("exit");else void cancelSearch();}else go("/games");}}><Icon name="arrow" size={17}/><span>GAME ROOM</span></a>
-      <a href="/games/chess" className="nc-brand" aria-label="Night Chess by NIGHTSHIFT" onClick={(e)=>{e.preventDefault();if(match){if(match.done)lobby();else if(inGame)setConfirm("exit");else void cancelSearch();}}}><Wordmark/></a>
+      <a href="/games" className="nc-back" onClick={(e)=>{e.preventDefault();if(spectate)watchAnother();else if(match && !match.done){if(inGame)setConfirm("exit");else void cancelSearch();}else go("/games");}}><Icon name="arrow" size={17}/><span>{spectate ? "LIVE GAMES" : "GAME ROOM"}</span></a>
+      <a href="/games/chess" className="nc-brand" aria-label="Night Chess by NIGHTSHIFT" onClick={(e)=>{e.preventDefault();if(spectate)lobby();else if(match){if(match.done)lobby();else if(inGame)setConfirm("exit");else void cancelSearch();}}}><Wordmark/></a>
       <div className="nc-account">{address ? <span className="nc-wallet"><Icon name="user" size={15}/>{address.slice(0,6)}…{address.slice(-4)}</span> : <button type="button" className="nc-btn ghost small" disabled={signing} onClick={()=>void signIn()}><Icon name="user" size={15}/><span>{signing ? "SIGNING IN" : "SIGN IN"}</span></button>}</div>
     </header>
 
@@ -226,27 +247,28 @@ export function ChessPage() {
     </main>}
 
     {inGame && match && mine && rival && <main className="nc-game">
-      <div className="nc-game-heading"><span className="nc-kicker">{mode==="practice" ? "PRACTICE / FROG #7" : <><i className="nc-live"/> LIVE DUEL</>}<span className="nc-heading-tc">{match.tc} · {CONTROLS[match.tc].label.toUpperCase()}</span></span><div className="nc-game-tools"><ImdSignature/><button type="button" className="nc-icon-btn" aria-label={soundOn ? "Mute sounds" : "Enable sounds"} aria-pressed={soundOn} onClick={()=>{sound.current?.unlock();setSoundOn(!soundOn);}}><Icon name={soundOn ? "sound":"sound-off"} size={20}/></button></div></div>
+      <div className="nc-game-heading"><span className="nc-kicker">{mode==="practice" ? "PRACTICE / FROG #7" : spectate ? <><i className="nc-live"/> SPECTATING · {viewers} WATCHING</> : <><i className="nc-live"/> LIVE DUEL</>}<span className="nc-heading-tc">{match.tc} · {CONTROLS[match.tc].label.toUpperCase()}</span></span><div className="nc-game-tools"><ImdSignature/>{spectate && <button type="button" className="nc-icon-btn" aria-label={flipped ? "View from white" : "View from black"} aria-pressed={flipped} onClick={()=>setFlipped(!flipped)}><Icon name="swap" size={20}/></button>}<button type="button" className="nc-icon-btn" aria-label={soundOn ? "Mute sounds" : "Enable sounds"} aria-pressed={soundOn} onClick={()=>{sound.current?.unlock();setSoundOn(!soundOn);}}><Icon name={soundOn ? "sound":"sound-off"} size={20}/></button></div></div>
       <section className="nc-table" aria-label="Chess table">
         <div className="nc-rival-card">{playerCard(rival)}</div>
-        <div className="nc-board-wrap"><Board fen={match.fen} color={myColor} selectableColor={running && match.turn===myColor && !busy ? myColor : null} selected={selected} targets={targets} lastMove={match.lastMove} onSquare={pick}/>
-          {countdown>0 && !match.done && <div className="nc-overlay nc-vs"><div><span className="nc-kicker">{mode==="practice" ? "YOUR SPARRING PARTNER" : "YOUR RIVAL IS HERE"}</span><div className="nc-versus"><span><FrogPortrait frog={mine.color==="w" ? "001" : "002"}/><b>{mine.name}</b><small>{mine.color==="w" ? "MOONLIGHT / WHITE":"ULTRAVIOLET / BLACK"}</small></span><em>vs</em><span><FrogPortrait frog={mode==="practice" ? "007" : rival.color==="w" ? "001" : "002"}/><b>{rival.name}</b><small>{rival.color==="w" ? "MOONLIGHT / WHITE":"ULTRAVIOLET / BLACK"}</small></span></div><strong className="nc-countdown" key={countdown}>{countdown}</strong><span className="nc-kicker">THE BOARD IS YOURS</span></div></div>}
+        <div className="nc-board-wrap"><Board fen={match.fen} color={myColor} selectableColor={!spectate && running && match.turn===myColor && !busy ? myColor : null} selected={selected} targets={targets} lastMove={match.lastMove} onSquare={spectate ? undefined : pick}/>
+          {countdown>0 && !match.done && <div className="nc-overlay nc-vs"><div><span className="nc-kicker">{mode==="practice" ? "YOUR SPARRING PARTNER" : spectate ? "BOTH PLAYERS ARE HERE" : "YOUR RIVAL IS HERE"}</span><div className="nc-versus"><span><FrogPortrait frog={mine.color==="w" ? "001" : "002"}/><b>{mine.name}</b><small>{mine.color==="w" ? "MOONLIGHT / WHITE":"ULTRAVIOLET / BLACK"}</small></span><em>vs</em><span><FrogPortrait frog={mode==="practice" ? "007" : rival.color==="w" ? "001" : "002"}/><b>{rival.name}</b><small>{rival.color==="w" ? "MOONLIGHT / WHITE":"ULTRAVIOLET / BLACK"}</small></span></div><strong className="nc-countdown" key={countdown}>{countdown}</strong><span className="nc-kicker">{spectate ? "YOU ARE WATCHING" : "THE BOARD IS YOURS"}</span></div></div>}
           {promotion && <div className="nc-overlay" role="dialog" aria-modal="true" aria-labelledby="nc-promote"><div className="nc-dialog"><span className="nc-kicker">EIGHTH RANK</span><h2 id="nc-promote">Choose your <em>piece.</em></h2><div className="nc-promotion">{(["q","r","b","n"] as PieceSymbol[]).map(p=><button type="button" disabled={busy} autoFocus={p==="q"} key={p} onClick={()=>void move(promotion.from,promotion.to,p)}><Icon name={`chess-${PIECES[p]}`} size={32}/><span>{PIECES[p]}</span></button>)}</div><button type="button" className="nc-btn ghost" onClick={()=>setPromotion(null)}>CANCEL</button></div></div>}
-          {match.done && <div className={`nc-overlay nc-result ${match.winnerIsYou ? "won" : ""}`} role="region" aria-label="Game result"><div className="nc-dialog"><span className="nc-result-icon"><Icon name={match.winnerIsYou ? "trophy" : match.winner ? "chess-king":"scales"} size={30}/></span><span className="nc-kicker">{mode==="practice" ? "PRACTICE COMPLETE" : "FINAL RESULT / SERVER VERIFIED"}</span><h2>{!match.winner ? "DRAW" : match.winnerIsYou ? "VICTORY":"DEFEAT"}</h2><p>{REASONS[match.reason ?? ""] ?? match.reason}</p><div className="nc-result-score"><span>{mine.name}<b>{mine.rating}<small>ELO</small></b></span><i>{match.winner ? match.winnerIsYou ? "1 : 0":"0 : 1" : "½ : ½"}</i><span>{rival.name}<b>{rival.rating}<small>ELO</small></b></span></div>{match.escrow && <StakeResult matchId={match.escrow} address={address}/>}{mode==="online" && !match.escrow && match.rivalWantsRematch && <p className="nc-rematch-note">Your rival wants another game.</p>}<div className="nc-result-actions">{!match.escrow && <button type="button" className="nc-btn" disabled={busy || match.rematchRequested} onClick={()=>mode==="practice" ? void start(true):void action("rematch")}><Icon name={match.rematchRequested ? "radar":"swap"} size={17}/>{match.rematchRequested ? "AWAITING RIVAL":"REMATCH"}</button>}<button type="button" className="nc-btn ghost" onClick={lobby}>BACK TO LOBBY</button></div>{error}</div></div>}
+          {match.done && <div className={`nc-overlay nc-result ${match.winnerIsYou ? "won" : ""}`} role="region" aria-label="Game result"><div className="nc-dialog"><span className="nc-result-icon"><Icon name={match.winnerIsYou || (spectate && match.winner) ? "trophy" : match.winner ? "chess-king":"scales"} size={30}/></span><span className="nc-kicker">{mode==="practice" ? "PRACTICE COMPLETE" : "FINAL RESULT / SERVER VERIFIED"}</span><h2>{!match.winner ? "DRAW" : spectate ? `${match.players.find(p=>p.color===match.winner)?.name ?? ""} WINS` : match.winnerIsYou ? "VICTORY":"DEFEAT"}</h2><p>{REASONS[match.reason ?? ""] ?? match.reason}</p><div className="nc-result-score"><span>{mine.name}<b>{mine.rating}<small>ELO</small></b></span><i>{match.winner ? mineWon ? "1 : 0":"0 : 1" : "½ : ½"}</i><span>{rival.name}<b>{rival.rating}<small>ELO</small></b></span></div>{match.escrow && <StakeResult matchId={match.escrow} address={address}/>}{mode==="online" && !match.escrow && match.rivalWantsRematch && <p className="nc-rematch-note">Your rival wants another game.</p>}{spectate ? <div className="nc-result-actions"><button type="button" className="nc-btn" onClick={watchAnother}><Icon name="radar" size={17}/>WATCH ANOTHER</button><button type="button" className="nc-btn ghost" onClick={lobby}>PLAY NIGHT CHESS</button></div> : <div className="nc-result-actions">{!match.escrow && <button type="button" className="nc-btn" disabled={busy || match.rematchRequested} onClick={()=>mode==="practice" ? void start(true):void action("rematch")}><Icon name={match.rematchRequested ? "radar":"swap"} size={17}/>{match.rematchRequested ? "AWAITING RIVAL":"REMATCH"}</button>}<button type="button" className="nc-btn ghost" onClick={lobby}>BACK TO LOBBY</button></div>}{error}</div></div>}
         </div>
         <div className="nc-mine-card">{playerCard(mine)}</div>
-        <div className={`nc-turn ${match.check ? "check" : ""}`} role="status">{match.done ? "Game complete" : countdown ? "Take a breath. Your game starts soon." : !connected && mode==="online" ? "Reconnecting… clocks continue on the server." : match.check ? `${match.turn===myColor ? "Your king is":"Your rival is"} in check` : match.turn===myColor ? selected ? "Choose a glowing square" : "Your move. Tap a piece." : mode==="practice" ? "Frog #7 is thinking…" : "Your rival is thinking…"}</div>
+        <div className={`nc-turn ${match.check ? "check" : ""}`} role="status">{spectate ? match.done ? "Game complete" : countdown ? "The game starts soon." : !connected ? "Reconnecting… clocks continue on the server." : match.check ? `${turnName} is in check` : `${turnName} to move` : match.done ? "Game complete" : countdown ? "Take a breath. Your game starts soon." : !connected && mode==="online" ? "Reconnecting… clocks continue on the server." : match.check ? `${match.turn===myColor ? "Your king is":"Your rival is"} in check` : match.turn===myColor ? selected ? "Choose a glowing square" : "Your move. Tap a piece." : mode==="practice" ? "Frog #7 is thinking…" : "Your rival is thinking…"}</div>
       </section>
       <aside className="nc-game-side"><div className="nc-scoresheet"><div className="nc-section-label"><span>THE GAME</span><span>{Math.ceil(match.ply/2)} MOVES</span></div><div className="nc-move-head"><span>NO.</span><span>WHITE</span><span>BLACK</span></div><div className="nc-moves" ref={history} aria-label="Moves in standard algebraic notation">{match.moves.length ? Array.from({length:Math.ceil(match.moves.length/2)},(_,i)=><div key={i}><span>{i+1}.</span><b className={match.ply===i*2+1 ? "last":""}>{match.moves[i*2]?.san}</b><b className={match.ply===i*2+2 ? "last":""}>{match.moves[i*2+1]?.san ?? "—"}</b></div>) : <p className="nc-empty">A quiet board.<br/>A thousand possibilities.</p>}</div></div>
-        <div className="nc-game-actions"><button type="button" className="nc-btn ghost" disabled={busy || match.done || countdown>0} onClick={()=>setConfirm("draw")}><Icon name="scales" size={18}/>{match.drawOffer==="you" ? "DRAW OFFERED":"OFFER DRAW"}</button><button type="button" className="nc-btn ghost" disabled={busy || match.done} onClick={()=>setConfirm("resign")}><Icon name="flag" size={18}/>RESIGN</button></div>
-        {match.drawOffer==="rival" && !match.done && <div className="nc-draw-offer" role="status"><p>Your rival offers a draw.</p><button type="button" className="nc-btn small" disabled={busy} onClick={()=>void action("draw","accept")}>ACCEPT</button><button type="button" className="nc-btn ghost small" disabled={busy} onClick={()=>void action("draw","decline")}>DECLINE</button></div>}
+        {spectate ? <div className="nc-spectate-banner" role="note"><Icon name="radar" size={18}/><p><b>Spectating</b>Read-only. The board follows the players' moves live; nobody here can move a piece.</p></div> : <><div className="nc-game-actions"><button type="button" className="nc-btn ghost" disabled={busy || match.done || countdown>0} onClick={()=>setConfirm("draw")}><Icon name="scales" size={18}/>{match.drawOffer==="you" ? "DRAW OFFERED":"OFFER DRAW"}</button><button type="button" className="nc-btn ghost" disabled={busy || match.done} onClick={()=>setConfirm("resign")}><Icon name="flag" size={18}/>RESIGN</button></div>
+        {match.drawOffer==="rival" && !match.done && <div className="nc-draw-offer" role="status"><p>Your rival offers a draw.</p><button type="button" className="nc-btn small" disabled={busy} onClick={()=>void action("draw","accept")}>ACCEPT</button><button type="button" className="nc-btn ghost small" disabled={busy} onClick={()=>void action("draw","decline")}>DECLINE</button></div>}</>}
         <p className="nc-board-help"><Icon name="orbit" size={16}/>Drag to orbit · pinch or scroll to zoom · double-tap to reset.</p>
         {error}
       </aside>
-      <div className="nc-accessible-board"><label htmlFor="nc-square">Play by coordinate</label><select id="nc-square" value="" onChange={e=>pick(e.target.value as Square)} disabled={busy || match.done || countdown>0 || match.turn!==myColor}><option value="">Select a square</option>{Array.from({length:64},(_,i)=>{const s=`${"abcdefgh"[i%8]}${Math.floor(i/8)+1}` as Square;const p=game.get(s);return <option key={s} value={s}>{s}{p ? ` · ${p.color==="w" ? "white":"black"} ${PIECES[p.type]}`:""}{targets.some(t=>t.square===s) ? " · legal target":""}</option>;})}</select><span>{selected ? `Selected ${selected}. Choose a legal target.`:"Choose a piece, then its destination."}</span></div>
+      {!spectate && <div className="nc-accessible-board"><label htmlFor="nc-square">Play by coordinate</label><select id="nc-square" value="" onChange={e=>pick(e.target.value as Square)} disabled={busy || match.done || countdown>0 || match.turn!==myColor}><option value="">Select a square</option>{Array.from({length:64},(_,i)=>{const s=`${"abcdefgh"[i%8]}${Math.floor(i/8)+1}` as Square;const p=game.get(s);return <option key={s} value={s}>{s}{p ? ` · ${p.color==="w" ? "white":"black"} ${PIECES[p.type]}`:""}{targets.some(t=>t.square===s) ? " · legal target":""}</option>;})}</select><span>{selected ? `Selected ${selected}. Choose a legal target.`:"Choose a piece, then its destination."}</span></div>}
     </main>}
 
-    {match && !match.startedAt && <div className="nc-overlay nc-search" role="dialog" aria-modal="true" aria-labelledby="nc-search-title"><div className="nc-dialog"><div className="nc-radar"><Icon name="radar" size={36}/></div><span className="nc-kicker">{match.escrow ? "STAKED DUEL" : "MATCHMAKING"} / {match.tc}</span><h2 id="nc-search-title">{match.escrow ? <>Waiting for<br/>your <em>rival.</em></> : <>Finding<br/>your <em>rival.</em></>}</h2><p>{match.escrow ? "Both stakes are in. The game starts when your rival connects, or within 5 minutes; a player who never comes loses by abandonment." : "The next player on your time control joins this table. Keep this page open."}</p><div className="nc-search-info"><span>{match.escrow ? "02 / 02 PLAYERS" : "01 / 02 PLAYERS"}</span><span>{match.escrow ? `${match.stake} ${tokenLabel(match.currency)} EACH` : "FREE DUEL"}</span></div><span className="nc-connection" role="status">{connected ? "Live connection open":"Connecting to the table…"}</span>{!match.escrow && <button type="button" autoFocus className="nc-btn ghost" disabled={busy} onClick={()=>void cancelSearch()}>CANCEL SEARCH</button>}{error}</div></div>}
+    {spectate && !inGame && <div className="nc-overlay nc-search" role="dialog" aria-modal="true" aria-labelledby="nc-watch-title"><div className="nc-dialog"><div className="nc-radar"><Icon name="radar" size={36}/></div><span className="nc-kicker">SPECTATOR MODE</span><h2 id="nc-watch-title">{err ? <>No game<br/>to <em>watch.</em></> : <>Finding<br/>the <em>table.</em></>}</h2><p>{err ?? "Connecting to the live game…"}</p><button type="button" autoFocus className="nc-btn" onClick={watchAnother}>WATCH ANOTHER</button><button type="button" className="nc-btn ghost" onClick={lobby}>PLAY NIGHT CHESS</button></div></div>}
+    {!spectate && match && !match.startedAt && <div className="nc-overlay nc-search" role="dialog" aria-modal="true" aria-labelledby="nc-search-title"><div className="nc-dialog"><div className="nc-radar"><Icon name="radar" size={36}/></div><span className="nc-kicker">{match.escrow ? "STAKED DUEL" : "MATCHMAKING"} / {match.tc}</span><h2 id="nc-search-title">{match.escrow ? <>Waiting for<br/>your <em>rival.</em></> : <>Finding<br/>your <em>rival.</em></>}</h2><p>{match.escrow ? "Both stakes are in. The game starts when your rival connects, or within 5 minutes; a player who never comes loses by abandonment." : "The next player on your time control joins this table. Keep this page open."}</p><div className="nc-search-info"><span>{match.escrow ? "02 / 02 PLAYERS" : "01 / 02 PLAYERS"}</span><span>{match.escrow ? `${match.stake} ${tokenLabel(match.currency)} EACH` : "FREE DUEL"}</span></div><span className="nc-connection" role="status">{connected ? "Live connection open":"Connecting to the table…"}</span>{!match.escrow && <button type="button" autoFocus className="nc-btn ghost" disabled={busy} onClick={()=>void cancelSearch()}>CANCEL SEARCH</button>}{error}</div></div>}
     {confirm && match && <div className="nc-overlay nc-confirm" role="dialog" aria-modal="true" aria-labelledby="nc-confirm-title" onKeyDown={e=>{if(e.key==="Escape")setConfirm(null);}}><div className="nc-dialog"><Icon name={confirm==="draw" ? "scales":"flag"} size={30}/><h2 id="nc-confirm-title">{confirm==="draw" ? "Call it a draw?":"Leave the table?"}</h2><p>{confirm==="draw" ? mode==="practice" ? "Frog #7 will agree to a friendly draw.":"Your rival can accept or decline. Keep playing while you wait.":"Resigning gives this game to your rival."}</p><button type="button" className="nc-btn" disabled={busy} onClick={()=>void action(confirm==="draw" ? "draw":"resign",confirm==="draw" ? "offer":undefined)}>{confirm==="draw" ? "OFFER A DRAW":"RESIGN GAME"}</button><button type="button" autoFocus className="nc-btn ghost" onClick={()=>setConfirm(null)}>KEEP PLAYING</button>{error}</div></div>}
     {!inGame && <AppTabs active="games"/>}
   </div>;

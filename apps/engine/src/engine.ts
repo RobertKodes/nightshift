@@ -46,6 +46,8 @@ import { fillTraits, frogCaption, sendFrogCard } from "./frogcard.js";
 import { type ArcadeEvent, onArcade } from "./pinball.js";
 import { followSwarm } from "./swarm.js";
 import { live as gameLobby } from "./games-routes.js";
+import { duelCard, freeDuelCard } from "./duelcards.js";
+import { liveGames } from "./spectate.js";
 import { type ChessEvent, onChess } from "./chess.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
@@ -188,6 +190,25 @@ export class Engine {
       const medal = ["🥇", "🥈", "🥉", "4.", "5."];
       void toCommunity(`🐸⏱ <b>NIGHT SHIFT HOURS · top of the crew</b>\n\n${top.map((t, i) => `${medal[i]} <a href="https://etherscan.io/address/${t.wallet}">${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}</a> · ${t.hours.toLocaleString("en-US")} h · ${t.frogs} frog${t.frogs === 1 ? "" : "s"}`).join("\n")}\n\nHold a frog, earn hours. Genesis 2×, #1 5×. No locking, no gas.`, [[{ text: "⏱ My shift hours", url: `${config.publicUrl}/frogs#staking` }]], "frog");
     }, 60_000);
+    // Duels to the community: every staked challenge (listed, on, won), and free PvP or agent games now and then.
+    gameLobby(this.vault).escrow.onEvent((kind, c) => void duelCard(kind, c).then((card) => card && toCommunity(card.text, card.buttons, kind === "settled" ? "milestone" : "launch")).catch((e) => console.error("duel card", e)));
+    const seenDuels = new Set<string>();
+    let primed = false, lastFree = 0, lastAgent = 0;
+    setInterval(() => {
+      const games = liveGames().filter((g) => g.players.length === 2 && g.stake.currency === "FREE");
+      for (const g of games) {
+        if (seenDuels.has(g.id)) continue;
+        seenDuels.add(g.id);
+        if (!primed) continue;
+        const agent = g.players.some((p) => p.agent), now = Date.now();
+        if (now - (agent ? lastAgent : lastFree) < 20 * 60_000) continue;
+        if (agent) lastAgent = now; else lastFree = now;
+        const card = freeDuelCard(g);
+        void toCommunity(card.text, card.buttons, "launch").catch((e) => console.error("free duel card", e));
+      }
+      primed = true;
+      if (seenDuels.size > 2000) seenDuels.clear();
+    }, 30_000);
     // The moment real-money duels open (the escrow's signer becomes our game signer), tell the community once.
     setInterval(() => void (async () => {
       const flag = join(config.dataDir, "stakes-announced");

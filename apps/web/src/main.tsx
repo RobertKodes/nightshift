@@ -27,7 +27,9 @@ import { LaunchpadPage } from "./LaunchpadPage";
 import "./styles.css";
 import "./landing/landing.css";
 
+const ArenaPage = lazy(() => import("./ArenaPage").then((x) => ({ default: x.ArenaPage })));
 const ChessPage = lazy(() => import("./ChessPage").then((x) => ({ default: x.ChessPage })));
+const LivePage = lazy(() => import("./LivePage").then((x) => ({ default: x.LivePage })));
 
 function App() {
   const path = useRoute();
@@ -54,13 +56,14 @@ function App() {
   if (seg[0] === "impact") page = <ImpactPage />;
   if (seg[0] === "guide") page = <GuidePage />;
   if (seg[0] === "tokenomics") page = <TokenomicsPage />;
-  if (seg[0] === "games") page = <GameRoomPage />;
+  if (seg[0] === "games") page = seg[1] === "live" ? <Suspense fallback={null}><LivePage /></Suspense> : <GameRoomPage />;
   if (seg[0] === "launchpad") page = <LaunchpadPage />;
-  const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "stake", "guide", "tokenomics", "games", "impact", "launchpad"];
+  if (seg[0] === "arena") page = <Suspense fallback={<div className="docs"><p className="dim">Loading the arena…</p></div>}><ArenaPage /></Suspense>;
+  const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "stake", "guide", "tokenomics", "games", "impact", "launchpad", "arena"];
   const key = seg[0] === "staking" ? "stake" : seg[0];
   const active: Active = seg[0] === "co" ? "company" : named.includes(key as Active) ? (key as Active) : "companies";
   // Each page names itself in the tab; pages that know more (a company, a product) set their own.
-  document.title = `${TITLES[key ?? ""] ?? "Companies"} · NIGHTSHIFT`;
+  document.title = `${seg[0] === "games" && seg[1] === "live" ? "Watch live" : TITLES[key ?? ""] ?? "Companies"} · NIGHTSHIFT`;
   return (
     <div className="ns ns-app">
       <SiteHeader active={active} />
@@ -75,7 +78,7 @@ function App() {
 const TITLES: Record<string, string> = {
   companies: "Companies", launch: "Launch a company", co: "Your company", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
   market: "Market", token: "$SHIFT", frogs: "NIGHT FROGS", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
-  tokenomics: "Tokenomics", games: "Game Room", launchpad: "Launchpad",
+  tokenomics: "Tokenomics", games: "Game Room", launchpad: "Launchpad", arena: "Agent Arena",
 };
 
 // The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.
