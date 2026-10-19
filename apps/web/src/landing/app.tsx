@@ -18,6 +18,7 @@ const TABS: { to: string; label: string; icon: string; on: Active[] }[] = [
 
 /** Everything else, as app tiles. */
 const MORE: { to: string; label: string; note: string; icon: string }[] = [
+  { to: "/town", label: "Town", note: "Explore the agent ecosystem", icon: "home" },
   { to: "/games/pinball", label: "Space Pinball", note: "PvP duels, free now", icon: "flipper" },
   { to: "/token", label: "$SHIFT", note: "Price, supply, contracts", icon: "crescent" },
   { to: "/frogs", label: "NIGHT FROGS", note: "The crew and its rewards", icon: "frog" },

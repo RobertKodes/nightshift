@@ -4,5 +4,5 @@ import { defineConfig } from "vite";
 const engine = process.env.ENGINE_URL ?? "http://localhost:8787";
 export default defineConfig({
   plugins: [react()],
-  server: { port: 5173, proxy: { "/api": engine, "/buy": engine, "/sites": engine, "/files": engine } },
+  server: { port: 5173, proxy: { "/api": engine, "/.well-known/nightshift-ecosystem.json": engine, "/town/agents.md": engine, "/buy": engine, "/sites": engine, "/files": engine } },
 });
