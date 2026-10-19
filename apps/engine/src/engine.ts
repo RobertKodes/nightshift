@@ -42,6 +42,7 @@ import { Store } from "./store.js";
 import { Vault } from "./vault.js";
 import { ProductFiles, fetchDelivery } from "./products.js";
 import { newFrogListings, newFrogSales, OPENSEA_SLUG } from "./frogmarket.js";
+import { fillTraits, frogCaption, sendFrogCard } from "./frogcard.js";
 import { type ArcadeEvent, onArcade } from "./pinball.js";
 import { followSwarm } from "./swarm.js";
 import { live as gameLobby } from "./games-routes.js";
@@ -54,6 +55,13 @@ import { type Button, type CommandContext, type GroupMessage, type Reply, bluesk
 import { IMD_TOKEN, completeContracts, followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { writeSettings } from "./settings.js";
+
+/** A NIGHT FROG market card with the frog's own picture on top; the plain card if the photo can't be sent. */
+async function frogPost(id: number, caption: string, buttons: Button[][], kind: Anim): Promise<boolean> {
+  if (!config.telegramToken) return false;
+  const sent = await Promise.all(chats().map((c) => sendFrogCard(c, id, caption, buttons)));
+  return sent.some(Boolean) || toCommunity(caption, buttons, kind);
+}
 
 export type EngineEvent = { type: "task" | "journal" | "company" | "sale"; companyId: string; payload: unknown; at: number };
 const DAY = 24 * 3600_000;
@@ -254,16 +262,18 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
     setInterval(() => void newFrogSales().then(async (sales) => {
       for (const s of sales) {
         const usd = s.eth * ((await marketSnapshot().catch(() => null))?.ethUsd ?? 0);
-        await toCommunity(`🐸💰 <b>NIGHT FROG #${s.id} SOLD</b>\n\n💵 <b>${s.eth.toFixed(4)} ETH</b>${usd ? ` (≈ $${usd.toFixed(0)})` : ""}\n👤 Buyer ${who(s.buyer)}\n🏷 Seller ${who(s.seller)}\n\nWelcome to the night crew. Holders share half of every NIGHTSHIFT reward.\n\n<a href="https://etherscan.io/tx/${s.tx}">TX</a>`,
-          [[{ text: `🌊 See #${s.id} on OpenSea`, url: frogUrl(s.id) }], [{ text: "🐸 The collection", url: `https://opensea.io/collection/${OPENSEA_SLUG}` }]], "frog");
+        const caption = await frogCaption({ kind: "sold", id: s.id, eth: s.eth, usd, buyer: s.buyer, seller: s.seller, tx: s.tx }, who);
+        await frogPost(s.id, caption, [[{ text: `🌊 #${s.id} on OpenSea`, url: frogUrl(s.id) }, { text: "🐸 Collection", url: `https://opensea.io/collection/${OPENSEA_SLUG}` }]], "frog");
       }
     }).catch((e) => console.error("frog sales", e)), 60_000);
     setInterval(() => void newFrogListings().then(async (list) => {
       for (const x of list) {
-        await toCommunity(`🐸🏷 <b>NIGHT FROG #${x.id} LISTED</b>\n\n💵 <b>${x.eth.toFixed(4)} ETH</b>${x.seller ? `\n👤 ${who(x.seller)}` : ""}\n\nOne more frog looking for a night shift.`,
-          [[{ text: `🌊 Buy #${x.id} on OpenSea`, url: x.url }]], "frog");
+        const caption = await frogCaption({ kind: "listed", id: x.id, eth: x.eth, seller: x.seller }, who);
+        await frogPost(x.id, caption, [[{ text: `🌊 Buy #${x.id} on OpenSea`, url: x.url }, { text: "🐸 Collection", url: `https://opensea.io/collection/${OPENSEA_SLUG}` }]], "frog");
       }
     }).catch((e) => console.error("frog listings", e)), 120_000);
+    // every frog's traits, once, so sale cards can show a rarity rank
+    void fillTraits().catch((e) => console.error("frog traits", e));
     // Every frog minted, to the community chat.
     setInterval(() => void newMints().then(async (mints) => {
       for (const m of mints) {

@@ -9,6 +9,7 @@ import { PendingError } from "./checkout.js";
 import { findPool } from "./v4.js";
 import { liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
 import { keeperAccount } from "./keeper.js";
+import { frogPng } from "./frogpng.js";
 import { board as pinBoard, frogImage as pinFrogImage, inMatch as pinInMatch, soloFinish as pinSoloFinish, soloProgress as pinSoloProgress, soloStart as pinSoloStart, finish as pinFinish, get as pinGet, leave as pinLeave, listen as pinListen, progress as pinProgress, queue as pinQueue, stakes as pinStakes } from "./pinball.js";
 import { claimsOf, epochs, markPosted } from "./frogpot.js";
 import { config } from "./config.js";
@@ -385,6 +386,15 @@ export function serve(engine: Engine) {
         // a NIGHT FROG's onchain image, the only face from a wallet shown to a rival: never run as a page
         if (parts[2] === "frog" && parts[3] && req.method === "GET") {
           if (limited(req, "pinball-frog", 120, 60_000)) return json(res, 429, { error: "slow down" });
+          // the same frog as a PNG, for Telegram photos and link previews
+          const pngId = /^(\d{1,5})\.png$/.exec(parts[3])?.[1];
+          if (pngId) {
+            const png = await frogPng(Number(pngId)).catch(() => null);
+            if (!png) return json(res, 404, { error: "no such frog" });
+            res.writeHead(200, { "Content-Type": "image/png", "Content-Length": png.length, "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff" });
+            res.end(png);
+            return;
+          }
           const svg = /^\d{1,5}$/.test(parts[3]) ? await pinFrogImage(Number(parts[3])) : null;
           if (!svg) return json(res, 404, { error: "no such frog" });
           res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox", "X-Content-Type-Options": "nosniff" });
