@@ -20,6 +20,7 @@ import { StakePage } from "./StakePage";
 import { ImpactPage } from "./ImpactPage";
 import { GuidePage } from "./GuidePage";
 import { TermsPage } from "./TermsPage";
+import { SecurityPage } from "./SecurityPage";
 import { TokenomicsPage } from "./TokenomicsPage";
 import { GameRoomPage } from "./GameRoomPage";
 import { PinballPage } from "./PinballPage";
@@ -48,6 +49,7 @@ function App() {
   if (seg[0] === "c" && seg[1]) page = <PublicPage slug={seg[1]} health={health} />;
   if (seg[0] === "mcp") page = <McpPage health={health} />;
   if (seg[0] === "terms") page = <TermsPage health={health} />;
+  if (seg[0] === "security") page = <SecurityPage />;
   if (seg[0] === "setup") page = <SetupPage />;
   if (seg[0] === "market") page = <MarketPage />;
   if (seg[0] === "token") page = <TokenPage />;

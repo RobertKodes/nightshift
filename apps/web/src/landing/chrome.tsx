@@ -193,6 +193,7 @@ export function SiteFooter() {
         <a href={TELEGRAM_URL} target="_blank" rel="noreferrer">TELEGRAM</a>
         <a href={BLUESKY_URL} target="_blank" rel="noreferrer">BLUESKY</a>
         <a href={OPENSEA_URL} target="_blank" rel="noreferrer">OPENSEA</a>
+        <Link to="/security">SECURITY</Link>
         <Link to="/market">MARKET</Link>
         <Link to="/token">TOKEN</Link>
         <Link to="/tokenomics">TOKENOMICS</Link>
