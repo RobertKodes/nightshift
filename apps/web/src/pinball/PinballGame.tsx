@@ -11,16 +11,21 @@ const RES = pixelRatio(2);
  * announcer banners, a live minimap of the rival's ball, meteors and surges from the rival,
  * synthesized sound and music. Inputs are recorded per tick and streamed to the server while the
  * game runs (it plays the same table with them), together with the tick each rival attack landed.
+ * A game the server deals (a duel, a board run) draws its luck from salts the server hands out as
+ * the stream reaches them: the table waits at a segment until its salt is here.
  */
 const ART = "/games/pinball";
 /** A rival's attack as the server relays it: its number, what it is, when it was earned and when it is due here. */
 export type Shot = { n: number; kind: Attack; tick: number; at: number };
 export type Landed = { n: number; at: number };
 export type Rival = { name: string; avatar?: string | null; live: number; x: number; y: number; attacks: Shot[] };
-/** One post of the stream: what changed since the last one that was taken. "stop": the server no longer counts this game. */
-export type Live = { tick: number; x: number; y: number; inputs: Input[]; from: number; landed: Landed[] };
+/** One post of the stream: what changed since the last one that was taken, and how many salts this page holds. "stop": the server no longer counts this game. */
+export type Live = { tick: number; x: number; y: number; inputs: Input[]; from: number; landed: Landed[]; have: number };
 type Props = {
+  /** Practice offline and the attract mode: one local seed for the whole game. */
   seed: number;
+  /** A dealt game: the salts revealed so far, one per segment (the page adds to this array as they come). */
+  luck?: number[];
   /** Wall-clock start (duels and board runs): the VS screen and countdown of a duel run until then. */
   startAt?: number;
   /** Server time minus this device's time, in ms: a duel or a board run runs on the server's clock. */
@@ -73,7 +78,7 @@ function makeAudio() {
   };
 }
 
-export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "You", rival, demo, onLive, onDone, overlay }: Props) {
+export function PinballGame({ seed, luck, startAt, clockOffset = 0, avatar, name = "You", rival, demo, onLive, onDone, overlay }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const mini = useRef<HTMLCanvasElement>(null);
   const keys = useRef({ left: 0, right: 0, plunger: 0 });
@@ -98,7 +103,7 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
       me: avatar ? img(avatar) : img(`${ART}/frog-0.webp`),
       rival: rivalRef.current?.avatar ? img(rivalRef.current.avatar) : img(`${ART}/frog-3.webp`),
     };
-    let t = new Table(seed);
+    let t = new Table(luck ?? seed);
     const inputs: Input[] = [];
     const landed: Landed[] = [];
     const scheduled = new Set<number>();
@@ -133,7 +138,9 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
         // the same moment, so attacks land where the server's replay puts them. Practice keeps frame time.
         if (startAt) acc = Math.min(4800, Math.max(0, Math.floor((Date.now() + clockOffset - startAt) / (TICK * 1000)) - t.tick)) * TICK + 1e-9;
         else acc += dt;
-        while (acc >= TICK && !t.over) {
+        // a dealt game waits at the edge of a segment until its salt is here (it catches up on the clock after)
+        if (!t.ready()) acc = Math.min(acc, TICK);
+        while (acc >= TICK && !t.over && t.ready()) {
           if (demo) {
             // the attract-mode bot
             const b = t.ball; if (demoL > 0) demoL--; if (demoR > 0) demoR--;
@@ -173,7 +180,7 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
         liveAt = now; posting = true;
         const chunk = inputs.slice(streamed, streamed + 300), news = landed.slice(told);
         const tick = streamed + chunk.length < inputs.length ? inputs[streamed + chunk.length]![0] : t.tick;
-        void onLive({ tick, x: t.ball.x, y: t.ball.y, inputs: chunk, from: streamed, landed: news }).then((ok) => {
+        void onLive({ tick, x: t.ball.x, y: t.ball.y, inputs: chunk, from: streamed, landed: news, have: luck?.length ?? 0 }).then((ok) => {
           posting = false;
           if (ok === "stop") stopped = true;
           else if (ok) { streamed += chunk.length; told += news.length; }
@@ -338,7 +345,7 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
         g.font = "900 64px 'JetBrains Mono', monospace"; g.fillStyle = "#e9e2ff"; g.shadowColor = "#7c5cff"; g.shadowBlur = 30; g.fillText("VS", W / 2, 350); g.shadowBlur = 0;
         g.font = "900 150px 'JetBrains Mono', monospace"; g.fillStyle = "#F2EFFF"; g.globalAlpha = 0.5 + 0.5 * ((wait % 1000) / 1000);
         g.fillText(secs > 3 ? "" : String(secs), W / 2, 700); g.globalAlpha = 1;
-        g.font = "600 16px 'JetBrains Mono', monospace"; g.fillStyle = "#a48bff"; g.fillText("Same table · same seed · meteors fly both ways", W / 2, 780);
+        g.font = "600 16px 'JetBrains Mono', monospace"; g.fillStyle = "#a48bff"; g.fillText("Same table · same luck · meteors fly both ways", W / 2, 780);
       }
       g.restore();
     };
@@ -354,7 +361,7 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
     const kd = key(true), ku = key(false);
     window.addEventListener("keydown", kd); window.addEventListener("keyup", ku);
     return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); };
-  }, [seed, demo]);
+  }, [seed, luck, demo]);
 
   const touch = (k: "left" | "right" | "plunger", v: 0 | 1) => (e: React.PointerEvent) => { e.preventDefault(); keys.current[k] = v; };
   if (demo) return <canvas ref={canvas} width={W} height={H} className="arc-canvas" />;

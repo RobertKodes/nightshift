@@ -194,6 +194,7 @@ export function SiteFooter() {
         <a href={BLUESKY_URL} target="_blank" rel="noreferrer">BLUESKY</a>
         <a href={OPENSEA_URL} target="_blank" rel="noreferrer">OPENSEA</a>
         <Link to="/security">SECURITY</Link>
+        <a href="/imd-status/">IMD STATUS</a>
         <Link to="/market">MARKET</Link>
         <Link to="/token">TOKEN</Link>
         <Link to="/tokenomics">TOKENOMICS</Link>

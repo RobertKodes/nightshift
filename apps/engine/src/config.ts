@@ -14,6 +14,13 @@ export const config = {
   dataDir: resolve(env.DATA_DIR ?? "data"),
   /** Encrypts every company's wallet key at rest. Set it in production. */
   secret: env.NIGHTSHIFT_SECRET ?? "",
+  /** Signs sign-in sessions. Unset: derived from the vault secret (as before). Setting it signs everyone out once. */
+  sessionSecret: process.env.SESSION_SECRET ?? "",
+  /**
+   * Proxies whose X-Forwarded-For is believed (IPs or CIDRs, comma separated). Loopback by default;
+   * the compose files set the network Caddy reaches the engine on.
+   */
+  trustedProxies: env.TRUSTED_PROXIES || "127.0.0.0/8,::1,caddy",
   openrouterKey: env.OPENROUTER_API_KEY ?? "",
   /** Free by default: OpenRouter's free models cost nothing. A paid model needs LLM_ALLOW_PAID=1. */
   model: env.NIGHTSHIFT_MODEL || "nvidia/nemotron-3-super-120b-a12b:free",

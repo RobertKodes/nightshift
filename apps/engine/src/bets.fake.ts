@@ -11,6 +11,8 @@ export function fakeBetChain(o: { pool: Address; signer: string; paused?: boolea
     balances: new Map<string, bigint>(),
     bets: new Map<string, readonly [bigint, bigint, bigint, bigint, boolean]>(),
     claimable: new Map<string, bigint>(),
+    /** A market's totals on side A and B, as markets() reports them (by lowercase market id). */
+    pools: new Map<string, readonly [bigint, bigint]>(),
     logs: [] as RawLog[],
     settled: [] as SettleCall[],
     created: [] as CreateCall[],
@@ -27,6 +29,7 @@ export function fakeBetChain(o: { pool: Address; signer: string; paused?: boolea
       if (a.functionName === "limits") return s.limits[String(a.args![0]).toLowerCase()] ?? [0n, 0n];
       if (a.functionName === "betsOf") return s.bets.get(key) ?? [0n, 0n, 0n, 0n, false];
       if (a.functionName === "claimable") return s.claimable.get(key) ?? 0n;
+      if (a.functionName === "markets") { const [ta, tb] = s.pools.get(key) ?? [0n, 0n]; return [TOKENS.IMD, 0n, `0x${"0".repeat(64)}`, ta, tb, 0n, 0n, false, 0, false]; }
       throw new Error(`unexpected read ${a.functionName}`);
     },
   };

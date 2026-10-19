@@ -44,6 +44,8 @@ export function writeSettings(patch: Record<string, unknown>): Partial<Record<Se
 
 /** The token that opens /setup: ADMIN_TOKEN, or one generated on first start and kept in the data folder. */
 export function adminToken(): { token: string; generated: boolean } {
+  // A short hand-set token opens the dashboard that moves the treasury: refuse to start rather than run with it.
+  if (process.env.ADMIN_TOKEN && process.env.ADMIN_TOKEN.length < 24) throw new Error("ADMIN_TOKEN is shorter than 24 characters. Use a long random one (openssl rand -base64 24), or unset it to have one generated.");
   if (process.env.ADMIN_TOKEN) return { token: process.env.ADMIN_TOKEN, generated: false };
   const f = join(dataDir, "admin-token");
   mkdirSync(dataDir, { recursive: true });

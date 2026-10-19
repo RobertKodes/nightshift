@@ -159,10 +159,10 @@ export function SwapPage() {
 
       <h2>How it works</h2>
       <ul className="frogs-util">
-        <li><b>Straight to the pool</b>: one call to Uniswap's Universal Router <code>{V4.router.slice(0, 6)}…{V4.router.slice(-4)}</code> on the ${sym}/ETH v4 pool with the NIGHTSHIFT hook. You can check every address on Etherscan.</li>
-        <li><b>Priced by Uniswap</b>: the quote comes from Uniswap's V4 Quoter, and your minimum is that quote less your slippage. Below it, the swap reverts and you keep your funds.</li>
-        <li><b>Fees, plainly</b>: every trade pays the pool's 1.25% (1% to the launch payer, 0.25% to IMD). Sells also pay 5%, split by the one rule: stakers and NIGHT FROGS holders, the dev wallet, the treasury, and SHIFT and IMD burns.</li>
-        <li><b>Selling, once</b>: the first sell asks for two approvals (Permit2, then the router), as on Uniswap. After that, one signature.</li>
+        <li><b>Straight to the pool</b>one call to Uniswap's Universal Router <code>{V4.router.slice(0, 6)}…{V4.router.slice(-4)}</code> on the ${sym}/ETH v4 pool with the NIGHTSHIFT hook. You can check every address on Etherscan.</li>
+        <li><b>Priced by Uniswap</b>the quote comes from Uniswap's V4 Quoter, and your minimum is that quote less your slippage. Below it, the swap reverts and you keep your funds.</li>
+        <li><b>Fees, plainly</b>every trade pays the pool's 1.25% (1% to the launch payer, 0.25% to IMD). Sells also pay 5%, split by the one rule: stakers and NIGHT FROGS holders, the dev wallet, the treasury, and SHIFT and IMD burns.</li>
+        <li><b>Selling, once</b>the first sell asks for two approvals (Permit2, then the router), as on Uniswap. After that, one signature.</li>
       </ul>
     </div>
   );

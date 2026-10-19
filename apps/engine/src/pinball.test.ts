@@ -1,14 +1,16 @@
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { type Input, Table, duelReplay, replay } from "./pinball/engine.js";
+import { type Input, type Luck, SEGMENT, SEGMENTS, Table, duelReplay, replay, segmentOf } from "./pinball/engine.js";
 
 /** The flipper bot: flips when the ball comes down to a flipper, pulls the plunger `pull` ticks. */
 type Bot = { t: Table; inputs: Input[]; last: string; lt: number; rt: number; pull: number };
-const bot = (seed: number, pull = 150): Bot => ({ t: new Table(seed), inputs: [], last: "", lt: 0, rt: 0, pull });
+const bot = (luck: Luck, pull = 150): Bot => ({ t: new Table(luck), inputs: [], last: "", lt: 0, rt: 0, pull });
+/** Plays up to `to`, or until the table needs a salt it has not been given (as the browser waits for it). */
 function playTo(c: Bot, to: number): void {
-  while (!c.t.over && c.t.tick < to) {
+  while (!c.t.over && c.t.tick < to && c.t.ready()) {
     const t = c.t, b = t.ball;
     if (c.lt > 0) c.lt--; if (c.rt > 0) c.rt--;
     if (c.lt === 0 && b.y > 745 && b.y < 815 && b.x < 300) c.lt = 40;
@@ -82,7 +84,29 @@ describe("space pinball", () => {
     }
     expect(crews).toBeGreaterThan(0);
   });
+  it("draws a dealt game's luck segment by segment, and never steps into a segment it has no salt for", () => {
+    const salts = Array.from({ length: SEGMENTS }, (_, k) => (k * 2654435761) >>> 0);
+    const g = bot(salts, 175); playTo(g, Infinity);
+    expect(g.t.over).toBe(true);
+    expect(replay(salts, g.inputs).score).toBe(g.t.score);
+    // with no salt yet, a table can still sit in the lane (nothing is drawn) but says it is not ready
+    const early: number[] = [], t = new Table(early);
+    expect(t.ready()).toBe(false);
+    expect(() => { t.input = { left: 0, right: 0, plunger: 0 }; t.step(); }).not.toThrow(); // nothing drawn on this tick
+    early.push(1);
+    const c = bot(early, 175); playTo(c, 10 * SEGMENT);
+    expect(c.t.tick).toBe(SEGMENT - 1);
+    expect(c.t.ready()).toBe(false);
+  });
 });
+
+/** A client's copy of the luck: the salts it was given, in order (a frame or a reply carries those after `from`). */
+type Held = { salts: number[] };
+function take(h: Held, l: { from: number; salts: number[] } | null | undefined): void {
+  if (!l || l.from > h.salts.length) return;
+  h.salts.push(...l.salts.slice(h.salts.length - l.from));
+}
+const commitment = (salts: number[]) => createHash("sha256").update(salts.join(",")).digest("hex");
 
 describe("space pinball server", () => {
   let pb: typeof import("./pinball.js");
@@ -95,7 +119,7 @@ describe("space pinball server", () => {
     pb.onArcade((e) => told.push(e));
   });
 
-  type Client = Bot & { me: string; landed: { n: number; at: number }[]; got: Set<number>; streamed: number; told: number; done: boolean; error?: string };
+  type Client = Bot & Held & { me: string; landed: { n: number; at: number }[]; got: Set<number>; streamed: number; told: number; done: boolean; error?: string };
   /**
    * Two clients playing a duel against the server, as the browser does: every 250 ms each reads the
    * attacks relayed to it, plays its table up to the match clock and posts what is new.
@@ -118,7 +142,10 @@ describe("space pinball server", () => {
     const m0 = pb.get(id, A.player)!;
     expect(m0.seed).not.toBeNull();
     const seed = m0.seed!, startedAt = m0.startedAt!;
-    const mk = (me: string, pull: number): Client => ({ ...bot(seed, pull), me, landed: [], got: new Set(), streamed: 0, told: 0, done: false });
+    // the start gives the first segments only, and nobody else sees them
+    expect(m0.luck!.salts.length).toBeLessThanOrEqual(2);
+    expect(pb.getWatch(id)!.luck).toBeNull();
+    const mk = (me: string, pull: number): Client => { const salts: number[] = []; take({ salts }, pb.get(id, me)!.luck); return { ...bot(salts, pull), salts, me, landed: [], got: new Set(), streamed: 0, told: 0, done: false }; };
     const a = mk(A.player, 175), b = mk(B.player, 150);
     if (o.absent) b.done = true;
     for (let step = 0; step < 900 && !pb.get(id)!.done; step++) {
@@ -142,15 +169,24 @@ describe("space pinball server", () => {
           try { pb.finish(id, c.me, { inputs: c.inputs, landed: c.landed, tick: c.t.tick }); } catch (e) { c.error = (e as Error).message; }
           continue;
         }
-        if (cheater === "silent") continue;
+        // a silent player streams only where it got to (or it would get no luck at all), never its inputs
+        if (cheater === "silent") { try { take(c, pb.progress(id, c.me, { inputs: [], from: 0, tick: c.t.tick, have: c.salts.length }).luck); } catch (e) { c.error = (e as Error).message; } continue; }
         const chunk = c.inputs.slice(c.streamed), news = c.landed.slice(c.told);
         const junk = cheater === "fake" ? { sent: Array.from({ length: 20 }, (_, i) => ({ kind: "meteor", tick: i * 300 })), landed: [...news, { n: 999, at: 5 }, { n: 0, at: 1 }] } : {};
-        try { pb.progress(id, c.me, { inputs: chunk, from: c.streamed, tick: c.t.tick, landed: news, x: c.t.ball.x, y: c.t.ball.y, ...junk }); c.streamed += chunk.length; c.told += news.length; } catch (e) { c.error = (e as Error).message; }
+        try { const r = pb.progress(id, c.me, { inputs: chunk, from: c.streamed, tick: c.t.tick, landed: news, x: c.t.ball.x, y: c.t.ball.y, have: c.salts.length, ...junk }); c.streamed += chunk.length; c.told += news.length; take(c, r.luck); } catch (e) { c.error = (e as Error).message; }
+        // never a salt for a segment starting more than 0.75 s past where this stream is committed
+        // (what it reported played, or what is too late to change: the clock less 2 s)
+        if (!pb.get(id)!.done) expect(c.salts.length).toBeLessThanOrEqual(segmentOf(Math.max(c.t.tick, clock - 480) + 180) + 1);
       }
     }
     const m = pb.get(id, a.me)!, mb = pb.get(id, b.me)!;
     expect(m.done).toBe(true);
-    return { id, seed, a, b, m, mb, va: m.players.find((p) => p.you)!, vb: mb.players.find((p) => p.you)! };
+    // settled: all the luck is out, and it is what the commitment shown at the start promised
+    const luck = pb.get(id)!.luck!.salts;
+    expect(luck).toHaveLength(SEGMENTS);
+    expect(commitment(luck)).toBe(seed);
+    expect(pb.getWatch(id)!.seed).toBe(seed);
+    return { id, seed, luck, a, b, m, mb, va: m.players.find((p) => p.you)!, vb: mb.players.find((p) => p.you)! };
   }
 
   it("verifies exactly what an honest duel played, attacks included (finding 2)", async () => {
@@ -160,7 +196,7 @@ describe("space pinball server", () => {
     expect(d.vb.score).toBe(d.b.t.score);
     expect(d.a.t.stats.received + d.b.t.stats.received).toBeGreaterThan(0);
     // on a good link every attack lands where the lockstep replay puts it
-    expect(duelReplay(d.seed, d.a.inputs, d.b.inputs).scores).toEqual([d.a.t.score, d.b.t.score]);
+    expect(duelReplay(d.luck, d.a.inputs, d.b.inputs).scores).toEqual([d.a.t.score, d.b.t.score]);
   });
   it("still verifies what was played when the relay is seconds late (finding 2)", async () => {
     // seeds are dealt at random: play until some attack reached the slow player after it was due
@@ -275,16 +311,23 @@ describe("space pinball server", () => {
     const A = await pb.queue("P", null, "FREE", 0, null), off = pb.listen(A.match.id, A.player, () => {});
     const B = await pb.queue("Q", null, "FREE", 0, null), off2 = pb.listen(B.match.id, B.player, () => {});
     vi.advanceTimersByTime(6_000);
-    const c = bot(pb.get(A.match.id, A.player)!.seed!, 175), start = pb.get(A.match.id)!.startedAt!;
+    const h: Held = { salts: [] }; take(h, pb.get(A.match.id, A.player)!.luck);
+    const c = bot(h.salts, 175), start = pb.get(A.match.id)!.startedAt!;
     for (let i = 0; i < 80; i++) {
       vi.advanceTimersByTime(250);
       const n = c.inputs.length; playTo(c, Math.floor(((Date.now() - start) * 240) / 1000));
-      pb.progress(A.match.id, A.player, { inputs: c.inputs.slice(n), from: n, tick: c.t.tick });
+      take(h, pb.progress(A.match.id, A.player, { inputs: c.inputs.slice(n), from: n, tick: c.t.tick, have: h.salts.length }).luck);
     }
+    // the rival, who streamed nothing, holds only luck that is already too late to use; spectators none
+    const clock = Math.floor(((Date.now() - start) * 240) / 1000);
+    expect(pb.get(B.match.id, B.player)!.luck!.salts.length).toBeLessThanOrEqual(segmentOf(clock - 480 + 180) + 1);
+    expect(h.salts.length).toBeGreaterThan(segmentOf(clock - 480 + 180) + 1);
+    expect(pb.getWatch(A.match.id)!.luck).toBeNull();
     const v = pb.get(B.match.id, B.player)!.players.find((p) => !p.you)!;
     expect([v.score, v.solo, v.stats, v.finished]).toEqual([null, null, null, false]);
-    // a finish long before the game could have ended on the match clock is refused
-    expect(() => pb.finish(A.match.id, A.player, { inputs: c.inputs, tick: c.t.tick })).toThrow(/later than the match/);
+    // a finish long before the game could have ended on the match clock is refused: the log ends holding
+    // the plunger, so the replayed game runs on to its full length (unless the ball in play is the last one)
+    if (c.t.ballsLeft > 1 || c.t.inLane) expect(() => pb.finish(A.match.id, A.player, { inputs: [...c.inputs, [c.t.tick, 1, 1, 1]], tick: c.t.tick })).toThrow(/later than the match/);
     off(); off2();
   });
   it("dissolves a match whose second player never connects, and the first waits again (finding 10)", async () => {
@@ -337,22 +380,46 @@ describe("space pinball server", () => {
     /** A run played on the server's clock, its inputs streamed every 250 ms. */
     function run(who: string) {
       const r = pb.soloStart("Solo", who);
-      const c = bot(r.seed, 160);
-      let streamed = 0;
+      const h: Held = { salts: [] }; take(h, r.luck);
+      const c = bot(h.salts, 160);
+      let streamed = 0, most = 0;
       while (!c.t.over) {
         vi.advanceTimersByTime(250);
         playTo(c, Math.floor(((Date.now() - r.startedAt) * 240) / 1000));
         if (c.t.over) break;
-        pb.soloProgress(r.id, { inputs: c.inputs.slice(streamed), from: streamed, tick: c.t.tick });
+        take(h, pb.soloProgress(r.id, { inputs: c.inputs.slice(streamed), from: streamed, tick: c.t.tick, have: h.salts.length }).luck);
         streamed = c.inputs.length;
+        most = Math.max(most, h.salts.length * SEGMENT - c.t.tick);
       }
-      return { r, c };
+      return { r, c, h, most };
     }
-    it("verifies a streamed run played on its clock", () => {
-      const { r, c } = run("ip:1");
+    it("verifies a streamed run played on its clock, and gives all its luck back to check it by", () => {
+      const { r, c, h, most } = run("ip:1");
+      expect(c.t.over).toBe(true);
+      // the luck came in as the run reached it, never more than 0.75 s and a segment ahead
+      expect(most).toBeLessThanOrEqual(180 + SEGMENT);
       const v = pb.soloFinish(r.id, c.inputs);
       expect(v.score).toBe(c.t.score);
       expect(v.rank).not.toBeNull();
+      expect(v.luck.slice(0, h.salts.length)).toEqual(h.salts);
+      expect(commitment(v.luck)).toBe(r.seed);
+      expect(replay(v.luck, c.inputs).score).toBe(v.score);
+    });
+    it("reveals no luck for a segment before the stream is committed to within 0.75 s of it (botting, finding 1)", () => {
+      const r = pb.soloStart("x", "ip:9");
+      // the start: segments 0 and 1 (ticks 0-239) only, not the whole game's seed
+      expect(r.luck.salts).toHaveLength(2);
+      expect(r.seed).toMatch(/^[0-9a-f]{64}$/);
+      vi.advanceTimersByTime(250);
+      // an empty post that commits nothing gets nothing more
+      expect(pb.soloProgress(r.id, { inputs: [], from: 0, have: 2 }).luck).toEqual({ from: 2, salts: [] });
+      // reporting tick 100 commits it: no input before 100 is taken from now on, and segment 2 (from 240) comes out
+      expect(pb.soloProgress(r.id, { inputs: [], from: 0, tick: 100, have: 2 }).luck.salts).toHaveLength(1);
+      expect(() => pb.soloProgress(r.id, { inputs: [[90, 0, 0, 1]], from: 0, tick: 100 })).toThrow(/late/);
+      // and a report far ahead of the clock (to see further) is refused
+      const s = pb.soloStart("x", "ip:10");
+      vi.advanceTimersByTime(250);
+      expect(() => pb.soloProgress(s.id, { inputs: [], from: 0, tick: 60 + 241 })).toThrow(/ahead/);
     });
     it("keeps one open run per player", () => {
       pb.soloStart("x", "ip:2");
@@ -361,7 +428,7 @@ describe("space pinball server", () => {
     });
     it("refuses a log that is not what was streamed, or that was never streamed", () => {
       const a = pb.soloStart("x", "ip:4");
-      const c = bot(a.seed, 160);
+      const c = bot(a.luck.salts, 160);
       vi.advanceTimersByTime(250); playTo(c, 60);
       pb.soloProgress(a.id, { inputs: c.inputs, from: 0, tick: 60 });
       expect(() => pb.soloFinish(a.id, [[0, 1, 0, 0], ...c.inputs.slice(1)])).toThrow(/do not match/);

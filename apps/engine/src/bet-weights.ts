@@ -14,19 +14,25 @@ import { Chess } from "chess.js";
  *
  *   base    = 1 − 0.65·p                  early bets count fully, the last ones about a third
  *   leader  = base · (1 − 0.8·c)          backing the side that is ahead counts less…
- *   trailer = min(1, base · (1 + 0.5·c))  …and backing the side behind a little more
+ *   trailer = min(1, base · (1 + 0.5·c))  …and backing the side behind a little more,
+ *             but never above max(cap, leader), cap = 1 − 0.6·min(1, c / 0.5): a position thrown
+ *             on purpose (to back it at full weight and then win anyway) is worth at most 4000 bps
  *   weightBps = clamp(round(10 000 · w), 500, 10 000)
  *
  * With nobody ahead both sides get `base`. Betting LOCKS (no ticket at all) when the result is
  * near certain or the game is about to end, and while a player is away:
  *   chess    the game is over or not started; mate in one is on the board; the first 10 s after
  *            a queen or rook was taken or a check given; one side is a queen (9 points) up with the
- *            game half played or more; either clock under 20 s; a player reconnecting.
+ *            game half played or more; either clock under 20 s; a player reconnecting; a draw offer
+ *            open.
  *   pinball  the duel is over or not started; the last 20% of its clock; a table has drained its
  *            last ball; a table stopped counting; a player reconnecting.
+ *   both     SWING_PAUSE_MS after the lead swung by SWING or more between two looks (SwingGuard).
  */
 export const MIN_WEIGHT = 500;
 export const MAX_WEIGHT = 10_000;
+/** The most a bet on the side behind can weigh (unless the leader's own weight is higher). */
+export const TRAILER_MAX_WEIGHT = 4_000;
 export type Weights = {
   /** Weight in bps for a bet on side A (chess: white; pinball: player 1) and on side B. */
   a: number; b: number;
@@ -44,8 +50,30 @@ export const bps = (w: number) => Math.min(MAX_WEIGHT, Math.max(MIN_WEIGHT, Math
 export function shape(progress: number, confidence: number, leader: 0 | 1 | null, locked: string | null = null): Weights {
   const p = clamp01(progress), c = leader === null ? 0 : clamp01(confidence);
   const base = 1 - 0.65 * p;
-  const ahead = bps(base * (1 - 0.8 * c)), behind = bps(Math.min(1, base * (1 + 0.5 * c)));
+  const ahead = bps(base * (1 - 0.8 * c)), cap = bps(1 - (1 - TRAILER_MAX_WEIGHT / 10_000) * Math.min(1, c / 0.5));
+  const behind = Math.min(bps(Math.min(1, base * (1 + 0.5 * c))), Math.max(cap, ahead));
   return { a: leader === 1 ? behind : ahead, b: leader === 0 ? behind : ahead, locked, progress: p, confidence: c, leader };
+}
+
+/** A swing of the signed lead (−1..1, A ahead positive) this big between two looks pauses betting. */
+export const SWING = 0.35;
+export const SWING_PAUSE_MS = 15_000;
+/**
+ * Remembers each match's lead between looks (every ticket, view and the 2 s tick) and locks betting
+ * for SWING_PAUSE_MS after a big swing: the moment right after a blunder is the one a player who
+ * threw the position, or a friend of theirs, would bet on.
+ */
+export class SwingGuard {
+  readonly #seen = new Map<string, { lead: number; swingAt: number | null }>();
+  check(key: string, w: Weights, now: number): Weights {
+    const lead = w.leader === null ? 0 : (w.leader === 0 ? 1 : -1) * w.confidence;
+    const last = this.#seen.get(key);
+    let swingAt = last?.swingAt ?? null;
+    if (last && Math.abs(lead - last.lead) >= SWING) swingAt = now;
+    if (!last && this.#seen.size >= 5_000) this.#seen.clear();
+    this.#seen.set(key, { lead, swingAt });
+    return !w.locked && swingAt !== null && now - swingAt < SWING_PAUSE_MS ? { ...w, locked: "The game just swung. Betting reopens in a few seconds." } : w;
+  }
 }
 
 // ---- NIGHT CHESS
@@ -93,6 +121,8 @@ export type ChessInput = {
   connected: [boolean, boolean];
   /** Time since the last sharp move (a queen or rook taken, or a check), if there was one. */
   sinceSharpMs?: number | null;
+  /** A draw offer is open: one word from the other player ends the game. */
+  drawOffered?: boolean;
 };
 /** Betting pauses this long after a sharp move: the position is in flux and the next move may decide it. */
 export const SHARP_PAUSE_MS = 10_000;
@@ -119,6 +149,7 @@ export function chessWeights(s: ChessInput): Weights {
     : Math.abs(material) >= 9 && p >= 0.5 ? "One side is a queen up late in the game."
     : s.status === "playing" && Math.min(s.clocks.w, s.clocks.b) < 20_000 ? "A clock is under 20 seconds."
     : s.status === "playing" && !(s.connected[0] && s.connected[1]) ? "A player is reconnecting."
+    : s.drawOffered ? "A draw is offered."
     : null;
   return shape(p, Math.tanh(Math.abs(e) / 5), leader, locked);
 }

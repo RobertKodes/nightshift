@@ -8,6 +8,7 @@ import { eth } from "./chain.js";
 import { CONTROLS, ChessGames, type TimeControl, chess as publicChess } from "./chess.js";
 import { config } from "./config.js";
 import type { Lobby } from "./games-routes.js";
+import { publicName } from "./names.js";
 
 /**
  * The AGENT ARENA: AI agents register, play NIGHT CHESS and play staked duels for their owners.
@@ -31,7 +32,10 @@ export const PRESENCE_MS = 60_000;
 const CHALLENGE_MS = 10 * 60_000;
 const MAX_AGENTS_PER_OWNER = 25;
 const MAX_TABLES_PER_AGENT = 3;
-const RESERVED = /^(nightshift|admin|imd|nightowl|owl|system|moderator|anthropic|claude|openai)$/i;
+/** Arena-only reserved names, on top of the shared rule (names.ts: the project, IMD, staff, however spelled). */
+const RESERVED = /^(nightowl|owl|system|anthropic|claude|openai)$/i;
+/** Two owners rate each other at most this many times a day (no farming Elo with a friendly rival). */
+export const PAIR_GAMES_PER_DAY = 3;
 const NAME = /^[A-Za-z0-9][A-Za-z0-9 ._-]{2,17}$/;
 const LABEL = /^[\w .:/+@()-]{0,40}$/;
 
@@ -47,19 +51,23 @@ export type Agent = {
   seat: { tokenId: number; agentId: string } | null; imd: Imd | null;
   keyHash: string; keyId: string; createdAt: number; lastSeenAt: number | null; revokedAt: number | null;
   elo: number; games: number; wins: number; losses: number; draws: number;
+  /** A salted hash of the IP the agent was registered from (never the IP): two owners registering from one place do not rate each other. */
+  ipHash?: string;
 };
 type Side = { name: string; agent: string | null; elo: number };
 export type GameRecord = {
   id: string; game: "chess"; where: Where; tc: TimeControl; currency: string; stake: string | null; escrow: string | null;
   startedAt: number | null; endedAt: number; white: Side; black: Side; result: "1-0" | "0-1" | "1/2-1/2"; reason: string; plies: number;
   rated: boolean; elo: Record<string, { before: number; after: number }>;
+  /** Why a game between agents was not rated, when it was not. */
+  unrated?: "short" | "same_owner" | "same_ip" | "pair_limit";
 };
 type Where = "arena" | "public" | "staked";
 type Seat = { player: string; off: (() => void) | null; seenAt: number };
 type Table = { id: string; where: Where; games: ChessGames; seats: Map<string, Seat>; createdAt: number; recorded: boolean; endedAt: number | null; waiters: Set<() => void> };
 export type Challenge = { id: string; game: "chess"; tc: TimeControl; from: string; to: string | null; createdAt: number; state: "open" | "accepted" | "cancelled"; gameId: string | null };
 type Stake = { matchId: string; agent: string; wallet: string; at: number };
-type State = { agents: Agent[]; games: GameRecord[]; stakes: Stake[] };
+type State = { agents: Agent[]; games: GameRecord[]; stakes: Stake[]; salt?: string };
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const lc = (s: unknown) => String(s ?? "").toLowerCase();
@@ -109,10 +117,16 @@ export class Arena {
     try {
       if (o.file && existsSync(o.file)) {
         const d = JSON.parse(readFileSync(o.file, "utf8")) as Partial<State>;
-        this.db = { agents: Array.isArray(d.agents) ? d.agents : [], games: Array.isArray(d.games) ? d.games : [], stakes: Array.isArray(d.stakes) ? d.stakes : [] };
+        this.db = { agents: Array.isArray(d.agents) ? d.agents : [], games: Array.isArray(d.games) ? d.games : [], stakes: Array.isArray(d.stakes) ? d.stakes : [], ...(typeof d.salt === "string" ? { salt: d.salt } : {}) };
       }
     } catch (e) { console.error("arena state", (e as Error).message); }
     for (const a of this.db.agents) if (a.keyHash) this.byKey.set(a.keyHash, a);
+  }
+  /** The registering IP, salted with this arena's own secret (kept in its state file) and hashed. */
+  private ipHash(ip: string | undefined): string | undefined {
+    if (!ip) return undefined;
+    this.db.salt ??= randomBytes(16).toString("hex");
+    return sha(`${this.db.salt}:${ip}`);
   }
 
   private save(): void {
@@ -136,7 +150,7 @@ export class Arena {
   private checkName(name: string, self?: Agent): string {
     const n = name.replace(/\s+/g, " ").trim();
     if (!NAME.test(n)) throw new ArenaError(400, "Name: 3 to 18 letters, digits, spaces, dots, dashes or underscores, starting with a letter or digit.", "bad_name");
-    if (RESERVED.test(n.replace(/[ ._-]/g, ""))) throw new ArenaError(400, "That name is reserved.", "bad_name");
+    if (RESERVED.test(n.replace(/[ ._-]/g, "")) || publicName(n, { max: 18 }) === null) throw new ArenaError(400, "That name is reserved.", "bad_name");
     if (this.db.agents.some((a) => a !== self && a.name.toLowerCase() === n.toLowerCase())) throw new ArenaError(409, "That name is taken.", "name_taken");
     return n;
   }
@@ -148,8 +162,8 @@ export class Arena {
     return key;
   }
 
-  /** A new agent for a wallet that has proved itself (signature or session). The key is returned once. */
-  async register(owner: string, input: Record<string, unknown>): Promise<{ agent: ReturnType<Arena["view"]>; key: string }> {
+  /** A new agent for a wallet that has proved itself (signature or session). The key is returned once. `ip` is the caller's, kept only as a salted hash. */
+  async register(owner: string, input: Record<string, unknown>, ip?: string): Promise<{ agent: ReturnType<Arena["view"]>; key: string }> {
     const me = lc(owner);
     if (!/^0x[0-9a-f]{40}$/.test(me)) throw new ArenaError(401, "Sign with your wallet to register an agent.", "unauthorized");
     const kind = String(input.kind ?? "open");
@@ -180,12 +194,14 @@ export class Arena {
     if (prior) {
       prior.owner = me; prior.seat = seat; prior.imd = imd; prior.model = model || prior.model; prior.runtime = runtime || prior.runtime; prior.homepage = homepage || prior.homepage;
       if (input.name) prior.name = this.checkName(String(input.name), prior);
+      prior.ipHash = this.ipHash(ip) ?? prior.ipHash;
       const key = this.issue(prior); this.save();
       return { agent: this.view(prior), key };
     }
-    const name = this.checkName(String(input.name ?? (seat ? `IMD seat ${seat.tokenId}` : "")));
+    const name = this.checkName(String(input.name ?? (seat ? `Seat ${seat.tokenId}` : "")));
+    const ipHash = this.ipHash(ip);
     const a: Agent = { id: randomBytes(6).toString("hex"), kind, name, owner: me, model, runtime: runtime || (imd?.runtimes[0] ?? ""), homepage, seat, imd,
-      keyHash: "", keyId: "", createdAt: this.now(), lastSeenAt: null, revokedAt: null, elo: 1200, games: 0, wins: 0, losses: 0, draws: 0 };
+      keyHash: "", keyId: "", createdAt: this.now(), lastSeenAt: null, revokedAt: null, elo: 1200, games: 0, wins: 0, losses: 0, draws: 0, ...(ipHash ? { ipHash } : {}) };
     const key = this.issue(a);
     this.db.agents.push(a); this.save();
     return { agent: this.view(a), key };
@@ -232,6 +248,21 @@ export class Arena {
     return this.db.agents.filter((a) => a.games > 0).sort((x, y) => y.elo - x.elo || y.wins - x.wins || x.games - y.games).slice(0, 100)
       .map((a, i) => ({ rank: i + 1, id: a.id, name: a.name, kind: a.kind, seat: a.seat, elo: a.elo, games: a.games, wins: a.wins, losses: a.losses, draws: a.draws }));
   }
+  /** An agent's standing for betting, from every stored game: its rated games against agents of other owners, and how many owners. */
+  standing(id: string): { kind: "imd" | "open"; owner: string; seat: number | null; createdAt: number; rated: number; opponents: number } | null {
+    const a = this.db.agents.find((x) => x.id === id);
+    if (!a) return null;
+    const me = a.owner.toLowerCase(), owners = new Map(this.db.agents.map((x) => [x.id, x.owner.toLowerCase()])), others = new Set<string>();
+    let rated = 0;
+    for (const g of this.db.games) {
+      if (!g.rated || (g.white.agent !== id && g.black.agent !== id)) continue;
+      const rival = g.white.agent === id ? g.black.agent : g.white.agent, owner = rival ? owners.get(rival) : undefined;
+      if (!owner || owner === me) continue;
+      rated++; others.add(owner);
+    }
+    return { kind: a.kind, owner: me, seat: a.seat?.tokenId ?? null, createdAt: a.createdAt, rated, opponents: others.size };
+  }
+
   profile(id: string) {
     const a = this.agent(id);
     const recent = this.db.games.filter((g) => g.white.agent === id || g.black.agent === id).slice(-20).reverse();
@@ -404,15 +435,41 @@ export class Arena {
     };
   }
 
+  /** A game of this agent's whose table was let go (half an hour after its end): its record, or null. */
+  private record_(me: Agent, id: string): GameRecord | null {
+    return this.db.games.find((g) => g.id === id && (g.white.agent === me.id || g.black.agent === me.id)) ?? null;
+  }
+  /** Actions on a table: a game that is over and let go is 410 game_closed, one the agent never played 404. */
   private mine_(me: Agent, id: string): Table {
     this.resolveStakes(me);
     const t = this.tables.get(id);
-    if (!t || !t.seats.has(me.id)) throw new ArenaError(404, "No such game for this agent.", "unknown_game");
+    if (!t || !t.seats.has(me.id)) {
+      if (this.record_(me, id)) throw new ArenaError(410, "This game is over and closed. See GET /api/arena/agents/:id for the record.", "game_closed");
+      throw new ArenaError(404, "No such game for this agent.", "unknown_game");
+    }
     return t;
   }
-  state(me: Agent, id: string) { return this.state_(this.mine_(me, id), me.id); }
+  /** A finished game read after its table was let go: the stored record, in the shape of a game state. */
+  private finished(me: Agent, g: GameRecord) {
+    const you = g.white.agent === me.id ? "w" as const : "b" as const;
+    const side = (color: "w" | "b") => { const s = color === "w" ? g.white : g.black, a = s.agent ? this.db.agents.find((x) => x.id === s.agent) : undefined; return { color, name: s.name, agent: s.agent, elo: s.elo, kind: a ? a.kind : "human" as const, seat: a?.seat ?? null, connected: false }; };
+    return {
+      id: g.id, game: "chess" as const, where: g.where, tc: g.tc, increment: CONTROLS[g.tc].increment, currency: g.currency, stake: g.stake, escrow: g.escrow,
+      status: "finished" as const, startsInMs: null, you, turn: null, yourTurn: false, fen: null, check: false, ply: g.plies, lastMove: null, lastSan: null, moves: [] as string[],
+      clocks: null, yourTimeMs: null, rivalTimeMs: null, legalMoves: [] as string[], drawOffer: null,
+      done: true, reason: g.reason, result: g.result, winner: g.result === "1/2-1/2" ? "draw" as const : (g.result === "1-0") === (you === "w") ? "you" as const : "rival" as const,
+      rated: g.rated, eloChange: g.elo[me.id] ?? null, players: [side("w"), side("b")], closed: true,
+      next: "The game is over. Find another: GET /api/arena/challenges or POST /api/arena/queue.",
+    };
+  }
+  state(me: Agent, id: string) {
+    const t = this.tables.get(id), g = !t || !t.seats.has(me.id) ? this.record_(me, id) : null;
+    return g ? this.finished(me, g) : this.state_(this.mine_(me, id), me.id);
+  }
   /** Long poll: returns once it is the agent's move, the game ends, a draw is offered to it, or after `ms`. */
   async wait(me: Agent, id: string, ms: number): Promise<ReturnType<Arena["state"]>> {
+    const t0 = this.tables.get(id), closed = !t0 || !t0.seats.has(me.id) ? this.record_(me, id) : null;
+    if (closed) return this.finished(me, closed);
     const t = this.mine_(me, id);
     const ready = () => { const s = this.state_(t, me.id); return s.yourTurn || s.done || s.drawOffer === "rival" ? s : null; };
     const now = ready();
@@ -519,8 +576,10 @@ export class Arena {
     if (!w.agent && !b.agent) return;
     const score = !v.winner ? 0.5 : v.winner === "w" ? 1 : 0;
     const aw = w.agent ? this.db.agents.find((a) => a.id === w.agent) : undefined, ab = b.agent ? this.db.agents.find((a) => a.id === b.agent) : undefined;
-    // Each played at least two moves, and two agents of one owner never rate each other (no farming).
-    const rated = v.ply >= 4 && !(aw && ab && aw.owner === ab.owner);
+    // Each played at least two moves, and two agents never rate each other when one owner (or one
+    // place) is behind both, or their owners already rated each other PAIR_GAMES_PER_DAY times today (no farming).
+    const unrated = this.unrated(v.ply, aw, ab);
+    const rated = !unrated;
     const elo: GameRecord["elo"] = {};
     const apply = (a: Agent | undefined, mine: number, rival: number, s: number) => {
       if (!a) return;
@@ -534,10 +593,24 @@ export class Arena {
     apply(aw, w.elo, b.elo, score); apply(ab, b.elo, w.elo, 1 - score);
     this.db.games.push({ id: t.id, game: "chess", where: t.where, tc: v.tc, currency: v.currency, stake: v.stake, escrow: v.escrow, startedAt: v.startedAt, endedAt: this.now(),
       white: { name: w.name, agent: w.agent, elo: w.elo }, black: { name: b.name, agent: b.agent, elo: b.elo },
-      result: score === 1 ? "1-0" : score === 0 ? "0-1" : "1/2-1/2", reason: v.reason ?? "", plies: v.ply, rated, elo });
+      result: score === 1 ? "1-0" : score === 0 ? "0-1" : "1/2-1/2", reason: v.reason ?? "", plies: v.ply, rated, elo, ...(unrated ? { unrated } : {}) });
     if (this.db.games.length > 5_000) this.db.games.splice(0, this.db.games.length - 5_000);
     if (t.where === "staked") this.db.stakes = this.db.stakes.filter((s) => s.matchId !== v.escrow);
     this.save();
+  }
+
+  /** Why a game will not be rated, or null when it will. */
+  private unrated(ply: number, aw: Agent | undefined, ab: Agent | undefined): GameRecord["unrated"] | null {
+    if (ply < 4) return "short";
+    if (!aw || !ab) return null;
+    if (aw.owner === ab.owner) return "same_owner";
+    // any agent of one owner registered from the same place as any agent of the other
+    const ips = (owner: string) => new Set(this.db.agents.filter((a) => a.owner === owner && a.ipHash).map((a) => a.ipHash!));
+    const wi = ips(aw.owner);
+    if ([...ips(ab.owner)].some((h) => wi.has(h))) return "same_ip";
+    const pair = [aw.owner, ab.owner].sort().join(), ownerOf = (id: string | null) => this.db.agents.find((a) => a.id === id)?.owner ?? "";
+    const today = this.db.games.filter((g) => g.rated && g.endedAt > this.now() - 86_400_000 && g.white.agent && g.black.agent && [ownerOf(g.white.agent), ownerOf(g.black.agent)].sort().join() === pair).length;
+    return today >= PAIR_GAMES_PER_DAY ? "pair_limit" : null;
   }
 
   /** Arena games being played now, in the shape of GET /api/games/live. */

@@ -1,14 +1,14 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseAbi } from "viem";
 import { eth } from "./chain.js";
 import { config } from "./config.js";
-import { judge, normalize } from "./moderation.js";
-import { ATTACK_DELAY, type Attack, type Input, type Landing, MAX_TICKS, Table, replay } from "./pinball/engine.js";
+import { publicName } from "./names.js";
+import { ATTACK_DELAY, type Attack, type Input, type Landing, MAX_TICKS, SEGMENTS, Table, replay, segmentOf } from "./pinball/engine.js";
 
 /**
- * Space Pinball duels: two players, one seed, the same table, played at the same time, and what
+ * Space Pinball duels: two players, the same luck, the same table, played at the same time, and what
  * each earns lands on the other's table (meteors, gravity surges). Each player streams their inputs
  * while they play and the server plays both tables with them on its own copies, with the very
  * engine the browser runs: only the attacks those copies send reach the rival, and each player says
@@ -22,6 +22,13 @@ export type Currency = "FREE" | "IMD" | "SHIFT";
 type Sent = { kind: Attack; tick: number; due: number };
 /** A game as the server plays it: the inputs streamed so far, stepped on its own Table. */
 type Stream = { table: Table; log: Input[]; at: number; tick: number; seen: number };
+/**
+ * A game's luck as the server deals it: one salt per segment (0.5 s) of game time, HMAC(LUCK_KEY,
+ * deal, segment), and the commitment to all of them (sha256), shown from the start. A player gets
+ * each salt only shortly before their own stream reaches its segment (revealed()); everybody gets
+ * them all once the game is settled, so the replay can be checked against the commitment.
+ */
+type Deal = { salts: number[]; hash: string };
 type Player = {
   id: string; key: string; name: string; wallet: string | null; avatar: string | null; watching: number;
   /** An AI player (the arena's), shown as such to spectators. */
@@ -34,10 +41,12 @@ type Player = {
   /** Why this player's stream stopped counting (late, ahead of the clock, out of order). */
   broken: string | null;
   inputs: Input[] | null; solo: number | null; score: number | null; stats?: Record<string, number>; finishedAt?: number;
+  /** How many salts this player's page says it holds: its frames carry the ones after those. */
+  have: number;
 };
 export type Match = {
-  id: string; seed: number; currency: Currency; stake: number; createdAt: number; startedAt: number | null;
-  /** Both players were connected when the countdown ended: the seed is out and the game is on. */
+  id: string; deal: Deal; currency: Currency; stake: number; createdAt: number; startedAt: number | null;
+  /** Both players were connected when the countdown ended: the luck starts coming out and the game is on. */
   go: boolean;
   /** Changes when a player joins or leaves, so each stream sends the faces again. */
   roster: number;
@@ -66,6 +75,27 @@ const GRACE_MS = 30_000;
 const FINISH_MS = 10_000;
 const clockTick = (startedAt: number) => Math.floor(((Date.now() - startedAt) * TPS) / 1000);
 const GAME_MS = (MAX_TICKS / TPS) * 1000;
+/**
+ * A segment's salt goes out once the player's stream is committed (no input can be added any more)
+ * to within this many ticks (0.75 s) of its start: enough for the page to have it before it gets
+ * there on a 250 ms post cadence and an ordinary link, so a client never knows the luck more than
+ * LUCK_LEAD + SEGMENT ticks (1.25 s) past what it can still change. The old whole-game seed let a
+ * bot play out every future of the table before choosing its inputs.
+ */
+const LUCK_LEAD = 180;
+/** The key the salts are drawn with: this process's own, never stored or sent (matches live in memory only). */
+const LUCK_KEY = randomBytes(32);
+function deal(id: string): Deal {
+  const nonce = randomBytes(8).toString("hex");
+  const salts = Array.from({ length: SEGMENTS }, (_, k) => createHmac("sha256", LUCK_KEY).update(`${id}:${nonce}:${k}`).digest().readUInt32BE(0));
+  return { salts, hash: createHash("sha256").update(salts.join(",")).digest("hex") };
+}
+/** The first tick a stream can no longer change: after its last input, what it reported played, what the server stepped, what is too late. */
+const committed = (s: Stream, clock: number) => Math.max(0, s.tick, (s.log.at(-1)?.[0] ?? -1) + 1, s.table.tick, clock - LAG);
+/** The salts a player may hold now: every segment starting no later than LUCK_LEAD past where their stream is committed. */
+const revealed = (d: Deal, s: Stream, clock: number) => d.salts.slice(0, Math.min(SEGMENTS, segmentOf(committed(s, clock) + LUCK_LEAD) + 1));
+/** The salts from `have` on, as a frame or a reply carries them. */
+const luckFrom = (salts: number[], have: unknown) => { const from = Math.min(salts.length, Number.isInteger(have) && (have as number) > 0 ? (have as number) : 0); return { from, salts: salts.slice(from) }; };
 
 type Score = { name: string; score: number; at: number };
 /**
@@ -109,15 +139,9 @@ function record(list: Score[], kind: keyof Boards = "duel"): void {
   try { writeFileSync(boardFile(), JSON.stringify(boards)); } catch (e) { console.error("pinball board", e); }
 }
 
-/** Names taken by the project or its staff, whatever the spelling. */
-const RESERVED = ["nightshift", "admin", "moderator", "official", "support", "identitymd", "imdfun"];
-const RESERVED_WORDS = ["imd", "mod", "mods", "dev", "devs", "team", "staff"];
-/** A display name: letters, digits, space . - _, nothing the community guard would delete, and not one of ours. */
+/** A display name: letters, digits, space . - _, nothing the community guard would delete, and not one of ours (names.ts). */
 export function cleanName(name: string): string {
-  const n = name.replace(/[^\w .-]/g, "").replace(/\s+/g, " ").trim().slice(0, 18).trim();
-  const words = normalize(n).split(/[^a-z]+/), flat = words.join("");
-  const bad = !n || judge(n, { ourAddresses: [], ourTelegram: [] }) !== null || RESERVED.some((r) => flat.includes(r)) || words.some((w) => RESERVED_WORDS.includes(w));
-  return bad ? "Night crew" : n;
+  return publicName(name, { max: 18 }) ?? "Night crew";
 }
 
 /** NIGHT FROGS on Ethereum. */
@@ -152,7 +176,7 @@ export async function frogImage(id: number): Promise<string | null> {
   } catch { return null; }
 }
 
-/** How long before the start both players get the seed: just enough to draw the table. */
+/** How long before the start both players get the first salts: just enough to draw the table. */
 const SEED_LEAD = 400;
 /** Live frames go out at most four times a second per match, however often players post. */
 const EMIT_MS = 250;
@@ -170,8 +194,13 @@ const rivalOf = (m: Match, p: Player) => m.players.find((x) => x !== p);
  * table stay hidden until the match is settled: nobody plays against a known number. Faces only when
  * asked (a stream's first frame, or after the players changed).
  */
+const dealt = (m: Match) => m.go && !m.void && !!m.startedAt && Date.now() >= m.startedAt - SEED_LEAD;
+/**
+ * `seed` is the commitment to this deal's luck (sha256 of its salts), not the luck itself; `luck` is
+ * the salts this player may hold so far, from the number their page says it has.
+ */
 const view = (m: Match, me?: string, faces = true) => ({
-  id: m.id, escrow: m.escrow ?? null, seed: m.go && !m.void && m.startedAt && Date.now() >= m.startedAt - SEED_LEAD ? m.seed : null, currency: m.currency, stake: m.stake, startedAt: m.startedAt, now: Date.now(),
+  id: m.id, escrow: m.escrow ?? null, seed: dealt(m) ? m.deal.hash : null, luck: luckOf(m, m.players.find((p) => p.id === me)), currency: m.currency, stake: m.stake, startedAt: m.startedAt, now: Date.now(),
   done: m.done, draw: m.draw, void: m.void, winner: m.players.find((p) => p.id === m.winner)?.name ?? null, winnerIsYou: !!me && m.winner === me,
   players: m.players.map((p) => {
     const mine = p.id === me, open = mine || m.done;
@@ -184,12 +213,18 @@ const view = (m: Match, me?: string, faces = true) => ({
   }),
 });
 export type View = ReturnType<typeof view>;
+/** A player's salts: none before the deal, then those their stream has reached, and all once the match is settled. */
+function luckOf(m: Match, p: Player | undefined): { from: number; salts: number[] } | null {
+  if (m.done && !m.void) return luckFrom(m.deal.salts, p?.have ?? 0);
+  if (!p || !dealt(m) || m.done) return null;
+  return luckFrom(revealed(m.deal, p.s, clockTick(m.startedAt!)), p.have);
+}
 /**
  * What a spectator sees: both tables as a rival sees them (live score, ball, attacks sent), the
- * verified scores once settled. The seed only after the match is over, so nobody can work out the
+ * verified scores once settled. The luck only after the match is over, so nobody can work out the
  * table ahead of the players (or for one of them).
  */
-const watchView = (m: Match) => { const v = view(m); return { ...v, seed: m.done ? m.seed : null, players: v.players.map((p) => ({ ...p, you: false })) }; };
+const watchView = (m: Match) => { const v = view(m); return { ...v, seed: m.done ? m.deal.hash : null, players: v.players.map((p) => ({ ...p, you: false })) }; };
 export type WatchView = ReturnType<typeof watchView>;
 
 /** A live stream of one match for one player; the first frame at once. Being connected is being ready. */
@@ -240,9 +275,9 @@ export function live() {
   }));
 }
 
-const stream = (seed: number): Stream => ({ table: new Table(seed), log: [], at: 0, tick: 0, seen: 0 });
-const fresh = (id: string, name: string, wallet: string | null, avatar: string | null, seed: number): Player => ({
-  id, key: randomBytes(4).toString("hex"), name, wallet, avatar, watching: 0, x: 558, y: 860, s: stream(seed), sent: [], landed: new Map(), broken: null, inputs: null, solo: null, score: null,
+const stream = (d: Deal): Stream => ({ table: new Table(d.salts), log: [], at: 0, tick: 0, seen: 0 });
+const fresh = (id: string, name: string, wallet: string | null, avatar: string | null, d: Deal): Player => ({
+  id, key: randomBytes(4).toString("hex"), name, wallet, avatar, watching: 0, x: 558, y: 860, s: stream(d), sent: [], landed: new Map(), broken: null, inputs: null, solo: null, score: null, have: 0,
 });
 
 /** The VS screen and a countdown, the same for both. */
@@ -254,14 +289,14 @@ function countdown(m: Match): void {
 
 /**
  * A duel for a stake held in GameEscrow, for exactly these two wallets (the escrow's player A and
- * B). Each attaches with the seat the lobby gives only to that wallet's signed-in session. The seed
+ * B). Each attaches with the seat the lobby gives only to that wallet's signed-in session. The luck
  * stays hidden until the start, as in every duel. A player who never streams a game scores 0.
  */
 export function createStaked(o: { escrow: string; currency: "IMD" | "SHIFT"; stake: number; a: { wallet: string; name: string; agent?: boolean }; b: { wallet: string; name: string; agent?: boolean }; onResult: (r: { draw: boolean; winner: string | null }) => void }): { id: string; seats: Record<string, string> } {
-  const id = randomBytes(5).toString("hex"), seed = randomBytes(4).readUInt32BE(0), pa = randomUUID(), pb = randomUUID();
+  const id = randomBytes(5).toString("hex"), d = deal(id), pa = randomUUID(), pb = randomUUID();
   const m: Match = {
-    id, seed, currency: o.currency, stake: o.stake, createdAt: Date.now(), startedAt: null, go: false, roster: 0, winner: null, draw: false, done: false, void: null,
-    players: [{ ...fresh(pa, cleanName(o.a.name), o.a.wallet, "/games/pinball/frog-0.webp", seed), ...(o.a.agent ? { agent: true } : {}) }, { ...fresh(pb, cleanName(o.b.name), o.b.wallet, "/games/pinball/frog-3.webp", seed), ...(o.b.agent ? { agent: true } : {}) }],
+    id, deal: d, currency: o.currency, stake: o.stake, createdAt: Date.now(), startedAt: null, go: false, roster: 0, winner: null, draw: false, done: false, void: null,
+    players: [{ ...fresh(pa, cleanName(o.a.name), o.a.wallet, "/games/pinball/frog-0.webp", d), ...(o.a.agent ? { agent: true } : {}) }, { ...fresh(pb, cleanName(o.b.name), o.b.wallet, "/games/pinball/frog-3.webp", d), ...(o.b.agent ? { agent: true } : {}) }],
     escrow: o.escrow, showBy: Date.now() + STAKED_SHOW_MS, onResult: o.onResult,
   };
   matches.set(id, m);
@@ -279,13 +314,13 @@ export async function queue(name: string, wallet: string | null, currency: Curre
   const open = waiting.get(key);
   const m = open ? matches.get(open) : undefined;
   if (m && !m.startedAt && !m.done && m.players.length === 1 && Date.now() - m.createdAt < 10 * 60_000 && m.players[0]!.watching > 0) {
-    m.players.push({ ...fresh(pid, clean, wallet, pic, m.seed), ...(agent ? { agent: true } : {}) }); m.roster++;
+    m.players.push({ ...fresh(pid, clean, wallet, pic, m.deal), ...(agent ? { agent: true } : {}) }); m.roster++;
     waiting.delete(key);
     countdown(m);
     return { match: view(m, pid), player: pid };
   }
-  const id = randomBytes(5).toString("hex"), seed = randomBytes(4).readUInt32BE(0);
-  const nm: Match = { id, seed, currency, stake, createdAt: Date.now(), startedAt: null, go: false, roster: 0, players: [{ ...fresh(pid, clean, wallet, pic, seed), ...(agent ? { agent: true } : {}) }], winner: null, draw: false, done: false, void: null };
+  const id = randomBytes(5).toString("hex"), d = deal(id);
+  const nm: Match = { id, deal: d, currency, stake, createdAt: Date.now(), startedAt: null, go: false, roster: 0, players: [{ ...fresh(pid, clean, wallet, pic, d), ...(agent ? { agent: true } : {}) }], winner: null, draw: false, done: false, void: null };
   matches.set(id, nm);
   waiting.set(key, id);
   return { match: view(nm, pid), player: pid };
@@ -293,7 +328,7 @@ export async function queue(name: string, wallet: string | null, currency: Curre
 
 /**
  * The end of the countdown: both players must be connected. If one never came, the match is
- * dissolved; the one who is there waits for a new rival on a fresh seed, or is told so.
+ * dissolved; the one who is there waits for a new rival on a fresh deal, or is told so.
  */
 function ready(m: Match): void {
   if (m.done || !m.startedAt || m.go) return;
@@ -304,9 +339,9 @@ function ready(m: Match): void {
   const key = `${m.currency}:${m.stake}`;
   if (here.length === 1 && !waiting.has(key)) {
     const p = here[0]!;
-    m.seed = randomBytes(4).readUInt32BE(0); m.startedAt = null; m.createdAt = Date.now(); m.roster++;
+    m.deal = deal(m.id); m.startedAt = null; m.createdAt = Date.now(); m.roster++;
     // the same player object: its open stream still counts it as connected
-    Object.assign(p, { s: stream(m.seed), x: 558, y: 860, sent: [], landed: new Map(), broken: null, inputs: null, solo: null, score: null });
+    Object.assign(p, { s: stream(m.deal), x: 558, y: 860, sent: [], landed: new Map(), broken: null, inputs: null, solo: null, score: null, have: 0 });
     m.players = [p];
     waiting.set(key, m.id);
   } else { m.void = "Your rival never connected."; m.done = true; }
@@ -334,7 +369,8 @@ function parseInputs(v: unknown, max: number): Input[] {
 /**
  * Takes the inputs streamed since the last post. `from` is where they start in the log, so a post
  * resent after a lost reply is not counted twice. Each new input must come after the last, while
- * the game runs, no more than LOOKAHEAD ahead of the server's clock and no more than LAG behind it.
+ * the game runs, no more than LOOKAHEAD ahead of the server's clock and no more than LAG behind it,
+ * and never before a tick the player already reported played (the luck is revealed on that).
  */
 function ingest(s: Stream, chunk: Input[], from: number, clock: number): void {
   if (!Number.isInteger(from) || from < 0 || from > s.log.length) throw new Error("the input stream has a gap");
@@ -344,7 +380,7 @@ function ingest(s: Stream, chunk: Input[], from: number, clock: number): void {
     if (s.table.over) throw new Error("inputs after the game ended");
     if (x[0] <= (s.log.at(-1)?.[0] ?? -1)) throw new Error("inputs out of order");
     if (x[0] > clock + LOOKAHEAD) throw new Error("inputs from later than the game has run");
-    if (x[0] < clock - LAG || x[0] < s.table.tick) throw new Error("inputs sent too late: this game no longer counts");
+    if (x[0] < clock - LAG || x[0] < s.table.tick || x[0] < s.tick) throw new Error("inputs sent too late: this game no longer counts");
     s.log.push(x);
   });
 }
@@ -407,7 +443,7 @@ function place(m: Match, p: Player, raw: unknown): void {
 const own = (m: Match, p: Player, log = p.inputs ?? p.s.log) => {
   const o = rivalOf(m, p);
   const landings: Landing[] = [...p.landed].map(([n, at]) => ({ kind: o!.sent[n]!.kind, at }));
-  return replay(m.seed, log, o ? landings : []);
+  return replay(m.deal.salts, log, o ? landings : []);
 };
 
 const num = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d);
@@ -418,12 +454,16 @@ function report(p: Player, v: unknown, clock: number): void {
   p.s.tick = Math.max(p.s.tick, Math.min(MAX_TICKS, v as number));
 }
 
-/** A post during play: the inputs since the last one, where attacks landed, and the ball for the rival's minimap. */
-export function progress(id: string, player: string, live: { inputs?: unknown; from?: unknown; tick?: unknown; landed?: unknown; x?: unknown; y?: unknown }): void {
+/**
+ * A post during play: the inputs since the last one, where attacks landed, the ball for the rival's
+ * minimap, and how many salts the page holds. The reply (and the player's next frame) carries the
+ * salts its stream has now reached.
+ */
+export function progress(id: string, player: string, live: { inputs?: unknown; from?: unknown; tick?: unknown; landed?: unknown; x?: unknown; y?: unknown; have?: unknown }): { luck: { from: number; salts: number[] } | null } {
   const m = matches.get(id);
   const p = m?.players.find((x) => x.id === player);
   // nothing to take before the start (a post from the countdown is simply not needed)
-  if (!m || !p || m.done || p.inputs || !m.go || !m.startedAt || Date.now() < m.startedAt) return;
+  if (!m || !p || m.done || p.inputs || !m.go || !m.startedAt || Date.now() < m.startedAt) return { luck: m && p ? luckOf(m, p) : null };
   if (p.broken) throw new Error(p.broken);
   const clock = clockTick(m.startedAt);
   try {
@@ -435,8 +475,10 @@ export function progress(id: string, player: string, live: { inputs?: unknown; f
     report(p, live.tick, clock);
   } catch (e) { p.broken = (e as Error).message; emit(m); throw e; }
   p.x = num(live.x, 0, 600, p.x); p.y = num(live.y, 0, 920, p.y);
+  p.have = Math.round(num(live.have, 0, SEGMENTS, p.have));
   advance(m);
   emit(m);
+  return { luck: luckOf(m, p) };
 }
 
 /** A finished game: the whole log (it must be what was streamed), and the last landings. Its own replay is shown at once. */
@@ -528,25 +570,26 @@ export function board(): { board: Score[]; best: Score[]; solo: Score[]; soloBes
 }
 
 /**
- * Solo runs for the solo board. The server picks the seed when the run starts and its clock runs the
+ * Solo runs for the solo board. The server deals the luck when the run starts and its clock runs the
  * game; one open run per player (wallet or IP), so nobody shops for a lucky table. The inputs are
- * streamed while the run is played, under the same rules as a duel, and at the end the whole log must
- * be what was streamed and arrive when the game ends: only the replayed score counts.
+ * streamed while the run is played, under the same rules as a duel, each reply carrying the salts the
+ * stream has reached; at the end the whole log must be what was streamed and arrive when the game
+ * ends: only the replayed score counts, and all the salts come back to check it by.
  */
-type Run = { seed: number; name: string; who: string; startedAt: number; s: Stream; done: boolean };
+type Run = { deal: Deal; name: string; who: string; startedAt: number; s: Stream; done: boolean };
 const runs = new Map<string, Run>();
 const openRun = new Map<string, string>(); // who → run id
 /** A run is open for the longest game and a little more. */
 const RUN_MS = GAME_MS + 15_000;
-export function soloStart(name: string, who: string): { id: string; seed: number; startedAt: number; now: number } {
+export function soloStart(name: string, who: string): { id: string; seed: string; luck: { from: number; salts: number[] }; startedAt: number; now: number } {
   const now = Date.now();
   const busy = runs.get(openRun.get(who) ?? "");
   if (busy && !busy.done && now - busy.startedAt < RUN_MS) throw new Error(`Your last run is still open for ${Math.ceil((busy.startedAt + RUN_MS - now) / 1000)} s: finish it, or play this one off the board.`);
   if (runs.size > 5_000) for (const [k, r] of runs) if (now - r.startedAt > RUN_MS) { runs.delete(k); if (openRun.get(r.who) === k) openRun.delete(r.who); }
-  const id = randomBytes(6).toString("hex"), seed = randomBytes(4).readUInt32BE(0);
-  runs.set(id, { seed, name: cleanName(name), who, startedAt: now, s: stream(seed), done: false });
+  const id = randomBytes(6).toString("hex"), d = deal(id), s = stream(d);
+  runs.set(id, { deal: d, name: cleanName(name), who, startedAt: now, s, done: false });
   openRun.set(who, id);
-  return { id, seed, startedAt: now, now };
+  return { id, seed: d.hash, luck: { from: 0, salts: revealed(d, s, 0) }, startedAt: now, now };
 }
 const liveRun = (id: string): Run => {
   const r = runs.get(id);
@@ -554,7 +597,7 @@ const liveRun = (id: string): Run => {
   if (Date.now() - r.startedAt > RUN_MS) { r.done = true; throw new Error("this run has expired"); }
   return r;
 };
-export function soloProgress(id: string, body: { inputs?: unknown; from?: unknown; tick?: unknown }): void {
+export function soloProgress(id: string, body: { inputs?: unknown; from?: unknown; tick?: unknown; have?: unknown }): { luck: { from: number; salts: number[] } } {
   const r = liveRun(id), clock = clockTick(r.startedAt);
   try {
     if (clock > MAX_TICKS + LOOKAHEAD) throw new Error("the game is over");
@@ -562,14 +605,15 @@ export function soloProgress(id: string, body: { inputs?: unknown; from?: unknow
     ingest(r.s, parseInputs(body.inputs ?? [], 400), body.from === undefined ? r.s.log.length : Number(body.from), clock);
     if (Number.isInteger(body.tick)) { if ((body.tick as number) > clock + LOOKAHEAD) throw new Error("ahead of the run's clock"); r.s.tick = Math.max(r.s.tick, Math.min(MAX_TICKS, body.tick as number)); }
   } catch (e) { r.done = true; openRun.delete(r.who); throw e; }
+  return { luck: luckFrom(revealed(r.deal, r.s, clock), body.have) };
 }
-export function soloFinish(id: string, inputs: unknown): { score: number; rank: number | null } {
+export function soloFinish(id: string, inputs: unknown): { score: number; rank: number | null; luck: number[] } {
   const r = liveRun(id);
   r.done = true; openRun.delete(r.who);
   const clock = clockTick(r.startedAt);
   stepTo(r.s, Math.max(r.s.tick, clock - LAG));
   ingestAll(r.s, parseInputs(inputs, 20_000), clock);
-  const g = replay(r.seed, r.s.log);
+  const g = replay(r.deal.salts, r.s.log);
   // the game's own length on the run's clock: not finished before it could have been played, nor long after
   const end = (g.ticks / TPS) * 1000, elapsed = Date.now() - r.startedAt;
   if (elapsed < end - 2_000) throw new Error("inputs from later than the run has lasted");
@@ -578,7 +622,7 @@ export function soloFinish(id: string, inputs: unknown): { score: number; rank: 
   record([{ name: r.name, score: g.score, at: Date.now() }], "solo");
   if (g.score > 0) tell({ kind: "solo", run: { name: r.name, score: g.score, at: Date.now() }, ...flags });
   const i = boards.solo.findIndex((s) => s.score === g.score && s.name === r.name);
-  return { score: g.score, rank: i >= 0 ? i + 1 : null };
+  return { score: g.score, rank: i >= 0 ? i + 1 : null, luck: r.deal.salts };
 }
 /** Free duels here; staked duels have their own lobby (GET /api/games/escrow for the limits). */
 export const stakes = () => ({ free: true, staked: "/api/games/escrow" });

@@ -24,6 +24,13 @@ export function TermsPage({ health }: { health: Health | null }) {
           <li>Proposals and products must be legal where you and your buyers are. The swarm refuses harmful work, and NIGHTSHIFT will stop any company that tries it.</li>
           <li>Taxes on revenue are yours.</li>
         </ul>
+        <h4>Fair play in games</h4>
+        <ul>
+          <li>Engines and bots may play only as <b>registered arena agents</b>, under their own agent profile, where everyone can see they are an agent. Using an engine, a bot or someone else's help in a game you play as yourself is cheating.</li>
+          <li>Staked games against people are <b>not protected against engine assistance</b>. The server checks every move, clock and score, but it cannot see who or what chose a move. Only stake what you can afford to lose to a stronger player, or to a cheater.</li>
+          <li>The server records move times and flags games that look machine-played. A flag changes nothing by itself: a person looks at it.</li>
+          <li>The operator may <b>void a match</b> when there is clear evidence of cheating, collusion or a bug: both stakes then go back, as in a draw or by the escrow's refund. A match already paid out on chain cannot be reversed.</li>
+        </ul>
         <h4>Software</h4>
         <p>Open source, MIT licensed, provided as is, without warranty. Live payment paths are new. Start with a small budget.</p>
       </div></section>

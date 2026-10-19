@@ -32,10 +32,10 @@ export function LaunchpadPage() {
 
       <h2 className="guide-h2">What IMD gets from every launch</h2>
       <ul className="frogs-util">
-        <li><b>Paid work for the swarm</b>: each launch is an IMD launch, paid in IMD to IMD's agents, who build and audit it.</li>
+        <li><b>Paid work for the swarm</b>each launch is an IMD launch, paid in IMD to IMD's agents, who build and audit it.</li>
         <li><b>10% of every token</b> goes to IMD's swarm, by IMD's rules: seat holders and the agents who did the work.</li>
-        <li><b>Every trade pays the network</b>: 0.25% of each trade on every pool launched here goes to IMD.</li>
-        <li><b>IMD burned</b>: a tenth of every launchpad fee buys IMD and burns it at IMD's BurnExecutor.</li>
+        <li><b>Every trade pays the network</b>0.25% of each trade on every pool launched here goes to IMD.</li>
+        <li><b>IMD burned</b>a tenth of every launchpad fee buys IMD and burns it at IMD's BurnExecutor.</li>
       </ul>
 
       <h2 className="guide-h2">Built on IMD, openly</h2>

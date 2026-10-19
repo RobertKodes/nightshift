@@ -15,6 +15,8 @@ import { claimsOf, epochs, markPosted } from "./frogpot.js";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { handleMcp } from "./mcp.js";
+import { clientIp, keyAllowed } from "./auth.js";
+import { MAX_TICKS } from "./pinball/engine.js";
 import { ANNOUNCED, checkSetup, isAdmin, pendingChanges, setupState } from "./admin.js";
 import { writeSettings } from "./settings.js";
 import { buybacks, checkLaunch, completeContracts, holderStatus, launchBody, launchState, patchLaunch, recordBuyback, recordLaunch, saveVerification, tokenOn, verification } from "./token.js";
@@ -34,24 +36,21 @@ import { impact } from "./impact.js";
 import { usdc } from "@nightshift/core";
 import { erc20Abi, getAddress } from "viem";
 
-/** The caller's IP. X-Forwarded-For is trusted only when the request comes from the local proxy. */
-function clientIp(req: IncomingMessage): string {
-  const peer = (req.socket.remoteAddress ?? "?").replace(/^::ffff:/, "");
-  const fromProxy = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$)/.test(peer);
-  const fwd = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim();
-  return fromProxy && fwd ? fwd : peer;
-}
-
 /** Open live-event streams, per IP and in all. */
 const streams = new Map<string, number>();
 let streamsTotal = 0;
+
+/** Open solo pinball runs by IP: fresh wallets do not let one IP hold many seeds. As long as pinball.ts keeps a run open. */
+const soloByIp = new Map<string, { id: string; until: number }>();
+const SOLO_RUN_MS = (MAX_TICKS / 240) * 1000 + 15_000;
+const releaseSolo = (req: IncomingMessage, id: string) => { const ip = clientIp(req); if (soloByIp.get(ip)?.id === id) soloByIp.delete(ip); };
 
 /** Payments being settled, one chain per company. */
 const settling = new Map<string, Promise<unknown>>();
 
 /** A small fixed-window limiter per IP and route; expired windows are swept. */
 const hits = new Map<string, { n: number; reset: number }>();
-setInterval(() => { const now = Date.now(); for (const [k, h] of hits) if (h.reset < now) hits.delete(k); }, 60_000).unref();
+setInterval(() => { const now = Date.now(); for (const [k, h] of hits) if (h.reset < now) hits.delete(k); for (const [k, r] of soloByIp) if (r.until < now) soloByIp.delete(k); }, 60_000).unref();
 function limited(req: IncomingMessage, key: string, max: number, windowMs: number): boolean {
   const ip = clientIp(req);
   const k = `${key}:${ip}`;
@@ -170,7 +169,7 @@ const BASE_HEADERS: Record<string, string> = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
   "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
-  ...(config.publicUrl.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains" } : {}),
+  ...(config.publicUrl.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload" } : {}),
 };
 /** The app's pages: our own scripts only, and only the hosts the browser really talks to (RPCs, WalletConnect, Google Fonts). */
 const CSP = [
@@ -194,9 +193,10 @@ function crossSite(req: IncomingMessage): boolean {
   try { return new URL(origin).host !== req.headers.host && new URL(origin).origin !== new URL(config.publicUrl).origin; } catch { return true; }
 }
 
-const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".mp4": "video/mp4", ".webmanifest": "application/manifest+json" };
+const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".mp4": "video/mp4", ".webmanifest": "application/manifest+json", ".txt": "text/plain; charset=utf-8" };
 
-function serveStatic(res: ServerResponse, path: string): boolean {
+/** A file of the built app (dot folders like /.well-known included), else the app's page. HEAD gets the headers only. */
+function serveStatic(res: ServerResponse, path: string, head = false): boolean {
   if (!existsSync(config.webDist)) return false;
   const safe = normalize(path).replace(/^([/\\])+/, "").replace(/\.\.[/\\]?/g, "");
   let f = resolve(config.webDist, safe);
@@ -204,8 +204,9 @@ function serveStatic(res: ServerResponse, path: string): boolean {
   if (!f.startsWith(resolve(config.webDist) + sep) || !existsSync(f) || statSync(f).isDirectory()) f = join(config.webDist, "index.html");
   if (!existsSync(f)) return false;
   const type = MIME[extname(f)] ?? "application/octet-stream";
-  res.writeHead(200, { "Content-Type": type, ...(type.startsWith("text/html") ? { "Content-Security-Policy": CSP, "Cache-Control": "no-cache" } : {}) });
-  res.end(readFileSync(f));
+  const data = readFileSync(f);
+  res.writeHead(200, { "Content-Type": type, "Content-Length": data.length, ...(type.startsWith("text/html") ? { "Content-Security-Policy": CSP, "Cache-Control": "no-cache" } : {}) });
+  res.end(head ? undefined : data);
   return true;
 }
 
@@ -349,7 +350,7 @@ export function serve(engine: Engine) {
           const a = keeperAccount(engine.vault).address;
           return json(res, 200, { address: a, eth: (await eth.getBalance({ address: a }).catch(() => 0n)).toString(), last: engine.lastKeeper });
         }
-        if (p === "/api/admin/keeper/run" && req.method === "POST") return json(res, 200, await engine.keeperRun());
+        if (p === "/api/admin/keeper/run" && req.method === "POST") return json(res, 200, await engine.keeperRun({ burnDelayMs: 0 }));
         if (p === "/api/admin/frogpot" && req.method === "GET") return json(res, 200, { epochs: epochs() });
         if (p === "/api/admin/frogpot/build" && req.method === "POST") return json(res, 200, { epoch: await engine.frogEpoch() });
         if (p === "/api/admin/frogpot/posted" && req.method === "POST") {
@@ -372,7 +373,9 @@ export function serve(engine: Engine) {
         return json(res, 404, { error: "not found" });
       }
 
-      const owner = engine.auth.owner(req);
+      // An API key reaches /mcp and a few reads only; everything that changes state needs the wallet's session.
+      const caller = engine.auth.caller(req);
+      const owner = caller && (caller.via === "session" || keyAllowed(req.method, p)) ? caller.addr : null;
       // Reads that reach the chain or IMD when their cache is cold: plenty for pages, not for a loop.
       if (["/api/staked", "/api/token/overview", "/api/token", "/api/frogs", "/api/frogs/claims", "/api/frogs/staking", "/api/impact", "/api/landing"].includes(p) && limited(req, "reads", 240, 60_000)) return json(res, 429, { error: "slow down" });
 
@@ -384,9 +387,9 @@ export function serve(engine: Engine) {
         return json(res, 200, { board: stakingBoard(20), me: /^0x[0-9a-fA-F]{40}$/.test(w) ? stakingOf(w) : null });
       }
       if (await spectateRoutes(req, res, p, { json, limited })) return;
-      if (p.startsWith("/api/chess/") && await chessRoutes(req, res, p, { json, body, limited, owner: engine.auth.owner(req), url })) return;
+      if (p.startsWith("/api/chess/") && await chessRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/bets/") && await betsRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
-      if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner: engine.auth.owner(req), url, vault: engine.vault })) return;
+      if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
       if (p.startsWith("/api/pinball/")) {
         const parts = p.split("/").filter(Boolean); // api pinball …
@@ -413,18 +416,25 @@ export function serve(engine: Engine) {
         if (p === "/api/pinball/solo" && req.method === "POST") {
           if (limited(req, "pinball-solo", 40, 600_000)) return json(res, 429, { error: "slow down" });
           const b = await body(req);
-          // one open run per player: the signed-in wallet, else the IP
-          try { return json(res, 200, pinSoloStart(String(b.name ?? ""), owner ?? `ip:${clientIp(req)}`)); } catch (e) { return json(res, 409, { error: (e as Error).message }); }
+          // one open run per player, the signed-in wallet else the IP, and one per IP whatever the wallet
+          const ip = clientIp(req), held = soloByIp.get(ip);
+          if (held && held.until > Date.now()) return json(res, 409, { error: `Your last run is still open for ${Math.ceil((held.until - Date.now()) / 1000)} s: finish it, or play this one off the board.` });
+          try {
+            const run = pinSoloStart(String(b.name ?? ""), owner ?? `ip:${ip}`);
+            soloByIp.set(ip, { id: run.id, until: run.startedAt + SOLO_RUN_MS });
+            return json(res, 200, run);
+          } catch (e) { return json(res, 409, { error: (e as Error).message }); }
         }
         if (parts[2] === "solo" && parts[3] && parts[4] === "progress" && req.method === "POST") {
           if (limited(req, "pinball-solo-progress", 600, 60_000)) return json(res, 429, { error: "slow down" });
           const b = await body(req, 16_000);
-          try { pinSoloProgress(parts[3], b); return json(res, 200, { ok: true }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          // a refused input ends the run: the IP is free again
+          try { return json(res, 200, { ok: true, ...pinSoloProgress(parts[3], b) }); } catch (e) { releaseSolo(req, parts[3]); return json(res, 400, { error: (e as Error).message }); }
         }
         if (parts[2] === "solo" && parts[3] && parts[4] === "finish" && req.method === "POST") {
           if (limited(req, "pinball-solo-finish", 40, 600_000)) return json(res, 429, { error: "slow down" });
           const b = await body(req, 400_000);
-          try { return json(res, 200, pinSoloFinish(parts[3], b.inputs)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          try { return json(res, 200, pinSoloFinish(parts[3], b.inputs)); } catch (e) { return json(res, 400, { error: (e as Error).message }); } finally { releaseSolo(req, parts[3]); }
         }
         if (p === "/api/pinball/queue" && req.method === "POST") {
           if (limited(req, "pinball-queue", 20, 600_000)) return json(res, 429, { error: "slow down" });
@@ -457,7 +467,7 @@ export function serve(engine: Engine) {
           if (parts[4] === "progress" && req.method === "POST") {
             if (limited(req, "pinball-progress", 600, 60_000)) return json(res, 429, { error: "slow down" });
             const b = await body(req, 16_000);
-            try { pinProgress(id, String(b.player ?? ""), b); return json(res, 200, { ok: true }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+            try { return json(res, 200, { ok: true, ...pinProgress(id, String(b.player ?? ""), b) }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
           }
           if (parts[4] === "leave" && req.method === "POST") { if (limited(req, "pinball-leave", 30, 60_000)) return json(res, 429, { error: "slow down" }); const b = await body(req, 2_000); pinLeave(id, String(b.player ?? "")); return json(res, 200, { ok: true }); }
           if (parts[4] === "finish" && req.method === "POST") {
@@ -513,16 +523,25 @@ export function serve(engine: Engine) {
         const b = await body(req);
         const token = await engine.auth.verify(String(b.address), String(b.nonce), String(b.signature) as `0x${string}`);
         const secure = config.publicUrl.startsWith("https") ? "; Secure" : "";
-        return json(res, 200, { token, address: getAddress(String(b.address)) }, { "Set-Cookie": `ns_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure}` });
+        // A browser (it sends Origin on every POST) keeps the session in the HttpOnly cookie only, out of reach of page scripts.
+        // Scripts and agents (no Origin) also get it in the body, to send as Bearer.
+        return json(res, 200, { ...(req.headers.origin ? {} : { token }), address: getAddress(String(b.address)) }, { "Set-Cookie": `ns_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure}` });
       }
       if (p === "/api/auth/me") return json(res, 200, { address: owner, requireAuth: config.requireAuth });
       if (p === "/api/auth/logout" && req.method === "POST") { engine.auth.revoke(req); return json(res, 200, { ok: true }, { "Set-Cookie": "ns_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" }); }
+      // Sign out everywhere: every session of this wallet issued until now stops working, on every device.
+      if (p === "/api/auth/logout-all" && req.method === "POST") {
+        const me = engine.auth.ownerSession(req);
+        if (!me) return json(res, 401, { error: "Sign in with your wallet first." });
+        engine.auth.revokeAll(me);
+        return json(res, 200, { ok: true }, { "Set-Cookie": "ns_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" });
+      }
 
       // ---- API keys for the MCP endpoint
       if (seg[0] === "api" && seg[1] === "keys") {
-        if (!owner) return json(res, 401, { error: "sign in first" });
         // Keys are managed from a signed-in wallet only: a leaked key cannot mint more keys for itself.
-        if ((req.headers.authorization ?? "").includes("nsk_")) return json(res, 403, { error: "Manage API keys from the dashboard, signed in with your wallet." });
+        if (caller?.via === "key") return json(res, 403, { error: "Manage API keys from the dashboard, signed in with your wallet." });
+        if (!owner) return json(res, 401, { error: "sign in first" });
         if (req.method === "GET") return json(res, 200, engine.auth.listKeys(owner));
         if (req.method === "POST") {
           if (limited(req, "keys", 10, 3600_000) || limited(req, `keys-owner:${owner}`, 10, 3600_000)) return json(res, 429, { error: "Too many new keys; try again in an hour." });
@@ -552,15 +571,17 @@ export function serve(engine: Engine) {
         res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
         res.write(": ok\n\n");
         const only = url.searchParams.get("company");
-        const viewer = engine.auth.owner(req);
+        const viewer = owner;
+        // a reader that does not keep up is dropped, like the game streams: events never pile up in memory
+        const send = (data: string) => { if (res.destroyed) return; if (res.writableLength > 256_000) { res.destroy(); return; } res.write(data); };
         const off = engine.on((e) => {
           if (only && e.companyId !== only) return;
           // Other people's companies only say "something changed"; their tasks and log stay private.
           const c = engine.store.companies.get(e.companyId);
           const ev = config.requireAuth && (!viewer || c?.owner !== viewer) ? { type: "company", companyId: e.companyId, payload: null, at: e.at } : e;
-          res.write(`data: ${JSON.stringify(ev, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}\n\n`);
+          send(`data: ${JSON.stringify(ev, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}\n\n`);
         });
-        const ping = setInterval(() => res.write(": ping\n\n"), 20_000);
+        const ping = setInterval(() => send(": ping\n\n"), 20_000);
         req.on("close", () => { off(); clearInterval(ping); });
         return;
       }
@@ -725,7 +746,7 @@ export function serve(engine: Engine) {
       }
 
       // an unknown API path is a 404, not the app's page
-      if (req.method === "GET" && !p.startsWith("/api/") && serveStatic(res, p)) return;
+      if ((req.method === "GET" || req.method === "HEAD") && !p.startsWith("/api/") && serveStatic(res, p, req.method === "HEAD")) return;
       return json(res, 404, { error: "not found" });
     } catch (err) {
       console.error(err);

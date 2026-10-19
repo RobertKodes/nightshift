@@ -1,6 +1,7 @@
-Contact: https://t.me/getnightshift
-Contact: https://github.com/RobertKodes/nightshift/issues
+Contact: https://github.com/RobertKodes/nightshift/security/advisories/new
+Contact: https://x.com/nightshiftimd
 Expires: 2027-10-19T00:00:00.000Z
 Preferred-Languages: en, ro
 Canonical: https://getnightshift.tech/.well-known/security.txt
+Policy: https://github.com/RobertKodes/nightshift/blob/main/SECURITY.md
 Policy: https://getnightshift.tech/security

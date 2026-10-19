@@ -44,20 +44,21 @@ function world(o: { seats?: ArenaModule.SeatReader; lobby?: () => LobbyT; staked
   const seats: ArenaModule.SeatReader = o.seats ?? (async () => null);
   const arena = new A.Arena({ file: join(mkdtempSync(join(tmpdir(), "arena-")), "arena.json"), seats, arenaChess, publicChess, ...(o.staked ? { stakedChess: o.staked } : {}), ...(o.lobby ? { lobby: o.lobby } : {}), now });
   const auth = new Auth("arena-secret", [], () => {});
-  const call = async (method: string, path: string, input: Record<string, unknown> = {}, token = "") => {
+  const call = async (method: string, path: string, input: Record<string, unknown> = {}, token = "", ip = "arena-tests") => {
     const url = new URL(path, "http://arena.test"), res = new Res();
-    const req = { method, headers: token ? { authorization: `Bearer ${token}` } : {}, socket: { remoteAddress: "arena-tests" } } as unknown as IncomingMessage;
+    const req = { method, headers: token ? { authorization: `Bearer ${token}` } : {}, socket: { remoteAddress: ip } } as unknown as IncomingMessage;
     const handled = await arenaRoutes(req, res as unknown as ServerResponse, url.pathname, {
       owner: token.startsWith("s.") ? auth.owner(req) : null, url, limited: () => false, body: async () => input, auth, vault: {} as Vault, arena,
       json: (r, status, body) => { r.writeHead(status); r.end(JSON.stringify(body)); },
     });
     return { handled, status: res.statusCode, body: JSON.parse(res.chunks.join("") || "{}") };
   };
-  /** Signs the nonce message with a fresh (or given) wallet and registers. */
-  const register = async (input: Record<string, unknown>, wallet = privateKeyToAccount(generatePrivateKey()), signer = wallet) => {
+  /** Signs the nonce message with a fresh (or given) wallet and registers, from a place of its own unless `ip` is given. */
+  let place = 0;
+  const register = async (input: Record<string, unknown>, wallet = privateKeyToAccount(generatePrivateKey()), signer = wallet, ip = `10.9.0.${++place}`) => {
     const n = auth.nonce();
     const signature = await signer.signMessage({ message: n.message(wallet.address) });
-    const r = await call("POST", "/api/arena/register", { address: wallet.address, nonce: n.nonce, signature, ...input });
+    const r = await call("POST", "/api/arena/register", { address: wallet.address, nonce: n.nonce, signature, ...input }, "", ip);
     return { ...r, wallet };
   };
   const advance = (ms: number) => { clock += ms; arenaChess.tick(); publicChess.tick(); o.staked?.tick(); arena.tick(); };
@@ -84,7 +85,7 @@ describe("arena registration", () => {
     expect((await w.call("POST", "/api/arena/register", { address: victim.address, nonce: n.nonce, signature, kind: "open", name: "Real One" })).status).toBe(201);
     expect((await w.call("POST", "/api/arena/register", { address: victim.address, nonce: n.nonce, signature, kind: "open", name: "Real Two" })).status).toBe(401);
     expect((await w.call("POST", "/api/arena/register", { kind: "open", name: "No Signature" })).status).toBe(401);
-    for (const input of [{ name: "x" }, { name: "admin" }, { name: "<script>" }, { name: "Okay Name", homepage: "javascript:alert(1)" }, { name: "Okay Name", homepage: "http://plain.example" }, { name: "Okay Name", kind: "robot" }]) {
+    for (const input of [{ name: "x" }, { name: "admin" }, { name: "IMD Official" }, { name: "imd team" }, { name: "Admin Support" }, { name: "NIGHTSHIFT Team" }, { name: "nightshiftt" }, { name: "Nlghtshift" }, { name: "<script>" }, { name: "Okay Name", homepage: "javascript:alert(1)" }, { name: "Okay Name", homepage: "http://plain.example" }, { name: "Okay Name", kind: "robot" }]) {
       const r = await w.register({ kind: "open", ...input });
       expect(r.status).toBeGreaterThanOrEqual(400);
     }
@@ -101,7 +102,7 @@ describe("arena registration", () => {
     expect((await w.register({ kind: "imd", tokenId: 9999 }, owner)).status).toBe(400);
     const ok = await w.register({ kind: "imd", tokenId: 42, agentId: "100" }, owner);
     expect(ok.status).toBe(201);
-    expect(ok.body.agent).toMatchObject({ kind: "imd", name: "IMD seat 42", seat: { tokenId: 42, agentId: "100" }, imd: { online: true, attempts: 50, accepted: 45, acceptance: 0.9 } });
+    expect(ok.body.agent).toMatchObject({ kind: "imd", name: "Seat 42", seat: { tokenId: 42, agentId: "100" }, imd: { online: true, attempts: 50, accepted: 45, acceptance: 0.9 } });
     expect((await w.register({ kind: "imd", tokenId: 42 }, owner)).body.code).toBe("already_registered");
   });
   it("authenticates by key; owners rename, rotate and revoke; keys never manage", async () => {
@@ -126,9 +127,9 @@ describe("arena registration", () => {
 });
 
 describe("arena chess", () => {
-  async function pair(w: ReturnType<typeof world>, sameOwner = false) {
-    const a = await w.register({ kind: "open", name: "Pearl Bot" });
-    const b = sameOwner ? await w.register({ kind: "open", name: "Obsidian Bot" }, a.wallet) : await w.register({ kind: "open", name: "Obsidian Bot" });
+  async function pair(w: ReturnType<typeof world>, sameOwner = false, o: { ip?: string; agents?: [Awaited<ReturnType<ReturnType<typeof world>["register"]>>, Awaited<ReturnType<ReturnType<typeof world>["register"]>>] } = {}) {
+    const a = o.agents?.[0] ?? await w.register({ kind: "open", name: "Pearl Bot" }, undefined, undefined, o.ip);
+    const b = o.agents?.[1] ?? (sameOwner ? await w.register({ kind: "open", name: "Obsidian Bot" }, a.wallet) : await w.register({ kind: "open", name: "Obsidian Bot" }, undefined, undefined, o.ip));
     const ch = await w.call("POST", "/api/arena/challenges", { game: "chess", tc: "3+2" }, a.body.key);
     expect(ch.status).toBe(201);
     expect((await w.call("GET", "/api/arena/challenges", {}, b.body.key)).body.challenges.map((c: { id: string }) => c.id)).toContain(ch.body.id);
@@ -187,6 +188,52 @@ describe("arena chess", () => {
     for (const [i, move] of SCHOLAR.entries()) await w.call("POST", `/api/arena/games/${game}/move`, { move }, (i % 2 ? black : white).body.key);
     expect((await w.call("GET", `/api/arena/games/${game}`, {}, white.body.key)).body).toMatchObject({ done: true, rated: false });
     expect(w.arena.leaderboard()).toEqual([]);
+  });
+  it("does not rate two owners who registered from the same place (match-fixing with two wallets)", async () => {
+    const w = world();
+    const { game, white, black } = await pair(w, false, { ip: "203.0.113.7" });
+    expect(white.wallet.address).not.toBe(black.wallet.address);
+    for (const [i, move] of SCHOLAR.entries()) await w.call("POST", `/api/arena/games/${game}/move`, { move }, (i % 2 ? black : white).body.key);
+    expect((await w.call("GET", `/api/arena/games/${game}`, {}, white.body.key)).body).toMatchObject({ done: true, rated: false });
+    expect(w.arena.leaderboard()).toEqual([]);
+    expect(JSON.stringify(w.arena.mine(white.wallet.address))).not.toContain("203.0.113.7");
+  });
+  it("rates the same two owners at most three times a day", async () => {
+    const w = world();
+    const first = await pair(w);
+    const agents = [first.a, first.b] as [typeof first.a, typeof first.b];
+    const rated: boolean[] = [];
+    for (let n = 0; n < 5; n++) {
+      const { game, white, black } = n === 0 ? first : await pair(w, false, { agents });
+      for (const [i, move] of SCHOLAR.entries()) await w.call("POST", `/api/arena/games/${game}/move`, { move }, (i % 2 ? black : white).body.key);
+      rated.push((await w.call("GET", `/api/arena/games/${game}`, {}, white.body.key)).body.rated);
+    }
+    expect(rated).toEqual([true, true, true, false, false]);
+    // a day later they count again
+    w.advance(86_400_000);
+    const { game, white, black } = await pair(w, false, { agents });
+    for (const [i, move] of SCHOLAR.entries()) await w.call("POST", `/api/arena/games/${game}/move`, { move }, (i % 2 ? black : white).body.key);
+    expect((await w.call("GET", `/api/arena/games/${game}`, {}, white.body.key)).body.rated).toBe(true);
+  });
+  it("records a game both agents walked away from, and keeps it readable after its table is let go (finding 4)", async () => {
+    const w = world();
+    const { game, white, black } = await pair(w);
+    for (const move of ["e2e4", "e7e5", "g1f3", "b8c6"]) await w.call("POST", `/api/arena/games/${game}/move`, { move }, (move === "e2e4" || move === "g1f3" ? white : black).body.key);
+    // both go silent: a minute and they count as gone, then 45 s on white's turn
+    w.advance(61_000); w.advance(46_000);
+    const rec = (await w.call("GET", `/api/arena/agents/${white.body.agent.id}`)).body.recent[0];
+    expect(rec).toMatchObject({ id: game, reason: "abandonment", result: "0-1", plies: 4 });
+    // half an hour later the table is let go: the game is still there, finished, from the record
+    w.advance(31 * 60_000);
+    const s = await w.call("GET", `/api/arena/games/${game}`, {}, black.body.key);
+    expect(s.status).toBe(200);
+    expect(s.body).toMatchObject({ id: game, status: "finished", done: true, result: "0-1", reason: "abandonment", winner: "you", closed: true, you: "b" });
+    expect((await w.call("GET", `/api/arena/games/${game}/wait?timeout=1`, {}, white.body.key)).body).toMatchObject({ done: true, winner: "rival" });
+    // acting on it is 410 game_closed, as documented; a stranger still gets 404
+    const late = await w.call("POST", `/api/arena/games/${game}/move`, { move: "a2a3" }, white.body.key);
+    expect(late.status).toBe(410); expect(late.body.code).toBe("game_closed");
+    const stranger = await w.register({ kind: "open", name: "Kibitzer" });
+    expect((await w.call("GET", `/api/arena/games/${game}`, {}, stranger.body.key)).status).toBe(404);
   });
   it("lists live arena games for spectators and treats a silent agent as gone", async () => {
     const w = world();

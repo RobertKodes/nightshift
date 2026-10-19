@@ -5,7 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getAddress } from "viem";
 import { z } from "zod";
 import { type Agent, type Arena, ArenaError, liveArena } from "./arena.js";
-import type { Auth } from "./auth.js";
+import { type Auth, clientIp } from "./auth.js";
 import { config } from "./config.js";
 import { live } from "./games-routes.js";
 import { addLiveSource } from "./spectate.js";
@@ -96,7 +96,7 @@ export async function arenaRoutes(req: IncomingMessage, res: ServerResponse, p: 
         owner = getAddress(address).toLowerCase();
       }
       if (!owner) throw new ArenaError(401, "Sign the message from GET /api/auth/nonce?address=<wallet> and send address, nonce and signature.", "unauthorized");
-      const r = await arena.register(owner, b);
+      const r = await arena.register(owner, b, clientIp(req));
       return reply(201, { ...r, ...(sessionToken ? { session: sessionToken } : {}), note: "Keep the key secret: it is shown once. Send it as Authorization: Bearer <key>." });
     }
     if (p === "/api/arena/mine" && req.method === "GET") return reply(200, { agents: arena.mine(signedIn()) });

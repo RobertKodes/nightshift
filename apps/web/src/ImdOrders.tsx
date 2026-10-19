@@ -10,6 +10,33 @@ const INTAKE = "0xa43e6f75ee006411f79ac1c84120606c2330de82";
 const PRICE = 500000000000000000n; // 0.5 IMD
 const intakeAbi = parseAbi(["function request(bytes32 action, bytes body, (address target, bytes4 selector) callback, address asset, uint256 amount) returns (bytes32)"]);
 const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const DEV = "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5";
+const TREASURY = "0x3322e6dd06ade8377f1f1bcb766f6133d7b64d69";
+/** The IMD intake actions an order may use. */
+const ACTIONS = new Set(["launch.open@launch-1", "job.open@job-1"]);
+
+/**
+ * The body comes from our server and is signed as is: before it is, this page checks it is ours.
+ * The action is one we use, a launch is owned by the dev wallet on Ethereum mainnet, its remainder
+ * goes to the dev wallet, and any other recipient field names the dev or the treasury wallet.
+ */
+function refuseBody(action: string, body: unknown): string | null {
+  if (!ACTIONS.has(action)) return `Refused: unexpected IMD action ${action}.`;
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "Refused: the order body is not an object.";
+  const b = body as Record<string, unknown>, lc = (x: unknown) => String(x ?? "").toLowerCase();
+  if ((action.startsWith("launch.") || "owner" in b) && lc(b.owner) !== DEV) return `Refused: the order names ${String(b.owner)} as owner, not the dev wallet.`;
+  if ((action.startsWith("launch.") || "chainId" in b) && b.chainId !== 1) return "Refused: the order is not for Ethereum mainnet.";
+  const e = b.economics as Record<string, unknown> | undefined;
+  if (e && typeof e === "object" && "remainderTo" in e && lc(e.remainderTo) !== DEV) return `Refused: the remainder goes to ${String(e.remainderTo)}, not the dev wallet.`;
+  const bad: string[] = [];
+  const walk = (v: unknown, key: string) => {
+    if (Array.isArray(v)) v.forEach((x) => walk(x, key));
+    else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, k);
+    else if (typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v) && /owner|recipient|remainder|treasury|payto|beneficiary|receiver|admin|wallet|^to$|feeto/i.test(key) && lc(v) !== DEV && lc(v) !== TREASURY) bad.push(`${key} ${v}`);
+  };
+  walk(b, "");
+  return bad.length ? `Refused: the order sends to an unknown address (${bad.join(", ")}).` : null;
+}
 
 type Item = { id: string; title: string; summary: string; action: string; actionId: string };
 type Order = { id: string; title: string; tx: string; at: number; stage: string; done?: boolean; error?: string; jobId?: string; repoUrl?: string; addresses?: { role: string; name?: string; address: string }[] };
@@ -40,6 +67,8 @@ export function ImdOrders({ call, token }: { call: (token: string, path: string,
     if (!r) return;
     setErr(null);
     try {
+      const refused = refuseBody(r.actionId, r.body);
+      if (refused) throw new Error(refused);
       const eth = await chooseWallet({ ask: true });
       const wallet = createWalletClient({ chain: mainnet, transport: custom(eth as never) });
       setStep("Connect your wallet…");

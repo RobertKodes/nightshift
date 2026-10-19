@@ -1,12 +1,20 @@
 # NIGHTSHIFT next to other apps on one Docker host that already runs Caddy (for example the
-# Solstones EC2 box). Joins Caddy's network instead of publishing a port, and is capped so it
-# can never starve its neighbours.
+# Solstones EC2 box). It publishes no port and shares one dedicated network with Caddy alone, so the
+# other apps on the box cannot reach it (and it cannot reach them). Capped so it can never starve its
+# neighbours. Once, on the host:
+#   docker network create --subnet 172.31.88.0/24 nightshift-edge
+#   docker network connect nightshift-edge <caddy container>      (or add the network to Caddy's compose)
+# then:
 #   docker compose -f compose.shared-host.yml --env-file .env up -d
+# Deploy a known build by its commit: IMAGE_TAG=<git sha> (CI pushes :latest and :<sha>); latest is the default.
 services:
   nightshift:
-    image: ghcr.io/robertkodes/nightshift:latest
+    image: ghcr.io/robertkodes/nightshift:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
+    environment:
+      # only Caddy and NIGHTSHIFT sit on this network: X-Forwarded-For is believed from it alone
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.31.88.0/24}
     volumes:
       - nightshift-data:/data
     mem_limit: 384m
@@ -17,4 +25,4 @@ volumes:
 networks:
   edge:
     external: true
-    name: ${EDGE_NETWORK:-solstones_default}
+    name: ${EDGE_NETWORK:-nightshift-edge}

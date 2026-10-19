@@ -40,11 +40,12 @@ describe("bet weights", () => {
     expect(W.chessWeights(chessIn({ ply: 4, clocks: { w: 50_000, b: 50_000 } })).a).toBeLessThan(early.a);
   });
   it("gives the side behind more weight than the leader (material, check, a mate threat, the clock)", () => {
-    // black has no queen, early on: backing white counts little, backing black fully
+    // black has no queen, early on: backing white counts little, backing black more, but never at full
+    // weight (a queen thrown on purpose, to back that side and win anyway, is worth at most 4000 bps)
     const q = W.chessWeights(chessIn({ fen: "rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", ply: 10 }));
     expect(q.leader).toBe(0);
     expect(q.a).toBeLessThan(3_000);
-    expect(q.b).toBe(10_000);
+    expect(q.b).toBe(W.TRAILER_MAX_WEIGHT);
     // a rook up for black: the other way round
     const r = W.chessWeights(chessIn({ fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/1NBQKBNR w Kkq - 0 1", ply: 10 }));
     expect(r.leader).toBe(1);
@@ -71,7 +72,8 @@ describe("bet weights", () => {
     expect(W.pinballWeights(pinIn({ now: 5_000 })).a).toBeGreaterThan(W.pinballWeights(pinIn({ now: 100_000 })).a);
     const lead = W.pinballWeights(pinIn({ now: 75_000, scores: [30_000, 10_000] }));
     expect(lead.leader).toBe(0);
-    expect(lead.a).toBeLessThan(lead.b);
+    expect(lead.a).toBeLessThanOrEqual(lead.b);
+    expect(W.pinballWeights(pinIn({ now: 15_000, scores: [12_000, 10_000] })).a).toBeLessThan(W.pinballWeights(pinIn({ now: 15_000, scores: [12_000, 10_000] })).b);
     expect(lead.a).toBeLessThan(W.pinballWeights(pinIn({ now: 75_000, scores: [12_000, 10_000] })).a);
     expect(W.pinballWeights(pinIn({ now: 121_000, scores: [5, 5] })).locked).toMatch(/last 20%/);
     expect(W.pinballWeights(pinIn({ now: 60_000, over: [false, true] })).locked).toMatch(/drained/);
@@ -80,14 +82,33 @@ describe("bet weights", () => {
     expect(W.pinballWeights(pinIn({ done: true })).locked).toMatch(/over/);
   });
   it("never goes below 500 or above 10000 bps", () => {
-    expect(W.shape(1, 1, 0)).toMatchObject({ a: 700, b: 5_250 });
+    expect(W.shape(1, 1, 0)).toMatchObject({ a: 700, b: 4_000 });
     expect(W.bps(0.01)).toBe(500);
     expect(W.bps(3)).toBe(10_000);
-    expect(W.shape(0, 1, 1)).toMatchObject({ a: 10_000, b: 2_000 });
+    expect(W.shape(0, 1, 1)).toMatchObject({ a: 4_000, b: 2_000 });
     for (let p = 0; p <= 1; p += 0.1) for (let c = 0; c <= 1; c += 0.1) for (const l of [0, 1, null] as const) {
       const w = W.shape(p, c, l);
       for (const x of [w.a, w.b]) { expect(x).toBeGreaterThanOrEqual(500); expect(x).toBeLessThanOrEqual(10_000); expect(Number.isInteger(x)).toBe(true); }
+      // the side behind: never below the leader; clearly behind, never above max(4000, the leader's weight)
+      if (l !== null && c > 0) {
+        const [ahead, behind] = l === 0 ? [w.a, w.b] : [w.b, w.a];
+        expect(behind).toBeGreaterThanOrEqual(ahead);
+        if (c >= 0.5) expect(behind).toBeLessThanOrEqual(Math.max(W.TRAILER_MAX_WEIGHT, ahead));
+      }
     }
+  });
+  it("locks a few seconds after a big swing of the lead, and while a draw offer is open", () => {
+    const g = new W.SwingGuard(), level = W.shape(0.2, 0, null), white = W.shape(0.2, 0.6, 0), black = W.shape(0.2, 0.6, 1);
+    expect(g.check("m", level, 0).locked).toBeNull();
+    expect(g.check("m", W.shape(0.2, 0.2, 0), 1_000).locked).toBeNull();
+    expect(g.check("m", white, 2_000).locked).toMatch(/just swung/);
+    expect(g.check("m", white, 2_000 + W.SWING_PAUSE_MS - 1).locked).toMatch(/just swung/);
+    expect(g.check("m", white, 2_000 + W.SWING_PAUSE_MS).locked).toBeNull();
+    // the other way round, at once: a thrown position
+    expect(g.check("m", black, 20_000).locked).toMatch(/just swung/);
+    // another match is not touched
+    expect(g.check("n", black, 20_000).locked).toBeNull();
+    expect(W.chessWeights(chessIn({ drawOffered: true })).locked).toMatch(/draw is offered/);
   });
 });
 
@@ -127,7 +148,7 @@ describe("BetPool signatures", () => {
 });
 
 /** A pool on a fake chain, with a real chess board and pinball duels the test sets. */
-function setup(o: { live?: boolean; address?: string } = {}) {
+function setup(o: { live?: boolean; address?: string; watch?: boolean } = {}) {
   let now = Date.UTC(2026, 9, 19, 12);
   const signer = privateKeyToAccount(generatePrivateKey());
   const f = fakeBetChain({ pool: POOL, signer: o.live === false ? "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5" : signer.address });
@@ -136,16 +157,17 @@ function setup(o: { live?: boolean; address?: string } = {}) {
   /** Arena tables the test sets: who owns the agents at each. */
   const arena = new Map<string, BetsModule.ArenaParties>();
   const lookup: BetsModule.Lookup = (game, id) => game === "chess" ? B.fromChess("chess", id, games.watchView(id), games.betInfo(id), arena.get(id) ?? null, now) : game === "pinball" && pin.has(id) ? B.fromPinball(id, pin.get(id)!, now) : null;
-  const bets = new B.Bets({ address: o.address ?? POOL, file: join(mkdtempSync(join(tmpdir(), "bets-")), "bets.json"), client: f.client, signer, lookup, relaySettle: f.relaySettle, relayCreate: f.relayCreate, now: () => now, fromBlock: 30_000_000n });
-  /** A chess game between two connected players, started (staked in GameEscrow unless `free`): who is white, and a move function. */
-  const game = (free = false) => {
+  const watch = (board: BetsModule.Board, id: string, f: () => void) => (board === "chess" ? games.watch(id, f) : null);
+  const bets = new B.Bets({ address: o.address ?? POOL, file: join(mkdtempSync(join(tmpdir(), "bets-")), "bets.json"), client: f.client, signer, lookup, watch: o.watch === false ? undefined : watch, relaySettle: f.relaySettle, relayCreate: f.relayCreate, now: () => now, fromBlock: 30_000_000n });
+  /** A chess game between two connected players, started (staked in GameEscrow unless `free`, 500 IMD each by default): who is white, and a move function. */
+  const game = (free = false, stake: { currency?: "IMD" | "SHIFT"; stake?: string } = {}) => {
     let id: string, pa: string, pb: string;
     if (free) {
       const a = games.queue("Pearl", null, "3+2"); games.listen(a.match.id, a.player, () => {});
       const b = games.queue("Onyx", null, "3+2"); games.listen(b.match.id, b.player, () => {});
       id = a.match.id; pa = a.player; pb = b.player;
     } else {
-      const t = games.createStaked({ escrow: keccak256(toHex(`duel ${Math.random()}`)), tc: "3+2", currency: "IMD", stake: "1", a: { wallet: P1, name: "Pearl" }, b: { wallet: P2, name: "Onyx" }, onResult: () => {} });
+      const t = games.createStaked({ escrow: keccak256(toHex(`duel ${Math.random()}`)), tc: "3+2", currency: stake.currency ?? "IMD", stake: stake.stake ?? "500", a: { wallet: P1, name: "Pearl" }, b: { wallet: P2, name: "Onyx" }, onResult: () => {} });
       id = t.id; pa = t.seats[P1.toLowerCase()]!; pb = t.seats[P2.toLowerCase()]!;
       games.listen(id, pa, () => {}); games.listen(id, pb, () => {});
     }
@@ -182,8 +204,12 @@ describe("tickets", () => {
     await expect(ask({ matchId: "ffff" })).rejects.toMatchObject({ status: 404 });
     await expect(ask({ amount: "0.09" })).rejects.toThrow(/between 0.1 and 500 IMD/);
     await expect(ask({ amount: "500.000000000000000001" })).rejects.toThrow(/between/);
-    await expect(ask({ token: "SHIFT", amount: "999" })).rejects.toThrow(/between 1000 and 25000000 SHIFT/);
-    await expect(ask({ token: "SHIFT", amount: "25000001" })).rejects.toThrow(/between/);
+    // a staked duel's bets are in its stake's token
+    await expect(ask({ token: "SHIFT", amount: "1000" })).rejects.toMatchObject({ status: 409, message: /in IMD, the token of its stake/ });
+    const s = game(false, { currency: "SHIFT", stake: "10000000" });
+    await expect(ask({ matchId: s.id, token: "SHIFT", amount: "999" })).rejects.toThrow(/between 1000 and 25000000 SHIFT/);
+    await expect(ask({ matchId: s.id, token: "SHIFT", amount: "25000001" })).rejects.toThrow(/between/);
+    await expect(ask({ matchId: s.id, token: "IMD" })).rejects.toThrow(/in SHIFT/);
   });
   it("gives a short ticket for exactly this wallet, side, amount and weight, signed by the game signer", async () => {
     const { bets, game, signer, f, flush } = setup();
@@ -243,6 +269,7 @@ describe("settlement", () => {
     const id = r.ticket.marketId;
     g.move("f2f3"); g.move("e7e5"); g.move("g2g4"); g.move("d8h4");
     await bets.tick();
+    for (let i = 0; i < 5; i++) await flush();
     const m = bets.markets.get(id)!;
     expect(m.outcome?.outcome).toBe(1);
     const first = m.result!;
@@ -262,12 +289,12 @@ describe("settlement", () => {
   it("maps a draw, a void duel and a game that vanished to 2, and pinball's winner to its side", async () => {
     const { bets, game, games, pin, advance } = setup();
     const g = game();
-    const r = await bets.ticket(A, { game: "chess", matchId: g.id, side: "A", token: "SHIFT", amount: "1000" });
+    const r = await bets.ticket(A, { game: "chess", matchId: g.id, side: "A", token: "IMD", amount: "1" });
     games.draw(g.id, g.white, "offer"); games.draw(g.id, g.black, "accept");
     await bets.tick();
     expect(bets.markets.get(r.ticket.marketId)!.outcome).toMatchObject({ outcome: 2, reason: "agreement" });
 
-    const duel = (o: Partial<BetsModule.PinballState> = {}): BetsModule.PinballState => ({ startedAt: Date.UTC(2026, 9, 19, 12), go: true, durationMs: 150_000, done: false, draw: false, void: null, winner: -1, currency: "IMD", stake: 1, escrow: keccak256(toHex("pinball duel")),
+    const duel = (o: Partial<BetsModule.PinballState> = {}): BetsModule.PinballState => ({ startedAt: Date.UTC(2026, 9, 19, 12), go: true, durationMs: 150_000, done: false, draw: false, void: null, winner: -1, currency: "IMD", stake: 100, escrow: keccak256(toHex("pinball duel")),
       players: [{ name: "Pearl", agent: false, wallet: P1.toLowerCase(), score: 0, over: false, connected: true, broken: false }, { name: "Onyx", agent: true, wallet: P2.toLowerCase(), score: 0, over: false, connected: true, broken: false }], ...o });
     pin.set("aa01", duel()); pin.set("aa02", duel()); pin.set("aa03", duel());
     const ids = await Promise.all(["aa01", "aa02", "aa03"].map(async (x) => (await bets.ticket(A, { game: "pinball", matchId: x, side: "B", token: "IMD", amount: "1" })).ticket.marketId));
@@ -361,10 +388,25 @@ describe("anti-rigging", () => {
     // a staked duel is open
     expect((await bets.view("chess", game().id, null)).eligible).toBe(true);
   });
-  it("opens arena games only to two registered agents of different owners", () => {
-    const free = { escrow: null, wallets: { w: null, b: null } };
-    expect(B.chessParties(free, { owners: { w: A, b: C }, agents: 2, assigned: [] })).toEqual({ eligible: null, tied: [A.toLowerCase(), C.toLowerCase()] });
-    expect(B.chessParties(free, { owners: { w: A, b: A.toUpperCase().replace("0X", "0x") }, agents: 2, assigned: [] }).eligible).toBe(B.NOT_ELIGIBLE);
+  it("opens arena games only to two agents of different owners that are both IMD seats or both established", () => {
+    const free = { escrow: null, wallets: { w: null, b: null } }, now = Date.UTC(2026, 9, 19, 12), week = 7 * 86_400_000;
+    const old = (owner: string, o: Partial<BetsModule.ArenaSeat> = {}): BetsModule.ArenaSeat => ({ kind: "open", owner: owner.toLowerCase(), seat: null, createdAt: now - week, rated: 10, opponents: 3, ...o });
+    const at = (w: BetsModule.ArenaSeat | null, b: BetsModule.ArenaSeat | null, owners = { w: A, b: C }) => B.chessParties(free, { owners, agents: 2, assigned: [], seats: { w, b } }, now);
+    expect(at(old(A), old(C))).toEqual({ eligible: null, tied: [A.toLowerCase(), C.toLowerCase()] });
+    // two fresh sybil agents: no market
+    expect(at(old(A, { createdAt: now - week + 1 }), old(C)).eligible).toBe(B.NOT_ESTABLISHED);
+    expect(at(old(A), old(C, { rated: 9 })).eligible).toBe(B.NOT_ESTABLISHED);
+    expect(at(old(A, { opponents: 2 }), old(C)).eligible).toBe(B.NOT_ESTABLISHED);
+    // two IMD seats (distinct, each owner's own) need no history
+    const seat = (owner: string, n: number) => old(owner, { kind: "imd", seat: n, createdAt: now, rated: 0, opponents: 0 });
+    expect(at(seat(A, 1), seat(C, 2)).eligible).toBeNull();
+    expect(at(seat(A, 1), seat(C, 1)).eligible).toBe(B.NOT_ESTABLISHED);
+    expect(at(seat(A, 1), old(C, { createdAt: now, rated: 0 })).eligible).toBe(B.NOT_ESTABLISHED);
+    // the agents must be the owners' at the table; unknown agents get nothing
+    expect(at(seat(P1, 1), seat(C, 2)).eligible).toBe(B.NOT_ESTABLISHED);
+    expect(at(null, old(C)).eligible).toBe(B.NOT_ESTABLISHED);
+    expect(B.chessParties(free, { owners: { w: A, b: C }, agents: 2, assigned: [] }).eligible).toBe(B.NOT_ESTABLISHED);
+    expect(B.chessParties(free, { owners: { w: A, b: A.toUpperCase().replace("0X", "0x") }, agents: 2, assigned: [], seats: { w: old(A), b: old(A) } }).eligible).toBe(B.NOT_ELIGIBLE);
     expect(B.chessParties(free, { owners: { w: A, b: null }, agents: 1, assigned: [] }).eligible).toBe(B.NOT_ELIGIBLE);
     expect(B.chessParties(free, null).eligible).toBe(B.NOT_ELIGIBLE);
     // a staked seat played by an agent: the players' wallets and the assigning owner are all tied
@@ -377,15 +419,38 @@ describe("anti-rigging", () => {
     await expect(ask(bets, A, "chess", g.id)).resolves.toBeTruthy();
     // an agent game on a free board: open to spectators, closed to both owners
     const h = game(true);
-    arena.set(h.id, { owners: { w: A, b: C }, agents: 2, assigned: [] });
+    const seat = (owner: string, n: number): BetsModule.ArenaSeat => ({ kind: "imd", owner: owner.toLowerCase(), seat: n, createdAt: 0, rated: 0, opponents: 0 });
+    arena.set(h.id, { owners: { w: A, b: C }, agents: 2, assigned: [], seats: { w: seat(A, 1), b: seat(C, 2) } });
     for (const w of [A, C]) await expect(ask(bets, w, "chess", h.id)).rejects.toMatchObject({ status: 403 });
     await expect(ask(bets, P1, "chess", h.id)).resolves.toBeTruthy();
     // pinball: staked only, and not its players
-    pin.set("bb01", { startedAt: Date.now(), go: true, durationMs: 150_000, done: false, draw: false, void: null, winner: -1, currency: "IMD", stake: 1, escrow: "0x01",
+    pin.set("bb01", { startedAt: Date.now(), go: true, durationMs: 150_000, done: false, draw: false, void: null, winner: -1, currency: "IMD", stake: 100, escrow: "0x01",
       players: [{ name: "Pearl", agent: false, wallet: P1.toLowerCase(), score: 0, over: false, connected: true, broken: false }, { name: "Onyx", agent: false, wallet: null, score: 0, over: false, connected: true, broken: false }] });
     pin.set("bb02", { ...pin.get("bb01")!, escrow: null });
     await expect(ask(bets, P1, "pinball", "bb01")).rejects.toMatchObject({ status: 403 });
     await expect(ask(bets, A, "pinball", "bb02")).rejects.toMatchObject({ status: 409, message: B.NOT_ELIGIBLE });
+    // a staked duel below the minimum stake gets no market
+    pin.set("bb03", { ...pin.get("bb01")!, stake: 9.99 });
+    await expect(ask(bets, A, "pinball", "bb03")).rejects.toMatchObject({ status: 409, message: /at least 10 IMD/ });
+    await expect(ask(bets, A, "chess", game(false, { stake: "9.5" }).id)).rejects.toMatchObject({ status: 409, message: /at least 10 IMD/ });
+  });
+  it(`caps a staked duel's whole pool at ${4}× its stake, open tickets included`, async () => {
+    const { bets, game, f, advance } = setup();
+    expect(B.POOL_PER_STAKE).toBe(4n);
+    const g = game(false, { stake: "100" }); // pool at most 400 IMD
+    const r = await ask(bets, A, "chess", g.id, { amount: "250" });
+    await expect(ask(bets, C, "chess", g.id, { amount: "151" })).rejects.toMatchObject({ status: 409, message: /pool is full: at most 400 IMD/ });
+    await expect(ask(bets, C, "chess", g.id, { amount: "150" })).resolves.toBeTruthy();
+    await expect(ask(bets, P1.replace("44", "66"), "chess", g.id, { amount: "0.1" })).rejects.toMatchObject({ status: 409 });
+    // the tickets lapse unused: room again; once bets are mined, the contract's totals count
+    advance((B.TICKET_TTL + 1) * 1000);
+    await expect(ask(bets, C, "chess", g.id, { amount: "100" })).resolves.toBeTruthy();
+    advance((B.TICKET_TTL + 1) * 1000);
+    f.created({ marketId: r.ticket.marketId, token: r.market.token as Address, closesAt: r.market.closesAt, game: r.market.game as Hex });
+    await bets.sync();
+    f.s.pools.set(r.ticket.marketId.toLowerCase(), [300n * E18, 50n * E18]);
+    await expect(ask(bets, C, "chess", g.id, { amount: "51" })).rejects.toMatchObject({ status: 409, message: /pool is full/ });
+    await expect(ask(bets, C, "chess", g.id, { amount: "50" })).resolves.toBeTruthy();
   });
   it("caps one wallet's total on a market at the contract's per-bet maximum, open tickets included", async () => {
     const { bets, game, f, advance } = setup();
@@ -393,8 +458,7 @@ describe("anti-rigging", () => {
     const r = await ask(bets, A, "chess", g.id, { amount: "300" });
     await expect(ask(bets, A, "chess", g.id, { amount: "250" })).rejects.toMatchObject({ status: 400, message: /at most 500 IMD in all/ });
     await expect(ask(bets, A, "chess", g.id, { amount: "200" })).resolves.toBeTruthy();
-    // the other token and other wallets have their own caps
-    await expect(ask(bets, A, "chess", g.id, { token: "SHIFT", amount: "25000000" })).resolves.toBeTruthy();
+    // other wallets have their own caps (within the duel's pool cap: 4 × 500 IMD)
     await expect(ask(bets, C, "chess", g.id, { amount: "500" })).resolves.toBeTruthy();
     // tickets expired; the 300 was mined: what is on chain still counts
     advance((B.TICKET_TTL + 1) * 1000);
@@ -404,8 +468,35 @@ describe("anti-rigging", () => {
     await expect(ask(bets, A, "chess", g.id, { amount: "201" })).rejects.toMatchObject({ status: 400 });
     await expect(ask(bets, A, "chess", g.id, { amount: "200", side: "B" })).resolves.toBeTruthy();
   });
-  it("lives 20 s, and pauses for 10 s after a check or the capture of a queen or rook", async () => {
-    expect(B.TICKET_TTL).toBe(20);
+  it("gives no ticket once the game is over, and decides its market at once (resignation, draw, mate), without the tick", async () => {
+    for (const end of ["resign", "draw", "mate"] as const) {
+      const { bets, game, games, f, flush } = setup();
+      const g = game();
+      const r = await ask(bets, A, "chess", g.id);
+      f.created({ marketId: r.ticket.marketId, token: r.market.token as Address, closesAt: r.market.closesAt, game: r.market.game as Hex });
+      await bets.sync();
+      if (end === "resign") games.resign(g.id, g.black);
+      else if (end === "draw") { games.draw(g.id, g.white, "offer"); games.draw(g.id, g.black, "accept"); }
+      else { g.move("f2f3"); g.move("e7e5"); g.move("g2g4"); g.move("d8h4"); }
+      await expect(ask(bets, C, "chess", g.id)).rejects.toMatchObject({ status: 409, message: /over/ });
+      for (let i = 0; i < 5; i++) await flush();
+      const m = bets.markets.get(r.ticket.marketId)!;
+      expect(m.outcome?.outcome).toBe(end === "resign" ? 0 : end === "draw" ? 2 : 1);
+      // signed and relayed already: no 2 s tick ran
+      expect(f.s.settled).toHaveLength(1);
+      expect(f.s.settled[0]).toMatchObject({ marketId: r.ticket.marketId, outcome: m.outcome!.outcome });
+    }
+    // without a game stream, any look at the finished game decides it too
+    const { bets, game, games, flush } = setup({ watch: false });
+    const g = game();
+    const r = await ask(bets, A, "chess", g.id);
+    games.resign(g.id, g.white);
+    await expect(ask(bets, C, "chess", g.id)).rejects.toMatchObject({ status: 409 });
+    for (let i = 0; i < 5; i++) await flush();
+    expect(bets.markets.get(r.ticket.marketId)!.outcome?.outcome).toBe(1);
+  });
+  it("lives 8 s, and pauses for 10 s after a check or the capture of a queen or rook", async () => {
+    expect(B.TICKET_TTL).toBe(8);
     const { bets, game, advance } = setup();
     const g = game();
     g.move("e2e4"); g.move("f7f5");

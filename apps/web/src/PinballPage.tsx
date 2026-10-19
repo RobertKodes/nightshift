@@ -17,12 +17,19 @@ type Currency = "FREE" | "IMD" | "SHIFT";
 type Mode = "PRACTICE" | Currency;
 /** A player as the server shows them; the rival's verified score, stats and finish only once the match is settled. Faces come in the first frame. */
 type PlayerView = { key: string; name: string; avatar?: string | null; live: number; x: number; y: number; attacks: Shot[]; score: number | null; solo: number | null; stats: Record<string, number> | null; you: boolean; finished: boolean; error?: string };
-type MatchView = { id: string; escrow: string | null; seed: number | null; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; void: string | null; winner: string | null; winnerIsYou: boolean; players: PlayerView[] };
+/** Salts the server hands out, from the number this page said it holds. */
+type LuckPart = { from: number; salts: number[] };
+/** `seed` is the deal's commitment (the sha256 of all its salts), shown at the start; the salts come in `luck` as the stream reaches them. */
+type MatchView = { id: string; escrow: string | null; seed: string | null; luck?: LuckPart | null; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; void: string | null; winner: string | null; winnerIsYou: boolean; players: PlayerView[] };
 /** What is on the table (it stays mounted under the result) and what is shown over it. A board run runs on the server's clock. */
-type Play = { kind: "practice"; seed: number; run: number; id?: string; startAt?: number; offset?: number } | { kind: "duel"; match: MatchView; player: string };
+type Play = { kind: "practice"; seed: number; run: number; id?: string; deal?: string; startAt?: number; offset?: number } | { kind: "duel"; match: MatchView; player: string };
+type SoloStart = { id: string; seed: string; luck: LuckPart; startedAt: number; now: number };
 type Over = { score: number; stats?: Record<string, number>; rank?: number | null };
 type BoardEntry = { name: string; score: number; at: number };
 type Leaderboard = { board: BoardEntry[]; best: BoardEntry[]; solo?: BoardEntry[]; soloBest?: BoardEntry[] };
+
+/** A duel's table before it is dealt: no salt, so it does not move. */
+const NO_LUCK: number[] = [];
 
 const MODES: { k: Mode; title: string; sub: string; icon: string }[] = [
   { k: "PRACTICE", title: "Practice", sub: "Solo · learn the table", icon: "play" },
@@ -63,9 +70,9 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
   if (!r.ok) throw Object.assign(new Error(j.error ?? `HTTP ${r.status}`), { status: r.status });
   return j as T;
 }
-/** A stream post: taken, to be sent again (network, rate limit), or refused for good (the server says why). */
-async function stream(path: string, body: unknown, refused: (why: string) => void): Promise<boolean | "stop"> {
-  try { await api(path, body); return true; } catch (e) {
+/** A stream post: taken, to be sent again (network, rate limit), or refused for good (the server says why). The reply may carry new salts. */
+async function stream(path: string, body: unknown, refused: (why: string) => void, got?: (l: LuckPart | null | undefined) => void): Promise<boolean | "stop"> {
+  try { const r = await api<{ luck?: LuckPart | null }>(path, body); got?.(r.luck); return true; } catch (e) {
     if ((e as { status?: number }).status === 400) { refused((e as Error).message); return "stop"; }
     return false;
   }
@@ -112,6 +119,15 @@ export function PinballPage() {
   const faces = useRef(new Map<string, string | null>());
   const withFaces = (m: MatchView): MatchView => ({ ...m, players: m.players.map((p) => { if (p.avatar !== undefined) faces.current.set(p.key, p.avatar); return { ...p, avatar: faces.current.get(p.key) ?? null }; }) });
   const me = name.trim() || "Night crew";
+  // the dealt game's salts: one array per deal (its commitment), filled in order as frames and replies bring them
+  const luck = useRef<{ deal: string | null; salts: number[] }>({ deal: null, salts: [] });
+  const take = (deal: string | null | undefined, l?: LuckPart | null) => {
+    if (!deal) return;
+    if (luck.current.deal !== deal) luck.current = { deal, salts: [] };
+    const h = luck.current.salts;
+    if (l && l.from <= h.length) h.push(...l.salts.slice(h.length - l.from));
+  };
+  const saltsFor = (deal: string | null | undefined) => (deal && luck.current.deal === deal ? luck.current.salts : undefined);
   const [watchId, setWatchId] = useState(() => new URLSearchParams(location.search).get("watch"));
   // the path stays /games/pinball between watching and playing: follow the query instead
   useEffect(() => { const on = () => setWatchId(new URLSearchParams(location.search).get("watch")); addEventListener("popstate", on); return () => removeEventListener("popstate", on); }, []);
@@ -129,6 +145,7 @@ export function PinballPage() {
     s.onmessage = (m) => {
       const match = withFaces(JSON.parse(m.data) as MatchView);
       sync(match);
+      take(match.seed, match.luck);
       const mine = match.players.find((p) => p.you);
       if (mine?.error) setErr(mine.error);
       // the rival never connected: back to the lobby, or (the match reopened) back to the search
@@ -145,8 +162,9 @@ export function PinballPage() {
     if (mode === "PRACTICE") {
       es.current?.close();
       // the server deals the table and runs its clock so the run can go on the solo board; offline, practice still works
-      const r = await api<{ id: string; seed: number; startedAt: number; now: number }>("solo", { name: me }).catch((e) => { if ((e as { status?: number }).status === 409) setErr((e as Error).message); return null; });
-      setPlay({ kind: "practice", seed: r?.seed ?? Math.floor(Math.random() * 2 ** 32), run: Date.now(), id: r?.id, startAt: r?.startedAt, offset: r ? r.now - Date.now() : 0 });
+      const r = await api<SoloStart>("solo", { name: me }).catch((e) => { if ((e as { status?: number }).status === 409) setErr((e as Error).message); return null; });
+      if (r) take(r.seed, r.luck);
+      setPlay({ kind: "practice", seed: Math.floor(Math.random() * 2 ** 32), run: Date.now(), id: r?.id, deal: r?.seed, startAt: r?.startedAt, offset: r ? r.now - Date.now() : 0 });
       return;
     }
     try {
@@ -154,6 +172,7 @@ export function PinballPage() {
       const r = await api<{ match: MatchView; player: string }>("queue", { name: me, currency: "FREE", stake: 0, avatar: frog ? `frog:${frog.id}` : "/games/pinball/frog-0.webp" });
       r.match = withFaces(r.match);
       sync(r.match);
+      take(r.match.seed, r.match.luck);
       if (r.match.startedAt) setPlay({ kind: "duel", match: r.match, player: r.player }); else setWaiting(r);
       follow(r.match.id, r.player);
     } catch (e) { setErr((e as Error).message); }
@@ -168,8 +187,8 @@ export function PinballPage() {
     if (play?.kind === "duel") await api(`match/${play.match.id}/finish`, { player: play.player, inputs: r.inputs, landed: r.landed, tick: r.tick }).catch((e) => setErr((e as Error).message));
   };
   // the inputs go to the server while the game runs: a duel's to its match, a board run's to its run
-  const onLive = play?.kind === "duel" ? (s: Live) => stream(`match/${play.match.id}/progress`, { player: play.player, ...s }, setErr)
-    : play?.kind === "practice" && play.id ? (s: Live) => stream(`solo/${play.id}/progress`, s, setErr) : undefined;
+  const onLive = play?.kind === "duel" ? (s: Live) => stream(`match/${play.match.id}/progress`, { player: play.player, ...s }, setErr, (l) => take(play.match.seed, l))
+    : play?.kind === "practice" && play.id ? (s: Live) => stream(`solo/${play.id}/progress`, s, setErr, (l) => take(play.deal, l)) : undefined;
   /** Both stakes are in: take the seat the lobby gave this wallet, as any duel. */
   const seat = (s: Seat) => { setErr(null); setOver(null); clock.current = 0; follow(s.id, s.player); };
   const toLobby = () => { es.current?.close(); setPlay(null); setOver(null); setWaiting(null); };
@@ -335,7 +354,9 @@ export function PinballPage() {
       {play && <main className="arc-game">
         <PinballGame
           key={play.kind === "practice" ? `p${play.run}` : `${play.match.id}-${play.match.seed ?? "vs"}`}
-          seed={play.kind === "practice" ? play.seed : play.match.seed ?? 0}
+          seed={play.kind === "practice" ? play.seed : 0}
+          // a dealt game (a duel, a board run) plays its server's luck; a duel waits on an empty one until it is dealt
+          luck={play.kind === "practice" ? (play.id ? saltsFor(play.deal) : undefined) : saltsFor(play.match.seed) ?? NO_LUCK}
           startAt={play.kind === "duel" ? play.match.startedAt ?? undefined : play.startAt}
           clockOffset={play.kind === "duel" ? clock.current : play.offset ?? 0}
           name={me} avatar={avatar} rival={rival}

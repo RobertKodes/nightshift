@@ -1,14 +1,14 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import type { Address, Hex } from "viem";
-import { liveArena } from "./arena.js";
-import { type ArenaParties, type Board, BETS_ABI, Bets, type BetsReader, type CreateCall, type Lookup, type SettleCall, fromChess, fromPinball } from "./bets.js";
-import { eth, ethWallet } from "./chain.js";
+import { type Arena, liveArena } from "./arena.js";
+import { type ArenaParties, type ArenaSeat, type Board, BETS_ABI, Bets, type BetsReader, type CreateCall, type Lookup, type SettleCall, fromChess, fromPinball } from "./bets.js";
+import { eth } from "./chain.js";
 import { type ChessGames, chess } from "./chess.js";
 import { config } from "./config.js";
 import { GameError, gameSignerAccount } from "./escrow.js";
 import { live as lobby } from "./games-routes.js";
-import { keeperAccount } from "./keeper.js";
+import { keeperAccount, keeperWrite } from "./keeper.js";
 import { betState } from "./pinball.js";
 import type { Vault } from "./vault.js";
 
@@ -22,6 +22,27 @@ type Context = {
 };
 
 const chessOn = (board: Board, id: string, games: ChessGames, arena: ArenaParties | null) => { try { return fromChess(board, id, games.watchView(id), games.betInfo(id), arena, Date.now()); } catch { return null; } };
+
+/** Each agent's standing for betting (arena.ts standing(), over every stored game), read at most once a minute. */
+const standing = new Map<string, { at: number; v: ArenaSeat | null }>();
+function seatOf(arena: Arena, agentId: string): ArenaSeat | null {
+  const hit = standing.get(agentId);
+  if (hit && Date.now() - hit.at < 60_000) return hit.v;
+  let v: ArenaSeat | null = null;
+  try { v = arena.standing(agentId); } catch { /* no such agent */ }
+  if (standing.size > 2_000) standing.clear();
+  standing.set(agentId, { at: Date.now(), v });
+  return v;
+}
+/** arena.ts betParties(), with the agent behind each colour. */
+function partiesOf(arena: Arena, id: string): ArenaParties | null {
+  const base = arena.betParties(id);
+  if (!base) return null;
+  let players: { color: string; agent: string | null }[] = [];
+  try { const w = arena.watch(id); if ("players" in w) players = w.players ?? []; } catch { /* closed */ }
+  const at = (c: "w" | "b") => { const p = players.find((x) => x.color === c && x.agent); return p ? seatOf(arena, p.agent!) : null; };
+  return { ...base, seats: { w: at("w"), b: at("b") } };
+}
 /**
  * Where each match is: the site's NIGHT CHESS, Space Pinball, or an arena table. An arena table
  * played on the site's board (an agent in the public queue, or a staked seat) is the same game as
@@ -34,9 +55,9 @@ export function liveLookup(vault: Vault): Lookup {
     const arena = liveArena(() => lobby(vault));
     if (game === "arena") {
       const b = arena.boardOf(id);
-      return b ? chessOn(b.where === "arena" ? "arena" : "chess", id, b.games, arena.betParties(id)) : null;
+      return b ? chessOn(b.where === "arena" ? "arena" : "chess", id, b.games, partiesOf(arena, id)) : null;
     }
-    return chessOn("chess", id, chess, arena.betParties(id));
+    return chessOn("chess", id, chess, partiesOf(arena, id));
   };
 }
 
@@ -51,18 +72,28 @@ export function liveBets(vault: Vault): Bets {
       if (gas < 10n ** 15n) throw new Error(`the keeper ${account.address} has no ETH for gas`);
       return f(account);
     };
+    // settle() goes privately (Flashbots Protect, as the keeper's burn): seen in the public mempool,
+    // it would tell anyone still holding a ticket the result, with time to get a bet in ahead of it
     const relaySettle = (r: SettleCall) => send(async (account) => {
       const { request } = await eth.simulateContract({ account, address: pool, abi: BETS_ABI, functionName: "settle", args: [r.marketId, r.outcome, r.deadline, r.signature] });
-      return ethWallet(account).writeContract(request);
+      return keeperWrite(account, request, true);
     });
     const relayCreate = (r: CreateCall) => send(async (account) => {
       const { request } = await eth.simulateContract({ account, address: pool, abi: BETS_ABI, functionName: "createMarket", args: [r.marketId, r.token, r.closesAt, r.game, r.signature] });
-      return ethWallet(account).writeContract(request);
+      return keeperWrite(account, request);
     });
     const receipt = async (hash: Hex) => (await eth.waitForTransactionReceipt({ hash, timeout: 600_000 })).status;
-    current = new Bets({ address: config.betPool.address, fromBlock: BigInt(config.betPool.block), file: join(config.dataDir, "bets.json"), client: eth as unknown as BetsReader,
-      signer: gameSignerAccount(vault), lookup: liveLookup(vault), relaySettle, relayCreate, receipt });
-    current.start();
+    // every change of a chess game (its end included) reaches its markets at once; staked pinball ends through the lobby
+    const watch = (board: Board, id: string, f: () => void) => {
+      if (board === "pinball") return null;
+      const games = board === "arena" ? liveArena(() => lobby(vault)).boardOf(id)?.games : chess;
+      return games ? games.watch(id, f) : null;
+    };
+    const bets = new Bets({ address: config.betPool.address, fromBlock: BigInt(config.betPool.block), file: join(config.dataDir, "bets.json"), client: eth as unknown as BetsReader,
+      signer: gameSignerAccount(vault), lookup: liveLookup(vault), watch, relaySettle, relayCreate, receipt });
+    current = bets;
+    if (bets.address) lobby(vault).onEnded((game, id) => void bets.ended(game, id).catch((e) => console.error("bets ended", (e as Error).message)));
+    bets.start();
   }
   return current;
 }

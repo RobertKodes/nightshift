@@ -21,4 +21,8 @@ describe("x402 exact / EIP-3009", () => {
     const forged = { ...p, payload: { ...p.payload, authorization: { ...p.payload.authorization, value: "9000000" } } };
     expect(await verifyPayment(forged, req, now)).toMatchObject({ ok: false, reason: "invalid_signature" });
   });
+  it("refuses an authorization valid for more than an hour ahead", async () => {
+    expect(await verifyPayment(await signPayment(buyer, { ...req, maxTimeoutSeconds: 3_601 }, now), req, now)).toMatchObject({ ok: false, reason: "valid_too_long" });
+    expect(await verifyPayment(await signPayment(buyer, { ...req, maxTimeoutSeconds: 3_600 }, now), req, now)).toMatchObject({ ok: true });
+  });
 });

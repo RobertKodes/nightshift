@@ -6,7 +6,7 @@ self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) =
 self.addEventListener("fetch", (e) => {
   const u = new URL(e.request.url);
   if (e.request.method !== "GET" || u.origin !== location.origin) return;
-  if (/^\/(api|mcp|files|d|download|buy|sites)(\/|$)/.test(u.pathname)) return;
+  if (/^\/(api|mcp|files|d|download|buy|sites|imd-status)(\/|$)/.test(u.pathname)) return;
   if (e.request.mode === "navigate") {
     // only the app's own page becomes the offline copy, never a bought file or a company site
     e.respondWith(fetch(e.request).then((r) => { if (r.ok && (r.headers.get("content-type") ?? "").startsWith("text/html")) { const c = r.clone(); void caches.open(CACHE).then((x) => x.put("/", c)); } return r; }).catch(() => caches.match("/")));

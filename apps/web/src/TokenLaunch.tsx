@@ -13,6 +13,30 @@ const FIRST = "0x3322e6dd06ade8377f1f1bcb766f6133d7b64d69";
 const intakeAbi = parseAbi(["function request(bytes32 action, bytes body, (address target, bytes4 selector) callback, address asset, uint256 amount) returns (bytes32)"]);
 const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+const ACTION = "launch.open@launch-1";
+
+/**
+ * The body comes from our server and is signed as is: before it is, this page checks it is ours.
+ * The owner and the launch remainder go to the dev wallet, any other recipient field names the dev
+ * or the treasury wallet, and it is for Ethereum mainnet. Anything else is refused, unsigned.
+ */
+function refuseBody(action: string, body: unknown): string | null {
+  if (action !== ACTION) return `Refused: unexpected IMD action ${action}.`;
+  if (!body || typeof body !== "object" || Array.isArray(body)) return "Refused: the launch body is not an object.";
+  const b = body as Record<string, unknown>, lc = (x: unknown) => String(x ?? "").toLowerCase();
+  if (lc(b.owner) !== DEV) return `Refused: the launch body names ${String(b.owner)} as owner, not your dev wallet.`;
+  if (b.chainId !== 1) return "Refused: the launch body is not for Ethereum mainnet.";
+  const e = b.economics as Record<string, unknown> | undefined;
+  if (e && typeof e === "object" && "remainderTo" in e && lc(e.remainderTo) !== DEV) return `Refused: the launch remainder goes to ${String(e.remainderTo)}, not your dev wallet.`;
+  const bad: string[] = [];
+  const walk = (v: unknown, key: string) => {
+    if (Array.isArray(v)) v.forEach((x) => walk(x, key));
+    else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, k);
+    else if (typeof v === "string" && /^0x[0-9a-fA-F]{40}$/.test(v) && /owner|recipient|remainder|treasury|payto|beneficiary|receiver|admin|wallet|^to$|feeto/i.test(key) && lc(v) !== DEV && lc(v) !== FIRST) bad.push(`${key} ${v}`);
+  };
+  walk(b, "");
+  return bad.length ? `Refused: the launch body sends to an unknown address (${bad.join(", ")}).` : null;
+}
 
 type Check = { blockers?: { code?: string; detail?: string; message?: string }[]; plan?: { title: string }[]; error?: string };
 type Launch = { tx: string; stage: string; token?: string; done?: boolean; open?: boolean; error?: string; symbol: string; contracts?: Record<string, string> } | null;
@@ -52,6 +76,8 @@ export function TokenLaunch({ call, token }: { call: (token: string, path: strin
     if (!res) return;
     setErr(null);
     try {
+      const refused = refuseBody(ACTION, res.body);
+      if (refused) throw new Error(refused);
       const eth = await chooseWallet({ ask: true });
       const wallet = createWalletClient({ chain: mainnet, transport: custom(eth as never) });
       setBusy("Connect your dev wallet…");
@@ -66,7 +92,7 @@ export function TokenLaunch({ call, token }: { call: (token: string, path: strin
       if (allowance < PRICE) steps.push({ call: { address: IMD, abi: erc20Abi, functionName: "approve", args: [INTAKE, PRICE] }, sign: "Signature 1 of 2: allow IMD to take 0.5 IMD…", wait: "Waiting for signature 1 to confirm…", fail: "The approval failed. Nothing was paid." });
       const two = steps.length > 0;
       steps.push({
-        call: { address: INTAKE, abi: intakeAbi, functionName: "request", args: [stringToHex("launch.open@launch-1", { size: 32 }), stringToHex(JSON.stringify(res.body)), { target: "0x0000000000000000000000000000000000000000", selector: "0x00000000" }, IMD, PRICE] },
+        call: { address: INTAKE, abi: intakeAbi, functionName: "request", args: [stringToHex(ACTION, { size: 32 }), stringToHex(JSON.stringify(res.body)), { target: "0x0000000000000000000000000000000000000000", selector: "0x00000000" }, IMD, PRICE] },
         sign: two ? "Signature 2 of 2: pay 0.5 IMD and send the launch…" : "Pay 0.5 IMD and send the launch (confirm in your wallet)…",
         wait: two ? "Waiting for signature 2 to confirm…" : "Waiting for the payment to confirm…",
       });

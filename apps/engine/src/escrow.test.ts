@@ -281,4 +281,39 @@ describe("staked NIGHT CHESS", () => {
     dealt.length = 0; await two.sync();
     expect(dealt).toHaveLength(0);
   });
+  it("never deals a game again after a restart: a game dealt before it ends as a draw, both stakes refunded", async () => {
+    const t = setup();
+    const file = join(mkdtempSync(join(tmpdir(), "escrow-redeal-")), "escrow.json");
+    const games = new ChessGames(null, t.now);
+    const one = new E.Escrow({ file, client: t.f.client, signer: t.signer, now: t.now });
+    const lobbyOne = new Lobby(one, { pinball: () => { throw new Error("no pinball here"); }, chess: (x) => games.createStaked(x) });
+    const r = await one.create(A, { game: "chess", token: "IMD", amount: "5", tc: "3+2" }), id = r.matchId as Hex;
+    t.f.open(id, E.TOKENS.IMD, 5n * IMD, E.GAMES.chess, A, t.sec()); t.f.join(id, B, t.sec());
+    await one.sync();
+    expect(lobbyOne.tables.has(id)).toBe(true);
+    expect(one.challenges.get(id)!.dealtAt).toBeTruthy();
+    // the same process keeps its game: nothing changes on the next sync
+    await one.sync();
+    expect(one.challenges.get(id)!.outcome).toBeUndefined();
+    // restart mid-game (say the loser's position was hopeless): no fresh game, a draw that refunds both
+    const two = new E.Escrow({ file, client: t.f.client, signer: t.signer, relay: t.f.relay, now: t.now });
+    const made: unknown[] = [];
+    const lobbyTwo = new Lobby(two, { pinball: () => { throw new Error("no pinball here"); }, chess: (x) => { made.push(x); return games.createStaked(x); } });
+    await two.sync();
+    expect(made).toHaveLength(0);
+    expect(lobbyTwo.tables.size).toBe(0);
+    const c = two.challenges.get(id)!;
+    expect(c.outcome).toMatchObject({ draw: true, winner: null, reason: expect.stringMatching(/restarted/) });
+    expect(c.result).toMatchObject({ draw: true });
+    expect(t.f.s.relayed).toEqual([expect.objectContaining({ matchId: id, draw: true })]);
+    expect(() => lobbyTwo.seat(id, A)).toThrow(/over/);
+    // a match that was joined but never dealt still gets its game after a restart
+    const s = await two.create(A, { game: "chess", token: "IMD", amount: "5", tc: "3+2" }), id2 = s.matchId as Hex;
+    t.f.open(id2, E.TOKENS.IMD, 5n * IMD, E.GAMES.chess, A, t.sec()); t.f.join(id2, C, t.sec());
+    const three = new E.Escrow({ file, client: t.f.client, signer: t.signer, now: t.now });
+    const lobbyThree = new Lobby(three, { pinball: () => { throw new Error("no pinball here"); }, chess: (x) => games.createStaked(x) });
+    await three.sync();
+    expect(lobbyThree.tables.has(id2)).toBe(true);
+    expect(three.challenges.get(id2)!.outcome).toBeUndefined();
+  });
 });

@@ -2,6 +2,7 @@ import { formatUnits } from "viem";
 import { config } from "./config.js";
 import { type BetEvent, payoutOf } from "./bets.js";
 import { ESCROW, type Challenge, type DuelEvent } from "./escrow.js";
+import { publicName } from "./names.js";
 import { prices } from "./prices.js";
 import { type Button, esc } from "./social.js";
 import type { LiveGame } from "./spectate.js";
@@ -13,9 +14,12 @@ import type { LiveGame } from "./spectate.js";
 const GAME = { chess: "♟ NIGHT CHESS", pinball: "🎱 SPACE PINBALL" } as const;
 const PAGE = { chess: "/games/chess", pinball: "/games/pinball" } as const;
 const short = (a?: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "");
+/** Only a real address or transaction hash goes into a link; a name passes the shared name rule (names.ts) and is escaped. */
+const ADDR = /^0x[0-9a-fA-F]{40}$/, TX = /^0x[0-9a-fA-F]{64}$/;
 const who = (name: string | undefined, addr?: string) => {
-  const n = name?.trim() ? `<b>${esc(name.trim())}</b>` : "";
-  const a = addr ? `<a href="https://etherscan.io/address/${addr}">${short(addr)}</a>` : "";
+  const clean = publicName(name, { max: 40 });
+  const n = clean ? `<b>${esc(clean)}</b>` : "";
+  const a = addr && ADDR.test(addr) ? `<a href="https://etherscan.io/address/${addr}">${short(addr)}</a>` : "";
   return n && a ? `${n} (${a})` : n || a || "a player";
 };
 const amount = (wei: string) => {
@@ -37,7 +41,7 @@ export async function duelCard(kind: DuelEvent, c: Challenge): Promise<{ text: s
   const pot = (BigInt(c.stake) * 2n).toString();
   const prize = ((BigInt(c.stake) * 2n * 95n) / 100n).toString();
   const page = `${config.publicUrl}${PAGE[c.game]}`;
-  const escrowLink = (tx?: string, label = "On chain") => tx ? [{ text: `🔎 ${label}`, url: `https://etherscan.io/tx/${tx}` }] : [{ text: "🔎 GameEscrow", url: `https://etherscan.io/address/${ESCROW}` }];
+  const escrowLink = (tx?: string, label = "On chain") => tx && TX.test(tx) ? [{ text: `🔎 ${label}`, url: `https://etherscan.io/tx/${tx}` }] : [{ text: "🔎 GameEscrow", url: `https://etherscan.io/address/${ESCROW}` }];
   if (kind === "listed") {
     return {
       text: [

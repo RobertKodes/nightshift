@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { type AbiEvent, type Address, type Hex, type LocalAccount, decodeEventLog, encodeAbiParameters, erc20Abi, formatUnits, getAddress, keccak256, parseAbi, parseAbiItem, parseUnits, stringToHex, toEventSelector } from "viem";
 import { writeAtomic } from "./atomic.js";
-import { type Weights, MAX_WEIGHT, MIN_WEIGHT, chessWeights, pinballWeights } from "./bet-weights.js";
+import { type Weights, MAX_WEIGHT, MIN_WEIGHT, SwingGuard, TRAILER_MAX_WEIGHT, chessWeights, pinballWeights } from "./bet-weights.js";
 import { CONTROLS, type ChessGames } from "./chess.js";
 import { GameError, TOKENS, type Token } from "./escrow.js";
 
@@ -12,28 +12,51 @@ import { GameError, TOKENS, type Token } from "./escrow.js";
  * server sets from the game at that moment (bet-weights.ts) and signs into a short ticket.
  *
  * - Markets: one per live match worth betting on, per token, made lazily when the first spectator
- *   asks for a ticket. Only staked GameEscrow duels and arena games between two registered agents
- *   of different owners get one: a free anonymous game could be played by one person on both
- *   seats. Nobody tied to the match (a player, an agent's owner) may bet on it. Its id
+ *   asks for a ticket. A free anonymous game could be played by one person on both seats, and so
+ *   could two wallets (sybils) throw a game for a friend's bets, so only:
+ *     - staked GameEscrow duels of at least MIN_MARKET_STAKE, whose pool is capped at
+ *       POOL_PER_STAKE × the stake, in the stake's token: fixing it would cost more than it pays;
+ *     - arena games between two agents of different owners that are both IMD seats (distinct seats,
+ *       which cost money) or both established (ESTABLISHED: old enough, with enough rated games
+ *       against enough other owners).
+ *   Nobody tied to the match (a player, an agent's owner) may bet on it. Its id
  *   is derived from the board and the match id, so it is the same on every request; the server signs
  *   the Market and anyone may submit createMarket (the keeper does at once, the bettor's page does if
  *   the keeper has not).
  * - Tickets: a signed Ticket for exactly one wallet, side, amount and weight, good for TICKET_TTL
- *   seconds, refused while the game is locked, outside the contract's limits, past one wallet's
- *   total cap on a market (the contract's per-bet maximum), or too often.
+ *   seconds, refused while the game is locked (bet-weights.ts, and a few seconds after a big swing),
+ *   outside the contract's limits, past one wallet's total cap on a market (the contract's per-bet
+ *   maximum), past a staked duel's pool cap, or too often; never once the game is over.
  * - Settlement: the same verified result the game already produced (chess moves and clocks played
  *   here, the pinball replay, the arena's games) becomes a signed Outcome once: 0 = A won, 1 = B
- *   won, 2 = void (a draw, or a game that ended without a result). The keeper relays settle() once;
- *   the signature stays available for anyone to submit.
+ *   won, 2 = void (a draw, or a game that ended without a result). It is decided the moment the game
+ *   ends (the game's own change stream, the lobby's verdict, any look at it; the 2 s tick as a
+ *   backstop), and the keeper relays settle() once, privately (Flashbots Protect), so a ticket still
+ *   in someone's hand cannot be raced in ahead of it from the public mempool. The signature stays
+ *   available for anyone to submit.
  * Nothing here can move a bet: the most a server signature can do is open a market for a real match,
  * admit a bet the bettor pays for, and name the side that won.
  */
 export const BOARDS = { chess: stringToHex("chess", { size: 32 }), pinball: stringToHex("pinball", { size: 32 }), arena: stringToHex("arena", { size: 32 }) } as const;
 export type Board = keyof typeof BOARDS;
-/** A ticket is good for this long (the contract allows at most 120 s): a weight is only true for a moment. */
-export const TICKET_TTL = 20;
+/**
+ * A ticket is good for this long (the contract allows at most 120 s): a weight is only true for a
+ * moment, and a ticket issued just before the game ends can still be mined after it, until settle()
+ * lands. Server-side this window is kept small (short tickets, none once the game is done or about
+ * to be, settle relayed at once and privately); the full fix needs the contract: an issuedAt in the
+ * Ticket and a cutoff in the Outcome (bets issued after the cutoff refunded), which BetPool v1 lacks.
+ */
+export const TICKET_TTL = 8;
 /** Shown for a match that gets no market (a free game, or agents of one owner). */
 export const NOT_ELIGIBLE = "Betting is for staked duels and agent games.";
+/** Shown for an agent game whose agents are neither both IMD seats nor both established. */
+export const NOT_ESTABLISHED = "Betting opens on agent games once both agents are IMD seats, or established (a week old, 10 rated games against 3 other owners).";
+/** A staked duel gets a market only with at least this stake. */
+export const MIN_MARKET_STAKE: Record<Token, bigint> = { IMD: 10n * 10n ** 18n, SHIFT: 400_000n * 10n ** 18n };
+/** A staked duel's pool (both sides, all wallets) is at most this many times its stake. */
+export const POOL_PER_STAKE = 4n;
+/** An arena agent is established when it is this old, with this many rated games against agents of this many other owners. */
+export const ESTABLISHED = { ageMs: 7 * 86_400_000, rated: 10, opponents: 3 } as const;
 /** A market's hard latest time for bets (the server stops issuing tickets long before). */
 export const MARKET_WINDOW = 6 * 3_600;
 /** A signed outcome is good for this long; asked for later, the same outcome is signed again. */
@@ -133,31 +156,59 @@ export type MatchState = {
   eligible: string | null;
   /** Wallets that may not bet on it (lowercase): the players, the agents' owners. */
   tied: string[];
+  /** A staked duel's escrow stake (one player's), or null: its market is in this token, its pool capped by it. */
+  staked?: { token: Token; amount: bigint } | null;
   /** 0 = A won, 1 = B won, 2 = void; null while it is played. */
   result: Outcome | null; reason: string | null;
 };
 export type Lookup = (game: Board, id: string) => MatchState | null;
 
 type ChessView = ReturnType<ChessGames["watchView"]>;
+/** chess.ts betInfo(); `drawOffer` (a draw offer open) when it reports one. */
 type ChessInfo = ReturnType<ChessGames["betInfo"]>;
-/** What arena.ts betParties() gives for a table: the agents' owners by colour, and owners assigned to its staked seats. */
-export type ArenaParties = { owners: { w: string | null; b: string | null }; agents: number; assigned: string[] };
+/** An agent at an arena table, as betting checks it: what arena.ts profile() says of it. */
+export type ArenaSeat = {
+  kind: "imd" | "open"; owner: string; seat: number | null; createdAt: number;
+  /** Its rated games against agents of other owners, and how many distinct owners those were. */
+  rated: number; opponents: number;
+};
+/** What arena.ts betParties() gives for a table: the agents' owners by colour, and owners assigned to its staked seats; plus the agents themselves. */
+export type ArenaParties = { owners: { w: string | null; b: string | null }; agents: number; assigned: string[]; seats?: { w: ArenaSeat | null; b: ArenaSeat | null } };
+/** Old enough, with enough rated games against enough other owners (ESTABLISHED). */
+export const established = (a: ArenaSeat, now: number) => now - a.createdAt >= ESTABLISHED.ageMs && a.rated >= ESTABLISHED.rated && a.opponents >= ESTABLISHED.opponents;
 /**
  * Who may bet on a chess game. A market only for a staked duel, or for two registered agents of
- * different owners; never a bet from a player's wallet, an agent's owner, or an owner who
- * assigned an agent to one of its staked seats.
+ * different owners that are both IMD seats (two distinct seats) or both established; never a bet
+ * from a player's wallet, an agent's owner, or an owner who assigned an agent to one of its staked seats.
  */
-export function chessParties(info: Pick<ChessInfo, "escrow" | "wallets">, arena: ArenaParties | null): { eligible: string | null; tied: string[] } {
+export function chessParties(info: Pick<ChessInfo, "escrow" | "wallets">, arena: ArenaParties | null, now = Date.now()): { eligible: string | null; tied: string[] } {
   const tied = [...new Set([info.wallets.w, info.wallets.b, arena?.owners.w, arena?.owners.b, ...(arena?.assigned ?? [])].filter((x): x is string => !!x).map(lc))];
+  if (info.escrow) return { eligible: null, tied };
+  const w = arena?.seats?.w ?? null, b = arena?.seats?.b ?? null;
   const agents = !!arena && arena.agents === 2 && !!arena.owners.w && !!arena.owners.b && lc(arena.owners.w) !== lc(arena.owners.b);
-  return { eligible: info.escrow || agents ? null : NOT_ELIGIBLE, tied };
+  if (!agents) return { eligible: NOT_ELIGIBLE, tied };
+  const known = !!w && !!b && lc(w.owner) === lc(arena!.owners.w) && lc(b.owner) === lc(arena!.owners.b);
+  const seats = known && w!.kind === "imd" && b!.kind === "imd" && w!.seat !== null && b!.seat !== null && w!.seat !== b!.seat;
+  return { eligible: seats || (known && established(w!, now) && established(b!, now)) ? null : NOT_ESTABLISHED, tied };
+}
+/** A staked duel's stake as betting uses it, or null; and why it is too small for a market. */
+function stakeOf(escrow: string | null, currency: string, amount: string): { staked: { token: Token; amount: bigint } | null; small: string | null } {
+  if (!escrow) return { staked: null, small: null };
+  let wei = 0n;
+  try { wei = parseUnits(amount, 18); } catch { /* not a decimal: no market */ }
+  if (!Object.hasOwn(TOKENS, currency) || wei < MIN_MARKET_STAKE[currency as Token]) {
+    const min = Object.hasOwn(TOKENS, currency) ? `${formatUnits(MIN_MARKET_STAKE[currency as Token], 18)} ${currency}` : "the minimum";
+    return { staked: null, small: `Betting opens on staked duels of at least ${min}.` };
+  }
+  return { staked: { token: currency as Token, amount: wei }, small: null };
 }
 /** A NIGHT CHESS game (the site's or the arena's board): side A is white, side B black. */
 export function fromChess(board: Board, id: string, v: ChessView, info: ChessInfo, arena: ArenaParties | null, now: number): MatchState {
   const w = v.players.find((p) => p.color === "w"), b = v.players.find((p) => p.color === "b");
-  const weights = chessWeights({ fen: v.fen, ply: v.ply, clocks: v.clocks, initialMs: CONTROLS[v.tc].time, status: v.status, connected: [!!w?.connected, !!b?.connected], sinceSharpMs: info.sharpAt === null ? null : now - info.sharpAt });
+  const weights = chessWeights({ fen: v.fen, ply: v.ply, clocks: v.clocks, initialMs: CONTROLS[v.tc].time, status: v.status, connected: [!!w?.connected, !!b?.connected], sinceSharpMs: info.sharpAt === null ? null : now - info.sharpAt, drawOffered: info.drawOffer === true });
+  const parties = chessParties(info, arena, now), stake = stakeOf(info.escrow, v.currency, v.stake ?? "0");
   return {
-    board, id, names: [w?.name ?? "White", b?.name ?? "Black"], stake: { currency: v.currency, amount: v.stake ?? "0" }, weights, ...chessParties(info, arena),
+    board, id, names: [w?.name ?? "White", b?.name ?? "Black"], stake: { currency: v.currency, amount: v.stake ?? "0" }, weights, tied: parties.tied, eligible: parties.eligible ?? stake.small, staked: stake.staked,
     result: !v.done ? null : v.winner === "w" ? 0 : v.winner === "b" ? 1 : 2, reason: v.reason ?? null,
   };
 }
@@ -172,7 +223,8 @@ export function fromPinball(id: string, s: PinballState, now: number): MatchStat
   const weights = pinballWeights({ startedAt: s.startedAt, now, durationMs: s.durationMs, scores: [a.score, b.score], over: [a.over, b.over], connected: [a.connected, b.connected], broken: [a.broken, b.broken], done: s.done || !!s.void });
   const result: Outcome | null = s.void ? 2 : !s.done ? null : s.draw || s.winner < 0 ? 2 : s.winner === 0 ? 0 : 1;
   const tied = [a.wallet, b.wallet].filter((x): x is string => !!x).map(lc);
-  return { board: "pinball", id, names: [a.name, b.name], stake: { currency: s.currency, amount: String(s.stake) }, weights, eligible: s.escrow ? null : NOT_ELIGIBLE, tied, result, reason: s.void ?? (s.done ? (s.draw ? "draw" : "verified by replay") : null) };
+  const stake = stakeOf(s.escrow, s.currency, Number.isFinite(s.stake) ? s.stake.toFixed(18).replace(/\.?0+$/, "") : "0");
+  return { board: "pinball", id, names: [a.name, b.name], stake: { currency: s.currency, amount: String(s.stake) }, weights, eligible: s.escrow ? stake.small : NOT_ELIGIBLE, staked: stake.staked, tied, result, reason: s.void ?? (s.done ? (s.draw ? "draw" : "verified by replay") : null) };
 }
 
 export type FeedBet = { key: string; bettor: string; side: 0 | 1; amount: string; weightBps: number; shares: string; tx: string; at: number };
@@ -220,15 +272,22 @@ export class Bets {
   #tickets = new Map<string, number[]>();
   /** Tickets given and not yet expired, per market and wallet: they count toward the wallet's cap. */
   #pending = new Map<string, { amount: bigint; expiry: number }[]>();
+  /** The same, per market (all wallets): they count toward a staked duel's pool cap. */
+  #open = new Map<string, { amount: bigint; expiry: number }[]>();
   #making = new Map<string, Promise<Market>>();
   #signing = new Set<string>();
   #creates: number[] = [];
   #you = new Map<string, { at: number; v: unknown }>();
+  #swing = new SwingGuard();
+  /** Each open market's subscription to its game's changes. */
+  #unwatch = new Map<string, () => void>();
   readonly #now: () => number;
 
   constructor(private o: {
     /** The BetPool contract; empty = betting is off. */
     address: string; file: string | null; client: BetsReader; signer: LocalAccount; lookup: Lookup;
+    /** Tells of every change to a match (a move, a resignation, the end), so its market is decided the moment the game ends. */
+    watch?: (board: Board, id: string, onChange: () => void) => (() => void) | null;
     /** The contract's deploy block: where the follower starts. */
     fromBlock?: bigint;
     /** Sends settle() / createMarket() from a wallet with gas; resolves with the hash once broadcast. */
@@ -283,7 +342,7 @@ export class Bets {
 
   /** Whether betting is live: the contract is configured, trusts this server's signer and is not paused. */
   async status() {
-    const base = { configured: !!this.address, betPool: this.address || null, serverSigner: this.serverSigner, tokens: TOKENS, ticketTtl: TICKET_TTL, weights: { min: MIN_WEIGHT, max: MAX_WEIGHT }, fee: "5% of the losing side" };
+    const base = { configured: !!this.address, betPool: this.address || null, serverSigner: this.serverSigner, tokens: TOKENS, ticketTtl: TICKET_TTL, weights: { min: MIN_WEIGHT, max: MAX_WEIGHT, trailerMax: TRAILER_MAX_WEIGHT }, fee: "5% of the losing side" };
     if (!this.address) return { ...base, live: false, signer: null, paused: null, limits: null };
     const chain = await this.chainState().catch(() => null);
     const lim = (t: Token) => chain ? { min: formatUnits(chain.limits[t].min, 18), max: formatUnits(chain.limits[t].max, 18) } : null;
@@ -292,7 +351,34 @@ export class Bets {
 
   #lookup(game: string, id: string): MatchState | null {
     if (!Object.hasOwn(BOARDS, game) || !MATCH.test(id)) return null;
-    try { return this.o.lookup(game as Board, id); } catch { return null; }
+    let s: MatchState | null;
+    try { s = this.o.lookup(game as Board, id); } catch { return null; }
+    if (!s || s.result !== null) return s;
+    // every look feeds the swing guard: a big swing since the last look locks betting for a few seconds
+    const weights = this.#swing.check(`${s.board}:${s.id}`, s.weights, this.#now());
+    return weights === s.weights ? s : { ...s, weights };
+  }
+
+  /** Follows a market's game, so it is decided the moment the game ends (not on the next tick). */
+  #follow(m: Market): void {
+    if (!this.o.watch || m.outcome || m.closed || this.#unwatch.has(m.marketId)) return;
+    try {
+      const off = this.o.watch(m.board, m.id, () => void this.ended(m.board, m.id).catch((e) => console.error("bets ended", (e as Error).message)));
+      if (off) this.#unwatch.set(m.marketId, off);
+    } catch { /* the game is gone: the tick voids it */ }
+  }
+  /**
+   * A match's game has ended (or may have): its markets are decided now, signed and relayed at once.
+   * Called by the game's change stream, by the lobby when a staked game has its verdict, and on any
+   * look at a game that is over.
+   */
+  async ended(board: Board, id: string): Promise<void> {
+    const s = this.#lookup(board, id);
+    if (!s || s.result === null) return;
+    for (const t of Object.keys(TOKENS) as Token[]) {
+      const m = this.markets.get(marketIdOf(s.board, s.id, t));
+      if (m && !m.outcome && !m.closed) await this.decide(m.marketId, s.result, s.reason ?? "");
+    }
   }
 
   /** The market for this match and token, made (and its Market signed) the first time it is asked for. */
@@ -308,6 +394,7 @@ export class Bets {
         const m: Market = { marketId, board: s.board, id: s.id, token, closesAt, createdAt: this.#now(), names: s.names, signature, totals: { a: "0", b: "0", sharesA: "0", sharesB: "0", bets: 0 }, feed: [] };
         this.markets.set(marketId, m);
         this.#save();
+        this.#follow(m);
         return m;
       })().finally(() => this.#making.delete(marketId));
       this.#making.set(marketId, p);
@@ -344,8 +431,9 @@ export class Bets {
     if (!s) throw new GameError(404, "This game is not live.");
     if (s.eligible) throw new GameError(409, s.eligible);
     if (s.tied.includes(me)) throw new GameError(403, "Your wallet is tied to this match (a player, or an agent's owner): you cannot bet on it.");
-    if (s.result !== null) throw new GameError(409, "This game is over: betting is closed.");
+    if (s.result !== null) { void this.ended(s.board, s.id).catch(() => {}); throw new GameError(409, "This game is over: betting is closed."); }
     if (s.weights.locked) throw new GameError(409, `Betting is locked: ${s.weights.locked}`);
+    if (s.staked && s.staked.token !== token) throw new GameError(409, `Bets on this duel are in ${s.staked.token}, the token of its stake.`);
     const { min, max } = chain.limits[token as Token];
     if (value < min || value > max) throw new GameError(400, `A bet must be between ${formatUnits(min, 18)} and ${formatUnits(max, 18)} ${token}.`);
     if (this.#tickets.size > 20_000) this.#tickets.clear();
@@ -354,20 +442,38 @@ export class Bets {
     const sec = Math.floor(now / 1000);
     if (m.outcome || m.closed) throw new GameError(409, "This game is over: betting is closed.");
     if (sec + TICKET_TTL + 60 > m.closesAt) throw new GameError(409, "This market is closing.");
+    // what is already in, from the contract: this wallet's bets, and the whole pool of a staked duel
+    let placed = 0n, pooled = BigInt(m.totals.a) + BigInt(m.totals.b);
+    if (m.onChain) {
+      const [b, pool] = await Promise.all([
+        this.#read("betsOf", [m.marketId, me]).catch(() => null) as Promise<readonly [bigint, bigint, bigint, bigint, boolean] | null>,
+        s.staked ? (this.#read("markets", [m.marketId]).catch(() => null) as Promise<readonly unknown[] | null>) : Promise.resolve([]),
+      ]);
+      if (!b || !pool) throw new GameError(503, "The betting pool cannot be read right now. Try again shortly.");
+      placed = b[0] + b[1];
+      if (s.staked) { const live = (pool[3] as bigint) + (pool[4] as bigint); if (live > pooled) pooled = live; }
+    }
+    // the game again, after the reads: it may have ended or locked meanwhile, and the weight is the one of now
+    const fresh = this.#lookup(game, id);
+    if (!fresh || fresh.result !== null) { void this.ended(s.board, s.id).catch(() => {}); throw new GameError(409, "This game is over: betting is closed."); }
+    if (fresh.weights.locked) throw new GameError(409, `Betting is locked: ${fresh.weights.locked}`);
+    // from here to the signature nothing waits, so two requests at once cannot both pass the caps
     // one wallet's total on this market, mined and still to come, stays within one maximum bet
     const key = `${m.marketId}:${me}`;
     const pending = (this.#pending.get(key) ?? []).filter((t) => t.expiry >= sec);
-    let placed = 0n;
-    if (m.onChain) {
-      const b = await this.#read("betsOf", [m.marketId, me]).catch(() => null) as readonly [bigint, bigint, bigint, bigint, boolean] | null;
-      if (!b) throw new GameError(503, "The betting pool cannot be read right now. Try again shortly.");
-      placed = b[0] + b[1];
-    }
     const held = placed + pending.reduce((n, t) => n + t.amount, 0n);
     if (held + value > max) throw new GameError(400, `One wallet bets at most ${formatUnits(max, 18)} ${token} in all on a game; you have ${formatUnits(held, 18)} in or on open tickets.`);
+    // a staked duel's whole pool, mined and on open tickets, stays within POOL_PER_STAKE × its stake
+    const open = (this.#open.get(m.marketId) ?? []).filter((t) => t.expiry >= sec);
+    if (s.staked) {
+      const cap = s.staked.amount * POOL_PER_STAKE, inPool = pooled + open.reduce((n, t) => n + t.amount, 0n);
+      if (inPool + value > cap) throw new GameError(409, `This duel's pool is full: at most ${formatUnits(cap, 18)} ${token} in all (${POOL_PER_STAKE}× its stake), ${formatUnits(inPool, 18)} in or on open tickets.`);
+    }
     if (this.#pending.size > 20_000) for (const [k, l] of this.#pending) if (l.every((t) => t.expiry < sec)) this.#pending.delete(k);
+    if (this.#open.size > 5_000) for (const [k, l] of this.#open) if (l.every((t) => t.expiry < sec)) this.#open.delete(k);
     this.#pending.set(key, [...pending, { amount: value, expiry: sec + TICKET_TTL }]);
-    const weightBps = side === 0 ? s.weights.a : s.weights.b, expiry = sec + TICKET_TTL;
+    this.#open.set(m.marketId, [...open, { amount: value, expiry: sec + TICKET_TTL }]);
+    const weightBps = side === 0 ? fresh.weights.a : fresh.weights.b, expiry = sec + TICKET_TTL;
     const nonce = `0x${randomBytes(32).toString("hex")}` as Hex, bettor = getAddress(me);
     const signature = await signTicket(this.o.signer, this.address, { marketId: m.marketId, bettor, side, amount: value, weightBps, expiry: BigInt(expiry), nonce });
     void this.#createOnChain(m, me, value);
@@ -433,6 +539,7 @@ export class Bets {
     const byToken = { IMD: this.markets.get(marketIdOf(board, mid, "IMD")), SHIFT: this.markets.get(marketIdOf(board, mid, "SHIFT")) };
     const any = byToken.IMD ?? byToken.SHIFT;
     if (!s && !any) throw new GameError(404, "This game is not live.");
+    if (s && s.result !== null && any && !any.outcome) void this.ended(s.board, s.id).catch(() => {});
     const chain = this.address ? await this.chainState().catch(() => null) : null;
     const decided = any?.outcome?.outcome ?? s?.result ?? null;
     const me = wallet && /^0x[0-9a-f]{40}$/.test(lc(wallet)) ? lc(wallet) : null;
@@ -470,7 +577,8 @@ export class Bets {
 
   /**
    * Every open market against its game: once the game has a verified result (or is gone without
-   * one, which is void), the outcome is recorded, signed and relayed. Runs every 2 s.
+   * one, which is void), the outcome is recorded, signed and relayed. Runs every 2 s: the backstop
+   * for ended(), which decides a market the moment its game ends.
    */
   async tick(): Promise<void> {
     for (const m of this.markets.values()) {
@@ -487,6 +595,8 @@ export class Bets {
     if (!m || m.closed || m.outcome || ![0, 1, 2].includes(outcome)) return;
     m.outcome = { outcome, reason: reason.slice(0, 80), at: this.#now() };
     this.#save();
+    this.#unwatch.get(m.marketId)?.();
+    this.#unwatch.delete(m.marketId);
     await this.#sign(m).catch((e) => console.error("bets sign", (e as Error).message));
   }
   async #sign(m: Market): Promise<void> {

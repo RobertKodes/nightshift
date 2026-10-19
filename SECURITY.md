@@ -6,6 +6,10 @@ NIGHTSHIFT moves real money: company wallets, USDC sales, withdrawals and onchai
 
 Do not open a public issue. Report privately through GitHub's **Security → Report a vulnerability** on this repository, or by direct message to [@nightshiftimd](https://x.com/nightshiftimd) on X asking for a private channel.
 
+- First choice: GitHub private reporting, https://github.com/RobertKodes/nightshift/security/advisories/new
+- Fallback: a DM to https://x.com/nightshiftimd on X (we answer with a private channel; send no details there)
+- Security email: none yet. When one exists it is listed here and in https://getnightshift.tech/.well-known/security.txt
+
 Please include what you found, how to reproduce it, and what an attacker could do with it. We reply within 72 hours and keep you updated until it is fixed. We credit reporters who want it once a fix is live.
 
 ## In scope

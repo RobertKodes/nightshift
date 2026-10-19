@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname, join } from "node:path";
 import { Chess, type Color, type Move } from "chess.js";
 import { config } from "./config.js";
+import { publicName } from "./names.js";
 
 /**
  * Chess duels. Moves, elapsed time and results are decided here, never by a browser. Queue games
@@ -14,7 +15,7 @@ export const STAKED_SHOW_MS = 5 * 60_000;
 export const CONTROLS = { "3+2": { time: 180_000, increment: 2_000 }, "5+0": { time: 300_000, increment: 0 }, "10+0": { time: 600_000, increment: 0 } };
 export type TimeControl = keyof typeof CONTROLS;
 export type Reason = "checkmate" | "stalemate" | "repetition" | "insufficient material" | "50-move rule" | "resignation" | "agreement" | "abandonment" | "timeout";
-type Player = { id: string; name: string; wallet: string | null; color: Color; rating: number; moves: number; streams: number; offlineAt: number | null; agent?: boolean };
+type Player = { id: string; name: string; wallet: string | null; color: Color; rating: number; moves: number; streams: number; offlineAt: number | null; agent?: boolean; times?: number[] };
 type Match = {
   id: string; tc: TimeControl; currency: "FREE" | "IMD" | "SHIFT"; createdAt: number; startedAt: number | null; turnAt: number;
   game: Chess; players: Player[]; clocks: Record<Color, number>; moves: Move[]; version: number;
@@ -24,7 +25,23 @@ type Match = {
   escrow?: string; stake?: string; showBy?: number; onResult?: (r: { draw: boolean; winner: string | null }) => void;
   /** When the last sharp move was played (a queen or rook taken, or a check): live betting pauses briefly after it. */
   sharpAt?: number;
+  /** A staked game whose move times look machine-made (flagFor): for the operator to look at, nothing automatic. */
+  flagged?: Flag;
 };
+/** Why a staked game was flagged: whose moves, how many, and their mean and spread in ms. */
+export type Flag = { game: string; escrow: string; player: string; wallet: string | null; moves: number; meanMs: number; sdMs: number; at: number };
+/** Move times are judged over at least this many of a player's moves in a staked game… */
+export const FLAG_MOVES = 20;
+/** …and flagged when they barely vary: a spread under this share of their mean (people think longer on some moves than others). */
+export const FLAG_CV = 0.1;
+/** A player's move times flag the game when, over FLAG_MOVES or more moves of at least a second on average, they barely vary. */
+export function flagFor(times: number[]): { meanMs: number; sdMs: number } | null {
+  if (times.length < FLAG_MOVES) return null;
+  const mean = times.reduce((a, b) => a + b, 0) / times.length;
+  const sd = Math.sqrt(times.reduce((a, b) => a + (b - mean) ** 2, 0) / times.length);
+  // premoves and instant replies (a mean under a second) say nothing about an engine
+  return mean >= 1_000 && sd < FLAG_CV * mean ? { meanMs: Math.round(mean), sdMs: Math.round(sd) } : null;
+}
 type Rating = { key: string; name: string; rating: number; games: number; wins: number; at: number };
 type NightResult = { key: string; at: number; win: boolean };
 type Boards = { ratings: Rating[]; results: NightResult[] };
@@ -32,9 +49,9 @@ export type ChessEvent = { kind: "result"; white: string; black: string; winner:
 const arcade: ((e: ChessEvent) => void)[] = [];
 export const onChess = (f: (e: ChessEvent) => void) => { arcade.push(f); };
 const opposite = (c: Color): Color => c === "w" ? "b" : "w";
+/** A display name by the shared rule (names.ts): not one of ours however it is spelled, nothing the community guard deletes. */
 export function cleanName(name: string): string {
-  const clean = name.replace(/[^\w .-]/g, "").trim().slice(0, 18);
-  return !clean || /^(nightshift|admin|imd)$/i.test(clean.replace(/[ ._-]/g, "")) ? "Night crew" : clean;
+  return publicName(name, { max: 18 }) ?? "Night crew";
 }
 const keyOf = (p: Pick<Player, "name" | "wallet">) => JSON.stringify([p.name.toLowerCase(), p.wallet?.toLowerCase() ?? ""]);
 
@@ -44,6 +61,7 @@ export class ChessGames {
   private waiting = new Map<TimeControl, Set<string>>();
   private listeners = new Map<string, Set<() => void>>();
   private boards: Boards = { ratings: [], results: [] };
+  private flagList: Flag[] = [];
   constructor(private file: string | null = join(config.dataDir, "chess.json"), private now = () => Date.now()) {
     try {
       if (file && existsSync(file)) {
@@ -149,10 +167,12 @@ export class ChessGames {
    * What live betting needs beyond the spectator view, never sent to a browser: whether the game is
    * staked, both players' wallets (no bets from them), and the last sharp move.
    */
-  betInfo(id: string): { escrow: string | null; wallets: { w: string | null; b: string | null }; sharpAt: number | null } {
+  betInfo(id: string): { escrow: string | null; wallets: { w: string | null; b: string | null }; sharpAt: number | null; flagged: Flag | null; drawOffer: boolean } {
     const m = this.match(id), by = (c: Color) => m.players.find((p) => p.color === c)?.wallet?.toLowerCase() ?? null;
-    return { escrow: m.escrow ?? null, wallets: { w: by("w"), b: by("b") }, sharpAt: m.sharpAt ?? null };
+    return { escrow: m.escrow ?? null, wallets: { w: by("w"), b: by("b") }, sharpAt: m.sharpAt ?? null, flagged: m.flagged ?? null, drawOffer: !!m.drawOffer };
   }
+  /** Staked games flagged for machine-like move times, newest first: for the operator, never acted on automatically. */
+  flags(): Flag[] { return [...this.flagList].reverse(); }
   /** A spectator's stream: told of every change, without counting as a player being there. */
   watch(id: string, f: () => void): () => void {
     this.match(id);
@@ -179,8 +199,10 @@ export class ChessGames {
     if (!/^[a-h][1-8]$/.test(from) || !/^[a-h][1-8]$/.test(to) || (promotion !== undefined && !/^[qrbn]$/.test(promotion))) throw new Error("Illegal move");
     let move: Move;
     try { move = m.game.move({ from, to, promotion }); } catch { throw new Error("Illegal move"); }
-    m.clocks[p.color] = Math.max(0, m.clocks[p.color] - (this.now() - m.turnAt)) + CONTROLS[m.tc].increment;
+    const took = this.now() - m.turnAt;
+    m.clocks[p.color] = Math.max(0, m.clocks[p.color] - took) + CONTROLS[m.tc].increment;
     m.turnAt = this.now(); m.moves.push(move); p.moves++; if (m.drawOffer !== p.id) m.drawOffer = null;
+    if (m.escrow) this.time(m, p, took);
     if (move.captured === "q" || move.captured === "r" || m.game.isCheck()) m.sharpAt = this.now();
     if (m.game.isCheckmate()) this.end(m, p.color, "checkmate");
     else if (m.game.isStalemate()) this.end(m, null, "stalemate");
@@ -218,6 +240,17 @@ export class ChessGames {
       this.emit(m);
     }
     return this.view(m, me);
+  }
+  /** A staked game keeps each player's move times; machine-even ones flag the game once (no automatic action). */
+  private time(m: Match, p: Player, took: number) {
+    (p.times ??= []).push(took);
+    if (m.flagged || p.agent) return;
+    const f = flagFor(p.times);
+    if (!f) return;
+    m.flagged = { game: m.id, escrow: m.escrow!, player: p.name, wallet: p.wallet, moves: p.times.length, ...f, at: this.now() };
+    this.flagList.push(m.flagged);
+    if (this.flagList.length > 200) this.flagList.shift();
+    console.warn(`chess fair play: staked game ${m.id} (escrow ${m.escrow}) flagged, ${p.name} ${p.wallet ?? ""} moved ${p.times.length} times at ${f.meanMs} ± ${f.sdMs} ms`);
   }
   private end(m: Match, winner: Color | null, reason: Reason) {
     if (m.done) return;

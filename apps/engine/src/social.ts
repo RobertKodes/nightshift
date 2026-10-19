@@ -142,7 +142,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
   const loop = async (): Promise<void> => {
     try {
       const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates?timeout=25&offset=${offset}&allowed_updates=${encodeURIComponent('["message","callback_query"]')}`, { signal: AbortSignal.timeout(35000) });
-      const j = (await r.json()) as { result?: { update_id: number; message?: { message_id: number; chat: { id: number; type: string; username?: string }; from?: { id: number; is_bot?: boolean; first_name?: string; username?: string }; text?: string; caption?: string; new_chat_members?: { first_name: string; is_bot?: boolean }[]; reply_to_message?: { from?: { id: number; is_bot?: boolean; first_name?: string; username?: string } } }; callback_query?: { id: string; from: { id: number }; data?: string; message?: { chat: { id: number }; message_id: number } } }[] };
+      const j = (await r.json()) as { result?: { update_id: number; message?: { message_id: number; chat: { id: number; type: string; username?: string }; from?: { id: number; is_bot?: boolean; first_name?: string; username?: string }; text?: string; caption?: string; new_chat_members?: { first_name: string; is_bot?: boolean }[]; reply_to_message?: { from?: { id: number; is_bot?: boolean; first_name?: string; username?: string } } }; callback_query?: { id: string; from: { id: number }; data?: string; message?: { chat: { id: number; type?: string }; message_id: number } } }[] };
       for (const u of j.result ?? []) {
         offset = u.update_id + 1;
         const q = u.callback_query;
@@ -171,7 +171,9 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
         const cmd = raw!.slice(1).split("@")[0]!.toLowerCase();
         const pub = await h.open(cmd, args).catch(() => null);
         const rt = m?.reply_to_message?.from;
-        const ctx: CommandContext = { chat, group: m?.chat.type === "group" || m?.chat.type === "supergroup", replyTo: rt && !rt.is_bot ? { id: String(rt.id), name: rt.username ? `@${rt.username}` : (rt.first_name ?? String(rt.id)) } : undefined };
+        // a button press has no m: its chat type comes from the message the button sits on, so a group stays a group
+        const chatType = m?.chat.type ?? q?.message?.chat.type;
+        const ctx: CommandContext = { chat, group: chatType === "group" || chatType === "supergroup" || chatType === "channel", replyTo: rt && !rt.is_bot ? { id: String(rt.id), name: rt.username ? `@${rt.username}` : (rt.first_name ?? String(rt.id)) } : undefined };
         const adminHere = isAdmin && (!ctx.group || cmd === "mute" || cmd === "unmute");
         const reply: Reply | null = pub ?? (adminHere ? await h.admin(cmd, args, ctx).catch((e) => ({ text: `⚠️ ${esc((e as Error).message)}` })) : m?.chat.type === "private" ? { text: "🌙 Public commands: /price · /ca · /links" } : null);
         if (!reply) continue;

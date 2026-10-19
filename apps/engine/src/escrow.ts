@@ -3,10 +3,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Address, type Hex, type LocalAccount, formatUnits, getAddress, parseAbi, parseUnits, stringToHex } from "viem";
 import { writeAtomic } from "./atomic.js";
-import { eth, ethWallet } from "./chain.js";
+import { eth } from "./chain.js";
 import { CONTROLS } from "./chess.js";
 import { config } from "./config.js";
-import { keeperAccount } from "./keeper.js";
+import { keeperAccount, keeperWrite } from "./keeper.js";
+import { publicName } from "./names.js";
 import type { Vault } from "./vault.js";
 
 /**
@@ -78,7 +79,9 @@ export type Challenge = {
   openedAt?: number; openTx?: string;
   playerB?: string; nameB?: string; joinedAt?: number; joinTx?: string;
   /** What the game decided; recorded before anything is signed, and never decided twice. */
-  outcome?: { draw: boolean; winner: string | null; at: number };
+  outcome?: { draw: boolean; winner: string | null; at: number; reason?: string };
+  /** When its game was dealt (ms). Kept across restarts: a game is dealt once, never again. */
+  dealtAt?: number;
   /** The one authoritative result. Kept so the winner can submit it if the relay does not. */
   result?: { winner: string; draw: boolean; deadline: string; signature: Hex; at: number };
   /** Why no result will ever be signed (the chain does not match what the game recorded). */
@@ -114,6 +117,8 @@ export class Escrow {
   /** Names a joiner gave before sending join(): wallet → name, per match (memory only). */
   #intents = new Map<string, Map<string, string>>();
   #signing = new Set<string>();
+  /** Matches whose game this process dealt (and so still has). */
+  #dealtHere = new Set<string>();
   readonly #now: () => number;
 
   constructor(private o: {
@@ -184,7 +189,7 @@ export class Escrow {
     const pending = [...this.challenges.values()].filter((c) => !c.openedAt && now - c.createdAt < PENDING_MS);
     if (pending.filter((c) => c.creator === me).length >= 5) throw new GameError(429, "You have 5 challenges waiting to be opened. Open or let them lapse first.");
     if (pending.length >= 5_000) throw new GameError(503, "The lobby is full. Try again shortly.");
-    const c: Challenge = { matchId: `0x${randomBytes(32).toString("hex")}`, game: game as Game, token: token as Token, stake: stake.toString(), creator: me, name: String(input.name ?? "").slice(0, 40), tc, createdAt: now };
+    const c: Challenge = { matchId: `0x${randomBytes(32).toString("hex")}`, game: game as Game, token: token as Token, stake: stake.toString(), creator: me, name: publicName(input.name, { max: 40 }) ?? "", tc, createdAt: now };
     this.challenges.set(c.matchId, c);
     this.#save();
     return { matchId: c.matchId, game: GAMES[c.game], token: TOKENS[c.token], stake: c.stake, escrow: ESCROW, expiresAt: now + PENDING_MS };
@@ -197,7 +202,7 @@ export class Escrow {
     if (!c || this.status(c) !== "open") throw new GameError(404, "That challenge is no longer open.");
     if (c.creator === lc(wallet)) throw new GameError(400, "That is your own challenge.");
     const m = this.#intents.get(matchId) ?? new Map<string, string>();
-    if (m.size < 50) m.set(lc(wallet), name.slice(0, 40));
+    if (m.size < 50) m.set(lc(wallet), publicName(name, { max: 40 }) ?? "");
     if (this.#intents.size > 5_000) this.#intents.clear();
     this.#intents.set(matchId, m);
     return c;
@@ -217,7 +222,7 @@ export class Escrow {
       matchId: c.matchId, game: c.game, token: c.token, tokenAddress: TOKENS[c.token], stake: c.stake, amount: formatUnits(BigInt(c.stake), 18), tc: c.tc,
       creator: c.creator, name: c.name || "Night crew", playerB: c.playerB ?? null, nameB: c.playerB ? c.nameB || "Night crew" : null, status: this.status(c),
       openedAt: c.openedAt ?? null, joinBy: c.openedAt ? c.openedAt + JOIN_TIMEOUT : null, joinedAt: c.joinedAt ?? null, refundAt: c.joinedAt ? c.joinedAt + SETTLE_TIMEOUT : c.openedAt ? c.openedAt + JOIN_TIMEOUT : null,
-      outcome: c.outcome ? { draw: c.outcome.draw, winner: c.outcome.winner } : null, signed: !!c.result, refused: c.refused ?? null,
+      outcome: c.outcome ? { draw: c.outcome.draw, winner: c.outcome.winner, reason: c.outcome.reason ?? null } : null, signed: !!c.result, refused: c.refused ?? null,
       relay: c.relay ? { state: c.relay.state, tx: c.relay.tx ?? null } : null, closed: c.closed ?? null,
       you: me && me === c.creator ? "A" as const : me && me === c.playerB ? "B" as const : null,
     };
@@ -258,12 +263,25 @@ export class Escrow {
       this.cursor = to;
       this.#save();
     }
-    // after a restart: joined matches without a decided game get one again; decided ones get signed
+    // after a restart: joined matches never dealt get their game; a game dealt before the restart is
+    // gone with it and is never dealt again (a losing player would get a free do-over): it ends as a
+    // draw, which refunds both stakes. Decided ones get signed.
     for (const c of this.challenges.values()) {
       if (c.closed || c.refused || !c.playerB || !c.joinedAt) continue;
-      if (!c.outcome) { if (this.#now() / 1000 < c.joinedAt + SETTLE_TIMEOUT - 3_600) this.#tellJoined(c); }
-      else if (!c.result) await this.#settle(c).catch((e) => console.error("escrow sign", (e as Error).message));
+      if (!c.outcome) {
+        if (c.dealtAt && !this.#dealtHere.has(c.matchId)) await this.finish(c.matchId, { draw: true, winner: null }, "the server restarted during the game: both stakes go back");
+        else if (!c.dealtAt && this.#now() / 1000 < c.joinedAt + SETTLE_TIMEOUT - 3_600) this.#tellJoined(c);
+      } else if (!c.result) await this.#settle(c).catch((e) => console.error("escrow sign", (e as Error).message));
     }
+  }
+
+  /** The lobby made this match's game: recorded (and saved) before anyone plays it. */
+  dealt(matchId: string): void {
+    const c = this.challenges.get(matchId);
+    if (!c || c.dealtAt) return;
+    c.dealtAt = this.#now();
+    this.#dealtHere.add(c.matchId);
+    this.#save();
   }
 
   async #apply(l: EscrowLog): Promise<void> {
@@ -302,12 +320,12 @@ export class Escrow {
    * The game's verdict, from its own verified logic. Recorded once; a second, different verdict is
    * ignored. The result is then signed (after checking the chain) and relayed.
    */
-  finish(matchId: string, outcome: { draw: boolean; winner: string | null }): Promise<void> {
+  finish(matchId: string, outcome: { draw: boolean; winner: string | null }, reason?: string): Promise<void> {
     const c = this.challenges.get(matchId);
     if (!c || c.closed || !c.playerB || c.outcome) return Promise.resolve();
     const winner = outcome.draw ? null : lc(outcome.winner);
     if (!outcome.draw && winner !== c.creator && winner !== c.playerB) { c.refused = "the game named a winner who is not a player"; this.#save(); return Promise.resolve(); }
-    c.outcome = { draw: outcome.draw, winner, at: this.#now() };
+    c.outcome = { draw: outcome.draw, winner, at: this.#now(), ...(reason ? { reason } : {}) };
     this.#save();
     return this.#settle(c).catch((e) => console.error("escrow sign", (e as Error).message));
   }
@@ -384,7 +402,7 @@ export function liveEscrow(vault: Vault): Escrow {
     const gas = await eth.getBalance({ address: account.address });
     if (gas < 10n ** 15n) throw new Error(`the keeper ${account.address} has no ETH for gas`);
     const { request } = await eth.simulateContract({ account, address: ESCROW, abi: ESCROW_ABI, functionName: "settle", args: [r.matchId, r.winner, r.draw, r.deadline, r.signature] });
-    return ethWallet(account).writeContract(request);
+    return keeperWrite(account, request);
   };
   const receipt = async (hash: Hex) => (await eth.waitForTransactionReceipt({ hash, timeout: 600_000 })).status;
   return new Escrow({ file: join(config.dataDir, "escrow.json"), client: eth as unknown as Reader, signer: gameSignerAccount(vault), relay, receipt });

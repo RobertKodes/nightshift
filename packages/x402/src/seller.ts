@@ -91,6 +91,9 @@ const TYPES = {
 
 export type VerifyResult = { ok: true; payer: Address; value: bigint } | { ok: false; reason: string };
 
+/** An authorization valid for longer than this ahead is refused. */
+export const MAX_VALID_SECONDS = 3_600;
+
 /** Checks the buyer's signed authorization against what this resource asks for. Pure, no chain call. */
 export async function verifyPayment(p: PaymentPayload, req: Requirement, nowSec = Math.floor(Date.now() / 1000)): Promise<VerifyResult> {
   if (p?.x402Version !== 2 || !p.payload?.authorization || !p.payload.signature) return { ok: false, reason: "invalid_payload" };
@@ -100,6 +103,8 @@ export async function verifyPayment(p: PaymentPayload, req: Requirement, nowSec 
   if (BigInt(a.value) < BigInt(req.amount)) return { ok: false, reason: "insufficient_amount" };
   if (BigInt(a.validAfter) > BigInt(nowSec)) return { ok: false, reason: "not_yet_valid" };
   if (BigInt(a.validBefore) < BigInt(nowSec + 6)) return { ok: false, reason: "expired" };
+  // a long-lived authorization is a standing claim on the payer's USDC for whoever holds it
+  if (BigInt(a.validBefore) > BigInt(nowSec + MAX_VALID_SECONDS)) return { ok: false, reason: "valid_too_long" };
   const chainId = Number(req.network.split(":")[1]);
   const valid = await verifyTypedData({
     address: a.from,

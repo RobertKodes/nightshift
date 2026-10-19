@@ -31,17 +31,26 @@ export type StakedGames = {
 export class Lobby {
   /** Escrow match id → the game made for it and each wallet's seat (memory only). */
   readonly tables = new Map<string, { game: "pinball" | "chess"; id: string; seats: Record<string, string> }>();
+  #ended: ((game: "pinball" | "chess", id: string) => void)[] = [];
   constructor(readonly escrow: Escrow, private games: StakedGames) {
     escrow.onJoined((c) => this.#deal(c));
   }
+  /** Called the moment a staked game has its verdict (live betting closes its markets at once). */
+  onEnded(f: (game: "pinball" | "chess", id: string) => void): void { this.#ended.push(f); }
   #deal(c: Challenge): void {
-    if (this.tables.has(c.matchId) || !c.playerB || c.outcome || c.closed) return;
+    // a game is dealt once per match, ever: one dealt before a restart ends as a draw (escrow.ts), never again
+    if (this.tables.has(c.matchId) || !c.playerB || c.outcome || c.closed || c.dealtAt) return;
     const a = { wallet: c.creator, name: c.name }, b = { wallet: c.playerB, name: c.nameB ?? "" };
-    const onResult = (r: Result) => void this.escrow.finish(c.matchId, r);
+    const onResult = (r: Result) => {
+      void this.escrow.finish(c.matchId, r);
+      const t = this.tables.get(c.matchId);
+      if (t) for (const f of this.#ended) try { f(t.game, t.id); } catch (e) { console.error("lobby ended", e); }
+    };
     const t = c.game === "pinball"
       ? this.games.pinball({ escrow: c.matchId, currency: c.token, stake: Number(formatUnits(BigInt(c.stake), 18)), a, b, onResult })
       : this.games.chess({ escrow: c.matchId, tc: (c.tc ?? "3+2") as TimeControl, currency: c.token, stake: formatUnits(BigInt(c.stake), 18), a, b, onResult });
     this.tables.set(c.matchId, { game: c.game, ...t });
+    this.escrow.dealt(c.matchId);
   }
   /** A player's seat at their staked game: only for the wallet that deposited as player A or B. */
   seat(matchId: string, wallet: string | null): { game: "pinball" | "chess"; id: string; player: string } | { waiting: true } {

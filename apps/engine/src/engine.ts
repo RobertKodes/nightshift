@@ -525,15 +525,15 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
   }
 
   lastKeeper: KeeperRun | null = null;
-  /** One keeper run, told to the admins. */
-  async keeperRun(): Promise<KeeperRun> {
+  /** One keeper run, told to the admins (an operator's run burns at once; the scheduled one at a random moment). */
+  async keeperRun(o: { burnDelayMs?: number } = {}): Promise<KeeperRun> {
     const l = launchState();
     let n = l?.launchNumber;
     if (!n && l?.launchId) {
       n = await fetch(`https://api.imd.fun/launches/${l.launchId}`, { signal: AbortSignal.timeout(15000) }).then((x) => x.json() as Promise<{ launchNumber?: number }>).then((d) => d.launchNumber).catch(() => undefined);
       if (n) patchLaunch({ launchNumber: n });
     }
-    const r = await runKeeper(this.vault, l?.contracts ?? {}, { launchNumber: n, payer: DEV_WALLET }).catch((e) => ({ at: Date.now(), did: [], skipped: [], error: (e as Error).message }));
+    const r = await runKeeper(this.vault, l?.contracts ?? {}, { launchNumber: n, payer: DEV_WALLET }, o).catch((e) => ({ at: Date.now(), did: [], skipped: [], error: (e as Error).message }));
     this.lastKeeper = r;
     if (r.error || r.did.length) void this.adminCard(`🧹 <b>Keeper run</b>\n${r.error ? `⚠️ ${esc(r.error)}` : ""}${r.did.map((x) => `✅ ${esc(x)}`).join("\n")}${r.skipped.length ? `\n${r.skipped.map((x) => `· ${esc(x)}`).join("\n")}` : ""}`, [[{ text: "⚙️ Setup", url: `${config.publicUrl}/setup` }]], `keeper-${r.at}`, r.error ? "alert" : "report");
     return r;
@@ -1027,6 +1027,18 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
    * rewards and burn parts (60%) until those contracts take USDC. In sim mode only the books move.
    */
   readonly #withdrawing = new Set<string>();
+  /**
+   * Since when each wallet has been seen holding SHIFT or a NIGHT FROG, without a gap: the fee is
+   * waived only after FEE_EXEMPT_AFTER_MS of that, so tokens borrowed (or flash-bought) for the one
+   * withdrawal do not waive it. Kept in fee-exempt.json; a wallet seen without them starts over.
+   */
+  readonly #eligibleSince = new Map<string, number>(((): [string, number][] => { try { return Object.entries(JSON.parse(readFileSync(join(config.dataDir, "fee-exempt.json"), "utf8")) as Record<string, number>).filter(([, t]) => Number.isFinite(t)); } catch { return []; } })());
+  #feeExempt(wallet: string | null, holdsNow: boolean, now = Date.now()): boolean {
+    if (!wallet) return false;
+    const r = feeExemptAfter(this.#eligibleSince, wallet, holdsNow, now);
+    if (r.changed) { try { writeFileSync(join(config.dataDir, "fee-exempt.json"), JSON.stringify(Object.fromEntries(this.#eligibleSince))); } catch { /* best effort: lost, the fee is charged until seen again */ } }
+    return r.exempt;
+  }
   /** One withdrawal at a time per company; the owner's share leaves first; perks are read fresh from the chain. */
   async withdraw(c: Company, to: `0x${string}`, amount?: bigint): Promise<{ sent: bigint; fee: bigint; txs: string[] }> {
     if (this.#withdrawing.has(c.id)) throw new Error("A withdrawal for this company is already running.");
@@ -1040,7 +1052,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     const available = await this.withdrawable(c);
     const total = amount ?? available;
     if (total <= 0n || total > available) throw new Error(`Nothing to withdraw, or more than the $${fromUsdc(available).toFixed(2)} available.`);
-    const holder = (await holderStatus(c.owner, true)).holds || (await frogCount(c.owner, true)) > 0;
+    const holder = this.#feeExempt(c.owner, (await holderStatus(c.owner, true)).holds || (await frogCount(c.owner, true)) > 0);
     const feeBps = config.platformTreasury && !holder ? config.platformFeeBps : 0;
     if (config.mode === "live") {
       // gas for every transfer of this withdrawal (owner, dev, treasury) before the first one leaves
@@ -1201,7 +1213,9 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
         const m = c.marketing.find((x) => x.status === "drafted");
         if (m) { housePost(`${m.text}\n\n— ${c.name}, a NIGHTSHIFT company`, `mkt-${c.id}-${m.at}`); Object.assign(m, { status: "posted", channel: "bluesky:project" }); this.#emit(c.id, "company", null); }
       }
-      if (c.owner) { void holderStatus(c.owner); void frogCount(c.owner); }
+      // the holder perks, refreshed in the background; a holder seen here starts its fee-waiver clock (only a
+      // withdrawal's fresh read resets it: a failed read here also answers "not a holder")
+      if (c.owner) { const w = c.owner; void Promise.all([holderStatus(w), frogCount(w)]).then(([h, f]) => { if (h.holds || f > 0) this.#feeExempt(w, true); }).catch(() => {}); }
       for (const p of c.products) {
         if (p.status !== "live" || this.files.has(c, p)) continue;
         const t = c.tasks.find((x) => x.id === p.taskId);
@@ -1243,4 +1257,17 @@ async function findSettlement(from: `0x${string}`, nonce: `0x${string}`, to: `0x
     }
   }
   return null;
+}
+
+/** A wallet must have been seen eligible for the fee waiver (holding SHIFT or a NIGHT FROG) this long without a gap. */
+export const FEE_EXEMPT_AFTER_MS = 7 * DAY;
+/**
+ * The waiver rule: records when a wallet was first seen eligible (`since`, by lowercase wallet),
+ * forgets it the first time the wallet is seen without, and waives only after FEE_EXEMPT_AFTER_MS.
+ */
+export function feeExemptAfter(since: Map<string, number>, wallet: string, holdsNow: boolean, now: number): { exempt: boolean; changed: boolean } {
+  const w = wallet.toLowerCase(), first = since.get(w);
+  if (!holdsNow) return { exempt: false, changed: since.delete(w) };
+  if (first === undefined) { since.set(w, now); return { exempt: false, changed: true }; }
+  return { exempt: now - first >= FEE_EXEMPT_AFTER_MS, changed: false };
 }

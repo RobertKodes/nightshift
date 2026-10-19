@@ -1,7 +1,8 @@
 import { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it, vi } from "vitest";
-import { ChessGames, cleanName } from "./chess.js";
+import { Chess } from "chess.js";
+import { ChessGames, cleanName, flagFor } from "./chess.js";
 import { chessRoutes } from "./chess-routes.js";
 
 function duel(tc: "3+2" | "5+0" | "10+0" = "3+2", sameName = false) {
@@ -82,6 +83,37 @@ describe("night chess", () => {
     expect(cleanName("NIGHTSHIFT")).toBe("Night crew");
     expect(cleanName("admin")).toBe("Night crew");
     expect(cleanName("<Pearl!>")).toBe("Pearl");
+    // the audit's bypasses: the shared rule (names.ts) reads them as they look
+    for (const n of ["IMD Official", "imd team", "Admin Support", "NIGHTSHIFT Team", "nightshiftt", "i.m.d", "lMD"]) expect(cleanName(n), n).toBe("Night crew");
+    expect(cleanName("Night Rook")).toBe("Night Rook");
+  });
+  it("flags a staked game whose move times barely vary, and does nothing else (fair play)", () => {
+    const play = (gap: (i: number) => number) => {
+      let now = 1_000_000;
+      const games = new ChessGames(null, () => now);
+      const t = games.createStaked({ escrow: `0x${"ab".repeat(32)}`, tc: "10+0", currency: "IMD", stake: "1", a: { wallet: "0x1111111111111111111111111111111111111111", name: "Pearl" }, b: { wallet: "0x2222222222222222222222222222222222222222", name: "Onyx" }, onResult: () => {} });
+      const [pa, pb] = Object.values(t.seats) as [string, string];
+      games.listen(t.id, pa, () => {}); games.listen(t.id, pb, () => {});
+      now += 5_000;
+      for (let i = 0; i < 44; i++) {
+        const v = games.get(t.id, pa), me = v.turn === v.you ? pa : pb;
+        const moves = new Chess(v.fen).moves({ verbose: true }), m = moves[(i * 7) % moves.length]!;
+        now += gap(i);
+        const r = games.move(t.id, me, m.from, m.to, m.promotion);
+        if (r.done) break;
+      }
+      return games;
+    };
+    // an engine on a fixed think time: 2 s a move, give or take 50 ms
+    const bot = play((i) => 2_000 + (i % 3) * 50);
+    expect(bot.flags()).toHaveLength(1);
+    expect(bot.flags()[0]).toMatchObject({ escrow: `0x${"ab".repeat(32)}`, moves: 20 });
+    expect(bot.betInfo(bot.flags()[0]!.game).flagged).not.toBeNull();
+    // a person: quick moves and long thinks
+    expect(play((i) => [1_200, 6_500, 2_300, 14_000, 3_100, 900, 8_000][i % 7]!).flags()).toEqual([]);
+    expect(flagFor(Array(19).fill(2_000))).toBeNull();
+    expect(flagFor(Array(20).fill(300))).toBeNull(); // premoves say nothing
+    expect(flagFor(Array(20).fill(2_000))).toMatchObject({ meanMs: 2_000, sdMs: 0 });
   });
   it("holds both clocks during the countdown and refuses an early move", () => {
     let now = 1_000_000;

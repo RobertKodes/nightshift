@@ -84,7 +84,53 @@ export async function answer(llm: LlmClient, model: string, question: string, fa
   });
   const text = (r.message.content ?? "").trim().replace(/^["']|["']$/g, "");
   if (!text || /^skip\b/i.test(text) || text.length < 8) return null;
-  return text.slice(0, 900);
+  return safeReply(text.slice(0, 900), facts);
+}
+
+/**
+ * Where the bot may link: the project's own site and accounts, IMD, the explorers, the DEX and the
+ * marketplace. An entry with a path allows only that path (and below it) on that host; one without
+ * allows the host and its subdomains.
+ */
+export const ALLOWED_HOSTS = [
+  "getnightshift.tech", "x.com/nightshiftidm", "twitter.com/nightshiftidm", "t.me/getnightshift", "bsky.app", "imd.fun", "dexscreener.com",
+  "opensea.io", "uniswap.org", "etherscan.io", "basescan.org", "github.com/robertkodes",
+];
+/** What a reply may not claim, unless the sentence denies it ("there is no airdrop", "never share your seed phrase"). */
+const CLAIMS = /\b(migrat\w*|airdrops?|new (ca|contract|token|address)|v2 (token|contract)|relaunch\w*|token swap|swap your (old )?tokens|claim (your|now|free|here)|free (tokens?|shift|imd|eth)|giveaway|double your|send (your )?(eth|imd|shift|usdc|tokens?) to|dm (me|us)|message me|whatsapp|seed phrase|private key|recovery phrase|(validate|sync|verify|rectify) (your )?wallet)\b/i;
+const DENIED = /\b(no|not|never|nobody|none|isn'?t|aren'?t|won'?t|fake|scams?|beware|ignore)\b/i;
+const INVISIBLE = /[\u00ad\u034f\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g;
+const LINK = /(?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:\/[^\s)\]}>"']*)?/gi;
+const bare = (u: string) => u.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[.,;:!?]+$/, "");
+
+/**
+ * The assistant's reply as it may go out under the bot's name, or null. The question is the
+ * asker's text, so a prompt injection can make the model say anything: a reply is refused when it
+ * carries an address the facts do not (a fake CA), a link to a host off ALLOWED_HOSTS or the facts'
+ * own links, or claims a migration, an airdrop, a new contract or the other classic scams.
+ */
+export function safeReply(raw: string, facts: Facts, known: string[] = []): string | null {
+  const text = raw.normalize("NFKC").replace(INVISIBLE, "");
+  const said = JSON.stringify(facts).toLowerCase();
+  const ours = new Set([...(said.match(/0x[0-9a-f]{40}/g) ?? []), ...known.map((a) => a.toLowerCase())]);
+  // an address is ours only exactly: a longer hex string (a "transaction", a padded address) is not
+  for (const a of text.match(/0x[0-9a-fA-F]{6,}/g) ?? []) if (!ours.has(a.toLowerCase())) return null;
+  if (/0x[0-9a-f]{0,4}\s*(\.\.\.|…)/i.test(text) && !/0x\.\.\.dead/i.test(text)) return null; // an abbreviated address cannot be checked
+  const allowed = [...ALLOWED_HOSTS, ...(said.match(/(?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s"\\]*)?/g) ?? []).filter((u) => /\//.test(bare(u))).map(bare)];
+  if (/\b\d{1,3}(\.\d{1,3}){3}\b/.test(text)) return null; // a bare IP is never one of our links
+  for (const l of text.match(LINK) ?? []) {
+    const u = bare(l), host = u.split(/[/:]/)[0]!;
+    const ok = allowed.some((e) => {
+      const [eh, ...ep] = e.split("/"), path = ep.join("/");
+      if (!path) return host === eh || host.endsWith(`.${eh}`);
+      return u === e || u.startsWith(`${e}/`) || u.startsWith(`${e}?`);
+    });
+    if (!ok) return null;
+  }
+  for (const sentence of text.split(/(?<=[.!?\n])\s+/)) if (CLAIMS.test(sentence) && !DENIED.test(sentence)) return null;
+  // a handle posing as staff ("@NightshiftSupport") is the next step of the same scam
+  if ((text.match(/@[a-z0-9_]{3,}/gi) ?? []).some((h) => /support|admin|help|official|team|mod|desk/i.test(h) && !said.includes(h.toLowerCase()))) return null;
+  return text;
 }
 
 /** Per person, per hour and per day, so the bot answers questions without filling the chat. */

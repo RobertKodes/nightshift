@@ -1,10 +1,15 @@
 /**
  * NIGHTSHIFT Space Pinball: the table and its physics, deterministic.
  *
- * The same seed and the same inputs give the same score on every machine: fixed time steps, only
+ * The same luck and the same inputs give the same score on every machine: fixed time steps, only
  * + - * / and Math.sqrt (exact in every JavaScript engine), no trigonometry at run time (the
  * flipper angles are a table computed once, offline), and a seeded random generator. The server
  * replays a player's inputs with this exact file to check the score, so a score cannot be faked.
+ *
+ * The luck of a game the server deals (duels, board runs) is not one seed for the whole game: it is
+ * one salt per SEGMENT of game time, which the server reveals only as each player's stream reaches
+ * it (pinball.ts), so nobody can work out the table more than a moment ahead. Practice offline and
+ * the attract mode still play from one local seed.
  *
  * Keep apps/engine/src/pinball/engine.ts byte-identical to this file (a test checks it).
  */
@@ -20,6 +25,14 @@ const MAX_SPEED = 2400;
 export const BALLS = 3;
 /** A game lasts at most this many ticks (150 s), so a replay is always bounded. */
 export const MAX_TICKS = 150 * 240;
+/** Ticks of game time drawn from one salt (0.5 s): segment k is ticks k·SEGMENT … (k+1)·SEGMENT − 1. */
+export const SEGMENT = 120;
+/** Salts in a whole game. */
+export const SEGMENTS = MAX_TICKS / SEGMENT;
+/** The segment a tick draws its luck from. */
+export const segmentOf = (tick: number): number => Math.floor(tick / SEGMENT);
+/** A game's luck: one seed for the whole game (practice), or the salts revealed so far, one per segment. */
+export type Luck = number | readonly number[];
 
 type V = { x: number; y: number };
 type Seg = { a: V; b: V; e: number; kick?: number; tag?: string };
@@ -114,10 +127,33 @@ export class Table {
   #meteorN = 0;
   /** The tick the frog crew last reset: its targets cannot fall again in that same tick. */
   #crewAt = -1;
-  readonly #rand: () => number;
+  /** Salted luck: the salts (the array grows as the server reveals them), the segment drawn from now and its generator. */
+  readonly #salts: readonly number[] | null;
+  #segAt = -1;
+  #segRand: () => number = () => 0;
+  readonly #seedRand: () => number;
 
   readonly seed: number;
-  constructor(seed: number) { this.seed = seed; this.#rand = rng(seed); }
+  constructor(luck: Luck) {
+    this.#salts = typeof luck === "number" ? null : luck;
+    this.seed = typeof luck === "number" ? luck : 0;
+    this.#seedRand = rng(this.seed);
+  }
+
+  /** The salt of the segment this tick is in; a table never steps into a segment whose salt it does not have. */
+  #salt(): number {
+    const v = this.#salts![segmentOf(this.tick)];
+    if (v === undefined) throw new Error("the luck of this segment is not revealed yet");
+    return v;
+  }
+  #rand(): number {
+    if (!this.#salts) return this.#seedRand();
+    const k = segmentOf(this.tick);
+    if (k !== this.#segAt) { this.#segAt = k; this.#segRand = rng(this.#salt()); }
+    return this.#segRand();
+  }
+  /** Can the next tick be played: its segment's salt is here (always, for a seeded game). */
+  ready(): boolean { return !this.#salts || this.over || this.tick + 1 >= MAX_TICKS || this.#salts[segmentOf(this.tick + 1)] !== undefined; }
 
   #add(kind: Event["kind"], points: number, send?: Attack) {
     if (kind !== "sling") this.slingRun = 0;
@@ -149,14 +185,14 @@ export class Table {
     if (this.over) return;
     this.tick++;
     if (this.tick >= MAX_TICKS) { this.over = true; return; }
-    // attacks landing now: a meteor in the upper table (its place from its own seeded draw), or a surge
+    // attacks landing now: a meteor in the upper table (its place from its own draw on this segment's luck), or a surge
     for (let i = this.incoming.length - 1; i >= 0; i--) {
       const a = this.incoming[i]!;
       if (a.at > this.tick) continue;
       this.incoming.splice(i, 1);
       this.stats.received++;
       if (a.kind === "surge") { this.surgeUntil = this.tick + SURGE_TICKS; this.#add("surge-in", 0); continue; }
-      const r = rng((this.seed ^ 0x9e3779b9) + this.#meteorN++);
+      const r = rng(((this.#salts ? this.#salt() : this.seed) ^ 0x9e3779b9) + this.#meteorN++);
       this.meteors.push({ x: 110 + r() * 360, y: 210 + r() * 300, r: 20 + r() * 10, until: this.tick + METEOR_TICKS });
       if (this.meteors.length > MAX_METEORS) this.meteors.shift();
       this.#add("meteor-in", 0);
@@ -301,8 +337,8 @@ export class Table {
  * When several land on one tick the result does not depend on their order: meteors are placed by
  * how many have landed, not by which one.
  */
-export function replay(seed: number, inputs: Input[], landings: Landing[] = []): { score: number; ticks: number; events: Event[]; stats: Table["stats"] } {
-  const t = new Table(seed);
+export function replay(luck: Luck, inputs: Input[], landings: Landing[] = []): { score: number; ticks: number; events: Event[]; stats: Table["stats"] } {
+  const t = new Table(luck);
   for (const l of landings) t.receive(l.kind, l.at);
   let i = 0;
   const sorted = inputs.filter((x) => Number.isInteger(x[0]) && x[0] >= 0 && x[0] <= MAX_TICKS).sort((p, q) => p[0] - q[0]);
@@ -315,8 +351,8 @@ export function replay(seed: number, inputs: Input[], landings: Landing[] = []):
 }
 
 /** A duel on a perfect network: both tables step together; what one earns lands on the other ATTACK_DELAY later. */
-export function duelReplay(seed: number, a: Input[], b: Input[]): { scores: [number, number]; stats: [Table["stats"], Table["stats"]] } {
-  const tables = [new Table(seed), new Table(seed)] as const;
+export function duelReplay(luck: Luck, a: Input[], b: Input[]): { scores: [number, number]; stats: [Table["stats"], Table["stats"]] } {
+  const tables = [new Table(luck), new Table(luck)] as const;
   const logs = [a, b].map((x) => x.filter((y) => Number.isInteger(y[0]) && y[0] >= 0 && y[0] <= MAX_TICKS).sort((p, q) => p[0] - q[0]));
   const at = [0, 0], seen = [0, 0];
   while (!tables[0].over || !tables[1].over) {

@@ -3,9 +3,20 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
+    environment:
+      # The host's reverse proxy reaches the engine through Docker's published port, so requests arrive
+      # from this network's gateway: only its X-Forwarded-For is believed.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.31.87.1}
     ports:
       - "127.0.0.1:8787:8787"
     volumes:
       - nightshift-data:/data
+    networks: [app]
 volumes:
   nightshift-data:
+networks:
+  app:
+    ipam:
+      config:
+        - subnet: 172.31.87.0/24
+          gateway: 172.31.87.1
