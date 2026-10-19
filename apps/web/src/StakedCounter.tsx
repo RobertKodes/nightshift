@@ -9,7 +9,10 @@ export function useStaked(): Staked | null {
     const load = () => void fetch("/api/staked").then((r) => r.json()).then(setS).catch(() => {});
     load();
     const t = setInterval(load, 60_000);
-    return () => clearInterval(t);
+    // a stake or withdrawal on this page refreshes the total right away (the chain read is a block behind at most)
+    const now = () => { load(); setTimeout(load, 15_000); };
+    window.addEventListener("ns-staked", now);
+    return () => { clearInterval(t); window.removeEventListener("ns-staked", now); };
   }, []);
   return s;
 }

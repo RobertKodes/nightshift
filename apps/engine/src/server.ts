@@ -212,9 +212,9 @@ function serveStatic(res: ServerResponse, path: string): boolean {
 const SUPPLY = 1_000_000_000;
 const DEAD = "0x000000000000000000000000000000000000dEaD";
 let stakedCache: { at: number; staked: number } | null = null;
-/** How much $SHIFT sits staked in ShiftRewards, read on chain at most once a minute. */
+/** How much $SHIFT sits staked in ShiftRewards, read on chain at most every 10 seconds. */
 async function stakedNow(): Promise<number | null> {
-  if (!stakedCache || Date.now() - stakedCache.at > 60_000) {
+  if (!stakedCache || Date.now() - stakedCache.at > 10_000) {
     const r = launchState()?.contracts?.rewards as `0x${string}` | undefined;
     const total = r ? await eth.readContract({ address: r, abi: [{ type: "function", name: "totalSupply", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }], functionName: "totalSupply" }).catch(() => null) : null;
     if (total !== null) stakedCache = { at: Date.now(), staked: Number(total / 10n ** 18n) };

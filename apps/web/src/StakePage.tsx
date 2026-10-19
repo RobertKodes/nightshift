@@ -47,6 +47,7 @@ export function StakePage() {
   const [l, setL] = useState<Launch>(null);
   const [me, setMe] = useState<Address | null>(null);
   const [amount, setAmount] = useState("");
+  const [out, setOut] = useState("");
   const [lock, setLock] = useState(365);
   const [bal, setBal] = useState<bigint | null>(null);
   const [h, setH] = useState<Awaited<ReturnType<typeof history>> | null>(null);
@@ -89,6 +90,7 @@ export function StakePage() {
       setStep("Waiting for Ethereum…");
       const r = await rpc.waitForTransactionReceipt({ hash: tx });
       setMsg(r.status === "success" ? { ok: true, text: "Done.", tx } : { ok: false, text: "It reverted. Nothing moved but gas.", tx });
+      if (r.status === "success") window.dispatchEvent(new Event("ns-staked")); // the staked total refreshes now, not in a minute
       void load(x.a);
     } catch (e) { setMsg({ ok: false, text: errText(e) }); } finally { setStep(null); }
   };
@@ -110,6 +112,20 @@ export function StakePage() {
   const unlocked = h ? h.stakes.filter((x) => x.unlockAt <= now).reduce((s, x) => s + x.amount, 0n) - h.out : 0n;
   // only what the stake history shows as unlocked: never the whole stake blind
   const withdrawable = h && unlocked > 0n ? (unlocked > staked ? staked : unlocked) : 0n;
+  // what is left of each stake: withdrawals come out of the unlocked stakes, oldest unlock first
+  const rows = (() => {
+    if (!h) return [];
+    let used = h.out;
+    const left = new Map<string, bigint>();
+    for (const x of [...h.stakes].filter((x) => x.unlockAt <= now).sort((a, b) => a.unlockAt - b.unlockAt)) { const take = used > x.amount ? x.amount : used; used -= take; left.set(x.tx, x.amount - take); }
+    return h.stakes.map((x) => ({ ...x, left: left.get(x.tx) ?? x.amount }));
+  })();
+  const outAmt = (() => { try { return out && Number(out) > 0 ? parseEther(out) : 0n; } catch { return 0n; } })();
+  const withdraw = (v: bigint) => run(`Confirm the withdrawal of ${fmt(v)} $${sym}…`, async ({ w, a }) => {
+    // a dry run first: a locked stake is refused here with a clear message, before any gas is spent
+    await rpc.simulateContract({ account: a, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [v] }).catch(() => { throw new Error("The contract refused the withdrawal: part of this stake may still be locked."); });
+    return w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [v] });
+  });
 
   return (
     <div className="docs token-page stake-page">
@@ -151,16 +167,18 @@ export function StakePage() {
             <div><span>Claimable now</span><b>{onChain.eth !== null ? `${Number(formatEther(onChain.eth)).toFixed(6)} ETH` : "…"}{onChain.shift !== null ? ` + ${fmt(onChain.shift)} $${sym}` : ""}</b></div>
             <div><span>ETH rewards claimed</span><b>{h ? fmt(h.paidEth) : "…"} ETH</b></div>
           </div>
-          {h && h.stakes.length > 0 && <table className="plain"><thead><tr><th>Stake</th><th>Unlocks</th><th></th></tr></thead><tbody>
-            {h.stakes.map((s) => <tr key={s.tx}><td>{fmt(s.amount)} ${sym}</td><td>{s.unlockAt <= now ? "unlocked" : new Date(s.unlockAt * 1000).toLocaleDateString("en-GB")}</td><td><a href={`https://etherscan.io/tx/${s.tx}`} target="_blank" rel="noreferrer">tx ↗</a></td></tr>)}
+          {rows.length > 0 && <table className="plain"><thead><tr><th>Stake</th><th>Left</th><th>Unlocks</th><th></th></tr></thead><tbody>
+            {rows.map((s) => <tr key={s.tx}><td>{fmt(s.amount)} ${sym} <a href={`https://etherscan.io/tx/${s.tx}`} target="_blank" rel="noreferrer">↗</a></td><td>{s.left > 0n ? `${fmt(s.left)} $${sym}` : "withdrawn"}</td><td>{s.unlockAt <= now ? "unlocked" : `🔒 ${new Date(s.unlockAt * 1000).toLocaleDateString("en-GB")}`}</td>
+              <td>{s.unlockAt <= now && s.left > 0n && <button type="button" className="swap-max" disabled={Boolean(step)} onClick={() => void withdraw(s.left > withdrawable ? withdrawable : s.left)}>Withdraw this</button>}</td></tr>)}
           </tbody></table>}
+          {withdrawable > 0n && <div className="swap-box" style={{ marginTop: 10 }}>
+            <label className="swap-leg"><span>Withdraw an amount <button type="button" className="swap-max" onClick={() => setOut(formatEther(withdrawable))}>max {fmt(withdrawable)}</button></span>
+              <div><input className="swap-in" inputMode="decimal" placeholder="0" value={out} onChange={(e) => setOut(e.target.value.replace(",", "."))} /><i>${sym}</i></div></label>
+            <button className="btn" disabled={Boolean(step) || !outAmt || outAmt > withdrawable} onClick={() => void withdraw(outAmt)}>{outAmt > withdrawable ? `Only ${fmt(withdrawable)} is unlocked` : `Withdraw ${outAmt ? fmt(outAmt) : ""} $${sym}`}</button>
+          </div>}
           <div className="setup-tools" style={{ marginTop: 10 }}>
             <button className="btn primary" disabled={Boolean(step)} onClick={() => void run("Confirm the claim…", ({ w, a }) => w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "getReward" }))}>Claim rewards</button>
-            <button className="btn" disabled={Boolean(step) || withdrawable <= 0n} onClick={() => void run("Confirm the withdrawal…", async ({ w, a }) => {
-              // a dry run first: a locked stake is refused here with a clear message, before any gas is spent
-              await rpc.simulateContract({ account: a, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [withdrawable] }).catch(() => { throw new Error("The contract refused the withdrawal: part of this stake may still be locked."); });
-              return w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [withdrawable] });
-            })}>Withdraw unlocked ({fmt(withdrawable)})</button>
+            <button className="btn" disabled={Boolean(step) || withdrawable <= 0n} onClick={() => void withdraw(withdrawable)}>Withdraw all unlocked ({fmt(withdrawable)})</button>
           </div>
         </section>
       )}
