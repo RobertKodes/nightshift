@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
@@ -44,6 +44,7 @@ import { ProductFiles, fetchDelivery } from "./products.js";
 import { newFrogListings, newFrogSales, OPENSEA_SLUG } from "./frogmarket.js";
 import { type ArcadeEvent, onArcade } from "./pinball.js";
 import { followSwarm } from "./swarm.js";
+import { live as gameLobby } from "./games-routes.js";
 import { type ChessEvent, onChess } from "./chess.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
@@ -179,6 +180,27 @@ export class Engine {
       const medal = ["🥇", "🥈", "🥉", "4.", "5."];
       void toCommunity(`🐸⏱ <b>NIGHT SHIFT HOURS · top of the crew</b>\n\n${top.map((t, i) => `${medal[i]} <a href="https://etherscan.io/address/${t.wallet}">${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}</a> · ${t.hours.toLocaleString("en-US")} h · ${t.frogs} frog${t.frogs === 1 ? "" : "s"}`).join("\n")}\n\nHold a frog, earn hours. Genesis 2×, #1 5×. No locking, no gas.`, [[{ text: "⏱ My shift hours", url: `${config.publicUrl}/frogs#staking` }]], "frog");
     }, 60_000);
+    // The moment real-money duels open (the escrow's signer becomes our game signer), tell the community once.
+    setInterval(() => void (async () => {
+      const flag = join(config.dataDir, "stakes-announced");
+      if (existsSync(flag)) return;
+      const chain = await gameLobby(this.vault).escrow.chainState(true).catch(() => null);
+      if (!chain?.live) return;
+      writeFileSync(flag, new Date().toISOString());
+      const E = "0xf460fd9ad76f18414f54a2431870e8a116193489";
+      await toCommunity([
+        "💎🎮 <b>REAL-MONEY DUELS ARE OPEN</b>", "",
+        "Space Pinball and NIGHT CHESS can now be played for <b>IMD</b> or <b>$SHIFT</b>, and you choose the amount:",
+        "• IMD from 0.5 to 1,000 · $SHIFT from 10,000 to 50,000,000",
+        "• Create a challenge with your stake; anyone can accept the exact same amount",
+        "• Both stakes sit in the GameEscrow contract, built, tested and audited by the IMD swarm. Nobody can take them, NIGHTSHIFT included",
+        "• The winner gets 95% of the pot automatically; 5% follows the fee rule: stakers and NIGHT FROGS holders, dev, treasury and burns",
+        "• Every score and every chess move is verified by the server; a draw refunds both; a match that never settles refunds after 24 h", "",
+        `📜 Contract: <code>${E}</code>`, "",
+        "Skill games for adults (18+), only where playing for stakes is legal. Never stake what you can't afford to lose.",
+      ].join("\n"), [[{ text: "🎱 Space Pinball", url: `${config.publicUrl}/games/pinball` }, { text: "♟ NIGHT CHESS", url: `${config.publicUrl}/games/chess` }], [{ text: "🔎 GameEscrow on Etherscan", url: `https://etherscan.io/address/${E}` }]], "launch");
+      void this.adminCard("💎 <b>Real-money duels are live</b>: the escrow's signer is now the server's game signer. Announced to the community.", [], "stakes-live", "launch");
+    })().catch((e) => console.error("stakes announce", e)), 120_000);
     // Swarm orders from /setup: announced to the community when the swarm finishes them.
     followSwarm((text, buttons) => toCommunity(text, buttons, "milestone"), (text) => Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => sendCard(id, "alert", text))));
     // Space Pinball in the community chat: records and crushing wins at once, the rest in a half-hourly report.
