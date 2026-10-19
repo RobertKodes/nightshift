@@ -1,3 +1,4 @@
+import { LIVE_LAUNCH } from "./shift";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { SwapBox } from "./SwapPage";
@@ -181,7 +182,7 @@ export function TokenPage() {
         <section id="tk-swap" className="tk-contract-box" aria-label="$SHIFT contract and swap" tabIndex={-1}>
           <div className="tk-contract-header"><div className="tk-token-name"><span className="tk-token-mark"><Icon name="crescent" size={24} /></span><h2>$SHIFT</h2></div><span className="tk-label">ETHEREUM</span></div>
           <div className="tk-address"><span className="tk-label">CONTRACT</span><div>{ca ? <><a href={etherscan(ca)} target="_blank" rel="noreferrer">{ca}</a><CopyButton value={ca} label="$SHIFT" /></> : <span className="tk-address-empty">{token.loading ? "…" : prelaunch ? "announced at launch" : "not available"}</span>}</div></div>
-          {prelaunch || swapLaunch?.pool ? <SwapBox launch={swapLaunch} /> : <div className="tk-swap-loading">{token.loading ? "Loading swap…" : "Swap not available. We’ll check again shortly."}</div>}
+          <SwapBox launch={prelaunch || swapLaunch?.pool ? swapLaunch : LIVE_LAUNCH} />
         </section>
         <section className="tk-timeline" aria-labelledby="tk-timeline-title">
           <div className="tk-section-heading"><span className="tk-label">BUILT IN THE OPEN</span><h2 id="tk-timeline-title">The story <em>so far.</em></h2></div>

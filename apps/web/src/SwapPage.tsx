@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SHIFT, SHIFT_POOL } from "./shift";
+import { LIVE_LAUNCH, SHIFT, SHIFT_POOL, fetchLaunch } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, formatEther, http, maxUint256, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
@@ -17,7 +17,7 @@ const errText = (e: unknown) => ((e as { shortMessage?: string }).shortMessage ?
  * first by Uniswap's own V4 Quoter, signed in your wallet.
  */
 export function SwapBox({ launch }: { launch?: Launch } = {}) {
-  const [fetchedLaunch, setFetchedLaunch] = useState<Launch>(null);
+  const [fetchedLaunch, setFetchedLaunch] = useState<Launch>(LIVE_LAUNCH);
   const l = launch === undefined ? fetchedLaunch : launch;
   const [me, setMe] = useState<Address | null>(null);
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -33,7 +33,7 @@ export function SwapBox({ launch }: { launch?: Launch } = {}) {
 
   useEffect(() => {
     if (launch !== undefined) return;
-    void fetch("/api/token").then((r) => r.json()).then((d) => setFetchedLaunch(d.launch ?? null)).catch(() => {});
+    void fetchLaunch<Launch>(LIVE_LAUNCH).then(setFetchedLaunch);
   }, [launch]);
   // the pool key and token are pinned in the page; the server only says whether trading is live
   const pool = l?.pool ? SHIFT_POOL : null;
@@ -149,8 +149,8 @@ export function SwapBox({ launch }: { launch?: Launch } = {}) {
 }
 
 export function SwapPage() {
-  const [l, setL] = useState<Launch>(null);
-  useEffect(() => { void fetch("/api/token").then((r) => r.json()).then((d) => setL(d.launch ?? null)).catch(() => {}); }, []);
+  const [l, setL] = useState<Launch>(LIVE_LAUNCH);
+  useEffect(() => { void fetchLaunch<Launch>(LIVE_LAUNCH).then(setL); }, []);
   const pool = l?.pool ?? null;
   const sym = l?.symbol ?? "SHIFT";
   return (

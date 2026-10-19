@@ -19,3 +19,25 @@ export const SHIFT_POOL = {
   tickSpacing: 60,
   hooks: "0x42Ebcf86E3AB0445ba0362F911a7E8FAd6aCe0CC" as Address,
 };
+
+/**
+ * $SHIFT is live for good: pages start from this and only take details from /api/token, so a slow
+ * or failed request (a restart, a weak connection, a busy shared network) never shows "opens at launch".
+ */
+export const LIVE_LAUNCH = {
+  symbol: "SHIFT",
+  token: SHIFT.token,
+  open: true,
+  pool: SHIFT_POOL,
+  scanFrom: 26215876,
+  contracts: { token: SHIFT.token, hook: SHIFT.hook, splitter: SHIFT.splitter, rewards: SHIFT.rewards } as Record<string, string>,
+};
+
+/** /api/token's launch, retried a few times; keeps what it had when the server does not answer. */
+export async function fetchLaunch<T>(keep: T): Promise<T> {
+  for (let i = 0; i < 3; i++) {
+    try { const d = await fetch("/api/token").then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))); return (d.launch ?? keep) as T; }
+    catch { await new Promise((r) => setTimeout(r, 1500 * (i + 1))); }
+  }
+  return keep;
+}

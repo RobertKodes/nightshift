@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SHIFT } from "./shift";
+import { LIVE_LAUNCH, SHIFT, fetchLaunch } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, fallback, formatEther, http, parseAbi, parseAbiItem, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
@@ -51,7 +51,7 @@ async function history(rewards: Address, who: Address, from: bigint) {
 
 /** Stake $SHIFT in ShiftRewards: the longer the lock and the bigger the stake, the bigger the share. */
 export function StakePage() {
-  const [l, setL] = useState<Launch>(null);
+  const [l, setL] = useState<Launch>(LIVE_LAUNCH);
   const [me, setMe] = useState<Address | null>(null);
   const [amount, setAmount] = useState("");
   const [out, setOut] = useState("");
@@ -63,7 +63,7 @@ export function StakePage() {
   const [step, setStep] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; tx?: string } | null>(null);
 
-  useEffect(() => { void fetch("/api/token").then((r) => r.json()).then((d) => setL(d.launch ?? null)).catch(() => {}); }, []);
+  useEffect(() => { void fetchLaunch<Launch>(LIVE_LAUNCH).then(setL); }, []);
   // the server only says whether $SHIFT is live; the addresses are pinned in the page
   const rewards = l?.contracts?.rewards ? SHIFT.rewards : undefined;
   const token = l?.contracts?.token || l?.token ? SHIFT.token : undefined;
