@@ -103,8 +103,9 @@ export const config = {
    * BETPOOL_ADDRESS is empty. BETPOOL_BLOCK is its deploy block, where the event follower starts.
    */
   betPool: {
-    address: (/^0x[0-9a-fA-F]{40}$/.test(env.BETPOOL_ADDRESS ?? "") ? env.BETPOOL_ADDRESS! : "") as `0x${string}` | "",
-    block: Math.max(0, Math.floor(num(env.BETPOOL_BLOCK, 0))),
+    // the live BetPool (IMD launch 8594ca07, verified on Etherscan and Sourcify); a setting overrides it, "off" turns betting off
+    address: ((v) => (/^0x[0-9a-fA-F]{40}$/.test(v) ? v : ""))(env.BETPOOL_ADDRESS ?? "0x76decb1958a1e04549e2e7f451cc22cd832d0fc3") as `0x${string}` | "",
+    block: Math.max(0, Math.floor(num(env.BETPOOL_BLOCK, 26226964))),
   },
   /** Companies one wallet may run at once. */
   maxCompaniesPerOwner: num(env.MAX_COMPANIES_PER_OWNER, 5),
