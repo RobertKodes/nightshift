@@ -1,4 +1,4 @@
-import { type Address, type Hex, type LocalAccount, createPublicClient, createWalletClient, erc20Abi, http, keccak256 } from "viem";
+import { type Address, type Hex, type LocalAccount, createPublicClient, createWalletClient, erc20Abi, fallback, http, keccak256 } from "viem";
 import { base, baseSepolia, mainnet } from "viem/chains";
 import { USDC } from "@nightshift/x402";
 import { IMD_MAINNET } from "@nightshift/imd";
@@ -6,12 +6,18 @@ import { config } from "./config.js";
 
 export const PERMIT2: Address = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
-export const eth = createPublicClient({ chain: mainnet, transport: http(config.ethRpc) });
+/**
+ * Ethereum through several free nodes: the configured one first (unless it is publicnode, which now blocks
+ * this server's IP), then MEV Blocker, dRPC and publicnode. A node that refuses or fails hands over to the next.
+ */
+const ETH_RPCS = [...new Set([...(config.ethRpc.includes("publicnode") ? [] : [config.ethRpc]), "https://rpc.mevblocker.io", "https://eth.drpc.org", "https://ethereum-rpc.publicnode.com"])];
+const ethTransport = () => fallback(ETH_RPCS.map((u) => http(u, { timeout: 15_000 })), { retryCount: 1 });
+export const eth = createPublicClient({ chain: mainnet, transport: ethTransport() });
 const salesChain = config.salesChainId === 8453 ? base : baseSepolia;
 export const sales = createPublicClient({ chain: salesChain, transport: http(config.salesRpc) });
 
 export function ethWallet(account: LocalAccount) {
-  return createWalletClient({ account, chain: mainnet, transport: http(config.ethRpc) });
+  return createWalletClient({ account, chain: mainnet, transport: ethTransport() });
 }
 
 export function salesWallet(account: LocalAccount) {
@@ -42,7 +48,7 @@ export async function ensurePermit2(account: LocalAccount): Promise<`0x${string}
   const allowance = await eth.readContract({ address: IMD_MAINNET, abi: erc20Abi, functionName: "allowance", args: [account.address, PERMIT2] });
   // A bounded allowance (20 IMD, refilled below 2): even a bad signature cannot reach the whole wallet.
   if (allowance >= 2n * 10n ** 18n) return null;
-  const wallet = createWalletClient({ account, chain: mainnet, transport: http(config.ethRpc) });
+  const wallet = createWalletClient({ account, chain: mainnet, transport: ethTransport() });
   const hash = await wallet.writeContract({ address: IMD_MAINNET, abi: erc20Abi, functionName: "approve", args: [PERMIT2, 20n * 10n ** 18n] });
   await eth.waitForTransactionReceipt({ hash });
   return hash;
