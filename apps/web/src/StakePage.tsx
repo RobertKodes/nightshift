@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { SHIFT } from "./shift";
-import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, formatEther, http, parseAbi, parseAbiItem, parseEther } from "viem";
+import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, fallback, formatEther, http, parseAbi, parseAbiItem, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
 import { StakedSupply } from "./StakedCounter";
 
 const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+// publicnode refuses logs older than its recent window, so the stake history is read from nodes that serve them
+const logs = createPublicClient({ chain: mainnet, transport: fallback([http("https://rpc.mevblocker.io"), http("https://eth.drpc.org"), http("https://ethereum-rpc.publicnode.com")]) });
 /** ShiftRewards, as fixed in the launch spec IMD checked: stake with a lock, withdraw unlocked, claim. */
 const REWARDS = parseAbi([
   "function stake(uint256 amount, uint256 lockDays)",
@@ -26,13 +28,13 @@ const errText = (e: unknown) => ((e as { shortMessage?: string }).shortMessage ?
 
 /** Your stakes are read from the contract's own events, so the page needs no extra view function. */
 async function history(rewards: Address, who: Address, from: bigint) {
-  const head = await rpc.getBlockNumber();
+  const head = await logs.getBlockNumber();
   const stakes: Stake[] = [];
   let out = 0n;
   let paid = 0n;
   for (let a = from; a <= head; a += 9_000n) {
     const range = { address: rewards, args: { account: who }, fromBlock: a, toBlock: a + 8_999n > head ? head : a + 8_999n };
-    const [s, w, p] = await Promise.all([rpc.getLogs({ ...range, event: STAKED }), rpc.getLogs({ ...range, event: WITHDRAWN }), rpc.getLogs({ ...range, event: PAID })]);
+    const [s, w, p] = await Promise.all([logs.getLogs({ ...range, event: STAKED }), logs.getLogs({ ...range, event: WITHDRAWN }), logs.getLogs({ ...range, event: PAID })]);
     for (const l of s) stakes.push({ amount: l.args.amount!, unlockAt: Number(l.args.unlockAt!), tx: l.transactionHash! });
     for (const l of w) out += l.args.amount!;
     for (const l of p) paid += l.args.token === "0x0000000000000000000000000000000000000000" ? l.args.amount! : 0n;
@@ -48,6 +50,7 @@ export function StakePage() {
   const [lock, setLock] = useState(365);
   const [bal, setBal] = useState<bigint | null>(null);
   const [h, setH] = useState<Awaited<ReturnType<typeof history>> | null>(null);
+  const [hErr, setHErr] = useState(false);
   const [onChain, setOnChain] = useState<{ staked: bigint | null; eth: bigint | null; shift: bigint | null }>({ staked: null, eth: null, shift: null });
   const [step, setStep] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; tx?: string } | null>(null);
@@ -62,7 +65,8 @@ export function StakePage() {
   const load = async (who = me) => {
     if (!who || !rewards || !token) return;
     setBal(await rpc.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [who] }).catch(() => null));
-    setH(await history(rewards, who, BigInt(Math.max(0, (l?.scanFrom ?? 0) - 20_000))).catch(() => null));
+    setHErr(false);
+    setH(await history(rewards, who, BigInt(Math.max(0, (l?.scanFrom ?? 0) - 100))).catch(() => { setHErr(true); return null; }));
     const read = (functionName: "balanceOf" | "earned", args: readonly unknown[]) => rpc.readContract({ address: rewards, abi: REWARDS, functionName, args } as never).then((x) => x as bigint, () => null);
     setOnChain({ staked: await read("balanceOf", [who]), eth: await read("earned", [who, "0x0000000000000000000000000000000000000000"]), shift: await read("earned", [who, token]) });
   };
@@ -104,8 +108,8 @@ export function StakePage() {
   const now = Date.now() / 1000;
   const staked = onChain.staked ?? (h ? h.stakes.reduce((s, x) => s + x.amount, 0n) - h.out : 0n);
   const unlocked = h ? h.stakes.filter((x) => x.unlockAt <= now).reduce((s, x) => s + x.amount, 0n) - h.out : 0n;
-  // when the stake history could not be read, offer the whole stake: the dry run catches a lock
-  const withdrawable = h ? (unlocked > 0n ? (unlocked > staked ? staked : unlocked) : 0n) : staked;
+  // only what the stake history shows as unlocked: never the whole stake blind
+  const withdrawable = h && unlocked > 0n ? (unlocked > staked ? staked : unlocked) : 0n;
 
   return (
     <div className="docs token-page stake-page">
@@ -137,6 +141,9 @@ export function StakePage() {
 
       {me && ready && (
         <section className="tkn-card">
+          {!h && (hErr
+            ? <p className="bad" style={{ fontSize: 13 }}>Could not read your locks from Ethereum right now. <button type="button" className="swap-max" onClick={() => void load()}>Try again</button></p>
+            : <p className="dim" style={{ fontSize: 13 }}>Reading your stakes and their locks from Ethereum…</p>)}
           <div className="tkn-head"><div><b>YOUR STAKE</b><span>{me.slice(0, 6)}…{me.slice(-4)}</span></div></div>
           <div className="token-specs">
             <div><span>Staked</span><b>{fmt(staked)} ${sym}</b></div>
@@ -151,7 +158,7 @@ export function StakePage() {
             <button className="btn primary" disabled={Boolean(step)} onClick={() => void run("Confirm the claim…", ({ w, a }) => w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "getReward" }))}>Claim rewards</button>
             <button className="btn" disabled={Boolean(step) || withdrawable <= 0n} onClick={() => void run("Confirm the withdrawal…", async ({ w, a }) => {
               // a dry run first: a locked stake is refused here with a clear message, before any gas is spent
-              await rpc.simulateContract({ account: a, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [withdrawable] }).catch(() => { throw new Error(h ? "The contract refused the withdrawal: part of this stake may still be locked." : "The contract refused: some of your stake is still locked. Reload to read your locks and withdraw the unlocked part."); });
+              await rpc.simulateContract({ account: a, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [withdrawable] }).catch(() => { throw new Error("The contract refused the withdrawal: part of this stake may still be locked."); });
               return w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [withdrawable] });
             })}>Withdraw unlocked ({fmt(withdrawable)})</button>
           </div>
