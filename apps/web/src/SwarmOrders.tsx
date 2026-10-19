@@ -76,22 +76,24 @@ export function SwarmOrders({ call, token }: { call: (token: string, path: strin
           <div key={o.key} className="card-b swarm-order">
             <div className="swarm-head"><b>{o.title}</b><span className={`pill ${o.placed ? "ok" : ""}`}>{o.placed ? (o.state?.stage ?? o.state?.status ?? "ordered") : "not ordered"}</span></div>
             <p className="dim">{o.what}</p>
-            {o.placed ? (
+            {o.placed && (
               <p className="swarm-placed">
                 Ordered {new Date(o.placed.at).toLocaleString()} · <a href={`https://etherscan.io/tx/${o.placed.tx}`} target="_blank" rel="noreferrer">payment</a>
                 {o.state?.jobId && <> · <a href={`https://explorer.imd.fun/jobs/${o.state.jobId}`} target="_blank" rel="noreferrer">job on IMD</a></>}
                 {o.state?.launchId && <> · <a href={`https://explorer.imd.fun/launches/${o.state.launchId}`} target="_blank" rel="noreferrer">launch on IMD</a></>}
-                {o.state?.error && <span className="bad"> · {o.state.error}</span>}
+                {o.state?.error && <span className="bad"> · {o.state.error === "unknown_transaction" ? "not seen by IMD yet" : o.state.error}</span>}
               </p>
-            ) : (
+            )}
+            {(!o.placed || o.state?.error === "unknown_transaction") && (
               <>
+                {o.placed && <p className="dim">IMD has not admitted this payment yet. You can pay again: both payments stay followed, and whichever IMD admits first is the one tracked.</p>}
                 {c && "error" in c && <p className="bad">{c.error}</p>}
                 {c && !("error" in c) && c.check && (blockers.length
                   ? <ul className="bad">{blockers.map((b, i) => <li key={i}>{b.message ?? b.detail ?? b.code}</li>)}</ul>
                   : <ol className="swarm-plan">{(c.check.plan ?? []).map((p, i) => <li key={i}>{p.title}</li>)}</ol>)}
                 <div className="swarm-actions">
                   <button className="btn" disabled={Boolean(busy[o.key])} onClick={() => void check(o.key)}>{c ? "Check again" : "Check for free"}</button>
-                  <button className="btn primary" disabled={!ok || Boolean(busy[o.key])} onClick={() => void pay(o)}>Pay 0.5 IMD and start</button>
+                  <button className="btn primary" disabled={!ok || Boolean(busy[o.key])} onClick={() => void pay(o)}>{o.placed ? "Pay 0.5 IMD again" : "Pay 0.5 IMD and start"}</button>
                 </div>
               </>
             )}

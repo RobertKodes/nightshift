@@ -125,7 +125,7 @@ Tests (Foundry): full flows for both tokens with several bettors on both sides a
   },
 ];
 
-type Placed = { tx: string; at: number; posted?: boolean };
+type Placed = { tx: string; at: number; posted?: boolean; earlier?: string[] };
 const file = () => join(config.dataDir, "swarm-orders.json");
 const load = (): Record<string, Placed> => { try { return existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : {}; } catch { return {}; } };
 
@@ -149,7 +149,9 @@ export async function checkOrder(key: string): Promise<{ check: unknown; body: R
 export function placeOrder(key: string, tx: string): Record<string, Placed> {
   if (!ORDERS.some((x) => x.key === key)) throw new Error("unknown order");
   const all = load();
-  all[key] = { tx, at: Date.now() };
+  const was = all[key];
+  // paying again (e.g. while IMD's intake is stalled) keeps the earlier payments followed too
+  all[key] = { tx, at: Date.now(), earlier: was ? [...(was.earlier ?? []), was.tx] : undefined };
   writeAtomic(file(), JSON.stringify(all, null, 2));
   return all;
 }
@@ -161,14 +163,23 @@ const DONE = new Set(["done", "completed", "complete", "delivered", "succeeded",
  * Every 10 minutes: an order the swarm has finished is announced to the community once, with its
  * public job page (and the audit report). Failures are told to the admins only.
  */
+/** The job of the first admitted payment for an order: the latest one, then any earlier ones. */
+async function admittedJob(p: Placed): Promise<string | undefined> {
+  for (const tx of [p.tx, ...(p.earlier ?? [])]) {
+    const intake = await fetch(`https://api.imd.fun/intake/1/${tx}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as { entries?: { admission?: { result?: { jobId?: string } } }[] } | null;
+    const jobId = intake?.entries?.[0]?.admission?.result?.jobId;
+    if (jobId) return jobId;
+  }
+  return undefined;
+}
+
 export function followSwarm(say: (text: string, buttons: { text: string; url: string }[][]) => Promise<unknown>, admin: (text: string) => Promise<unknown>): void {
   const tick = async () => {
     const all = load();
     for (const o of ORDERS) {
       const p = all[o.key];
       if (!p || p.posted) continue;
-      const intake = await fetch(`https://api.imd.fun/intake/1/${p.tx}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as { entries?: { admission?: { result?: { jobId?: string } } }[] } | null;
-      const jobId = intake?.entries?.[0]?.admission?.result?.jobId;
+      const jobId = await admittedJob(p);
       if (!jobId) continue;
       const job = await fetch(`https://api.imd.fun/jobs/${jobId}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as (Job & { job?: Job }) | null;
       const j = job?.job ?? job;
@@ -196,7 +207,12 @@ export async function orders(): Promise<unknown[]> {
   const placed = load();
   return Promise.all(ORDERS.map(async (o) => {
     const p = placed[o.key];
-    const state = p ? await fetch(`https://api.imd.fun/intake/1/${p.tx}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) : null;
+    let state: { error?: string } | null = null;
+    for (const tx of p ? [p.tx, ...(p.earlier ?? [])] : []) {
+      const s = await fetch(`https://api.imd.fun/intake/1/${tx}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as { error?: string } | null;
+      if (!state) state = s;
+      if (s && !s.error) { state = s; break; }
+    }
     return { key: o.key, title: o.title, what: o.what, intake: o.intake, body: o.body, placed: p ?? null, state };
   }));
 }
