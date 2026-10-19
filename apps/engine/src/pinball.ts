@@ -217,6 +217,21 @@ export function watch(id: string, f: (v: WatchView) => void): (() => void) | nul
   return () => { s.delete(send); };
 }
 export function getWatch(id: string): WatchView | null { const m = matches.get(id); return m ? watchView(m) : null; }
+/**
+ * What live betting reads of a duel (bets.ts): its clock, both live scores as the server plays
+ * them, which tables are over, who is connected, and the verified verdict once settled. Also the
+ * players' wallets (no bets from them); this never goes to a browser.
+ */
+export function betState(id: string) {
+  const m = matches.get(id);
+  if (!m || m.players.length !== 2) return null;
+  return {
+    startedAt: m.startedAt, go: m.go, durationMs: GAME_MS, done: m.done, draw: m.draw, void: m.void,
+    winner: m.done && !m.draw && !m.void ? m.players.findIndex((p) => p.id === m.winner) : -1,
+    currency: m.currency, stake: m.stake, escrow: m.escrow ?? null,
+    players: m.players.map((p) => ({ name: p.name, agent: !!p.agent, wallet: p.wallet?.toLowerCase() ?? null, score: p.score ?? p.s.table.score, over: p.inputs !== null || p.s.table.over, connected: p.watching > 0, broken: p.broken !== null })),
+  };
+}
 /** The duels being played now (the countdown included), for the spectators' list. No seat ever leaves here. */
 export function live() {
   return [...matches.values()].filter((m) => !m.done && !m.void && m.startedAt !== null && m.players.length === 2).map((m) => ({

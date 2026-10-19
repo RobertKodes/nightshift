@@ -22,6 +22,8 @@ type Match = {
   rematch: Set<string>; rematchId: string | null; endedAt: number | null;
   /** A staked game: the escrow match id, the stake shown, when it starts regardless, who hears the result. */
   escrow?: string; stake?: string; showBy?: number; onResult?: (r: { draw: boolean; winner: string | null }) => void;
+  /** When the last sharp move was played (a queen or rook taken, or a check): live betting pauses briefly after it. */
+  sharpAt?: number;
 };
 type Rating = { key: string; name: string; rating: number; games: number; wins: number; at: number };
 type NightResult = { key: string; at: number; win: boolean };
@@ -143,6 +145,14 @@ export class ChessGames {
     const v = this.view(m, "", compact);
     return { ...v, escrow: null, you: null, winnerIsYou: false, drawOffer: null, rematchRequested: false, rivalWantsRematch: false, rematchId: null, players: v.players.map((p) => ({ ...p, you: false })) };
   }
+  /**
+   * What live betting needs beyond the spectator view, never sent to a browser: whether the game is
+   * staked, both players' wallets (no bets from them), and the last sharp move.
+   */
+  betInfo(id: string): { escrow: string | null; wallets: { w: string | null; b: string | null }; sharpAt: number | null } {
+    const m = this.match(id), by = (c: Color) => m.players.find((p) => p.color === c)?.wallet?.toLowerCase() ?? null;
+    return { escrow: m.escrow ?? null, wallets: { w: by("w"), b: by("b") }, sharpAt: m.sharpAt ?? null };
+  }
   /** A spectator's stream: told of every change, without counting as a player being there. */
   watch(id: string, f: () => void): () => void {
     this.match(id);
@@ -171,6 +181,7 @@ export class ChessGames {
     try { move = m.game.move({ from, to, promotion }); } catch { throw new Error("Illegal move"); }
     m.clocks[p.color] = Math.max(0, m.clocks[p.color] - (this.now() - m.turnAt)) + CONTROLS[m.tc].increment;
     m.turnAt = this.now(); m.moves.push(move); p.moves++; if (m.drawOffer !== p.id) m.drawOffer = null;
+    if (move.captured === "q" || move.captured === "r" || m.game.isCheck()) m.sharpAt = this.now();
     if (m.game.isCheckmate()) this.end(m, p.color, "checkmate");
     else if (m.game.isStalemate()) this.end(m, null, "stalemate");
     else if (m.game.isThreefoldRepetition()) this.end(m, null, "repetition");

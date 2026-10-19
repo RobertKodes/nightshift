@@ -81,7 +81,7 @@ export async function setupState(engine: Engine) {
 
 /** Settings that move money or trust: every change is announced, so a leaked admin token cannot act quietly. */
 export const ANNOUNCED = ["NIGHTSHIFT_MODE", "PLATFORM_TREASURY", "PLATFORM_DEV", "PLATFORM_FEE_BPS", "ETH_RPC", "SALES_RPC", "SALES_CHAIN_ID", "TOKEN_ADDRESS", "NFT_ADDRESS", "REQUIRE_AUTH",
-  "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS", "LAUNCH_NOTIFY", "PUBLIC_URL"];
+  "BETPOOL_ADDRESS", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS", "LAUNCH_NOTIFY", "PUBLIC_URL"];
 
 /** Saved settings that differ from what runs now, by name: what a restart would apply. */
 export function pendingChanges(): string[] {
@@ -89,6 +89,7 @@ export function pendingChanges(): string[] {
   const running: Record<string, string> = {
     NIGHTSHIFT_MODE: config.mode, PLATFORM_TREASURY: config.platformTreasury, PLATFORM_DEV: config.platformDev, PLATFORM_FEE_BPS: String(config.platformFeeBps),
     ETH_RPC: config.ethRpc, SALES_RPC: config.salesRpc, SALES_CHAIN_ID: String(config.salesChainId), TOKEN_ADDRESS: config.token.address, NFT_ADDRESS: config.nft.address,
+    BETPOOL_ADDRESS: config.betPool.address, BETPOOL_BLOCK: String(config.betPool.block),
     TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","), PUBLIC_URL: config.publicUrl, REQUIRE_AUTH: config.requireAuth ? "1" : "0",
   };
   return EDITABLE.filter((k) => saved[k] !== undefined && (SECRET_KEYS.has(k) || running[k] === undefined || saved[k] !== running[k]));
@@ -116,6 +117,10 @@ export function checkSetup(patch: Record<string, unknown>): string | null {
   if (dv && !isAddress(dv)) return "PLATFORM_DEV must be an address";
   const ta = v("TOKEN_ADDRESS");
   if (ta && !isAddress(ta)) return "TOKEN_ADDRESS must be an address";
+  const bp = v("BETPOOL_ADDRESS");
+  if (bp && !isAddress(bp)) return "BETPOOL_ADDRESS must be an address";
+  const bb = v("BETPOOL_BLOCK");
+  if (bb && !/^\d{1,12}$/.test(bb)) return "BETPOOL_BLOCK is the contract's deploy block number";
   // A masked secret coming back unchanged means "keep it".
   for (const k of SECRET_KEYS) if (patch[k] === "set") delete patch[k];
   return null;

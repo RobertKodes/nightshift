@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { BetPanel } from "./bets";
 import { Icon } from "./Icon";
 import { useSession } from "./session";
 import "./arena.css";
@@ -83,6 +84,7 @@ function Spectate({ id, onClose }: { id: string; onClose: () => void }) {
         </div>
       </div>}
       {w?.done && !w.fen && <p className="dim">This game is over.</p>}
+      <BetPanel game="arena" id={id} theme="ar" />
     </section>
   );
 }

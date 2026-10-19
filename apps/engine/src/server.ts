@@ -26,6 +26,7 @@ import { chessRoutes } from "./chess-routes.js";
 import { gamesRoutes } from "./games-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
 import { spectateRoutes } from "./spectate.js";
+import { betsRoutes } from "./bets-routes.js";
 import { prices } from "./prices.js";
 import { checkOrder as checkSwarmOrder, orders as swarmOrders, placeOrder as placeSwarmOrder } from "./swarm.js";
 import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
@@ -381,6 +382,7 @@ export function serve(engine: Engine) {
       }
       if (await spectateRoutes(req, res, p, { json, limited })) return;
       if (p.startsWith("/api/chess/") && await chessRoutes(req, res, p, { json, body, limited, owner: engine.auth.owner(req), url })) return;
+      if (p.startsWith("/api/bets/") && await betsRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner: engine.auth.owner(req), url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
       if (p.startsWith("/api/pinball/")) {

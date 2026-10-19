@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
+import { BetPanel } from "../bets";
 import { Link } from "../router";
 import { stakeText } from "../games/live";
 import { H, Table, W } from "./engine";
@@ -101,6 +102,7 @@ export function PinballWatch({ id }: { id: string }) {
       </div>
       <div className="pw-bar" aria-hidden="true"><span style={{ width: `${Math.round((shown(a) / Math.max(1, shown(a) + shown(b))) * 100)}%` }} /></div>
       {!m.done && !m.void && <p className="pw-note">{lead === 0 ? "Level on points." : `${(lead > 0 ? a : b).name} leads by ${Math.abs(lead).toLocaleString()}.`} Live scores; the result is the server's replay of both tables.</p>}
+      <BetPanel game="pinball" id={id} theme="arc" />
       {(m.done || m.void) && <div className="arc-result pw-result" role="region" aria-label="Duel result">
         <span className="arc-result-icon"><Icon name={m.void ? "alert" : m.draw ? "scales" : "trophy"} size={28} /></span>
         <span className="arc-kicker">{m.void ? "No duel" : "Final result · verified by replay"}</span>

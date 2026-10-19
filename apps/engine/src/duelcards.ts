@@ -1,5 +1,6 @@
 import { formatUnits } from "viem";
 import { config } from "./config.js";
+import { type BetEvent, payoutOf } from "./bets.js";
 import { ESCROW, type Challenge, type DuelEvent } from "./escrow.js";
 import { prices } from "./prices.js";
 import { type Button, esc } from "./social.js";
@@ -92,5 +93,41 @@ export function freeDuelCard(g: LiveGame): { text: string; buttons: Button[][] }
       g.game === "chess" && g.tc ? `⏱ ${esc(g.tc)} · free game` : "🎮 Free game",
     ].join("\n"),
     buttons: [[{ text: "👀 Watch live", url: `${config.publicUrl}${g.watch}` }, { text: "🎮 Play too", url: `${config.publicUrl}${PAGE[g.game]}` }]],
+  };
+}
+
+const BET_GAME = { chess: "♟ NIGHT CHESS", pinball: "🎱 SPACE PINBALL", arena: "🤖 AGENT ARENA" } as const;
+const watchUrl = (board: keyof typeof BET_GAME, id: string) => `${config.publicUrl}${board === "arena" ? "/arena" : PAGE[board]}?watch=${id}`;
+
+/** Live betting: a big bet as it lands, and a settled pool (only when both sides had bets). */
+export async function betCard(e: BetEvent): Promise<{ text: string; buttons: Button[][] } | null> {
+  const m = e.market, [a, b] = m.names;
+  const watch = [{ text: "👀 Watch and bet", url: watchUrl(m.board, m.id) }];
+  if (e.kind === "big") {
+    const side = e.bet.side === 0 ? a : b;
+    return {
+      text: [
+        `🎯 <b>BIG LIVE BET · ${BET_GAME[m.board]}</b>`, "",
+        `${who(undefined, e.bet.bettor)} put <b>${amount(e.bet.amount)} ${sym(m.token)}</b>${await usd(m.token, e.bet.amount)} on <b>${esc(side)}</b>`,
+        `⚖️ Counted at <b>${(e.bet.weightBps / 10_000).toFixed(2)}x</b> · ${esc(a)} 🆚 ${esc(b)}`,
+        `💰 Pool now <b>${amount((BigInt(m.totals.a) + BigInt(m.totals.b)).toString())} ${sym(m.token)}</b>`, "",
+        "Early and underdog bets count more. The pool pays out on the server-verified result.",
+      ].join("\n"),
+      buttons: [watch, [{ text: "🔎 On chain", url: `https://etherscan.io/tx/${e.bet.tx}` }]],
+    };
+  }
+  if (!m.closed || m.closed.kind !== "settled" || m.closed.outcome === undefined) return null;
+  const p = payoutOf(m, m.closed.outcome);
+  if (p.refundable || p.pool === 0n) return null; // a void or one-sided pool simply refunds
+  const winner = m.closed.outcome === 0 ? a : b, loser = m.closed.outcome === 0 ? b : a;
+  return {
+    text: [
+      `🏁 <b>LIVE BETS SETTLED · ${BET_GAME[m.board]}</b>`, "",
+      `🏆 <b>${esc(winner)}</b> beat ${esc(loser)}`,
+      `💰 Pool <b>${amount(p.pool.toString())} ${sym(m.token)}</b>${await usd(m.token, p.pool.toString())} · ${m.totals.bets} bet${m.totals.bets === 1 ? "" : "s"}`,
+      `🎉 Winners share <b>${amount(p.winners.toString())} ${sym(m.token)}</b>: their stakes back plus 95% of the losing side`,
+      `🔥 ${amount(p.fee.toString())} ${sym(m.token)} fee to stakers, NIGHT FROGS holders, the treasury and burns`,
+    ].join("\n"),
+    buttons: [[{ text: "🎮 Watch the next game", url: `${config.publicUrl}/games/live` }], [{ text: "🔎 Settlement", url: `https://etherscan.io/tx/${m.closed.tx}` }]],
   };
 }

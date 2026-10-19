@@ -81,6 +81,10 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "NFT_ADDRESS", label: "NIGHT FROGS contract (fills itself in)", hint: "0x…" },
     { k: "NFT_EXTRA_SLOTS", label: "Extra company slots per frog holder", hint: "2" },
   ] },
+  { title: "Live betting", note: "BetPool on Ethereum (the swarm's arena-bets order). Empty = off. Once deployed: its address and deploy block here, setSigner(the game signer) from the owner wallet, and the same address pinned in the web app (bets.tsx).", fields: [
+    { k: "BETPOOL_ADDRESS", label: "BetPool contract", hint: "0x…" },
+    { k: "BETPOOL_BLOCK", label: "Its deploy block", hint: "e.g. 23900000" },
+  ] },
   { title: "Simulation pacing", fields: [
     { k: "SIM_SHIFT_MINUTES", label: "Minutes between shifts", hint: "2" },
     { k: "SIM_JOB_SECONDS", label: "Seconds per swarm job", hint: "40" },
@@ -161,7 +165,7 @@ export function SetupPage() {
       </section>
 
       <section className="card">
-        <div className="card-h"><h3>Space Pinball: orders for the IMD swarm</h3><span className="faint" style={{ fontSize: 12 }}>free check first · 0.5 IMD each from your dev wallet</span></div>
+        <div className="card-h"><h3>Orders for the IMD swarm</h3><span className="faint" style={{ fontSize: 12 }}>free check first · 0.5 IMD each from your dev wallet</span></div>
         <SwarmOrders call={call} token={token} />
       </section>
 

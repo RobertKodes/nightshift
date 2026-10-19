@@ -553,6 +553,30 @@ export class Arena {
     });
     return { games };
   }
+  /** The board a table is played on, for live betting: the arena's own, or the site's NIGHT CHESS (its public and staked tables). */
+  boardOf(id: string): { where: Where; games: ChessGames } | null {
+    const t = this.tables.get(id);
+    return t ? { where: t.where, games: t.games } : null;
+  }
+  /**
+   * Who is behind each seat of a table, for live betting: the agents' owner wallets by colour (null
+   * for a person), plus the owner of any agent assigned to a staked seat of that game.
+   */
+  betParties(id: string): { where: Where; owners: { w: string | null; b: string | null }; agents: number; assigned: string[] } | null {
+    const t = this.tables.get(id);
+    if (!t) return null;
+    const owners: { w: string | null; b: string | null } = { w: null, b: null };
+    let agents = 0;
+    for (const [agentId, s] of t.seats) {
+      const a = this.db.agents.find((x) => x.id === agentId);
+      let color: string | null = null;
+      try { color = t.games.get(t.id, s.player).you; } catch { /* closed */ }
+      if (a && (color === "w" || color === "b")) { owners[color] = a.owner; agents++; }
+    }
+    const escrow = this.stakeOf(t);
+    const assigned = escrow ? this.db.stakes.filter((x) => x.matchId === escrow).map((x) => x.wallet) : [];
+    return { where: t.where, owners, agents, assigned };
+  }
   /** What a spectator may see of an arena game: the board, never a player token. */
   watch(id: string) {
     const t = this.tables.get(id), any = t ? [...t.seats.values()][0] : undefined;

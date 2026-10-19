@@ -46,7 +46,8 @@ import { fillTraits, frogCaption, sendFrogCard } from "./frogcard.js";
 import { type ArcadeEvent, onArcade } from "./pinball.js";
 import { followSwarm } from "./swarm.js";
 import { live as gameLobby } from "./games-routes.js";
-import { duelCard, freeDuelCard } from "./duelcards.js";
+import { betCard, duelCard, freeDuelCard } from "./duelcards.js";
+import { liveBets } from "./bets-routes.js";
 import { liveGames } from "./spectate.js";
 import { type ChessEvent, onChess } from "./chess.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
@@ -192,6 +193,8 @@ export class Engine {
     }, 60_000);
     // Duels to the community: every staked challenge (listed, on, won), and free PvP or agent games now and then.
     gameLobby(this.vault).escrow.onEvent((kind, c) => void duelCard(kind, c).then((card) => card && toCommunity(card.text, card.buttons, kind === "settled" ? "milestone" : "launch")).catch((e) => console.error("duel card", e)));
+    // Live betting: big bets and settled pools (nothing runs while BETPOOL_ADDRESS is empty).
+    liveBets(this.vault).onEvent((e) => void betCard(e).then((card) => card && toCommunity(card.text, card.buttons, e.kind === "settled" ? "milestone" : "launch")).catch((err) => console.error("bet card", err)));
     const seenDuels = new Set<string>();
     let primed = false, lastFree = 0, lastAgent = 0;
     setInterval(() => {

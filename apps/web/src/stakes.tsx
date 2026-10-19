@@ -26,7 +26,7 @@ const ABI = parseAbi([
   "function limits(address token) view returns (uint256 min, uint256 max)",
   "function matches(bytes32 matchId) view returns (address token, uint256 stake, bytes32 game, address playerA, address playerB, uint256 openedAt, uint256 joinedAt, bool settled)",
 ]);
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+export const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
 const ZERO = "0x0000000000000000000000000000000000000000";
 export const tokenLabel = (t: string) => (t === "SHIFT" ? "$SHIFT" : "IMD");
 const short = (a?: string | null) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "?");
@@ -59,14 +59,14 @@ export function useEscrow(): Escrow | null {
 }
 
 /** The signed-in wallet's provider, on Ethereum mainnet, the same account as the session. */
-async function wallet(address: string) {
+export async function wallet(address: string) {
   const w = createWalletClient({ chain: mainnet, transport: custom((await chooseWallet()) as never) });
   const [a] = await w.requestAddresses();
   if (!a || a.toLowerCase() !== address.toLowerCase()) throw new Error(`Your wallet is on ${short(a)} but you are signed in as ${short(address)}. Switch the account, or sign in again.`);
   return { w, a: getAddress(a) };
 }
 /** Checked before every transaction: chain id 1, or the wallet is asked to switch. */
-async function mainnetOnly(w: ReturnType<typeof createWalletClient>) {
+export async function mainnetOnly(w: ReturnType<typeof createWalletClient>) {
   if ((await w.getChainId()) === 1) return;
   await w.switchChain({ id: 1 }).catch(() => {});
   if ((await w.getChainId()) !== 1) throw new Error("Switch your wallet to Ethereum mainnet first.");

@@ -98,6 +98,14 @@ export const config = {
     /** The owner's Chainlink VRF v2.5 subscription, prefilled in /setup for configureVRF. */
     vrfSub: env.NFT_VRF_SUB ?? "",
   },
+  /**
+   * Live betting for spectators (BetPool on Ethereum, built by the IMD swarm): off while
+   * BETPOOL_ADDRESS is empty. BETPOOL_BLOCK is its deploy block, where the event follower starts.
+   */
+  betPool: {
+    address: (/^0x[0-9a-fA-F]{40}$/.test(env.BETPOOL_ADDRESS ?? "") ? env.BETPOOL_ADDRESS! : "") as `0x${string}` | "",
+    block: Math.max(0, Math.floor(num(env.BETPOOL_BLOCK, 0))),
+  },
   /** Companies one wallet may run at once. */
   maxCompaniesPerOwner: num(env.MAX_COMPANIES_PER_OWNER, 5),
 };
