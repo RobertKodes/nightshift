@@ -25,7 +25,8 @@ export async function chessRoutes(req: IncomingMessage, res: ServerResponse, p: 
     if (p === "/api/chess/queue" && req.method === "POST") {
       if (limited(req, "chess-queue", 20, 600_000)) return reply(429, { error: "Too many searches. Try again shortly." });
       const b = await body(req, 2_000);
-      return reply(200, chess.queue(String(b.name ?? ""), owner, String(b.tc ?? "3+2") as TimeControl));
+      // "any": whoever waits, in any time control
+      return reply(200, chess.queue(String(b.name ?? ""), owner, String(b.tc ?? "3+2") as TimeControl | "any"));
     }
     const state = /^\/api\/chess\/match\/([a-f0-9]+)$/.exec(p);
     if (state && req.method === "GET") return reply(200, chess.get(state[1]!, url.searchParams.get("player") ?? ""));
@@ -76,5 +77,9 @@ export async function chessRoutes(req: IncomingMessage, res: ServerResponse, p: 
     if (action === "draw") return reply(200, chess.draw(id, player, String(b.action ?? "offer")));
     if (action === "rematch") return reply(200, chess.rematch(id, player));
     chess.leave(id, player); return reply(200, { ok: true });
-  } catch (err) { return reply(400, { error: (err as Error).message }); }
+  } catch (err) {
+    // the lounge's refusals carry their own status (409: your own game, someone took it; 410: closed)
+    const status = (err as { status?: unknown }).status;
+    return reply(typeof status === "number" ? status : 400, { error: (err as Error).message });
+  }
 }

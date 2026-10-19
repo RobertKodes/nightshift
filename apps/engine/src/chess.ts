@@ -14,6 +14,19 @@ import { publicName } from "./names.js";
 export const STAKED_SHOW_MS = 5 * 60_000;
 export const CONTROLS = { "3+2": { time: 180_000, increment: 2_000 }, "5+0": { time: 300_000, increment: 0 }, "10+0": { time: 600_000, increment: 0 } };
 export type TimeControl = keyof typeof CONTROLS;
+/** An open free game stays in the lounge this long after its host's last stream closed (a phone asleep, a tab switch)… */
+export const LOUNGE_GRACE_MS = 90_000;
+/** …and at most this long in all, waiting for a rival. */
+export const LOUNGE_WAIT_MS = 30 * 60_000;
+/** Why an open game closed without being played: its host was away past the grace period, or nobody came. */
+export type Expired = "away" | "timeout";
+/** A wallet asking to play its own open game: said plainly, never a silent wait. */
+export class OwnGameError extends Error {
+  readonly status = 409;
+  constructor() { super("This is your own game: use another wallet or play as a guest."); }
+}
+/** A lounge request that cannot be met (gone, taken, host away): a clear reason with an HTTP status. */
+export class LoungeError extends Error { constructor(readonly status: number, message: string) { super(message); } }
 export type Reason = "checkmate" | "stalemate" | "repetition" | "insufficient material" | "50-move rule" | "resignation" | "agreement" | "abandonment" | "timeout";
 type Player = { id: string; name: string; wallet: string | null; color: Color; rating: number; moves: number; streams: number; offlineAt: number | null; agent?: boolean; times?: number[] };
 type Match = {
@@ -27,7 +40,15 @@ type Match = {
   sharpAt?: number;
   /** A staked game whose move times look machine-made (flagFor): for the operator to look at, nothing automatic. */
   flagged?: Flag;
+  /** An open game whose host takes any time control: the first rival's sets the clock. */
+  any?: boolean;
+  /** An open game that closed unplayed, and why: its host is told when they come back. */
+  expired?: Expired;
+  /** An open game folded into an older one in the same time control: its host's stream follows there. */
+  movedTo?: string;
 };
+/** An open free game as the lounge lists it: the host's public name and rating only, never a seat or a wallet. */
+export type OpenChess = { id: string; tc: TimeControl; any: boolean; host: { name: string; rating: number; agent?: boolean }; since: number; away: boolean; awayUntil: number | null };
 /** Why a staked game was flagged: whose moves, how many, and their mean and spread in ms. */
 export type Flag = { game: string; escrow: string; player: string; wallet: string | null; moves: number; meanMs: number; sdMs: number; at: number };
 /** Move times are judged over at least this many of a player's moves in a staked game… */
@@ -103,23 +124,115 @@ export class ChessGames {
     return { id: m.id, seats: { [a.wallet!]: a.id, [b.wallet!]: b.id } };
   }
   private start(m: Match) { m.startedAt = this.now() + 5_000; m.turnAt = m.startedAt; this.emit(m); }
-  /** `agent` marks an AI player (the arena's), shown as such to spectators. */
-  queue(name: string, wallet: string | null, tc: TimeControl, agent = false) {
-    if (!Object.hasOwn(CONTROLS, tc)) throw new Error("Choose 3+2, 5+0 or 10+0");
-    if (this.matches.size >= 10_000) throw new Error("The arcade is full. Try again shortly.");
+  /** A free game waiting for its second player. */
+  private isOpen(m: Match) { return !m.done && !m.startedAt && !m.escrow && m.players.length === 1; }
+  /** Its host is here (an open stream) and it has not waited too long: a rival may sit down now. */
+  private joinable(m: Match) { return this.isOpen(m) && m.players[0]!.streams > 0 && this.now() - m.createdAt <= LOUNGE_WAIT_MS; }
+  /** A person's own open game (the same wallet): never a game against themselves, and always said. Agents of one owner just wait apart. */
+  private own(m: Match, wallet: string | null, agent: boolean) { return !agent && !m.players[0]!.agent && this.sameWallet(m, wallet); }
+  /** The same wallet as a person and as its own agent is no game either, but no error: each waits for someone else. */
+  private sameWallet(m: Match, wallet: string | null) { const w = m.players[0]?.wallet; return !!wallet && !!w && w.toLowerCase() === wallet.toLowerCase(); }
+  private unlist(m: Match) { for (const line of this.waiting.values()) line.delete(m.id); }
+  private newPlayer(name: string, wallet: string | null, agent: boolean): Player {
     const p: Player = { id: randomUUID(), name: cleanName(name), wallet, color: randomInt(2) ? "w" : "b", rating: 1200, moves: 0, streams: 0, offlineAt: this.now(), ...(agent ? { agent: true } : {}) };
     p.rating = this.rating(p);
-    const line = this.waiting.get(tc) ?? new Set<string>();
-    this.waiting.set(tc, line);
-    for (const id of line) {
-      const m = this.matches.get(id), rival = m?.players[0];
-      if (!m || m.done || m.startedAt || this.now() - m.createdAt > 600_000) { line.delete(id); continue; }
-      if (!rival?.streams || (wallet && rival.wallet?.toLowerCase() === wallet.toLowerCase())) continue;
-      p.color = opposite(rival.color); m.players.push(p); line.delete(id); this.start(m);
+    return p;
+  }
+  /** The rival sits down: the other colour, the host's clock (the rival's, for a host who takes any), then the countdown. */
+  private seat(m: Match, p: Player, tc: TimeControl | "any") {
+    if (m.any && tc !== "any" && tc !== m.tc) { m.tc = tc; m.clocks = { w: CONTROLS[tc].time, b: CONTROLS[tc].time }; }
+    m.any = false;
+    p.color = opposite(m.players[0]!.color); m.players.push(p); this.unlist(m); this.start(m);
+  }
+  /** Open games, oldest first: the longest wait is served first. */
+  private openGames() {
+    return [...this.waiting.values()].flatMap((line) => [...line]).map((id) => this.matches.get(id)).filter((m): m is Match => !!m && this.isOpen(m)).sort((a, b) => a.createdAt - b.createdAt);
+  }
+  /**
+   * Find a rival, or open a game in the lounge. `tc` "any" plays whoever waits in any time control
+   * (on their clock), else opens a 3+2 game that the next rival of any time control takes on theirs.
+   * A wallet that already has an open game is told so, instead of waiting on itself. `agent` marks
+   * an AI player (the arena's), shown as such to spectators.
+   */
+  queue(name: string, wallet: string | null, tc: TimeControl | "any", agent = false) {
+    if (tc !== "any" && !Object.hasOwn(CONTROLS, tc)) throw new Error("Choose 3+2, 5+0 or 10+0");
+    if (this.matches.size >= 10_000) throw new Error("The arcade is full. Try again shortly.");
+    const open = this.openGames();
+    if (open.some((m) => this.own(m, wallet, agent))) throw new OwnGameError();
+    const p = this.newPlayer(name, wallet, agent);
+    for (const m of open) {
+      if (!this.joinable(m) || this.sameWallet(m, wallet)) continue;
+      if (tc !== "any" && !m.any && m.tc !== tc) continue;
+      this.seat(m, p, tc);
       return { match: this.view(m, p.id), player: p.id };
     }
-    const m = this.create(tc, [p]); line.add(m.id);
+    const m = this.create(tc === "any" ? "3+2" : tc, [p]);
+    if (tc === "any") m.any = true;
+    const line = this.waiting.get(m.tc) ?? new Set<string>();
+    this.waiting.set(m.tc, line); line.add(m.id);
     return { match: this.view(m, p.id), player: p.id };
+  }
+  /**
+   * Sit down at one open game from the lounge, by its id. The same checks as the queue: not your own
+   * wallet's, still open, its host here. The wallet's own open game elsewhere is closed first.
+   */
+  join(id: string, name: string, wallet: string | null, agent = false) {
+    const m = this.matches.get(id);
+    if (!m || m.escrow) throw new LoungeError(404, "This game is not in the lounge any more.");
+    if (m.startedAt || m.players.length > 1) throw new LoungeError(409, "Someone else just took this game. Pick another one.");
+    if (m.done) throw new LoungeError(410, m.expired === "timeout" ? "This game waited too long and closed." : "This game has closed.");
+    if (this.sameWallet(m, wallet)) throw new OwnGameError();
+    if (m.players[0]!.streams === 0) throw new LoungeError(409, "The host stepped away for a moment. Their game opens again when they are back.");
+    if (!this.joinable(m)) throw new LoungeError(410, "This game waited too long and closed.");
+    for (const o of this.openGames()) if (this.own(o, wallet, agent)) { o.done = true; o.endedAt = this.now(); this.unlist(o); this.emit(o); }
+    const p = this.newPlayer(name, wallet, agent);
+    this.seat(m, p, "any");
+    return { match: this.view(m, p.id), player: p.id };
+  }
+  /** Close an open game from the lounge: by its host's seat token, or by the signed-in wallet that opened it. */
+  cancel(id: string, me: string | null, wallet: string | null) {
+    const m = this.matches.get(id);
+    if (!m || !this.isOpen(m)) throw new LoungeError(404, "This game is not open any more.");
+    const host = m.players[0]!;
+    if (!(me && host.id === me) && !this.sameWallet(m, wallet)) throw new LoungeError(403, "Only the player who opened this game can close it.");
+    m.done = true; m.endedAt = this.now(); this.unlist(m); this.emit(m);
+  }
+  /**
+   * The lounge's free games: each open one (its host's name and rating, since when it waits, away
+   * while the host's stream is gone within the grace period) and how many wait per time control (hosts who are here).
+   * `mine` lists the ids the signed-in wallet opened; no wallet or seat leaves here.
+   */
+  lounge(wallet: string | null = null): { open: OpenChess[]; waiting: Record<TimeControl | "any", number>; mine: string[] } {
+    const waiting: Record<TimeControl | "any", number> = { "3+2": 0, "5+0": 0, "10+0": 0, any: 0 };
+    const open: OpenChess[] = [], mine: string[] = [];
+    for (const m of this.openGames()) {
+      const host = m.players[0]!, away = host.streams === 0;
+      // a host who is away is listed, not counted: nobody can sit down there right now
+      if (!away) waiting[m.any ? "any" : m.tc]++;
+      if (this.sameWallet(m, wallet)) mine.push(m.id);
+      if (open.length < 100) open.push({ id: m.id, tc: m.tc, any: !!m.any, host: { name: host.name, rating: host.rating, ...(host.agent ? { agent: true } : {}) }, since: m.createdAt, away, awayUntil: away && host.offlineAt !== null ? host.offlineAt + LOUNGE_GRACE_MS : null });
+    }
+    return { open, waiting, mine };
+  }
+  /**
+   * Two open games that could be one (the same time control, or a host who takes any; different
+   * wallets; both hosts here): the newer host moves to the older table and their stream follows
+   * (movedTo), so two players never wait apart for each other. An agent's table never moves.
+   */
+  private fold() {
+    const open = this.openGames().filter((m) => this.joinable(m));
+    for (let i = 0; i < open.length; i++) {
+      const a = open[i]!;
+      for (let j = i + 1; j < open.length && this.isOpen(a); j++) {
+        const b = open[j]!, mover = b.players[0]!;
+        if (!this.isOpen(b) || mover.agent || this.sameWallet(a, mover.wallet)) continue;
+        if (a.tc !== b.tc && !a.any && !b.any) continue;
+        // a host who takes any plays on the other's clock
+        const tc: TimeControl | "any" = a.any && !b.any ? b.tc : "any";
+        b.done = true; b.endedAt = this.now(); b.movedTo = a.id; this.unlist(b);
+        this.seat(a, mover, tc); this.emit(b);
+      }
+    }
   }
   private clocks(m: Match) {
     const clocks = { ...m.clocks };
@@ -136,6 +249,7 @@ export class ChessGames {
       you: m.players.find((p) => p.id === me)?.color ?? null, winnerIsYou: m.winner === me,
       drawOffer: m.drawOffer ? m.drawOffer === me ? "you" as const : "rival" as const : null,
       rematchRequested: m.rematch.has(me), rivalWantsRematch: m.players.some((p) => p.id !== me && m.rematch.has(p.id)), rematchId: m.rematchId,
+      waitingSince: m.createdAt, any: !!m.any, expired: m.expired ?? null, movedTo: m.movedTo ?? null,
       players: m.players.map((p) => ({ name: p.name, color: p.color, rating: p.rating, you: p.id === me, connected: p.streams > 0 })) };
   }
   get(id: string, me: string, compact = false) { const m = this.match(id); this.player(m, me); this.check(m); return this.view(m, me, compact); }
@@ -183,7 +297,7 @@ export class ChessGames {
     const m = this.match(id); this.player(m, me);
     if (m.escrow) throw new Error("A staked game starts once both players are here, or within 5 minutes. Stay at the table.");
     if (m.startedAt) throw new Error("The rival joined. Resign to leave this game.");
-    m.done = true; this.waiting.get(m.tc)?.delete(id); this.emit(m);
+    m.done = true; m.endedAt = this.now(); this.unlist(m); this.emit(m);
   }
   private check(m: Match) {
     if (m.done || !m.startedAt || this.now() < m.startedAt) return;
@@ -295,10 +409,18 @@ export class ChessGames {
       }
       this.check(m);
       if (!m.done && m.startedAt) this.emit(m);
-      if ((!m.startedAt && this.now() - m.createdAt > 600_000) || (m.endedAt !== null && this.now() - m.endedAt > 3_600_000)) {
-        m.done = true; this.emit(m); this.waiting.get(m.tc)?.delete(m.id); this.matches.delete(m.id); this.listeners.delete(m.id);
+      // an open game whose host is gone past the grace period, or that waited too long: closed, and kept
+      // an hour so a host who comes back is told why
+      if (this.isOpen(m)) {
+        const host = m.players[0]!;
+        const expired: Expired | null = this.now() - m.createdAt > LOUNGE_WAIT_MS ? "timeout" : host.streams === 0 && host.offlineAt !== null && this.now() - host.offlineAt > LOUNGE_GRACE_MS ? "away" : null;
+        if (expired) { m.done = true; m.expired = expired; m.endedAt = this.now(); this.unlist(m); this.emit(m); }
+      }
+      if ((!m.startedAt && !m.done && this.now() - m.createdAt > LOUNGE_WAIT_MS + 60_000) || (m.endedAt !== null && this.now() - m.endedAt > 3_600_000)) {
+        m.done = true; this.emit(m); this.unlist(m); this.matches.delete(m.id); this.listeners.delete(m.id);
       }
     }
+    this.fold();
   }
 }
 export const chess = new ChessGames();

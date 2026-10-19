@@ -1,7 +1,7 @@
 import { RuleBar } from "./TokenomicsPage";
 import { Icon } from "./Icon";
 import "./chess/chess.css";
-import { LiveNow } from "./games/live";
+import { Lounge } from "./games/lounge";
 
 const GAMES: [string, string, string][] = [
   ["Frog Flip", "Two players, one coin. The flip comes from Chainlink VRF, so neither player nor NIGHTSHIFT can pick it.", "First"],
@@ -18,7 +18,7 @@ export function GameRoomPage() {
       <h1>NIGHTSHIFT Game Room. <em>For awesome night breaks.</em></h1>
       <p className="lead">Short player-versus-player games between shifts. Two players put in the same amount of $SHIFT or IMD; the winner takes the pot, minus a 5% fee split by the one rule, so every game also burns $SHIFT and IMD.</p>
 
-      <LiveNow />
+      <Lounge create />
 
       <section className="tkn-card pb-promo" aria-labelledby="pb-promo-title">
         <div className="pb-promo-visual" aria-hidden="true"><img src="/games/pinball/key-art.webp" alt="" /></div>

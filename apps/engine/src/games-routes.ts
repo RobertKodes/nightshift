@@ -6,6 +6,7 @@ import { createStaked as pinballStaked } from "./pinball.js";
 import { type Challenge, ESCROW, Escrow, GameError, liveEscrow } from "./escrow.js";
 import { keeperAccount } from "./keeper.js";
 import { eth } from "./chain.js";
+import { loungeRoutes } from "./lounge.js";
 import type { Vault } from "./vault.js";
 
 type Context = {
@@ -88,6 +89,8 @@ export async function gamesRoutes(req: IncomingMessage, res: ServerResponse, p: 
       return reply(200, { escrow: ESCROW, serverSigner: escrow.serverSigner, signer: chain?.signer ?? null, paused: chain?.paused ?? null, live: chain?.live ?? false,
         keeper, keeperEth: (await eth.getBalance({ address: keeper }).catch(() => 0n)).toString(), cursor: escrow.cursor.toString() });
     }
+    // the lounge: every open game, waiting counts, open challenges and live games, with its own limits
+    if (await loungeRoutes(req, res, p, { json, body, limited, owner, challenges: () => escrow.open(undefined, null) })) return true;
     if (limited(req, "games", 240, 60_000)) return reply(429, { error: "Slow down" });
     if (p === "/api/games/escrow" && req.method === "GET") {
       const chain = await escrow.chainState().catch(() => null);

@@ -12,6 +12,7 @@ import { api, clockText, CONTROLS, type Leaderboard, type MatchView, type Player
 import "./chess/chess.css";
 import "./games/live.css";
 import { type Seat, StakeLobby, StakeResult, tokenLabel, useEscrow } from "./stakes";
+import { alertJoined, doneWaiting, keepWaiting, Lounge, primeAlerts, useLounge, waitingOn, waitText } from "./games/lounge";
 
 const OPENING = new Chess().fen();
 const DEMO = "r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 7";
@@ -41,7 +42,10 @@ export function ChessPage() {
   const { address, signIn, busy: signing } = useSession();
   const [name,setName] = useState(()=>{try{return localStorage.getItem("nc-name") ?? "";}catch{return "";}});
   const [tc,setTc] = useState<TimeControl>("3+2");
-  const [money,setMoney] = useState<"FREE" | "IMD" | "SHIFT">("FREE");
+  // ?accept=<match>&token=IMD (from the lounge): the stake lobby, where that challenge is accepted
+  const [money,setMoney] = useState<"FREE" | "IMD" | "SHIFT">(()=>{const t=new URLSearchParams(location.search).get("token");return t==="IMD" || t==="SHIFT" ? t : "FREE";});
+  const lounge = useLounge();
+  const [closedNote,setClosedNote] = useState<string | null>(null);
   const escrow = useEscrow();
   const [match,setMatch] = useState<MatchView | null>(null);
   const [token,setToken] = useState("");
@@ -77,6 +81,19 @@ export function ChessPage() {
     if(old?.id!==incoming.id) {shownPly.current=incoming.ply;setSelected(null);setPromotion(null);setConfirm(null);}
     else if(incoming.ply>shownPly.current) {shownPly.current=incoming.ply;sound.current?.play(incoming.check ? "check" : incoming.lastMove?.captured ? "capture" : "move");setSelected(null);setPromotion(null);}
     if(incoming.done){setConfirm(null);setPromotion(null);setSelected(null);}
+    if(!watching.current && !practice.current) {
+      // folded into an older table in the lounge: the same seat, followed there
+      if(incoming.movedTo){keepWaiting(null);try{sessionStorage.setItem("nc-match",JSON.stringify({id:incoming.movedTo,player:playerToken.current}));}catch { /* private window */ }refreshStream.current(incoming.movedTo,playerToken.current);return;}
+      // an open game that closed unplayed: back to the lobby, and why
+      if(incoming.done && !incoming.startedAt){
+        doneWaiting("chess",incoming.id);source.current?.close();source.current=null;current.current=null;setMatch(null);setToken("");setConnected(true);
+        try{sessionStorage.removeItem("nc-match");}catch { /* private window */ }
+        if(incoming.expired)setClosedNote(incoming.expired==="away" ? "Your game closed: you were away for more than 90 seconds. Open a new one, or join someone in the lounge." : "Nobody joined in 30 minutes, so your game closed. Open a new one, or join someone in the lounge.");
+        return;
+      }
+      if(incoming.startedAt){doneWaiting("chess",incoming.id);if(old?.id===incoming.id && !old.startedAt && !incoming.done){sound.current?.play("check");alertJoined("chess","/games/chess");}}
+      else if(!incoming.done && !incoming.escrow)keepWaiting({game:"chess",id:incoming.id,player:playerToken.current,tc:incoming.tc,since:incoming.waitingSince ?? Date.now()});
+    }
     current.current=incoming;setMatch(incoming);
     if(incoming.rematchId) refreshStream.current(incoming.rematchId,playerToken.current);
   },[]);
@@ -143,12 +160,12 @@ export function ChessPage() {
     if(!spectate && running && match?.turn===myColor && seconds>0 && seconds<=20 && lastTick.current!==seconds){lastTick.current=seconds;sound.current?.play("tick");}
   },[time,running,match?.turn,myColor]);
   const start = async (practiceMode=false) => {
-    if(actionPending.current)return;actionPending.current=true;setBusy(true);setErr(null);sound.current?.unlock();
+    if(actionPending.current)return;actionPending.current=true;setBusy(true);setErr(null);setClosedNote(null);sound.current?.unlock();if(!practiceMode)primeAlerts();
     try {localStorage.setItem("nc-name",name);}catch { /* private window */ }
     try {
       source.current?.close();setSelected(null);setConfirm(null);offset.current=0;shownPly.current=0;current.current=null;
       if(practiceMode){setMode("practice");practice.current=new Practice(name,tc);receive(practice.current.state);setConnected(true);}
-      else {practice.current=null;setMode("online");const r=await api<{match:MatchView;player:string}>("queue",{name,tc});if(!mounted.current)return;receive(r.match);follow(r.match.id,r.player);}
+      else {practice.current=null;setMode("online");const r=await api<{match:MatchView;player:string}>("queue",{name,tc});if(!mounted.current)return;playerToken.current=r.player;receive(r.match);follow(r.match.id,r.player);}
     } catch(e){setErr((e as Error).message);}finally {actionPending.current=false;if(mounted.current)setBusy(false);}
   };
   const move=useCallback(async (from: Square,to: Square,promote?: string)=>{
@@ -169,7 +186,9 @@ export function ChessPage() {
   },[selected,move]);
   /** Both stakes are in: take the seat the lobby gave this wallet. */
   const seat=(s: Seat)=>{source.current?.close();practice.current=null;current.current=null;offset.current=0;shownPly.current=0;setErr(null);setMode("online");follow(s.id,s.player);};
-  const lobby=()=>{if(watching.current){watching.current=null;setWatchId(null);setViewers(0);window.history.replaceState(null,"","/games/chess");document.title="NIGHT CHESS · NIGHTSHIFT";}source.current?.close();source.current=null;practice.current=null;current.current=null;setMatch(null);setToken("");setSelected(null);setPromotion(null);setConfirm(null);setErr(null);setConnected(true);try{sessionStorage.removeItem("nc-match");}catch { /* private window */ }};
+  const lobby=()=>{if(watching.current){watching.current=null;setWatchId(null);setViewers(0);window.history.replaceState(null,"","/games/chess");document.title="NIGHT CHESS · NIGHTSHIFT";}if(current.current)doneWaiting("chess",current.current.id);source.current?.close();source.current=null;practice.current=null;current.current=null;setMatch(null);setToken("");setSelected(null);setPromotion(null);setConfirm(null);setErr(null);setConnected(true);try{sessionStorage.removeItem("nc-match");}catch { /* private window */ }};
+  /** A seat from the lounge on this page: the same as a seat from the queue. */
+  const loungeSeat=(_game: string,id: string,player: string)=>{source.current?.close();practice.current=null;current.current=null;offset.current=0;shownPly.current=0;setErr(null);setClosedNote(null);setMode("online");try{localStorage.setItem("nc-name",name);}catch { /* private window */ }follow(id,player);};
   const cancelSearch=async()=>{
     if(!match || actionPending.current)return;actionPending.current=true;setBusy(true);
     try {await api(`match/${match.id}/leave`,{player:token});lobby();}
@@ -208,7 +227,7 @@ export function ChessPage() {
   return <div className={`nc ${inGame ? "nc-playing" : ""}`}>
     <div className="nc-backdrop" aria-hidden="true"/>
     <header className="nc-top">
-      <a href="/games" className="nc-back" onClick={(e)=>{e.preventDefault();if(spectate)watchAnother();else if(match && !match.done){if(inGame)setConfirm("exit");else void cancelSearch();}else go("/games");}}><Icon name="arrow" size={17}/><span>{spectate ? "LIVE GAMES" : "GAME ROOM"}</span></a>
+      <a href="/games" className="nc-back" onClick={(e)=>{e.preventDefault();if(spectate)watchAnother();else if(match && !match.done && inGame)setConfirm("exit");else go("/games");}}><Icon name="arrow" size={17}/><span>{spectate ? "LIVE GAMES" : "GAME ROOM"}</span></a>
       <a href="/games/chess" className="nc-brand" aria-label="Night Chess by NIGHTSHIFT" onClick={(e)=>{e.preventDefault();if(spectate)lobby();else if(match){if(match.done)lobby();else if(inGame)setConfirm("exit");else void cancelSearch();}}}><Wordmark/></a>
       <div className="nc-account">{address ? <span className="nc-wallet"><Icon name="user" size={15}/>{address.slice(0,6)}…{address.slice(-4)}</span> : <button type="button" className="nc-btn ghost small" disabled={signing} onClick={()=>void signIn()}><Icon name="user" size={15}/><span>{signing ? "SIGNING IN" : "SIGN IN"}</span></button>}</div>
     </header>
@@ -228,14 +247,16 @@ export function ChessPage() {
         <div className="nc-name-field"><input id="nc-name" value={name} maxLength={18} placeholder="Night crew" autoComplete="nickname" disabled={!!match || busy} onChange={e=>setName(e.target.value)}/><Icon name="edit" size={18}/></div>
         <p className="nc-note">A seat at the table. No wallet required.</p>
         <div className="nc-section-label"><span>01 / SET THE PACE</span><Icon name="clock" size={15}/></div>
-        <div className="nc-controls" role="group" aria-label="Time control">{(Object.keys(CONTROLS) as TimeControl[]).map(k=><button type="button" disabled={!!match || busy} key={k} className={tc===k ? "on" : ""} aria-pressed={tc===k} onClick={()=>setTc(k)}><span>{CONTROLS[k].label}</span><b>{k}</b><small>{k==="3+2" ? "+2 SEC / MOVE" : "NO INCREMENT"}</small>{tc===k && <Icon name="check" size={13}/>}</button>)}</div>
+        <div className="nc-controls" role="group" aria-label="Time control">{(Object.keys(CONTROLS) as TimeControl[]).map(k=><button type="button" disabled={!!match || busy} key={k} className={tc===k ? "on" : ""} aria-pressed={tc===k} onClick={()=>setTc(k)}><span>{CONTROLS[k].label}</span><b>{k}</b><small>{k==="3+2" ? "+2 SEC / MOVE" : "NO INCREMENT"}</small><small className={`nc-waiting ${waitingOn(lounge,k) ? "on" : ""}`}>{waitingOn(lounge,k) ? `${waitingOn(lounge,k)} WAITING` : "NOBODY WAITING"}</small>{tc===k && <Icon name="check" size={13}/>}</button>)}</div>
         <p className="nc-note">{CONTROLS[tc].note}. Your clock runs on your turn.</p>
         <div className="nc-section-label"><span>02 / PLAY FOR</span><Icon name="diamond" size={15}/></div>
         <div className="nc-controls" role="group" aria-label="Stake">{(["FREE","IMD","SHIFT"] as const).map(k=><button type="button" disabled={!!match || busy} key={k} className={money===k ? "on" : ""} aria-pressed={money===k} onClick={()=>setMoney(k)}><span>{k==="FREE" ? "Free" : "Stake"}</span><b>{k==="FREE" ? "FREE" : tokenLabel(k)}</b><small>{k==="FREE" ? "RATED · NO STAKE" : escrow?.live ? "WINNER TAKES 95%" : "OPENS WITH THE SIGNER"}</small>{money===k ? <Icon name="check" size={13}/> : k!=="FREE" && !escrow?.live ? <Icon name="lock" size={13}/> : null}</button>)}</div>
         {money==="FREE" ? <button type="button" className="nc-btn primary" disabled={busy || !!match} onClick={()=>void start()}><Icon name="swords" size={19}/><span>{busy ? "OPENING YOUR TABLE" : "FIND A RIVAL"}</span><Icon name="arrow" size={18}/></button>
           : <StakeLobby game="chess" token={money} name={name} tc={tc} address={address} signIn={signIn} onSeat={seat} theme="nc"/>}
         <button type="button" className="nc-btn ghost" disabled={busy || !!match} onClick={()=>void start(true)}><FrogPortrait/>PLAY FROG #7 (BOT)<span className="nc-muted">OFFLINE</span></button>
+        {closedNote && <div className="nc-error" role="status"><Icon name="clock" size={16}/><span>{closedNote}</span><button type="button" onClick={()=>setClosedNote(null)} aria-label="Dismiss"><Icon name="close" size={16}/></button></div>}
         {error}
+        {money==="FREE" && <Lounge game="chess" onSeat={loungeSeat}/>}
         <div className="nc-section-label"><span>03 / EVERY MOVE MATTERS</span></div>
         <div className="nc-how">{[["swords","A real rival","Join the queue. Meet someone on the same clock."],["target","Choose your move","Tap a piece, then a glowing square. Drag to orbit."],["shield","A fair table","The server validates every move and keeps both clocks."],["trophy","Make your mark","Start at 1200. Play two moves each to count toward Elo."]].map(([icon,title,copy])=><div key={title}><Icon name={icon!} size={22}/><b>{title}</b><p>{copy}</p></div>)}</div>
         <div className="nc-leaderboard"><div className="nc-section-label"><span><Icon name="trophy" size={15}/> THE NIGHT CREW</span><span>ELO</span></div>
@@ -257,7 +278,7 @@ export function ChessPage() {
           {match.done && <div className={`nc-overlay nc-result ${match.winnerIsYou ? "won" : ""}`} role="region" aria-label="Game result"><div className="nc-dialog"><span className="nc-result-icon"><Icon name={match.winnerIsYou || (spectate && match.winner) ? "trophy" : match.winner ? "chess-king":"scales"} size={30}/></span><span className="nc-kicker">{mode==="practice" ? "PRACTICE COMPLETE" : "FINAL RESULT / SERVER VERIFIED"}</span><h2>{!match.winner ? "DRAW" : spectate ? `${match.players.find(p=>p.color===match.winner)?.name ?? ""} WINS` : match.winnerIsYou ? "VICTORY":"DEFEAT"}</h2><p>{REASONS[match.reason ?? ""] ?? match.reason}</p><div className="nc-result-score"><span>{mine.name}<b>{mine.rating}<small>ELO</small></b></span><i>{match.winner ? mineWon ? "1 : 0":"0 : 1" : "½ : ½"}</i><span>{rival.name}<b>{rival.rating}<small>ELO</small></b></span></div>{match.escrow && <StakeResult matchId={match.escrow} address={address}/>}{mode==="online" && !match.escrow && match.rivalWantsRematch && <p className="nc-rematch-note">Your rival wants another game.</p>}{spectate ? <div className="nc-result-actions"><button type="button" className="nc-btn" onClick={watchAnother}><Icon name="radar" size={17}/>WATCH ANOTHER</button><button type="button" className="nc-btn ghost" onClick={lobby}>PLAY NIGHT CHESS</button></div> : <div className="nc-result-actions">{!match.escrow && <button type="button" className="nc-btn" disabled={busy || match.rematchRequested} onClick={()=>mode==="practice" ? void start(true):void action("rematch")}><Icon name={match.rematchRequested ? "radar":"swap"} size={17}/>{match.rematchRequested ? "AWAITING RIVAL":"REMATCH"}</button>}<button type="button" className="nc-btn ghost" onClick={lobby}>BACK TO LOBBY</button></div>}{error}</div></div>}
         </div>
         <div className="nc-mine-card">{playerCard(mine)}</div>
-        <div className={`nc-turn ${match.check ? "check" : ""}`} role="status">{spectate ? match.done ? "Game complete" : countdown ? "The game starts soon." : !connected ? "Reconnecting… clocks continue on the server." : match.check ? `${turnName} is in check` : `${turnName} to move` : match.done ? "Game complete" : countdown ? "Take a breath. Your game starts soon." : !connected && mode==="online" ? "Reconnecting… clocks continue on the server." : match.check ? `${match.turn===myColor ? "Your king is":"Your rival is"} in check` : match.turn===myColor ? selected ? "Choose a glowing square" : "Your move. Tap a piece." : mode==="practice" ? "Frog #7 is thinking…" : "Your rival is thinking…"}</div>
+        <div className={`nc-turn ${match.check ? "check" : ""}`} role="status">{spectate ? match.done ? "Game complete" : countdown ? "The game starts soon." : !connected ? "Reconnecting… clocks continue on the server." : match.check ? `${turnName} is in check` : `${turnName} to move` : match.done ? "Game complete" : countdown ? "Take a breath. Your game starts soon." : !connected && mode==="online" ? "Reconnecting… clocks continue on the server." : mode==="online" && !rival.connected ? "Your rival lost connection. If they stay away 45 seconds on their turn, you win by abandonment." : match.check ? `${match.turn===myColor ? "Your king is":"Your rival is"} in check` : match.turn===myColor ? selected ? "Choose a glowing square" : "Your move. Tap a piece." : mode==="practice" ? "Frog #7 is thinking…" : "Your rival is thinking…"}</div>
       </section>
       <aside className="nc-game-side"><div className="nc-scoresheet"><div className="nc-section-label"><span>THE GAME</span><span>{Math.ceil(match.ply/2)} MOVES</span></div><div className="nc-move-head"><span>NO.</span><span>WHITE</span><span>BLACK</span></div><div className="nc-moves" ref={history} aria-label="Moves in standard algebraic notation">{match.moves.length ? Array.from({length:Math.ceil(match.moves.length/2)},(_,i)=><div key={i}><span>{i+1}.</span><b className={match.ply===i*2+1 ? "last":""}>{match.moves[i*2]?.san}</b><b className={match.ply===i*2+2 ? "last":""}>{match.moves[i*2+1]?.san ?? "—"}</b></div>) : <p className="nc-empty">A quiet board.<br/>A thousand possibilities.</p>}</div></div>
         {spectate ? <><div className="nc-spectate-banner" role="note"><Icon name="radar" size={18}/><p><b>Spectating</b>Read-only. The board follows the players' moves live; nobody here can move a piece.</p></div><BetPanel game="chess" id={match.id} theme="nc"/></> : <><div className="nc-game-actions"><button type="button" className="nc-btn ghost" disabled={busy || match.done || countdown>0} onClick={()=>setConfirm("draw")}><Icon name="scales" size={18}/>{match.drawOffer==="you" ? "DRAW OFFERED":"OFFER DRAW"}</button><button type="button" className="nc-btn ghost" disabled={busy || match.done} onClick={()=>setConfirm("resign")}><Icon name="flag" size={18}/>RESIGN</button></div>
@@ -269,7 +290,7 @@ export function ChessPage() {
     </main>}
 
     {spectate && !inGame && <div className="nc-overlay nc-search" role="dialog" aria-modal="true" aria-labelledby="nc-watch-title"><div className="nc-dialog"><div className="nc-radar"><Icon name="radar" size={36}/></div><span className="nc-kicker">SPECTATOR MODE</span><h2 id="nc-watch-title">{err ? <>No game<br/>to <em>watch.</em></> : <>Finding<br/>the <em>table.</em></>}</h2><p>{err ?? "Connecting to the live game…"}</p><button type="button" autoFocus className="nc-btn" onClick={watchAnother}>WATCH ANOTHER</button><button type="button" className="nc-btn ghost" onClick={lobby}>PLAY NIGHT CHESS</button></div></div>}
-    {!spectate && match && !match.startedAt && <div className="nc-overlay nc-search" role="dialog" aria-modal="true" aria-labelledby="nc-search-title"><div className="nc-dialog"><div className="nc-radar"><Icon name="radar" size={36}/></div><span className="nc-kicker">{match.escrow ? "STAKED DUEL" : "MATCHMAKING"} / {match.tc}</span><h2 id="nc-search-title">{match.escrow ? <>Waiting for<br/>your <em>rival.</em></> : <>Finding<br/>your <em>rival.</em></>}</h2><p>{match.escrow ? "Both stakes are in. The game starts when your rival connects, or within 5 minutes; a player who never comes loses by abandonment." : "The next player on your time control joins this table. Keep this page open."}</p><div className="nc-search-info"><span>{match.escrow ? "02 / 02 PLAYERS" : "01 / 02 PLAYERS"}</span><span>{match.escrow ? `${match.stake} ${tokenLabel(match.currency)} EACH` : "FREE DUEL"}</span></div><span className="nc-connection" role="status">{connected ? "Live connection open":"Connecting to the table…"}</span>{!match.escrow && <button type="button" autoFocus className="nc-btn ghost" disabled={busy} onClick={()=>void cancelSearch()}>CANCEL SEARCH</button>}{error}</div></div>}
+    {!spectate && match && !match.startedAt && <div className="nc-overlay nc-search" role="dialog" aria-modal="true" aria-labelledby="nc-search-title"><div className="nc-dialog"><div className="nc-radar"><Icon name="radar" size={36}/></div><span className="nc-kicker">{match.escrow ? "STAKED DUEL" : "MATCHMAKING"} / {match.tc}</span><h2 id="nc-search-title">{match.escrow ? <>Waiting for<br/>your <em>rival.</em></> : <>Finding<br/>your <em>rival.</em></>}</h2><p>{match.escrow ? "Both stakes are in. The game starts when your rival connects, or within 5 minutes; a player who never comes loses by abandonment." : "Your game is open in the lounge. The next player on your time control (or anyone who plays anyone) joins it. Browse the site meanwhile: you hear it when someone joins."}</p><div className="nc-search-info"><span>{match.escrow ? "02 / 02 PLAYERS" : "01 / 02 PLAYERS"}</span><span>{match.escrow ? `${match.stake} ${tokenLabel(match.currency)} EACH` : `FREE DUEL · WAITING ${waitText(now-(match.waitingSince ?? now))}`}</span></div><span className="nc-connection" role="status">{connected ? "Live connection open":"Connecting to the table…"}</span>{!match.escrow && <><button type="button" autoFocus className="nc-btn" onClick={()=>go("/games")}><Icon name="radar" size={17}/>BROWSE WHILE YOU WAIT</button><button type="button" className="nc-btn ghost" disabled={busy} onClick={()=>void cancelSearch()}>CANCEL SEARCH</button></>}{error}</div></div>}
     {confirm && match && <div className="nc-overlay nc-confirm" role="dialog" aria-modal="true" aria-labelledby="nc-confirm-title" onKeyDown={e=>{if(e.key==="Escape")setConfirm(null);}}><div className="nc-dialog"><Icon name={confirm==="draw" ? "scales":"flag"} size={30}/><h2 id="nc-confirm-title">{confirm==="draw" ? "Call it a draw?":"Leave the table?"}</h2><p>{confirm==="draw" ? mode==="practice" ? "Frog #7 will agree to a friendly draw.":"Your rival can accept or decline. Keep playing while you wait.":"Resigning gives this game to your rival."}</p><button type="button" className="nc-btn" disabled={busy} onClick={()=>void action(confirm==="draw" ? "draw":"resign",confirm==="draw" ? "offer":undefined)}>{confirm==="draw" ? "OFFER A DRAW":"RESIGN GAME"}</button><button type="button" autoFocus className="nc-btn ghost" onClick={()=>setConfirm(null)}>KEEP PLAYING</button>{error}</div></div>}
     {!inGame && <AppTabs active="games"/>}
   </div>;

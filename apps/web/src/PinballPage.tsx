@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { Link } from "./router";
+import { go, Link } from "./router";
 import { Icon } from "./Icon";
 import { type Landed, type Live, PinballGame, type Rival, type Shot } from "./pinball/PinballGame";
 import type { Input } from "./pinball/engine";
@@ -7,6 +7,7 @@ import { useSession } from "./session";
 import { InstallButton, useGameApp } from "./pinball/install";
 import { AppTabs } from "./landing/app";
 import { type Seat, StakeLobby, StakeResult, useEscrow } from "./stakes";
+import { alertJoined, doneWaiting, keepSeat, keepWaiting, Lounge, primeAlerts, waitText } from "./games/lounge";
 import "./pinball/arcade.css";
 import { LITE, onHidden } from "./lite";
 
@@ -20,7 +21,7 @@ type PlayerView = { key: string; name: string; avatar?: string | null; live: num
 /** Salts the server hands out, from the number this page said it holds. */
 type LuckPart = { from: number; salts: number[] };
 /** `seed` is the deal's commitment (the sha256 of all its salts), shown at the start; the salts come in `luck` as the stream reaches them. */
-type MatchView = { id: string; escrow: string | null; seed: string | null; luck?: LuckPart | null; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; void: string | null; winner: string | null; winnerIsYou: boolean; players: PlayerView[] };
+type MatchView = { id: string; escrow: string | null; seed: string | null; luck?: LuckPart | null; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; void: string | null; winner: string | null; winnerIsYou: boolean; players: PlayerView[]; waitingSince?: number; movedTo?: string | null };
 /** What is on the table (it stays mounted under the result) and what is shown over it. A board run runs on the server's clock. */
 type Play = { kind: "practice"; seed: number; run: number; id?: string; deal?: string; startAt?: number; offset?: number } | { kind: "duel"; match: MatchView; player: string };
 type SoloStart = { id: string; seed: string; luck: LuckPart; startedAt: number; now: number };
@@ -104,7 +105,9 @@ export function PinballPage() {
   const [waiting, setWaiting] = useState<{ match: MatchView; player: string } | null>(null);
   const [over, setOver] = useState<Over | null>(null);
   const [name, setName] = useState(() => { try { return localStorage.getItem("pb-name") ?? ""; } catch { return ""; } });
-  const [mode, setMode] = useState<Mode>("FREE");
+  // ?accept=<match>&token=IMD (from the lounge): the stake lobby, where that challenge is accepted
+  const [mode, setMode] = useState<Mode>(() => { const t = new URLSearchParams(location.search).get("token"); return t === "IMD" || t === "SHIFT" ? t : "FREE"; });
+  const [now, setNow] = useState(Date.now());
   const escrow = useEscrow();
   const [err, setErr] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<Leaderboard>({ board: [], best: [] });
@@ -112,6 +115,8 @@ export function PinballPage() {
   const [boardKind, setBoardKind] = useState<"duel" | "solo">("duel");
   const board = (boardKind === "duel" ? leaderboard[boardTab] : boardTab === "board" ? leaderboard.solo : leaderboard.soloBest) ?? [];
   const es = useRef<EventSource | null>(null);
+  /** The open duel this page waits in: someone sitting down there is announced once. */
+  const openId = useRef<string | null>(null);
   // server time minus ours; the smallest delivery delay gives the best estimate, so keep the largest sample
   const clock = useRef(0);
   const sync = (m: MatchView) => { if (m.now) clock.current = Math.max(clock.current === 0 ? -Infinity : clock.current, m.now - Date.now()); };
@@ -138,6 +143,12 @@ export function PinballPage() {
     void api<Leaderboard>("board").then(setLeaderboard).catch(() => {});
   }, [play === null]);
   useEffect(() => () => es.current?.close(), []);
+  useEffect(() => { if (!waiting) return; const t = setInterval(() => setNow(Date.now()), 1_000); return () => clearInterval(t); }, [!!waiting]);
+  // a seat from the lounge, or a duel left waiting while browsing: taken up again here
+  useEffect(() => {
+    if (watchId) return;
+    try { const saved = JSON.parse(sessionStorage.getItem("pb-match") ?? "null") as { id: string; player: string } | null; if (saved) follow(saved.id, saved.player); } catch { /* no saved seat */ }
+  }, [watchId]);
 
   const follow = (id: string, player: string) => {
     es.current?.close();
@@ -149,9 +160,26 @@ export function PinballPage() {
       const mine = match.players.find((p) => p.you);
       if (mine?.error) setErr(mine.error);
       // the rival never connected: back to the lobby, or (the match reopened) back to the search
-      if (match.void) { s.close(); setPlay(null); setWaiting(null); setErr(match.void); return; }
-      if (match.startedAt) { setWaiting(null); setPlay((p) => (p?.kind === "duel" && p.match.id === match.id ? { ...p, match } : { kind: "duel", match, player })); }
-      else { setPlay((p) => (p?.kind === "duel" && p.match.id === match.id ? null : p)); setWaiting({ match, player }); }
+      // folded into an older table in the lounge: the same seat, followed there
+      if (match.movedTo) { keepSeat("pinball", { id: match.movedTo, player }); keepWaiting(null); follow(match.movedTo, player); return; }
+      if (match.void) { s.close(); doneWaiting("pinball", match.id); keepSeat("pinball", null); setPlay(null); setWaiting(null); setErr(match.void); return; }
+      if (match.done && !match.startedAt) { s.close(); doneWaiting("pinball", match.id); keepSeat("pinball", null); setPlay(null); setWaiting(null); return; }
+      if (match.startedAt) {
+        // a duel cannot be picked up again after a reload: the seat is kept only while waiting
+        doneWaiting("pinball", match.id); keepSeat("pinball", null);
+        if (openId.current === match.id) { openId.current = null; alertJoined("pinball", "/games/pinball"); }
+        setWaiting(null);
+        setPlay((p) => (p?.kind === "duel" && p.match.id === match.id ? { ...p, match } : { kind: "duel", match, player }));
+      }
+      else {
+        setPlay((p) => (p?.kind === "duel" && p.match.id === match.id ? null : p)); setWaiting({ match, player });
+        if (!match.escrow) { openId.current = match.id; keepSeat("pinball", { id: match.id, player }); keepWaiting({ game: "pinball", id: match.id, player, tc: null, since: match.waitingSince ?? Date.now() }); }
+      }
+    };
+    s.onerror = () => {
+      // a restart or a closed table: the saved seat is gone, back to the lobby
+      if (es.current !== s) return;
+      void fetch(`/api/pinball/match/${id}?player=${encodeURIComponent(player)}`).then((r) => { if (es.current === s && r.status === 404) { s.close(); doneWaiting("pinball", id); keepSeat("pinball", null); setWaiting(null); setErr("That table has closed. Find a new rival."); } }).catch(() => {});
     };
     es.current = s;
   };
@@ -168,7 +196,7 @@ export function PinballPage() {
       return;
     }
     try {
-      clock.current = 0;
+      clock.current = 0; primeAlerts();
       const r = await api<{ match: MatchView; player: string }>("queue", { name: me, currency: "FREE", stake: 0, avatar: frog ? `frog:${frog.id}` : "/games/pinball/frog-0.webp" });
       r.match = withFaces(r.match);
       sync(r.match);
@@ -191,6 +219,8 @@ export function PinballPage() {
     : play?.kind === "practice" && play.id ? (s: Live) => stream(`solo/${play.id}/progress`, s, setErr, (l) => take(play.deal, l)) : undefined;
   /** Both stakes are in: take the seat the lobby gave this wallet, as any duel. */
   const seat = (s: Seat) => { setErr(null); setOver(null); clock.current = 0; follow(s.id, s.player); };
+  /** A seat from the lounge on this page: the same as a seat from the queue. */
+  const loungeSeat = (_game: string, id: string, player: string) => { setErr(null); setOver(null); clock.current = 0; try { localStorage.setItem("pb-name", name); } catch { /* private window */ } follow(id, player); };
   const toLobby = () => { es.current?.close(); setPlay(null); setOver(null); setWaiting(null); };
 
   const opp = play?.kind === "duel" ? play.match.players.find((p) => !p.you) : null;
@@ -242,8 +272,9 @@ export function PinballPage() {
         <div><b>{waiting.match.stake.toLocaleString()}</b><span>stake</span></div><div><b>3 s</b><span>attack delay</span></div>
       </div>
       {waiting.match.escrow ? <p>The duel starts as soon as your rival connects, or within 5 minutes. A player who never plays scores 0. Keep this page open.</p> : <>
-        <p>Invite a friend to this page. The next player to find a rival joins your table.</p>
-        <button type="button" autoFocus className="arc-btn ghost" onClick={() => { es.current?.close(); void api(`match/${waiting.match.id}/leave`, { player: waiting.player }).catch(() => {}); setWaiting(null); }}>CANCEL SEARCH</button>
+        <p>Your duel is open in the lounge, waiting {waitText(now - (waiting.match.waitingSince ?? now))}. The next player to find a rival joins your table. Browse the site meanwhile: you hear it when someone joins.</p>
+        <div className="arc-actions"><button type="button" autoFocus className="arc-btn" onClick={() => go("/games")}><Icon name="radar" size={17} />BROWSE WHILE YOU WAIT</button>
+        <button type="button" className="arc-btn ghost" onClick={() => { es.current?.close(); void api(`match/${waiting.match.id}/leave`, { player: waiting.player }).catch(() => {}); doneWaiting("pinball", waiting.match.id); keepSeat("pinball", null); setWaiting(null); }}>CANCEL SEARCH</button></div>
       </>}
     </div>
   </div>;
@@ -315,6 +346,7 @@ export function PinballPage() {
           {staked ? <StakeLobby game="pinball" token={mode} name={me} address={address ?? null} signIn={signIn} onSeat={seat} theme="arc" />
             : <button type="button" className="arc-btn play" disabled={!!waiting} onClick={() => void start()}><Icon name={waiting ? "radar" : mode === "PRACTICE" ? "play" : "swords"} size={20} /><span>{waiting ? "FINDING YOUR RIVAL" : mode === "PRACTICE" ? "PLAY PRACTICE" : "FIND A RIVAL"}</span>{!waiting && <Icon name="arrow" size={18} />}</button>}
           {err && <p className="arc-err" role="alert">{err}</p>}
+          {mode === "FREE" && <Lounge game="pinball" onSeat={loungeSeat} />}
 
           <div className="arc-section-head"><span className="arc-kicker">02 / HOW IT PLAYS</span><span>Same table. Same seed.</span></div>
           <div className="arc-how">

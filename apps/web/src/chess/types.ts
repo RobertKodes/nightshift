@@ -9,6 +9,8 @@ export type MatchView = {
   clocks: Record<Color, number>; lastMove: Move | null; moves: Move[]; ply: number; done: boolean; reason: string | null;
   winner: Color | null; you: Color | null; winnerIsYou: boolean; drawOffer: "you" | "rival" | null;
   rematchRequested: boolean; rivalWantsRematch: boolean; rematchId: string | null; players: PlayerView[];
+  /** An open game in the lounge: since when it waits, whether its host takes any clock, why it closed unplayed, or the table it moved to. */
+  waitingSince?: number; any?: boolean; expired?: "away" | "timeout" | null; movedTo?: string | null;
 };
 export type BoardEntry = { name: string; rating: number; games: number; wins: number };
 export type Leaderboard = { board: BoardEntry[]; best: BoardEntry[] };

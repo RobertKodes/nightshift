@@ -5,6 +5,7 @@ import { parseAbi } from "viem";
 import { eth } from "./chain.js";
 import { config } from "./config.js";
 import { publicName } from "./names.js";
+import { LOUNGE_GRACE_MS, LOUNGE_WAIT_MS, LoungeError, OwnGameError, type Expired } from "./chess.js";
 import { ATTACK_DELAY, type Attack, type Input, type Landing, MAX_TICKS, SEGMENTS, Table, replay, segmentOf } from "./pinball/engine.js";
 
 /**
@@ -53,10 +54,15 @@ export type Match = {
   players: Player[]; winner: string | null; draw: boolean; done: boolean; void: string | null;
   /** A staked duel: the escrow match id, when it starts without a missing player, and who hears the verdict. */
   escrow?: string; showBy?: number; onResult?: (r: { draw: boolean; winner: string | null }) => void;
+  /** An open duel: since when its host has had no stream (null while connected); the lounge's grace period counts from it. */
+  awayAt?: number | null;
+  /** An open duel that closed unplayed, and why; or the older table its host was moved to (fold). */
+  expired?: Expired; movedTo?: string;
 };
+/** An open free duel as the lounge lists it: the host's public name and face only. */
+export type OpenPinball = { id: string; host: { name: string; avatar: string | null; agent?: boolean }; since: number; away: boolean; awayUntil: number | null };
 
 const matches = new Map<string, Match>();
-const waiting = new Map<string, string>(); // queue key → match id
 const listeners = new Map<string, Set<() => void>>();
 /** A staked duel starts once both players are connected, or this long after it was made, whoever is there. */
 export const STAKED_SHOW_MS = 5 * 60_000;
@@ -202,6 +208,7 @@ const dealt = (m: Match) => m.go && !m.void && !!m.startedAt && Date.now() >= m.
 const view = (m: Match, me?: string, faces = true) => ({
   id: m.id, escrow: m.escrow ?? null, seed: dealt(m) ? m.deal.hash : null, luck: luckOf(m, m.players.find((p) => p.id === me)), currency: m.currency, stake: m.stake, startedAt: m.startedAt, now: Date.now(),
   done: m.done, draw: m.draw, void: m.void, winner: m.players.find((p) => p.id === m.winner)?.name ?? null, winnerIsYou: !!me && m.winner === me,
+  waitingSince: m.createdAt, expired: m.expired ?? null, movedTo: m.movedTo ?? null,
   players: m.players.map((p) => {
     const mine = p.id === me, open = mine || m.done;
     return {
@@ -233,13 +240,20 @@ export function listen(id: string, me: string | undefined, f: (v: View) => void)
   if (!m) return () => {};
   const p = m.players.find((x) => x.id === me);
   if (p) p.watching++;
+  if (p && isOpen(m) && m.players[0] === p) m.awayAt = null;
   if (m.escrow && !m.startedAt && !m.done && m.players.every((x) => x.watching > 0)) countdown(m);
   let roster = -1;
   const send = () => { const cur = matches.get(id); if (!cur) return; const faces = cur.roster !== roster; roster = cur.roster; f(view(cur, me, faces)); };
   const s = listeners.get(id) ?? new Set();
   s.add(send); listeners.set(id, s);
   send();
-  return () => { s.delete(send); if (p) p.watching--; };
+  return () => {
+    s.delete(send);
+    if (!p) return;
+    p.watching--;
+    // the host of an open duel is away: their game keeps its place for the grace period
+    if (!p.watching && isOpen(m) && m.players[0] === p) m.awayAt = Date.now();
+  };
 }
 
 /** A spectator's stream: the same frames as the players get, without counting as a player being there. */
@@ -304,27 +318,116 @@ export function createStaked(o: { escrow: string; currency: "IMD" | "SHIFT"; sta
   return { id, seats: { [o.a.wallet.toLowerCase()]: pa, [o.b.wallet.toLowerCase()]: pb } };
 }
 
-/** Join the free queue; pairs with whoever waits there, else opens a match. Staked duels come from the challenge lobby. `agent` marks an AI player. */
+/** A free duel waiting for its second player. */
+const isOpen = (m: Match) => !m.done && !m.startedAt && !m.escrow && m.players.length === 1;
+/** Its host is here (an open stream) and it has not waited too long: a rival may sit down now. */
+const joinable = (m: Match) => isOpen(m) && m.players[0]!.watching > 0 && Date.now() - m.createdAt <= LOUNGE_WAIT_MS;
+const sameWallet = (m: Match, wallet: string | null) => { const w = m.players[0]?.wallet; return !!wallet && !!w && w.toLowerCase() === wallet.toLowerCase(); };
+/** A person's own open duel (the same wallet): never a game against themselves, and always said. */
+const ownDuel = (m: Match, wallet: string | null, agent: boolean) => !agent && !m.players[0]!.agent && sameWallet(m, wallet);
+/** Open duels, oldest first: the longest wait is served first. */
+const openDuels = () => [...matches.values()].filter(isOpen).sort((a, b) => a.createdAt - b.createdAt);
+/** A player's table made fresh for a deal (a reopened or a folded duel). */
+const reset = (p: Player, d: Deal) => Object.assign(p, { s: stream(d), x: 558, y: 860, sent: [], landed: new Map(), broken: null, inputs: null, solo: null, score: null, have: 0 });
+/** The rival sits down at an open duel: the VS screen and the countdown for both. */
+function sit(m: Match, p: Player): void { m.players.push(p); m.roster++; m.awayAt = null; countdown(m); }
+
+/**
+ * Join the free queue: pairs with whoever has waited longest (their host here, not your own wallet),
+ * else opens a duel in the lounge. A wallet that already has an open duel is told so, instead of
+ * waiting on itself. Staked duels come from the challenge lobby. `agent` marks an AI player.
+ */
 export async function queue(name: string, wallet: string | null, currency: Currency, stake: number, avatar: string | null, agent = false): Promise<{ match: View; player: string }> {
   if (currency !== "FREE") throw new Error("Duels for IMD or $SHIFT are made through the challenge lobby.");
   stake = 0; // a free duel never carries a stake, whatever an old page sends
+  const open = openDuels();
+  if (open.some((m) => ownDuel(m, wallet, agent))) throw new OwnGameError();
   const clean = cleanName(name), pic = await face(avatar, wallet);
-  const key = `${currency}:${stake}`;
   const pid = randomUUID();
-  const open = waiting.get(key);
-  const m = open ? matches.get(open) : undefined;
-  if (m && !m.startedAt && !m.done && m.players.length === 1 && Date.now() - m.createdAt < 10 * 60_000 && m.players[0]!.watching > 0) {
-    m.players.push({ ...fresh(pid, clean, wallet, pic, m.deal), ...(agent ? { agent: true } : {}) }); m.roster++;
-    waiting.delete(key);
-    countdown(m);
+  // the face lookup may take a moment: whoever is still open then
+  const m = openDuels().find((x) => joinable(x) && !sameWallet(x, wallet));
+  if (m) {
+    sit(m, { ...fresh(pid, clean, wallet, pic, m.deal), ...(agent ? { agent: true } : {}) });
     return { match: view(m, pid), player: pid };
   }
   const id = randomBytes(5).toString("hex"), d = deal(id);
-  const nm: Match = { id, deal: d, currency, stake, createdAt: Date.now(), startedAt: null, go: false, roster: 0, players: [{ ...fresh(pid, clean, wallet, pic, d), ...(agent ? { agent: true } : {}) }], winner: null, draw: false, done: false, void: null };
+  const nm: Match = { id, deal: d, currency, stake, createdAt: Date.now(), startedAt: null, go: false, roster: 0, players: [{ ...fresh(pid, clean, wallet, pic, d), ...(agent ? { agent: true } : {}) }], winner: null, draw: false, done: false, void: null, awayAt: Date.now() };
   matches.set(id, nm);
-  waiting.set(key, id);
   return { match: view(nm, pid), player: pid };
 }
+
+/**
+ * Sit down at one open duel from the lounge, by its id: the same checks as the queue (not your own
+ * wallet's, still open, its host here). The wallet's own open duel elsewhere is closed first.
+ */
+export async function joinOpen(id: string, name: string, wallet: string | null, avatar: string | null): Promise<{ match: View; player: string }> {
+  const check = () => {
+    const m = matches.get(id);
+    if (!m || m.escrow) throw new LoungeError(404, "This duel is not in the lounge any more.");
+    if (m.startedAt || m.players.length > 1) throw new LoungeError(409, "Someone else just took this duel. Pick another one.");
+    if (m.done) throw new LoungeError(410, m.expired === "timeout" ? "This duel waited too long and closed." : "This duel has closed.");
+    if (sameWallet(m, wallet)) throw new OwnGameError();
+    if (m.players[0]!.watching === 0) throw new LoungeError(409, "The host stepped away for a moment. Their duel opens again when they are back.");
+    if (!joinable(m)) throw new LoungeError(410, "This duel waited too long and closed.");
+    return m;
+  };
+  check();
+  const pic = await face(avatar, wallet);
+  const m = check();
+  for (const o of openDuels()) if (ownDuel(o, wallet, false)) { o.done = true; emit(o); matches.delete(o.id); }
+  const pid = randomUUID();
+  sit(m, fresh(pid, cleanName(name), wallet, pic, m.deal));
+  return { match: view(m, pid), player: pid };
+}
+
+/** Close an open duel from the lounge: by its host's seat token, or by the signed-in wallet that opened it. */
+export function cancel(id: string, player: string | null, wallet: string | null): void {
+  const m = matches.get(id);
+  if (!m || !isOpen(m)) throw new LoungeError(404, "This duel is not open any more.");
+  if (!(player && m.players[0]!.id === player) && !sameWallet(m, wallet)) throw new LoungeError(403, "Only the player who opened this duel can close it.");
+  m.done = true; emit(m); matches.delete(id);
+}
+
+/** The lounge's free duels: each open one and since when it waits (away within the grace period); `mine`, the signed-in wallet's. */
+export function lounge(wallet: string | null = null): { open: OpenPinball[]; waiting: number; mine: string[] } {
+  const open: OpenPinball[] = [], mine: string[] = [];
+  const all = openDuels();
+  for (const m of all) {
+    const host = m.players[0]!, away = host.watching === 0;
+    if (sameWallet(m, wallet)) mine.push(m.id);
+    if (open.length < 100) open.push({ id: m.id, host: { name: host.name, avatar: host.avatar, ...(host.agent ? { agent: true } : {}) }, since: m.createdAt, away, awayUntil: away && m.awayAt ? m.awayAt + LOUNGE_GRACE_MS : null });
+  }
+  return { open, waiting: all.filter((m) => m.players[0]!.watching > 0).length, mine };
+}
+
+/**
+ * The lounge's upkeep: an open duel whose host is gone past the grace period, or that waited too
+ * long, closes (kept for its host to be told why); two open duels whose hosts are both here become
+ * one, the newer host moving to the older table (movedTo), so two players never wait apart.
+ */
+export function sweepOpen(): void {
+  const now = Date.now();
+  for (const m of openDuels()) {
+    const expired: Expired | null = now - m.createdAt > LOUNGE_WAIT_MS ? "timeout" : m.players[0]!.watching === 0 && m.awayAt && now - m.awayAt > LOUNGE_GRACE_MS ? "away" : null;
+    if (!expired) continue;
+    m.done = true; m.expired = expired;
+    m.void = expired === "away" ? "Your duel closed: you were away for more than 90 seconds. Open a new one from the lounge." : "Nobody joined in 30 minutes, so your duel closed. Open a new one from the lounge.";
+    emit(m);
+  }
+  const ready = openDuels().filter(joinable);
+  for (let i = 0; i < ready.length; i++) {
+    const a = ready[i]!;
+    for (let j = i + 1; j < ready.length && isOpen(a); j++) {
+      const b = ready[j]!, mover = b.players[0]!;
+      if (!isOpen(b) || mover.agent || sameWallet(a, mover.wallet)) continue;
+      b.done = true; b.movedTo = a.id;
+      // the same player object, on the older table's deal: their open stream still counts them as here
+      reset(mover, a.deal);
+      sit(a, mover); emit(b);
+    }
+  }
+}
+setInterval(sweepOpen, 2_000).unref();
 
 /**
  * The end of the countdown: both players must be connected. If one never came, the match is
@@ -336,21 +439,19 @@ function ready(m: Match): void {
   if (m.escrow) { m.go = true; emit(m); return; }
   const here = m.players.filter((p) => p.watching > 0);
   if (here.length === 2) { m.go = true; emit(m); return; }
-  const key = `${m.currency}:${m.stake}`;
-  if (here.length === 1 && !waiting.has(key)) {
+  if (here.length === 1) {
     const p = here[0]!;
-    m.deal = deal(m.id); m.startedAt = null; m.createdAt = Date.now(); m.roster++;
-    // the same player object: its open stream still counts it as connected
-    Object.assign(p, { s: stream(m.deal), x: 558, y: 860, sent: [], landed: new Map(), broken: null, inputs: null, solo: null, score: null, have: 0 });
+    m.deal = deal(m.id); m.startedAt = null; m.createdAt = Date.now(); m.roster++; m.awayAt = null;
+    // the same player object: its open stream still counts it as connected; the duel is open in the lounge again
+    reset(p, m.deal);
     m.players = [p];
-    waiting.set(key, m.id);
   } else { m.void = "Your rival never connected."; m.done = true; }
   emit(m);
 }
 
 export function leave(id: string, player: string): void {
   const m = matches.get(id);
-  if (m && !m.escrow && !m.startedAt && m.players[0]?.id === player) { matches.delete(id); for (const [k, v] of waiting) if (v === id) waiting.delete(k); }
+  if (m && !m.escrow && !m.startedAt && m.players[0]?.id === player) { m.done = true; emit(m); matches.delete(id); }
 }
 
 export function get(id: string, me?: string) { const m = matches.get(id); return m ? view(m, me) : null; }

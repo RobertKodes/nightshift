@@ -25,6 +25,7 @@ import { TokenomicsPage } from "./TokenomicsPage";
 import { GameRoomPage } from "./GameRoomPage";
 import { PinballPage } from "./PinballPage";
 import { LaunchpadPage } from "./LaunchpadPage";
+import { WaitingBanner } from "./games/lounge";
 import "./styles.css";
 import "./lite"; // marks <html data-lite> before the first paint
 import "./landing/landing.css";
@@ -105,4 +106,4 @@ class Crash extends Component<{ children: ReactNode }, { error: Error | null }> 
   }
 }
 
-createRoot(document.getElementById("root")!).render(<StrictMode><Crash><SessionProvider><App /></SessionProvider></Crash></StrictMode>);
+createRoot(document.getElementById("root")!).render(<StrictMode><Crash><SessionProvider><App /><WaitingBanner /></SessionProvider></Crash></StrictMode>);

@@ -441,7 +441,7 @@ export function serve(engine: Engine) {
         if (p === "/api/pinball/queue" && req.method === "POST") {
           if (limited(req, "pinball-queue", 20, 600_000)) return json(res, 429, { error: "slow down" });
           const b = await body(req);
-          try { return json(res, 200, await pinQueue(String(b.name ?? ""), owner, String(b.currency ?? "FREE") as never, Number(b.stake ?? 0), typeof b.avatar === "string" ? b.avatar : null)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          try { return json(res, 200, await pinQueue(String(b.name ?? ""), owner, String(b.currency ?? "FREE") as never, Number(b.stake ?? 0), typeof b.avatar === "string" ? b.avatar : null)); } catch (e) { const st = (e as { status?: unknown }).status; return json(res, typeof st === "number" ? st : 400, { error: (e as Error).message }); }
         }
         if (parts[2] === "match" && parts[3]) {
           const id = parts[3];
