@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { LIVE_LAUNCH, SHIFT, fetchLaunch } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, fallback, formatEther, http, parseAbi, parseAbiItem, parseEther } from "viem";
 import { mainnet } from "viem/chains";
-import { chooseWallet } from "./wallet";
+import { chooseWallet, knownWallet } from "./wallet";
+import { useSession } from "./session";
 import { type Step, canBatch, sendSteps } from "./batch";
 import { StakedSupply } from "./StakedCounter";
 
@@ -54,6 +55,13 @@ async function history(rewards: Address, who: Address, from: bigint) {
 export function StakePage() {
   const [l, setL] = useState<Launch>(LIVE_LAUNCH);
   const [me, setMe] = useState<Address | null>(null);
+  // the account the wallet is on now, when it differs from the one this page reads
+  const [walletOn, setWalletOn] = useState<Address | null>(null);
+  const session = useSession();
+  const signedIn = (session.address ?? null) as Address | null;
+  const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+  // signed in: read that wallet's stake straight away, whatever account a wallet extension happens to be on
+  useEffect(() => { if (signedIn && !me) setMe(signedIn); }, [signedIn]);
   const [amount, setAmount] = useState("");
   const [out, setOut] = useState("");
   const [lock, setLock] = useState(365);
@@ -99,20 +107,31 @@ export function StakePage() {
     document.addEventListener("visibilitychange", back);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", back); };
   }, [me, rewards]);
-  // a wallet that already allowed this site reconnects silently, and a switched account is followed
+  // the wallet this person chose reconnects silently (never just window.ethereum, which may be another
+  // extension or account), and a switched account is followed
   useEffect(() => {
-    const eth = (window as { ethereum?: { request: (a: { method: string }) => Promise<unknown>; on?: (e: string, f: (a: string[]) => void) => void; removeListener?: (e: string, f: (a: string[]) => void) => void } }).ethereum;
-    if (!eth) return;
-    void eth.request({ method: "eth_accounts" }).then((a) => { const x = (a as string[])?.[0]; if (x && !meRef.current) setMe(x as Address); }).catch(() => {});
-    const changed = (a: string[]) => { setH(null); setOnChain({ staked: null, eth: null, shift: null }); setMe((a?.[0] as Address) ?? null); };
-    eth.on?.("accountsChanged", changed);
-    return () => eth.removeListener?.("accountsChanged", changed);
-  }, []);
+    let prov: { request: (a: { method: string }) => Promise<unknown>; on?: (e: string, f: (a: string[]) => void) => void; removeListener?: (e: string, f: (a: string[]) => void) => void } | null = null;
+    const changed = (a: string[]) => {
+      const x = (a?.[0] ?? null) as Address | null;
+      if (signedIn && x && x.toLowerCase() !== signedIn.toLowerCase()) { setWalletOn(x); return; }
+      setWalletOn(null);
+      if (x && x.toLowerCase() !== meRef.current?.toLowerCase()) { setH(null); setOnChain({ staked: null, eth: null, shift: null }); setMe(x); }
+    };
+    void knownWallet().then((p) => {
+      prov = p as typeof prov;
+      if (!prov) return;
+      void prov.request({ method: "eth_accounts" }).then((a) => { const x = (a as string[])?.[0]; if (x) { if (!meRef.current) setMe(x as Address); changed([x]); } }).catch(() => {});
+      prov.on?.("accountsChanged", changed);
+    }).catch(() => {});
+    return () => prov?.removeListener?.("accountsChanged", changed);
+  }, [signedIn]);
 
   const wallet = async () => {
     const w = createWalletClient({ chain: mainnet, transport: custom((await chooseWallet()) as never) });
     const [a] = await w.requestAddresses();
     if (!a) throw new Error("No account in the wallet.");
+    if (signedIn && a.toLowerCase() !== signedIn.toLowerCase()) { setWalletOn(a); throw new Error(`Your wallet is on ${short(a)}, but you are signed in as ${short(signedIn)}. Switch the account in your wallet to ${short(signedIn)}, then try again.`); }
+    setWalletOn(null);
     setMe(a);
     await w.switchChain({ id: 1 });
     return { w, a };
@@ -201,6 +220,7 @@ export function StakePage() {
 
       {me && ready && (
         <section className="tkn-card">
+          {walletOn && me && walletOn.toLowerCase() !== me.toLowerCase() && <p className="bad" style={{ fontSize: 13 }}>Your wallet is on <b>{short(walletOn)}</b>, but this is the stake of <b>{short(me)}</b>, the wallet you signed in with. To withdraw or claim, switch the account in your wallet to {short(me)}.</p>}
           {!h && (hErr
             ? <p className="bad" style={{ fontSize: 13 }}>Could not read your locks from Ethereum right now. <button type="button" className="swap-max" onClick={() => void load()}>Try again</button></p>
             : <p className="dim" style={{ fontSize: 13 }}>Reading your stakes and their locks from Ethereum…</p>)}

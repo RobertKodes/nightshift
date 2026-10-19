@@ -77,6 +77,13 @@ function pick(list: Detail[]): Promise<Detail | null> {
   });
 }
 
+/** The wallet this person already chose (or the only one installed), without asking: null when there is none to pick silently. */
+export async function knownWallet(): Promise<unknown | null> {
+  const injected = (await discover()).filter((d) => d.info.rdns !== "walletconnect");
+  const saved = injected.find((d) => d.info.rdns === remembered()) ?? (injected.length === 1 ? injected[0] : undefined);
+  return saved ? open(saved) : null;
+}
+
 /** The wallet to use: the only one, the remembered one, or the person's pick. */
 export async function chooseWallet(opts: { ask?: boolean } = {}): Promise<unknown> {
   const list = await discover();
