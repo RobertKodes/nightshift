@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { safeHref } from "./safe";
 import { chooseWallet } from "./wallet";
+import { type Step, canBatch, sendSteps } from "./batch";
 import { type Hex, createPublicClient, createWalletClient, custom, erc20Abi, http, parseAbi, stringToHex } from "viem";
 import { mainnet } from "viem/chains";
 
@@ -48,20 +49,18 @@ export function ImdOrders({ call, token }: { call: (token: string, path: string,
       const bal = await rpc.readContract({ address: IMD, abi: erc20Abi, functionName: "balanceOf", args: [me] });
       if (bal < PRICE) throw new Error(`This wallet has ${(Number(bal) / 1e18).toFixed(3)} IMD; the order costs 0.5 IMD plus a little ETH for gas.`);
       const allowance = await rpc.readContract({ address: IMD, abi: erc20Abi, functionName: "allowance", args: [me, INTAKE] });
-      if (allowance < PRICE) {
-        setStep("1/2 · Approve 0.5 IMD for IMD's Intake (confirm in your wallet)…");
-        const a = await wallet.writeContract({ account: me, address: IMD, abi: erc20Abi, functionName: "approve", args: [INTAKE, PRICE] });
-        setStep("1/2 · Waiting for the approval to confirm…");
-        await rpc.waitForTransactionReceipt({ hash: a });
-      }
-      setStep("2/2 · Pay 0.5 IMD and send the order (confirm in your wallet)…");
-      const tx = await wallet.writeContract({
-        account: me, address: INTAKE, abi: intakeAbi, functionName: "request",
-        args: [stringToHex(r.actionId, { size: 32 }), stringToHex(JSON.stringify(r.body)), { target: "0x0000000000000000000000000000000000000000", selector: "0x00000000" }, IMD, PRICE],
+      const steps: Step[] = [];
+      if (allowance < PRICE) steps.push({ call: { address: IMD, abi: erc20Abi, functionName: "approve", args: [INTAKE, PRICE] }, sign: "1/2 · Approve 0.5 IMD for IMD's Intake (confirm in your wallet)…", wait: "1/2 · Waiting for the approval to confirm…", fail: "The approval failed. Nothing was paid." });
+      const two = steps.length > 0;
+      steps.push({
+        call: { address: INTAKE, abi: intakeAbi, functionName: "request", args: [stringToHex(r.actionId, { size: 32 }), stringToHex(JSON.stringify(r.body)), { target: "0x0000000000000000000000000000000000000000", selector: "0x00000000" }, IMD, PRICE] },
+        sign: two ? "2/2 · Pay 0.5 IMD and send the order (confirm in your wallet)…" : "Pay 0.5 IMD and send the order (confirm in your wallet)…",
+        wait: two ? "2/2 · Waiting for the transaction to confirm…" : "Waiting for the transaction to confirm…",
       });
-      setStep("2/2 · Waiting for the transaction to confirm…");
-      const rc = await rpc.waitForTransactionReceipt({ hash: tx as Hex });
-      if (rc.status !== "success") throw new Error(`The transaction reverted: ${tx}`);
+      const batched = two && (await canBatch(wallet, me));
+      const sent = await sendSteps(wallet, me, steps, { batched, once: "Confirm once in your wallet (approve 0.5 IMD + pay and send the order)…", wait: batched ? "Waiting for the transaction to confirm…" : undefined, say: setStep });
+      const tx = sent.hash;
+      if (!sent.ok) throw new Error(`The transaction reverted: ${tx}`);
       const d = await call(token, "orders/paid", { id, tx });
       setList(d.orders);
       setStep(null);

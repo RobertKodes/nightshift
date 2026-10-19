@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { glossy } from "./glossy";
 
 type Disposable = { dispose(): void };
 type Card = { group: THREE.Group; heading: number; phase: number };
@@ -41,7 +42,7 @@ export class BoardBranding {
   }
 
   private table() {
-    const metal = this.keep(new THREE.MeshPhysicalMaterial({ color: 0x0d0a1f, metalness: .72, roughness: .3, clearcoat: 1, envMapIntensity: .65 }));
+    const metal = this.keep(glossy({ color: 0x0d0a1f, metalness: .72, roughness: .3, clearcoat: 1, envMapIntensity: .65 }));
     const slab = this.mesh(new THREE.BoxGeometry(9.24, .27, 9.24), metal);
     slab.position.y = -.245; slab.receiveShadow = true; this.group.add(slab);
 
@@ -104,7 +105,7 @@ export class BoardBranding {
     paint();
     void this.image("brand/nightshift-mark.svg", image => { mark = image; paint(); });
     void this.image("brand/nightshift-wordmark.svg", image => { wordmark = image; paint(); });
-    const glass = this.mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshPhysicalMaterial({
+    const glass = this.mesh(new THREE.PlaneGeometry(8, 8), glossy({
       map: texture, color: 0xffffff, roughness: .27, metalness: .12, clearcoat: 1, clearcoatRoughness: .16, envMapIntensity: .55,
     }));
     glass.name = "2048px ultraviolet glass / crescent underprint"; glass.rotation.x = -Math.PI / 2; glass.position.y = .04; glass.receiveShadow = true; this.group.add(glass);
@@ -171,7 +172,7 @@ export class BoardBranding {
     group.name = `NIGHT FROG #${number} glass collectible`; group.position.set(side * 5.38, 1.23, -side * 2.1); group.rotation.y = heading;
     this.cards.push({ group, heading, phase: number }); this.group.add(group);
     const frame = this.mesh(new THREE.ExtrudeGeometry(this.rounded(1.46, 2.05, .12), { depth: .045, bevelEnabled: true, bevelSize: .018, bevelThickness: .018, bevelSegments: 3, steps: 1 }),
-      new THREE.MeshPhysicalMaterial({ color: 0x21133b, metalness: .3, roughness: .16, clearcoat: 1, transparent: true, opacity: .86, emissive: 0x7c5cff, emissiveIntensity: .75 }));
+      glossy({ color: 0x21133b, metalness: .3, roughness: .16, clearcoat: 1, transparent: true, opacity: .86, emissive: 0x7c5cff, emissiveIntensity: .75 }));
     frame.position.z = -.023; group.add(frame);
     const outline = new THREE.EdgesGeometry(frame.geometry, 35);
     group.add(new THREE.LineSegments(this.keep(outline), this.keep(new THREE.LineBasicMaterial({ color: 0xa48bff, transparent: true, opacity: .8, toneMapped: false }))));

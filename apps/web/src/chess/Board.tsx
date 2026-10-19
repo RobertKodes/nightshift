@@ -5,13 +5,18 @@ import { Icon } from "../Icon";
 import { Pieces, type PieceState, type PieceVisual } from "./Pieces";
 import { ControlRoom } from "./ControlRoom";
 import { BoardBranding } from "./BoardBranding";
+import { LITE, pixelRatio } from "../lite";
 
 type Props = { fen: string; color?: Color; selectableColor?: Color | null; selected?: Square | null; targets?: { square: Square; capture: boolean }[]; lastMove?: Move | null; onSquare?: (square: Square) => void; demo?: boolean };
 type Piece = PieceVisual & { type: PieceSymbol; color: Color; square: Square; from: THREE.Vector3; to: THREE.Vector3; start: number; dying?: boolean };
 const PIECE_Y = .045;
 const point = (square: string) => new THREE.Vector3(square.charCodeAt(0) - 97 - 3.5, PIECE_Y, 3.5 - (Number(square[1]) - 1));
 
-/** A light scene: shared piece geometry, a single shadow map and additive light instead of post-processing. */
+/**
+ * A light scene: shared piece geometry, a single shadow map and additive light instead of post-processing.
+ * In lite (a wallet app's browser, a weak phone) it renders at 1× without antialiasing or the shadow
+ * map (the pieces keep their contact shadows), with plain glass and fewer stars.
+ */
 class NightBoard {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -53,15 +58,15 @@ class NightBoard {
   private intersection: IntersectionObserver;
   constructor(private host: HTMLDivElement, props: Props, onPieceState: (state: PieceState) => void) {
     this.props = props;
-    this.renderer = new THREE.WebGLRenderer({ antialias: devicePixelRatio < 1.8, alpha: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, matchMedia("(max-width: 700px)").matches ? 1.5 : 1.75)); this.renderer.setClearColor(0x03020a, 0);
-    this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer = new THREE.WebGLRenderer({ antialias: !LITE && devicePixelRatio < 1.8, alpha: true, powerPreference: "high-performance" });
+    this.renderer.setPixelRatio(pixelRatio(1.75)); this.renderer.setClearColor(0x03020a, 0);
+    this.renderer.shadowMap.enabled = !LITE; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.05;
     this.renderer.domElement.setAttribute("aria-hidden", "true"); host.appendChild(this.renderer.domElement);
     this.scene.add(this.board, this.markers);
     const ambient = new THREE.HemisphereLight(0xe9e2ff, 0x21123d, 1.7); this.scene.add(ambient);
-    const key = new THREE.DirectionalLight(0xeee8ff, 3.3); key.position.set(-3, 9, 5); key.castShadow = true;
+    const key = new THREE.DirectionalLight(0xeee8ff, 3.3); key.position.set(-3, 9, 5); key.castShadow = !LITE;
     key.shadow.mapSize.set(2048,2048); key.shadow.camera.left = -6; key.shadow.camera.right = 6; key.shadow.camera.top = 6; key.shadow.camera.bottom = -6;
     key.shadow.camera.near = .5; key.shadow.camera.far = 24; key.shadow.bias = -.00015; key.shadow.normalBias = .012; key.shadow.radius = 3; this.scene.add(key);
     const rim = new THREE.DirectionalLight(0x7c5cff, 3); rim.position.set(5, 4, -5); this.scene.add(rim);
@@ -107,9 +112,9 @@ class NightBoard {
       const s = new THREE.Sprite(this.keep(new THREE.SpriteMaterial({ map: texture, color: 0x7c5cff, blending: THREE.AdditiveBlending, transparent: true, opacity, depthWrite: false }))); s.position.set(x!,y!,z!); s.scale.set(size!,size!,1); this.scene.add(s);
     }
     this.edgePulse=new THREE.Sprite(this.keep(new THREE.SpriteMaterial({map:texture,color:0xff285c,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:.7})));this.edgePulse.scale.setScalar(.8);this.edgePulse.visible=false;this.scene.add(this.edgePulse);
-    const positions = new Float32Array(550*3);
+    const stars=LITE ? 180 : 550, positions = new Float32Array(stars*3);
     let seed=47; const random=() => { seed=(seed*16807)%2147483647; return seed/2147483647; };
-    for(let i=0;i<550;i++) { positions[i*3]=(random()-.5)*48; positions[i*3+1]=-4-random()*9; positions[i*3+2]=(random()-.5)*48; }
+    for(let i=0;i<stars;i++) { positions[i*3]=(random()-.5)*48; positions[i*3+1]=-4-random()*9; positions[i*3+2]=(random()-.5)*48; }
     const g=this.keep(new THREE.BufferGeometry()); g.setAttribute("position",new THREE.BufferAttribute(positions,3));
     this.scene.add(new THREE.Points(g,this.keep(new THREE.PointsMaterial({ color: 0xa48bff, size: .035, transparent: true, opacity: .7, sizeAttenuation: true }))));
   }

@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { type Attack, BALLS, H, type Input, MAX_TICKS, TICK, Table, W } from "./engine";
+import { LITE, flat, pixelRatio } from "../lite";
+
+/** The playfield's pixels per table unit: 2 on a computer, at most 1.5 on a phone, 1 in lite. */
+const RES = pixelRatio(2);
 
 /**
  * The table on screen. Physics is the deterministic engine; everything here is looks and feel:
@@ -86,7 +90,7 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
 
   useEffect(() => {
     const cv = canvas.current!;
-    const g = cv.getContext("2d")!;
+    const g = flat(cv.getContext("2d")!); // lite: no glow blur
     const A = {
       field: img(`${ART}/playfield.webp`), hole: img(`${ART}/blackhole.webp`),
       planets: [0, 1, 2, 3].map((i) => img(`${ART}/planet-${i}.webp`)),
@@ -106,9 +110,10 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
     const say = (text: string, color: string, sub?: string, life = 1.4) => { const same = banners.find((x) => x.text === text); if (same) { same.life = same.max = life; same.sub = sub; return; } banners.push({ text, sub, color, life, max: life }); if (banners.length > 3) banners.shift(); };
     const beep = (f: number, d?: number, type?: OscillatorType, vol?: number) => { if (soundRef.current && !demo) audio.current.beep(f, d, type, vol); };
     const burst = (x: number, y: number, color: string, n = 18, speed = 260) => {
+      if (LITE) n = Math.ceil(n / 3); // lite: a third of the sparks
       for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = speed * (0.3 + Math.random()); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0, max: 0.4 + Math.random() * 0.6, color, size: 1.5 + Math.random() * 3 }); }
     };
-    const stars = Array.from({ length: 70 }, () => ({ x: Math.random() * W, y: Math.random() * H, z: 0.3 + Math.random() * 0.7 }));
+    const stars = Array.from({ length: LITE ? 28 : 70 }, () => ({ x: Math.random() * W, y: Math.random() * H, z: 0.3 + Math.random() * 0.7 }));
 
     const frame = (now: number) => {
       const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
@@ -183,7 +188,7 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
     const drawMini = () => {
       const m = mini.current, r = rivalRef.current;
       if (!m || !r) return;
-      const c = m.getContext("2d")!, s = m.width / W;
+      const c = flat(m.getContext("2d")!), s = m.width / W;
       c.setTransform(s, 0, 0, s, 0, 0);
       c.fillStyle = "#03020A"; c.fillRect(0, 0, W, H);
       if (A.field.complete) { c.globalAlpha = 0.7; c.drawImage(A.field, 0, 0, W, H); c.globalAlpha = 1; }
@@ -266,7 +271,7 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
       }
 
       const b = t.ball;
-      if (t.held === 0) { trail.push({ x: b.x, y: b.y }); if (trail.length > 16) trail.shift(); } else trail.length = 0;
+      if (t.held === 0) { trail.push({ x: b.x, y: b.y }); if (trail.length > (LITE ? 8 : 16)) trail.shift(); } else trail.length = 0;
       trail.forEach((p, i) => { g.fillStyle = `rgba(164,139,255,${(i / trail.length) * 0.35})`; g.beginPath(); g.arc(p.x, p.y, 11 * (i / trail.length), 0, 7); g.fill(); });
       if (t.held === 0) {
         const grd = g.createRadialGradient(b.x - 3, b.y - 3, 1, b.x, b.y, 12);
@@ -409,7 +414,7 @@ export function PinballGame({ seed, startAt, clockOffset = 0, avatar, name = "Yo
         </aside>
 
         <div className="arc-table">
-          <canvas ref={canvas} width={W * 2} height={H * 2} className="arc-canvas" aria-label="Space Pinball playfield" />
+          <canvas ref={canvas} width={Math.round(W * RES)} height={Math.round(H * RES)} className="arc-canvas" aria-label="Space Pinball playfield" />
           {overlay}
         </div>
 

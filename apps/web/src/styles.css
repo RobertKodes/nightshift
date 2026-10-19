@@ -460,3 +460,11 @@ table.plain.addr a { overflow-wrap: anywhere; font-size: 12.5px; }
 .swarm-plan { margin: 0; padding-left: 20px; color: var(--dim); font-size: 13px; line-height: 1.6; }
 .swarm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .swarm-placed { margin: 0; font-size: 13px; }
+
+/* Lite (a wallet app's browser, a weak phone: see lite.ts): no live blur behind glass, which is
+   recomputed every frame over the animated canvases, and no decorative loops. The glass gets
+   denser instead, so text stays as readable. */
+html[data-lite] *, html[data-lite] *::before, html[data-lite] *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+html[data-lite] .ns, html[data-lite] .nc, html[data-lite] .arc, html[data-lite] .tk { --glass: rgba(10, 8, 22, .92); }
+html[data-lite] .arc .arc-cabinet::after, html[data-lite] .ns-panel::after, html[data-lite] .ns-app::before, html[data-lite] .nc-result.won::before { animation: none !important; }
+html[data-lite] .arc .arc-stage::before { filter: none; opacity: .6; }

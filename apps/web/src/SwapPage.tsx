@@ -3,6 +3,7 @@ import { LIVE_LAUNCH, SHIFT, SHIFT_POOL, fetchLaunch } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, formatEther, http, maxUint256, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
+import { type Step, canBatch, sendSteps } from "./batch";
 import { type PoolKey, V4, permit2Abi, quoteArgs, quoterAbi, routerAbi, swapCall } from "./v4";
 
 const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
@@ -83,30 +84,25 @@ export function SwapBox({ launch }: { launch?: Launch } = {}) {
       setMe(a);
       setStep("Switch to Ethereum…");
       await w.switchChain({ id: 1 });
+      const steps: Step[] = [];
       if (side === "sell") {
-        // Selling goes through Permit2: one approval for the token (once), then for the router exactly
-        // this amount for 30 minutes, so no standing permission to pull SHIFT is left behind.
+        // Selling goes through Permit2: the token allows Permit2 exactly this amount, and Permit2 the
+        // router exactly this amount for 30 minutes, so no standing permission to pull SHIFT is left behind.
+        // Permit2 (Uniswap's own contract, used by every Uniswap swap) gets the standard one-time approval; what it may
+        // pass to the router is set per sell, exact and for 30 minutes, so a wallet that cannot batch signs twice, not three times.
         const toPermit2 = await rpc.readContract({ address: token, abi: erc20Abi, functionName: "allowance", args: [a, V4.permit2] });
-        if (toPermit2 < amt) {
-          setStep(`Approve ${sym} for Uniswap's Permit2 (once)…`);
-          const h = await w.writeContract({ account: a, chain: mainnet, address: token, abi: erc20Abi, functionName: "approve", args: [V4.permit2, maxUint256] });
-          await rpc.waitForTransactionReceipt({ hash: h });
-        }
+        if (toPermit2 < amt) steps.push({ call: { address: token, abi: erc20Abi, functionName: "approve", args: [V4.permit2, maxUint256] }, sign: `Once for this wallet: let Uniswap's Permit2 use your ${sym}…`, wait: "Waiting for the approval…", fail: "The approval failed. Nothing was sold." });
         const [p2, until] = await rpc.readContract({ address: V4.permit2, abi: permit2Abi, functionName: "allowance", args: [a, token, V4.router] });
         const nowSec = Math.floor(Date.now() / 1000);
-        if (p2 < amt || until <= nowSec + 60) {
-          setStep("Let the Uniswap router use this amount…");
-          const h = await w.writeContract({ account: a, chain: mainnet, address: V4.permit2, abi: permit2Abi, functionName: "approve", args: [token, V4.router, amt, nowSec + 30 * 60] });
-          await rpc.waitForTransactionReceipt({ hash: h });
-        }
+        if (p2 < amt || until <= nowSec + 60) steps.push({ call: { address: V4.permit2, abi: permit2Abi, functionName: "approve", args: [token, V4.router, amt, nowSec + 30 * 60] }, sign: "Let the Uniswap router use this amount…", wait: "Waiting for the approval…", fail: "The router approval failed. Nothing was sold." });
       }
       const minOut = (quote * BigInt(100 * (100 - slip))) / 10_000n;
       const c = swapCall(pool, side === "buy", amt, minOut, BigInt(Math.floor(Date.now() / 1000) + 900));
-      setStep(`Confirm the ${side} in your wallet…`);
-      const hash = await w.writeContract({ account: a, chain: mainnet, address: V4.router, abi: routerAbi, functionName: "execute", args: [c.commands, c.inputs, c.deadline], value: side === "buy" ? amt : 0n });
-      setStep("Waiting for Ethereum…");
-      const r = await rpc.waitForTransactionReceipt({ hash });
-      if (r.status !== "success") throw new Error("The swap reverted. Nothing was spent but gas.");
+      steps.push({ call: { address: V4.router, abi: routerAbi, functionName: "execute", args: [c.commands, c.inputs, c.deadline], value: side === "buy" ? amt : 0n }, sign: `Confirm the ${side} in your wallet…`, wait: "Waiting for Ethereum…" });
+      const batched = steps.length > 1 && (await canBatch(w, a));
+      const r = await sendSteps(w, a, steps, { batched, once: `Confirm once in your wallet (approve + ${side})…`, say: setStep });
+      if (!r.ok) throw new Error("The swap reverted. Nothing was spent but gas.");
+      const hash = r.hash;
       setDone(hash); setAmount(""); void loadBal(a);
     } catch (e) { setErr(errText(e)); } finally { setStep(null); }
   };

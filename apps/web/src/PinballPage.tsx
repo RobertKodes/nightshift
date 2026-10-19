@@ -8,6 +8,7 @@ import { InstallButton, useGameApp } from "./pinball/install";
 import { AppTabs } from "./landing/app";
 import { type Seat, StakeLobby, StakeResult, useEscrow } from "./stakes";
 import "./pinball/arcade.css";
+import { LITE, onHidden } from "./lite";
 
 /** Spectator mode (/games/pinball?watch=<id>): its own chunk, loaded only when someone watches. */
 const PinballWatch = lazy(() => import("./pinball/Watch").then((x) => ({ default: x.PinballWatch })));
@@ -75,14 +76,15 @@ function Confetti() {
   useEffect(() => {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const c = ref.current!, g = c.getContext("2d")!; let raf = 0, prev = performance.now();
-    const bits = Array.from({ length: 80 }, () => ({ x: Math.random() * c.width, y: -Math.random() * c.height, vy: 90 + Math.random() * 170, vx: (Math.random() - 0.5) * 70, r: Math.random() * 6, c: ["#F2EFFF", "#A48BFF", "#7C5CFF"][Math.floor(Math.random() * 3)]! }));
+    const bits = Array.from({ length: LITE ? 30 : 80 }, () => ({ x: Math.random() * c.width, y: -Math.random() * c.height, vy: 90 + Math.random() * 170, vx: (Math.random() - 0.5) * 70, r: Math.random() * 6, c: ["#F2EFFF", "#A48BFF", "#7C5CFF"][Math.floor(Math.random() * 3)]! }));
     const f = (now: number) => {
       const dt = (now - prev) / 1000; prev = now; g.clearRect(0, 0, c.width, c.height);
       for (const b of bits) { b.y += b.vy * dt; b.x += b.vx * dt; b.r += dt * 4; if (b.y > c.height) { b.y = -10; b.x = Math.random() * c.width; } g.save(); g.translate(b.x, b.y); g.rotate(b.r); g.fillStyle = b.c; g.fillRect(-5, -2, 10, 4); g.restore(); }
       raf = requestAnimationFrame(f);
     };
     raf = requestAnimationFrame(f);
-    return () => cancelAnimationFrame(raf);
+    const off = onHidden((hidden) => { cancelAnimationFrame(raf); if (!hidden) { prev = performance.now(); raf = requestAnimationFrame(f); } });
+    return () => { cancelAnimationFrame(raf); off(); };
   }, []);
   return <canvas ref={ref} width={600} height={900} className="arc-confetti" />;
 }

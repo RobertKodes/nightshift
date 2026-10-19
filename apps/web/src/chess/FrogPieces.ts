@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { Color, PieceSymbol } from "chess.js";
+import { glossy } from "./glossy";
 
 export type Frog = {
   group: THREE.Group;
@@ -20,7 +21,7 @@ const INK = 0x090613, GOLD = 0xffc46b, UV = 0x7c5cff, ACID = 0xb8ff4a, CYAN = 0x
 export class FrogPieces {
   private models = new Map<string, Model>();
   private geometries: THREE.BufferGeometry[] = [];
-  private glossy = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: .3, metalness: .12, clearcoat: 1, clearcoatRoughness: .19, emissive: 0x35205f, emissiveIntensity: .09 });
+  private glossy = glossy({ vertexColors: true, roughness: .3, metalness: .12, clearcoat: 1, clearcoatRoughness: .19, emissive: 0x35205f, emissiveIntensity: .09 });
   private ink = new THREE.MeshBasicMaterial({ color: INK });
   private hull = new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide });
   private laser = new THREE.MeshBasicMaterial({ color: 0xff285c, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false });

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { inUsd, useImdUsd } from "./price";
 import { chooseWallet } from "./wallet";
+import { type Step, canBatch, sendSteps } from "./batch";
 import { type Hex, createPublicClient, createWalletClient, custom, erc20Abi, http, parseAbi, stringToHex } from "viem";
 import { mainnet } from "viem/chains";
 
@@ -61,20 +62,18 @@ export function TokenLaunch({ call, token }: { call: (token: string, path: strin
       const bal = await rpc.readContract({ address: IMD, abi: erc20Abi, functionName: "balanceOf", args: [me] });
       if (bal < PRICE) throw new Error(`Your dev wallet has ${(Number(bal) / 1e18).toFixed(3)} IMD. It needs 0.5 IMD, plus a little ETH for gas.`);
       const allowance = await rpc.readContract({ address: IMD, abi: erc20Abi, functionName: "allowance", args: [me, INTAKE] });
-      if (allowance < PRICE) {
-        setBusy("Signature 1 of 2: allow IMD to take 0.5 IMD…");
-        const a = await wallet.writeContract({ account: me, address: IMD, abi: erc20Abi, functionName: "approve", args: [INTAKE, PRICE] });
-        setBusy("Waiting for signature 1 to confirm…");
-        await rpc.waitForTransactionReceipt({ hash: a });
-      }
-      setBusy("Signature 2 of 2: pay 0.5 IMD and send the launch…");
-      const tx = await wallet.writeContract({
-        account: me, address: INTAKE, abi: intakeAbi, functionName: "request",
-        args: [stringToHex("launch.open@launch-1", { size: 32 }), stringToHex(JSON.stringify(res.body)), { target: "0x0000000000000000000000000000000000000000", selector: "0x00000000" }, IMD, PRICE],
+      const steps: Step[] = [];
+      if (allowance < PRICE) steps.push({ call: { address: IMD, abi: erc20Abi, functionName: "approve", args: [INTAKE, PRICE] }, sign: "Signature 1 of 2: allow IMD to take 0.5 IMD…", wait: "Waiting for signature 1 to confirm…", fail: "The approval failed. Nothing was paid." });
+      const two = steps.length > 0;
+      steps.push({
+        call: { address: INTAKE, abi: intakeAbi, functionName: "request", args: [stringToHex("launch.open@launch-1", { size: 32 }), stringToHex(JSON.stringify(res.body)), { target: "0x0000000000000000000000000000000000000000", selector: "0x00000000" }, IMD, PRICE] },
+        sign: two ? "Signature 2 of 2: pay 0.5 IMD and send the launch…" : "Pay 0.5 IMD and send the launch (confirm in your wallet)…",
+        wait: two ? "Waiting for signature 2 to confirm…" : "Waiting for the payment to confirm…",
       });
-      setBusy("Waiting for signature 2 to confirm…");
-      const r = await rpc.waitForTransactionReceipt({ hash: tx as Hex });
-      if (r.status !== "success") throw new Error(`The transaction reverted: ${tx}`);
+      const batched = two && (await canBatch(wallet, me));
+      const r = await sendSteps(wallet, me, steps, { batched, once: "Confirm once in your wallet (allow exactly 0.5 IMD + pay and send the launch)…", wait: batched ? "Waiting for the payment to confirm…" : undefined, say: setBusy });
+      const tx = r.hash;
+      if (!r.ok) throw new Error(`The transaction reverted: ${tx}`);
       await call(token, "token/launched", { tx, symbol: "SHIFT" });
       setBusy(null);
       void refresh();

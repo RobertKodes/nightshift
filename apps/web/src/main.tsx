@@ -25,6 +25,7 @@ import { GameRoomPage } from "./GameRoomPage";
 import { PinballPage } from "./PinballPage";
 import { LaunchpadPage } from "./LaunchpadPage";
 import "./styles.css";
+import "./lite"; // marks <html data-lite> before the first paint
 import "./landing/landing.css";
 
 const ArenaPage = lazy(() => import("./ArenaPage").then((x) => ({ default: x.ArenaPage })));

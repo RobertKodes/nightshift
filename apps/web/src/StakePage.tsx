@@ -3,6 +3,7 @@ import { LIVE_LAUNCH, SHIFT, fetchLaunch } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, fallback, formatEther, http, parseAbi, parseAbiItem, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
+import { type Step, canBatch, sendSteps } from "./batch";
 import { StakedSupply } from "./StakedCounter";
 
 const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
@@ -134,13 +135,13 @@ export function StakePage() {
   const amt = (() => { try { return amount && Number(amount) > 0 ? parseEther(amount) : 0n; } catch { return 0n; } })();
   const stake = () => run("Confirm in your wallet…", async ({ w, a }) => {
     const allowed = await rpc.readContract({ address: token!, abi: erc20Abi, functionName: "allowance", args: [a, rewards!] });
-    if (allowed < amt) {
-      setStep(`Approve ${fmt(amt)} $${sym} for staking…`);
-      const ap = await w.writeContract({ account: a, chain: mainnet, address: token!, abi: erc20Abi, functionName: "approve", args: [rewards!, amt] });
-      await rpc.waitForTransactionReceipt({ hash: ap });
-    }
-    setStep(`Stake ${fmt(amt)} $${sym} for ${LOCKS.find(([d]) => d === lock)![1].toLowerCase()}…`);
-    return w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "stake", args: [amt, BigInt(lock)] });
+    const lockText = LOCKS.find(([d]) => d === lock)![1].toLowerCase();
+    const steps: Step[] = [];
+    // exactly the amount staked, never more
+    if (allowed < amt) steps.push({ call: { address: token!, abi: erc20Abi, functionName: "approve", args: [rewards!, amt] }, sign: `Approve ${fmt(amt)} $${sym} for staking…`, wait: "Waiting for the approval…", fail: "The approval failed. Nothing was staked." });
+    steps.push({ call: { address: rewards!, abi: REWARDS, functionName: "stake", args: [amt, BigInt(lock)] }, sign: `Stake ${fmt(amt)} $${sym} for ${lockText}…` });
+    const batched = steps.length > 1 && (await canBatch(w, a));
+    return (await sendSteps(w, a, steps, { batched, once: `Confirm once in your wallet (approve + stake ${fmt(amt)} $${sym} for ${lockText})…`, say: setStep })).hash;
   });
 
   const now = Date.now() / 1000;

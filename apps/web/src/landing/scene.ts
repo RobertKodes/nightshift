@@ -4,6 +4,8 @@
  * glow sits exactly on the structure it belongs to.
  */
 
+import { LITE, flat, onHidden, pixelRatio } from "../lite";
+
 export const ART_W = 1672;
 export const ART_H = 941;
 
@@ -26,7 +28,8 @@ const LILAC = "196,180,255";
 export interface SceneHandle { stop(): void; setPointer(x: number, y: number): void }
 
 export function startScene(canvas: HTMLCanvasElement, opts: { reduceMotion: boolean }): SceneHandle {
-  const g = canvas.getContext("2d")!;
+  // lite: no glow blur, 1× pixels, a third of the stars, lights and dust, 30 frames a second
+  const g = flat(canvas.getContext("2d")!);
   let W = 0;
   let H = 0;
   let dpr = 1;
@@ -38,7 +41,7 @@ export function startScene(canvas: HTMLCanvasElement, opts: { reduceMotion: bool
   let last = 0;
 
   const rnd = (a: number, b: number) => a + Math.random() * (b - a);
-  const stars: Star[] = Array.from({ length: 320 }, () => {
+  const stars: Star[] = Array.from({ length: LITE ? 110 : 320 }, () => {
     let x = 0;
     let y = 0;
     // Keep stars out of the reactor's disc and the planet.
@@ -46,8 +49,9 @@ export function startScene(canvas: HTMLCanvasElement, opts: { reduceMotion: bool
     return { x, y, z: Math.random(), r: Math.random() < 0.06 ? rnd(1.2, 1.9) : rnd(0.3, 1), tw: rnd(0.4, 1.6), ph: rnd(0, 6.28) };
   });
   // Lights along the ring: sampled on its ellipse, each with its own rhythm.
-  const ringLights = Array.from({ length: 150 }, (_, i) => {
-    const a = (i / 150) * Math.PI * 2 + rnd(-0.02, 0.02);
+  const LIGHTS = LITE ? 60 : 150;
+  const ringLights = Array.from({ length: LIGHTS }, (_, i) => {
+    const a = (i / LIGHTS) * Math.PI * 2 + rnd(-0.02, 0.02);
     return { a, h: rnd(-14, 14), ph: rnd(0, 6.28), sp: rnd(0.6, 2.4), big: Math.random() < 0.12 };
   });
   const ships: Ship[] = [
@@ -56,14 +60,14 @@ export function startScene(canvas: HTMLCanvasElement, opts: { reduceMotion: bool
     { t: 0.2, speed: 0.016, path: [-60, 420, 300, 380, 640, 330], size: 0.7, delay: 0 },
     { t: 0.7, speed: 0.007, path: [520, 760, 900, 690, 1320, 640], size: 1.0, delay: 0 },
   ];
-  const motes: Mote[] = Array.from({ length: 70 }, () => ({ x: rnd(0, ART_W), y: rnd(0, ART_H), vx: rnd(-6, 6), vy: rnd(-3, 3), r: rnd(0.6, 2.2), a: rnd(0.15, 0.6) }));
+  const motes: Mote[] = Array.from({ length: LITE ? 24 : 70 }, () => ({ x: rnd(0, ART_W), y: rnd(0, ART_H), vx: rnd(-6, 6), vy: rnd(-3, 3), r: rnd(0.6, 2.2), a: rnd(0.15, 0.6) }));
   let flash = { at: -10, x: 0, y: 0 };
 
   function size() {
     const rect = canvas.getBoundingClientRect();
     W = rect.width;
     H = rect.height;
-    dpr = Math.min(2, devicePixelRatio || 1);
+    dpr = pixelRatio(2);
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
     // object-fit: cover, centred
@@ -86,6 +90,7 @@ export function startScene(canvas: HTMLCanvasElement, opts: { reduceMotion: bool
   }
 
   function frame(now: number) {
+    if (LITE && now - last < 30) { raf = requestAnimationFrame(frame); return; }
     const t = now / 1000;
     const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
     last = now;
@@ -256,8 +261,10 @@ export function startScene(canvas: HTMLCanvasElement, opts: { reduceMotion: bool
   const ro = new ResizeObserver(size);
   ro.observe(canvas);
   raf = requestAnimationFrame(frame);
+  // a hidden tab (or a wallet app in the background) draws nothing
+  const off = onHidden((hidden) => { cancelAnimationFrame(raf); if (!hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } });
   return {
-    stop() { cancelAnimationFrame(raf); ro.disconnect(); },
+    stop() { cancelAnimationFrame(raf); ro.disconnect(); off(); },
     setPointer(x: number, y: number) { pointer.tx = x; pointer.ty = y; },
   };
 }

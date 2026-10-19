@@ -5,6 +5,7 @@ import { inUsd, useImdUsd } from "./price";
 import { type Hex, createPublicClient, createWalletClient, custom, erc20Abi, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
+import { type Step, canBatch, sendSteps } from "./batch";
 
 const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
 /** The NIGHT FROGS contract, deployed by IMD (launch 1fc22c34). The page never approves anything else. */
@@ -67,17 +68,14 @@ export function FrogsPage() {
       const bal = await rpc.readContract({ address: IMD, abi: erc20Abi, functionName: "balanceOf", args: [me] });
       if (bal < cost) throw new Error(`You need ${Number(cost) / 1e18} IMD; this wallet has ${(Number(bal) / 1e18).toFixed(3)}. Buy IMD on Uniswap first.`);
       const allowance = await rpc.readContract({ address: IMD, abi: erc20Abi, functionName: "allowance", args: [me, nft] });
-      if (allowance < cost) {
-        setStep(`1/2 · Approve exactly ${Number(cost) / 1e18} IMD for NIGHT FROGS (confirm in your wallet)…`);
-        const a = await wallet.writeContract({ account: me, address: IMD, abi: erc20Abi, functionName: "approve", args: [nft, cost] });
-        setStep("1/2 · Waiting for the approval…");
-        await rpc.waitForTransactionReceipt({ hash: a });
-      }
-      setStep(`2/2 · Mint ${qty} frog${qty > 1 ? "s" : ""} (confirm in your wallet)…`);
-      const tx = await wallet.writeContract({ account: me, address: nft, abi: FROGS, functionName: "mint", args: [BigInt(qty)] });
-      setStep("2/2 · Waiting for the mint…");
-      const r = await rpc.waitForTransactionReceipt({ hash: tx as Hex });
-      if (r.status !== "success") throw new Error(`The mint reverted: ${tx}`);
+      const steps: Step[] = [];
+      if (allowance < cost) steps.push({ call: { address: IMD, abi: erc20Abi, functionName: "approve", args: [nft, cost] }, sign: `1/2 · Approve exactly ${Number(cost) / 1e18} IMD for NIGHT FROGS (confirm in your wallet)…`, wait: "1/2 · Waiting for the approval…", fail: "The approval failed. Nothing was minted." });
+      const two = steps.length > 0, frogs = `${qty} frog${qty > 1 ? "s" : ""}`;
+      steps.push({ call: { address: nft, abi: FROGS, functionName: "mint", args: [BigInt(qty)] }, sign: two ? `2/2 · Mint ${frogs} (confirm in your wallet)…` : `Mint ${frogs} (confirm in your wallet)…`, wait: two ? "2/2 · Waiting for the mint…" : "Waiting for the mint…" });
+      const batched = two && (await canBatch(wallet, me));
+      const r = await sendSteps(wallet, me, steps, { batched, once: `Confirm once in your wallet (approve exactly ${Number(cost) / 1e18} IMD + mint ${frogs})…`, wait: batched ? "Waiting for the mint…" : undefined, say: setStep });
+      const tx = r.hash;
+      if (!r.ok) throw new Error(`The mint reverted: ${tx}`);
       setStep(null);
       setDone(tx);
       void load();

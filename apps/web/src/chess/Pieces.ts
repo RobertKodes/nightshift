@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { Color, PieceSymbol } from "chess.js";
 import { FrogPieces, type Frog } from "./FrogPieces";
+import { glossy } from "./glossy";
 
 export type PieceVisual = { group: THREE.Group; phase: number; fallback?: Frog; baseRing?: THREE.Mesh<THREE.TorusGeometry, THREE.MeshStandardMaterial>; contactShadow?: THREE.Mesh; side?: Color };
 export type PieceState = "loading" | "ready" | "fallback";
@@ -74,12 +75,12 @@ export class Pieces {
   private foot = new THREE.MeshStandardMaterial({ color: 0x0d0a1f, metalness: .6, roughness: .28 });
   private rings: Record<Color, THREE.MeshStandardMaterial[]> = { w: [], b: [] };
   private contact: THREE.MeshBasicMaterial;
-  private pearl = new THREE.MeshPhysicalMaterial({
+  private pearl = glossy({
     name: "Moonlight pearl", color: "#ece6ff", roughness: .28,
     clearcoat: 1, clearcoatRoughness: .15, sheen: .35, sheenColor: "#c5b4ef", sheenRoughness: .6,
     emissive: "#2a1f55", emissiveIntensity: .18,
   });
-  private obsidian = new THREE.MeshPhysicalMaterial({
+  private obsidian = glossy({
     name: "Ultraviolet obsidian", color: "#1a1238", roughness: .2,
     clearcoat: 1, clearcoatRoughness: .15,
   });

@@ -4,6 +4,7 @@ import { BetPanel } from "../bets";
 import { Link } from "../router";
 import { stakeText } from "../games/live";
 import { H, Table, W } from "./engine";
+import { flat, onHidden } from "../lite";
 import "../games/live.css";
 
 /**
@@ -24,7 +25,7 @@ function MiniTable({ seat, rival }: { seat: Seat; rival: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null), target = useRef({ x: seat.x, y: seat.y });
   target.current = { x: seat.x, y: seat.y };
   useEffect(() => {
-    const c = ref.current!, g = c.getContext("2d")!;
+    const c = ref.current!, g = flat(c.getContext("2d")!);
     const A = { field: img(`${ART}/playfield.webp`), hole: img(`${ART}/blackhole.webp`), planets: [0, 1, 2, 3].map((i) => img(`${ART}/planet-${i}.webp`)) };
     const ball = { ...target.current };
     let raf = 0, prev = performance.now();
@@ -46,7 +47,9 @@ function MiniTable({ seat, rival }: { seat: Seat; rival: boolean }) {
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
+    // a hidden tab (or a wallet app in the background) draws nothing
+    const off = onHidden((hidden) => { cancelAnimationFrame(raf); if (!hidden) { prev = performance.now(); raf = requestAnimationFrame(frame); } });
+    return () => { cancelAnimationFrame(raf); off(); };
   }, [rival]);
   return <canvas ref={ref} width={360} height={540} className="arc-mini pw-table" aria-label={`Live view of ${seat.name}'s table`} />;
 }

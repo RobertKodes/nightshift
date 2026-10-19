@@ -4,6 +4,7 @@ import { mainnet } from "viem/chains";
 import { Icon } from "./Icon";
 import { api as session } from "./api";
 import { chooseWallet } from "./wallet";
+import { type Step, canBatch, sendSteps } from "./batch";
 import "./stakes.css";
 
 /**
@@ -136,20 +137,23 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     setErr(null); setStep(label);
     try { await f(); } catch (e) { setErr(errText(e)); } finally { setStep(null); }
   };
-  /** Approves exactly `stake` to the escrow, only if the allowance is short. */
-  const approve = async (w: ReturnType<typeof createWalletClient>, a: Address, tokenAddress: Address, stake: bigint, label: string) => {
+  /** The approval of exactly `stake` to the escrow, only if the allowance is short. */
+  const approval = async (a: Address, tokenAddress: Address, stake: bigint, label: string): Promise<Step | null> => {
     const [bal, allowance] = await Promise.all([
       rpc.readContract({ address: tokenAddress, abi: erc20Abi, functionName: "balanceOf", args: [a] }),
       rpc.readContract({ address: tokenAddress, abi: erc20Abi, functionName: "allowance", args: [a, ESCROW] }),
     ]);
     if (bal < stake) throw new Error(`This wallet holds ${fmt(bal)} ${label}; the stake is ${fmt(stake)}.`);
-    if (allowance >= stake) return;
+    if (allowance >= stake) return null;
     if (!(await confirm("Approve the stake", [["Token", `${label} ${short(tokenAddress)}`], ["Spender", `GameEscrow ${ESCROW}`], ["Amount", `exactly ${formatUnits(stake, 18)} ${label}`]]))) throw new Error("Cancelled.");
+    return { call: { address: tokenAddress, abi: erc20Abi, functionName: "approve", args: [ESCROW, stake] }, sign: "Approving in your wallet…", wait: "Waiting for the approval to confirm…", fail: "The approval failed." };
+  };
+  /** The approval (if any) and the escrow call: one confirmation where the wallet batches, else one after the other. */
+  const send = async (w: ReturnType<typeof createWalletClient>, a: Address, ap: Step | null, last: Step, what: string, sent: () => void) => {
     await mainnetOnly(w);
-    setStep("Approving in your wallet…");
-    const h = await w.writeContract({ account: a, chain: mainnet, address: tokenAddress, abi: erc20Abi, functionName: "approve", args: [ESCROW, stake] });
-    setStep("Waiting for the approval to confirm…");
-    if ((await rpc.waitForTransactionReceipt({ hash: h })).status !== "success") throw new Error("The approval failed.");
+    const steps = ap ? [ap, last] : [last];
+    const batched = steps.length > 1 && (await canBatch(w, a));
+    return sendSteps(w, a, steps, { batched, once: `Confirm once in your wallet (approve + ${what})…`, say: setStep, sent });
   };
 
   const create = () => run("Preparing your challenge…", async () => {
@@ -164,14 +168,10 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     const r = await games<{ matchId: Hex; game: Hex; token: string; stake: string; escrow: string }>("challenge", { game, token, amount: typed, tc, name });
     // the server's answer must be exactly what was asked, on the pinned contract
     if (r.escrow.toLowerCase() !== ESCROW || r.token.toLowerCase() !== tokenAddress || r.game !== LABELS[game] || BigInt(r.stake) !== stake || !/^0x[0-9a-f]{64}$/.test(r.matchId)) throw new Error("The server's challenge does not match what you asked for. Nothing was sent.");
-    await approve(w, a, tokenAddress, stake, tokenLabel(token));
+    const ap = await approval(a, tokenAddress, stake, tokenLabel(token));
     if (!(await confirm("Open the challenge", [["Contract", `GameEscrow ${ESCROW}`], ["Your stake", `${formatUnits(stake, 18)} ${tokenLabel(token)}`], ["Winner receives", `${formatUnits(payoutOf(stake), 18)} ${tokenLabel(token)} (95% of the pot)`], ["Game", game === "chess" ? `NIGHT CHESS ${tc ?? ""}` : "Space Pinball"], ["Match", short(r.matchId)]]))) throw new Error("Cancelled.");
-    await mainnetOnly(w);
-    setStep("Opening in your wallet…");
-    const h = await w.writeContract({ account: a, chain: mainnet, address: ESCROW, abi: ABI, functionName: "open", args: [r.matchId, tokenAddress, stake, LABELS[game]] });
-    track(r.matchId);
-    setStep("Waiting for the stake to confirm…");
-    if ((await rpc.waitForTransactionReceipt({ hash: h })).status !== "success") throw new Error("Opening the challenge failed.");
+    const open: Step = { call: { address: ESCROW, abi: ABI, functionName: "open", args: [r.matchId, tokenAddress, stake, LABELS[game]] }, sign: "Opening in your wallet…", wait: "Waiting for the stake to confirm…" };
+    if (!(await send(w, a, ap, open, "open the challenge", () => track(r.matchId))).ok) throw new Error("Opening the challenge failed.");
   });
 
   const accept = (c: ChallengeView) => run("Checking the challenge…", async () => {
@@ -185,14 +185,10 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     if (!tokenAddress || m[0].toLowerCase() !== tokenAddress || m[1] !== stake || m[2] !== LABELS[game] || m[3].toLowerCase() !== c.creator || m[4] !== ZERO || m[7]) throw new Error("This challenge on chain is not the one listed, or it was taken. Nothing was sent.");
     if (Number(m[5]) + 3_600 < Date.now() / 1000 + 90) throw new Error("This challenge's join window is about to close.");
     const { w, a } = await wallet(me);
-    await approve(w, a, tokenAddress, stake, tokenLabel(c.token));
+    const ap = await approval(a, tokenAddress, stake, tokenLabel(c.token));
     if (!(await confirm("Accept the challenge", [["Contract", `GameEscrow ${ESCROW}`], ["Your stake", `${formatUnits(stake, 18)} ${tokenLabel(c.token)}`], ["Winner receives", `${formatUnits(payoutOf(stake), 18)} ${tokenLabel(c.token)} (95% of the pot)`], ["Rival", `${c.name} · ${short(c.creator)}`], ["Match", short(c.matchId)]]))) throw new Error("Cancelled.");
-    await mainnetOnly(w);
-    setStep("Joining in your wallet…");
-    const h = await w.writeContract({ account: a, chain: mainnet, address: ESCROW, abi: ABI, functionName: "join", args: [c.matchId] });
-    track(c.matchId);
-    setStep("Waiting for your stake to confirm…");
-    if ((await rpc.waitForTransactionReceipt({ hash: h })).status !== "success") throw new Error("Joining failed: someone may have joined first.");
+    const join: Step = { call: { address: ESCROW, abi: ABI, functionName: "join", args: [c.matchId] }, sign: "Joining in your wallet…", wait: "Waiting for your stake to confirm…" };
+    if (!(await send(w, a, ap, join, "join", () => track(c.matchId))).ok) throw new Error("Joining failed: someone may have joined first.");
   });
 
   const close = (kind: "cancel" | "refund") => run(kind === "cancel" ? "Cancelling…" : "Refunding…", async () => {

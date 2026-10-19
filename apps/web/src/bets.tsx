@@ -5,6 +5,7 @@ import { Icon } from "./Icon";
 import { api } from "./api";
 import { useSession } from "./session";
 import { STAKE_TOKENS, type StakeToken, mainnetOnly, rpc, tokenLabel, wallet } from "./stakes";
+import { type Step, canBatch, sendSteps } from "./batch";
 import "./stakes.css";
 import "./bets.css";
 
@@ -157,39 +158,49 @@ export function BetPanel({ game, id, theme }: { game: BetGame; id: string; theme
       rpc.readContract({ address: tokenAddress, abi: erc20Abi, functionName: "allowance", args: [a, BETPOOL as Address] }),
     ]);
     if (bal < value) throw new Error(`This wallet holds ${fmt(bal)} ${label}; the bet is ${fmt(value)}.`);
+    const steps: Step[] = [];
     if (allowance < value) {
       if (!(await confirm("Approve the bet", [["Token", `${label} ${short(tokenAddress)}`], ["Spender", `BetPool ${BETPOOL}`], ["Amount", `exactly ${formatUnits(value, 18)} ${label}`]]))) throw new Error("Cancelled.");
-      await mainnetOnly(w);
-      setStep("Approving in your wallet…");
-      const h = await w.writeContract({ account: a, chain: mainnet, address: tokenAddress, abi: erc20Abi, functionName: "approve", args: [BETPOOL as Address, value] });
-      setStep("Waiting for the approval…");
-      if ((await rpc.waitForTransactionReceipt({ hash: h })).status !== "success") throw new Error("The approval failed.");
+      steps.push({ call: { address: tokenAddress, abi: erc20Abi, functionName: "approve", args: [BETPOOL as Address, value] }, sign: "Approving in your wallet…", wait: "Waiting for the approval…", fail: "The approval failed." });
     }
     // the market: usually opened by the keeper meanwhile; otherwise this wallet opens it with the server's signature
-    if (!(await onChain(t.ticket.marketId))) {
-      t = await ticket(me, side, value);
-      if (t.market.keeper?.tx && t.market.keeper.state !== "failed") {
-        setStep("Opening the market…");
-        await rpc.waitForTransactionReceipt({ hash: t.market.keeper.tx as Hex, timeout: 90_000 }).catch(() => null);
-      }
-      if (!(await onChain(t.ticket.marketId))) {
+    let opening = false, askedOpen = false;
+    steps.push({
+      call: async () => {
+        if (await onChain(t.ticket.marketId)) return null;
+        t = await ticket(me, side, value);
+        if (t.market.keeper?.tx && t.market.keeper.state !== "failed") {
+          setStep("Opening the market…");
+          await rpc.waitForTransactionReceipt({ hash: t.market.keeper.tx as Hex, timeout: 90_000 }).catch(() => null);
+        }
+        if (await onChain(t.ticket.marketId)) return null;
         if (!t.market.signature) throw new Error("The market is not open yet. Try again in a moment.");
-        if (!(await confirm("Open the market", [["Contract", `BetPool ${BETPOOL}`], ["Market", short(t.market.marketId)], ["Why", "You are the first to bet on this game in " + label]]))) throw new Error("Cancelled.");
+        if (!askedOpen && !(await confirm("Open the market", [["Contract", `BetPool ${BETPOOL}`], ["Market", short(t.market.marketId)], ["Why", "You are the first to bet on this game in " + label]]))) throw new Error("Cancelled.");
+        askedOpen = opening = true;
         await mainnetOnly(w);
-        setStep("Opening the market in your wallet…");
-        const h = await w.writeContract({ account: a, chain: mainnet, address: BETPOOL as Address, abi: ABI, functionName: "createMarket", args: [t.market.marketId, t.market.token as Address, BigInt(t.market.closesAt), t.market.game, t.market.signature] });
-        if ((await rpc.waitForTransactionReceipt({ hash: h })).status !== "success" && !(await onChain(t.ticket.marketId))) throw new Error("Opening the market failed.");
-      }
-    }
+        return { address: BETPOOL as Address, abi: ABI, functionName: "createMarket", args: [t.market.marketId, t.market.token as Address, BigInt(t.market.closesAt), t.market.game, t.market.signature] };
+      },
+      sign: "Opening the market in your wallet…", wait: "Waiting for the market to open…", fail: "Opening the market failed.",
+    });
     // the bet itself, on a fresh ticket: its weight is the game's right now
     const name = v.names[side];
-    if (!(await confirm("Place the bet", [["Contract", `BetPool ${BETPOOL}`], ["On", `${name} (side ${side ? "B" : "A"})`], ["Amount", `${formatUnits(value, 18)} ${label}`], ["Counts as", `${times(t.weightBps)} now (it may move a little)`], ["If it wins", "your bet back plus a share of the losing side, minus 5%"]]))) throw new Error("Cancelled.");
-    t = await ticket(me, side, value);
+    let askedBet = false;
+    steps.push({
+      call: async () => {
+        if (!askedBet && !(await confirm("Place the bet", [["Contract", `BetPool ${BETPOOL}`], ["On", `${name} (side ${side ? "B" : "A"})`], ["Amount", `${formatUnits(value, 18)} ${label}`], ["Counts as", `${times(t.weightBps)} now (it may move a little)`], ["If it wins", "your bet back plus a share of the losing side, minus 5%"]]))) throw new Error("Cancelled.");
+        askedBet = true;
+        t = await ticket(me, side, value);
+        await mainnetOnly(w);
+        return { address: BETPOOL as Address, abi: ABI, functionName: "bet", args: [t.ticket.marketId, side, value, t.ticket.weightBps, BigInt(t.ticket.expiry), t.ticket.nonce, t.signature] };
+      },
+      get sign() { return `Confirm in your wallet (${times(t.weightBps)}, ${t.expiresIn}s)…`; }, wait: "Waiting for the bet to confirm…",
+    });
     await mainnetOnly(w);
-    setStep(`Confirm in your wallet (${times(t.weightBps)}, ${t.expiresIn}s)…`);
-    const h = await w.writeContract({ account: a, chain: mainnet, address: BETPOOL as Address, abi: ABI, functionName: "bet", args: [t.ticket.marketId, side, value, t.ticket.weightBps, BigInt(t.ticket.expiry), t.ticket.nonce, t.signature] });
-    setStep("Waiting for the bet to confirm…");
-    if ((await rpc.waitForTransactionReceipt({ hash: h })).status !== "success") throw new Error("The bet failed: its ticket may have expired. Try again.");
+    const batched = await canBatch(w, a);
+    const parts = () => [allowance < value && "approve", opening && "open the market", "bet"].filter(Boolean).join(" + ");
+    const r = await sendSteps(w, a, steps, { batched, get once() { return `Confirm once in your wallet (${parts()}, ${times(t.weightBps)}, ${t.expiresIn}s)…`; }, say: setStep });
+    if (!r.ok) throw new Error(r.batched ? "The bet failed: its ticket may have expired. Nothing moved but gas. Try again." : "The bet failed: its ticket may have expired. Try again.");
+    const h = r.hash;
     setDone(h);
   });
 
