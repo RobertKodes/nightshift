@@ -13,6 +13,13 @@ export function took(ms: number): string {
   return h < 48 ? `${h}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m` : `${Math.floor(h / 24)}d ${h % 24}h`;
 }
 
+/** Who chose the move: the owner by hand, the CEO's model (and what thinking cost), or the playbook (and why). */
+function By({ m }: { m: NonNullable<Flight["mind"]> }) {
+  if (m.by === "owner") return <>Ordered by the owner, not the CEO</>;
+  if (m.by === "playbook") return <>Decided by the playbook{m.fallback ? `, because ${m.fallback}` : ""}</>;
+  return <>Decided by the CEO's model{m.model ? <> (<code>{m.model}</code>)</> : null}{m.costUsd > 0 ? `, ${usd(m.costUsd, 4)} to think` : ""}</>;
+}
+
 type Row = FlightSpan & { depth: number };
 const flat = (nodes: FlightSpan[], depth = 0, out: Row[] = []): Row[] => {
   for (const n of nodes) { out.push({ ...n, depth }); flat(n.children, depth + 1, out); }
@@ -32,8 +39,14 @@ export function FlightDrawer({ load, onClose, accent = "#4ad8ff", share }: { loa
   const [copied, setCopied] = useState(false);
   const raf = useRef(0);
 
-  // loaded once: the parent keys the drawer by shift
+  // loaded when opened (the parent keys the drawer by shift), then kept fresh while the shift runs
   useEffect(() => { load().then(setF).catch((e: Error) => setErr(e.message)); }, []);
+  const running = f !== null && f.endedAt === null;
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => { load().then(setF).catch(() => {}); }, 4000);
+    return () => clearInterval(t);
+  }, [running]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, [onClose]);
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
@@ -74,7 +87,7 @@ export function FlightDrawer({ load, onClose, accent = "#4ad8ff", share }: { loa
               <span>{f.kind.replace(/_/g, " ")}</span>
               <span><b>{took(f.durationMs)}</b>{f.endedAt ? "" : " so far"}</span>
               <span><b>{f.money.costUsd > 0 ? usd(f.money.costUsd) : "free"}</b>{f.money.costImd > 0 ? ` · ${f.money.costImd} IMD` : ""}</span>
-              {pb?.kind === "product" && pb.ratio !== null && <span className={pb.ratio >= 1 ? "fr-good" : ""}><b>{pb.ratio.toFixed(1)}×</b> paid back</span>}
+              {pb?.kind === "product" && pb.ratio !== null && pb.status === "live" && <span className={pb.ratio >= 1 ? "fr-good" : ""}><b>{pb.ratio.toFixed(1)}×</b> paid back</span>}
             </div>
             {!f.recorded && <p className="fr-note">This shift ran before the flight recorder: only its start and its end were kept.</p>}
 
@@ -89,7 +102,7 @@ export function FlightDrawer({ load, onClose, accent = "#4ad8ff", share }: { loa
                   <span><b>{usd(f.mind.saw.imdUsd)}</b>per IMD</span>
                 </div>
                 <p className="fr-by">
-                  Decided by {f.mind.by === "model" ? <>the CEO's model{f.mind.model ? <> (<code>{f.mind.model}</code>)</> : null}{f.mind.costUsd > 0 ? `, ${usd(f.mind.costUsd, 4)} to think` : ""}</> : <>the playbook{f.mind.fallback ? `, because ${f.mind.fallback}` : ""}</>}
+                  <By m={f.mind} />
                   {f.mind.saw.direction ? " · following the owner's direction" : ""}
                 </p>
               </>

@@ -51,7 +51,7 @@ export interface FlightSpan {
 export interface Flight {
   id: string; cycle: number; kind: string; title: string; why: string; status: string; error: string | null;
   createdAt: number; endedAt: number | null; durationMs: number; activity: string | null; recorded: boolean;
-  mind: { by: "model" | "playbook"; costUsd: number; model?: string; fallback?: string; saw: { visits7d: number; sales7d: number; revenue7dUsd: number; imdUsd: number; liveProducts: number; direction: boolean } } | null;
+  mind: { by: "model" | "playbook" | "owner"; costUsd: number; model?: string; fallback?: string; saw: { visits7d: number; sales7d: number; revenue7dUsd: number; imdUsd: number; liveProducts: number; direction: boolean } } | null;
   plan: string[]; steps: { done: number; total: number }; trace: FlightSpan[];
   money: { costImd: number; costUsd: number; imdUsd: number; ledger: { id: string; kind: string; memo?: string; at: number; legs: { account: string; asset: string; amount: number }[] }[] };
   payback: { kind: "product"; name: string; status: string; sales: number; revenueUsd: number; costUsd: number; ratio: number | null; recent: { at: number; usd: number; payer?: string; tx?: string | null }[] } | { kind: "site"; visits: number; costUsd: number } | null;
@@ -120,6 +120,7 @@ export const api = {
   desk: () => req<Desk>("GET", "/api/my/companies"),
   profile: (id: string, p: Partial<Pick<DeskCompany, "name" | "mission" | "audience" | "idea" | "direction">>) => req("POST", `/api/companies/${id}/profile`, p),
   product: (id: string, product: string, p: { name?: string; pitch?: string; status?: "live" | "retired" }) => req("POST", `/api/companies/${id}/products/${product}`, p),
+  commission: (id: string, w: { kind: "research" | "build_product" | "build_site" | "improve_site"; brief?: string; name?: string; pitch?: string; priceUsd?: number; productKind?: string }) => req<{ ok: boolean; taskId: string; status: string; error: string | null }>("POST", `/api/companies/${id}/commission`, w),
   remove: (id: string, confirm: string) => req("POST", `/api/companies/${id}/delete`, { confirm }),
   restore: (id: string) => req<{ ok: boolean; id: string }>("POST", `/api/my/archived/${id}/restore`),
 };

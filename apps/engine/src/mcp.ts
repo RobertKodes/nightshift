@@ -33,7 +33,7 @@ const err = (message: string) => ({ ...text({ ok: false, message }), isError: tr
  */
 function build(engine: Engine, owner: string | null) {
   const server = new McpServer({ name: "nightshift", version: "0.2.0" }, {
-    instructions: "Run autonomous companies that build with the IMD swarm and sell via x402. List, create, run shifts, approve or decline spending, change limits, pause, direct the CEO, replay any shift's flight record, and withdraw revenue. Spending decisions stay with the human: show them pending approvals and withdrawals before acting.",
+    instructions: "Run autonomous companies that build with the IMD swarm and sell via x402. List, create, run shifts, approve or decline spending, change limits, pause, direct the CEO, order work by hand, replay any shift's flight record, and withdraw revenue. Spending decisions stay with the human: show them pending approvals and withdrawals before acting.",
   });
   const mine = () => [...engine.store.companies.values()].filter((c) => !config.requireAuth || c.owner === owner);
   const pick = (id: string) => {
@@ -137,6 +137,21 @@ function build(engine: Engine, owner: string | null) {
     const c = pick(id);
     engine.updateProfile(c, Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined)));
     return { ok: true, name: c.name, mission: c.mission, audience: c.audience, direction: c.direction ?? "" };
+  }));
+
+  server.registerTool("nightshift_order", {
+    title: "Order work from the swarm",
+    description: "The owner orders one piece of work by hand: research, a new product (name, pitch, price, what goes inside), the site, or a change to the site. SPENDS 0.5 IMD of the company's budget after IMD's free check, with no approval wait. Requires confirm: true.",
+    inputSchema: {
+      id: z.string(), kind: z.enum(["research", "build_product", "build_site", "improve_site"]), brief: z.string().max(1500).optional(),
+      name: z.string().optional(), pitch: z.string().optional(), priceUsd: z.number().optional(), productKind: z.enum(["report", "template", "dataset"]).optional(),
+      confirm: z.boolean().default(false),
+    },
+  }, run(async ({ id, confirm, ...w }: { id: string; confirm: boolean } & Record<string, unknown>) => {
+    const c = pick(id);
+    if (!confirm) return { ok: false, needsConfirm: true, costImd: 0.5, note: "This spends 0.5 IMD of the company's budget. Call again with confirm: true." };
+    const t = await engine.commission(c, w);
+    return { ok: t.status !== "failed", taskId: t.id, shift: t.cycle, status: t.status, error: t.error, follow: "nightshift_flight with this shift" };
   }));
 
   server.registerTool("nightshift_flight", {

@@ -91,18 +91,43 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
   const order = imdOrder(c, decision, d.buyBase(c));
   // The saver: never buy the same body twice. An identical order is not a move, so it leaves no
   // task behind; the company rests for a day instead of asking again every shift.
-  if (order) {
-    const hash = inputHash(order.action, order.input);
-    const twin = c.tasks.find((x) => x.imd && !["failed", "rejected"].includes(x.status) && inputHash(x.imd.action, x.imd.input) === hash);
-    if (twin) {
-      c.cycle -= 1;
-      c.restUntil = now(d) + 24 * 60 * 60 * 1000;
-      note(c, d, "note", `Saver: "${decision.title}" was already bought in shift ${twin.cycle}. Nothing new worth paying for; resting for a day, or until you run a shift.`);
-      return null;
-    }
+  const twin = order && twinOf(c, order);
+  if (twin) {
+    c.cycle -= 1;
+    c.restUntil = now(d) + 24 * 60 * 60 * 1000;
+    note(c, d, "note", `Saver: "${decision.title}" was already bought in shift ${twin.cycle}. Nothing new worth paying for; resting for a day, or until you run a shift.`);
+    return null;
   }
   note(c, d, "decision", `Shift ${c.cycle}: ${decision.title}. ${decision.why}`);
+  return start(c, d, decision, mind, order, false);
+}
 
+/**
+ * Work the owner orders by hand: the same free check, daily budget, saver and books as the CEO's
+ * moves, without the approval wait (the owner is the one asking). One paid move at a time.
+ */
+export async function commission(c: Company, d: ShiftDeps, decision: Decision): Promise<Task> {
+  if (c.status !== "active") throw new Error("The company is paused. Resume it to order work.");
+  if (c.tasks.some((t) => ACTIVE.has(t.status))) throw new Error("Work is still in progress. Order more once it is delivered.");
+  const order = imdOrder(c, decision, d.buyBase(c));
+  if (!order) throw new Error("That is not work the swarm can do for this company yet.");
+  const twin = twinOf(c, order);
+  if (twin) throw new Error(`The same order was already bought in shift ${twin.cycle}.`);
+  delete c.restUntil;
+  c.cycle += 1;
+  const saw = { ...d.stats(c), liveProducts: c.products.filter((p) => p.status === "live").length, direction: Boolean(c.direction) };
+  note(c, d, "decision", `Shift ${c.cycle}, ordered by the owner: ${decision.title}.`);
+  return start(c, d, decision, { by: "owner", saw }, order, true);
+}
+
+/** An order already bought with the same body, unless it failed or was turned down. */
+function twinOf(c: Company, order: { action: string; input: unknown }): Task | undefined {
+  const hash = inputHash(order.action, order.input);
+  return c.tasks.find((x) => x.imd && !["failed", "rejected"].includes(x.status) && inputHash(x.imd.action, x.imd.input) === hash);
+}
+
+/** Records the move as a task and starts it: in-house at once, or bought from the swarm. */
+async function start(c: Company, d: ShiftDeps, decision: Decision, mind: Task["mind"], order: ReturnType<typeof imdOrder>, approved: boolean): Promise<Task> {
   const t: Task = {
     id: randomUUID(),
     cycle: c.cycle,
@@ -157,7 +182,7 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
     t.productId = p.id;
   }
   t.imd = { action: order.action, input: order.input };
-  await buy(c, t, d, false);
+  await buy(c, t, d, approved);
   return t;
 }
 

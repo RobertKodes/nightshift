@@ -249,6 +249,37 @@ describe("the flight recorder and the owner's direction", () => {
   });
 });
 
+import { commission } from "./shift.js";
+describe("work the owner orders by hand", () => {
+  const product = { kind: "build_product" as const, title: 'Build "Shopify Playbook"', why: "Ordered by the owner.", brief: "A playbook for Shopify sellers.", product: { name: "Shopify Playbook", kind: "report" as const, pitch: "Sell more on Shopify this week.", priceUsd: 19 } };
+
+  it("buys without the approval wait, but inside the daily budget, and never twice", async () => {
+    const now = { t: 1_000_000 };
+    const d = deps(now);
+    const c = company({ approvalOverUsd: 1 }); // the CEO would wait for approval at $3
+    const t = await commission(c, d, product);
+    expect(t.status).toBe("building");
+    expect(t.mind?.by).toBe("owner");
+    expect(c.products[0]).toMatchObject({ name: "Shopify Playbook", status: "building" });
+    await expect(commission(c, d, product)).rejects.toThrow(/in progress/);
+    now.t += 20_000;
+    await advance(c, d);
+    await advance(c, d);
+    await expect(commission(c, d, product)).rejects.toThrow(/already bought in shift 1/);
+
+    const poor = company({ dailyBudgetUsd: 1 });
+    const t2 = await commission(poor, d, product);
+    expect(t2.status).toBe("failed"); // $3 does not fit a $1 day, whoever asks
+    expect(await d.ledger.balance("co:c1:imd", "IMD")).toBe(-500000000000000000n); // only the first order was paid
+  });
+
+  it("refuses while paused, and a site change before there is a site", async () => {
+    const d = deps({ t: 1_000_000 });
+    await expect(commission({ ...company(), status: "paused" }, d, product)).rejects.toThrow(/paused/);
+    await expect(commission(company(), d, { kind: "improve_site", title: "Fix the page", why: "", brief: "Shorter hero." })).rejects.toThrow(/not work the swarm can do/);
+  });
+});
+
 import { budgetPrice } from "./policy.js";
 describe("the IMD price budgets are valued at", () => {
   it("moves with two agreeing sources, but not on one wrong feed", () => {

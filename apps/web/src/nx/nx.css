@@ -533,6 +533,12 @@
 .dk-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .dk-toggle { display: flex !important; align-items: center; gap: 10px !important; flex-wrap: wrap; }
 .dk-toggle input { width: 20px; height: 20px; accent-color: var(--acc); }
+.dk-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dk-kinds button { display: grid; gap: 4px; padding: 12px 14px; border: 0; background: var(--nx-panel2); box-shadow: inset 0 0 0 1px var(--nx-line); color: var(--nx-dim); font: 12.5px/1.4 var(--nx-ui); text-align: left; cursor: pointer; }
+.dk-kinds button b { color: var(--nx-ink); font-size: 14px; }
+.dk-kinds button.on { background: var(--acc-soft); box-shadow: inset 0 0 0 1px var(--acc); }
+.dk-form select.field { width: 100%; }
+@media (max-width: 520px) { .dk-kinds { grid-template-columns: 1fr; } }
 .dk-presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .dk-presets button { padding: 7px 11px; border: 0; background: var(--nx-panel2); box-shadow: inset 0 0 0 1px var(--nx-line); color: var(--nx-dim); font: 12.5px/1.35 var(--nx-ui); text-align: left; cursor: pointer; }
 .dk-presets button:hover { color: var(--nx-ink); box-shadow: inset 0 0 0 1px var(--acc-line); }

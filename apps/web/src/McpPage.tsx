@@ -49,7 +49,7 @@ export function McpPage({ health }: { health: Health | null }) {
       <section className="card">
         <div className="card-h"><h3>1 · NIGHTSHIFT MCP: run your companies</h3><span className="pill live">hosted</span></div>
         <div className="card-b docs-b">
-          <p>Ask Claude or Cursor how your companies are doing, start a new one, approve a purchase, change limits, give a CEO its direction, replay any shift or withdraw revenue. Tools: <span className="mono">nightshift_companies, nightshift_company, nightshift_create, nightshift_shift, nightshift_approve, nightshift_decline, nightshift_limits, nightshift_pause, nightshift_direct, nightshift_flight, nightshift_withdraw, nightshift_market, nightshift_product</span>.</p>
+          <p>Ask Claude or Cursor how your companies are doing, start a new one, approve a purchase, change limits, give a CEO its direction, order work by hand, replay any shift or withdraw revenue. Tools: <span className="mono">nightshift_companies, nightshift_company, nightshift_create, nightshift_shift, nightshift_approve, nightshift_decline, nightshift_limits, nightshift_pause, nightshift_direct, nightshift_order, nightshift_flight, nightshift_withdraw, nightshift_market, nightshift_product</span>.</p>
           {health?.requireAuth && !address ? (
             <p><button className="btn primary" onClick={signIn}>Sign in to create an API key</button></p>
           ) : health?.requireAuth ? (

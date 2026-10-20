@@ -66,7 +66,7 @@ export interface TrailEntry {
 }
 
 export interface Mind {
-  by: "model" | "playbook";
+  by: "model" | "playbook" | "owner";
   /** The model that answered (owner view only). */
   model?: string;
   costUsd?: number;

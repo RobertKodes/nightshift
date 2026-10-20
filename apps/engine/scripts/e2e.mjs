@@ -87,6 +87,10 @@ ok((await post(`/api/my/archived/${made.id}/restore`, {}, tStranger)).status ===
 ok((await post(`/api/my/archived/${made.id}/restore`, {})).status === 200, "the owner restores it");
 const desk3 = await (await fetch(`${base}/api/my/companies`, { headers: H(tOwner) })).json();
 ok(desk3.companies.length === 2 && desk3.companies.find((x) => x.id === made.id)?.status === "paused", "it comes back paused");
+const order = { kind: "research", brief: "What do freelance designers pay for to find clients, with prices?" };
+ok((await post(`/api/companies/${made.id}/commission`, order, tStranger)).status === 403, "a stranger cannot order work");
+const paused = await post(`/api/companies/${made.id}/commission`, order);
+ok(paused.status === 400 && /paused/.test((await paused.json()).error), "a paused company takes no orders");
 
 engine.kill();
 console.log("\nall good");

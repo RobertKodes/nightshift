@@ -179,7 +179,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
   );
 }
 
-const TABS = [["profile", "Profile"], ["direction", "Direction"], ["products", "Products"], ["limits", "Limits"], ["books", "Books"], ["delete", "Delete"]] as const;
+const TABS = [["profile", "Profile"], ["direction", "Direction"], ["order", "Order work"], ["products", "Products"], ["limits", "Limits"], ["books", "Books"], ["delete", "Delete"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 const PRESETS = [
@@ -242,6 +242,8 @@ function EditDrawer({ c, first, live, imdUsd, onClose, onSaved, onDeleted, onRep
           </form>
         )}
 
+        {tab === "order" && <OrderWork c={c} imdUsd={imdUsd} saving={saving} setSaving={setSaving} setError={setError} onOrdered={(task) => { void onSaved(); say("Ordered. The swarm is on it."); onReplay(task); }} />}
+
         {tab === "products" && (
           <div className="dk-form">
             {c.products.length === 0 ? <p className="dim">No products yet: the first one is the CEO's first move.</p> : c.products.map((x) => <ProductEdit key={x.id} co={c.id} x={x} saving={saving} save={save} />)}
@@ -289,6 +291,51 @@ function EditDrawer({ c, first, live, imdUsd, onClose, onSaved, onDeleted, onRep
       </div>
     </div>,
     document.body,
+  );
+}
+
+const ORDERS = [
+  ["build_product", "A new product", "A report, template or dataset, written by the swarm and put on sale at your price."],
+  ["research", "Research", "A sourced report on a question you choose. It feeds the CEO's next decisions."],
+  ["improve_site", "A site change", "Tell the swarm what to change on the company's site."],
+  ["build_site", "The site", "A one-page site with every product and its buy link."],
+] as const;
+
+/** The owner orders one piece of work by hand: same free check, budget and books as the CEO's moves. */
+function OrderWork({ c, imdUsd, saving, setSaving, setError, onOrdered }: { c: DeskCompany; imdUsd: number; saving: boolean; setSaving: (b: boolean) => void; setError: (e: string | null) => void; onOrdered: (task: string) => void }) {
+  const [kind, setKind] = useState<(typeof ORDERS)[number][0]>("build_product");
+  const [w, setW] = useState({ name: "", pitch: "", priceUsd: "9", productKind: "report", brief: "" });
+  const available = ORDERS.filter(([k]) => (k === "build_site" ? !c.site && c.products.some((p) => p.status === "live") : k === "improve_site" ? Boolean(c.site) : true));
+  const busy = c.working !== null;
+  const send = async () => {
+    setSaving(true); setError(null);
+    try {
+      const r = await api.commission(c.id, { kind, brief: w.brief, ...(kind === "build_product" ? { name: w.name, pitch: w.pitch, priceUsd: Number(w.priceUsd), productKind: w.productKind } : {}) });
+      if (r.status === "failed") setError(r.error ?? "It did not go through. Nothing more was spent."); else onOrdered(r.taskId);
+    } catch (e) { setError((e as Error).message); } finally { setSaving(false); }
+  };
+  return (
+    <form className="dk-form" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+      <p className="dk-hint">Skip the CEO and order exactly what you want. It goes through IMD's free check, costs 0.5 IMD{imdUsd ? ` (about ${usd(imdUsd * 0.5)})` : ""} from the company's daily budget, and needs no approval because you are the one asking. You can follow it live in the flight recorder.</p>
+      {busy && <p className="dk-hint bad">The company is working on "{c.working!.title}". Order more once it is delivered.</p>}
+      {c.status !== "active" && <p className="dk-hint bad">The company is paused. Resume it to order work.</p>}
+      <div className="dk-kinds" role="radiogroup" aria-label="What to order">
+        {available.map(([k, l, d]) => <button type="button" key={k} role="radio" aria-checked={kind === k} className={kind === k ? "on" : ""} onClick={() => setKind(k)}><b>{l}</b><span>{d}</span></button>)}
+      </div>
+      {kind === "build_product" && (
+        <>
+          <label>Name<input className="field" value={w.name} maxLength={80} placeholder="e.g. The Etsy Holiday Playbook" onChange={(e) => setW({ ...w, name: e.target.value })} /></label>
+          <label>Pitch<span className="dim">one line for the shop</span><input className="field" value={w.pitch} maxLength={240} placeholder="Sell more this December, with 30 listings that work" onChange={(e) => setW({ ...w, pitch: e.target.value })} /></label>
+          <div className="dk-two">
+            <label>Kind<select className="field" value={w.productKind} onChange={(e) => setW({ ...w, productKind: e.target.value })}><option value="report">Report</option><option value="template">Templates</option><option value="dataset">Dataset</option></select></label>
+            <label>Price (USDC)<input className="field mono" type="number" min={1} max={499} step="0.5" value={w.priceUsd} onChange={(e) => setW({ ...w, priceUsd: e.target.value })} /></label>
+          </div>
+        </>
+      )}
+      {kind !== "build_site" && <label>{kind === "build_product" ? "What goes inside" : kind === "research" ? "What to find out" : "What to change"}<textarea className="field" rows={4} maxLength={1500} value={w.brief} onChange={(e) => setW({ ...w, brief: e.target.value })} placeholder={kind === "build_product" ? "Sections, examples, templates, who it is for, what they can do with it the same day." : kind === "research" ? "e.g. What do Etsy sellers pay for in Q4, with prices and who sells it?" : "e.g. Put the newest product first and add three FAQ answers."} /></label>}
+      {kind === "build_site" && <p className="dk-hint">The swarm builds one page: the promise, who it is for, every product with its price and buy link, and a short FAQ.</p>}
+      <button className="nx-btn nx-btn-acc" disabled={saving || busy || c.status !== "active"}>{saving ? "Ordering…" : "Order it · 0.5 IMD"}</button>
+    </form>
   );
 }
 

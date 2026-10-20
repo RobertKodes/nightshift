@@ -5,12 +5,15 @@ import { randomUUID } from "node:crypto";
 import {
   type Company,
   type CompanyStats,
+  type Decision,
   DEFAULT_POLICY,
   type Policy,
   type ShiftDeps,
+  type Task,
   advance,
   approve,
   budgetPrice,
+  commission,
   found,
   fromUsdc,
   mark,
@@ -961,6 +964,44 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     note(c, this.#deps(c), "note", `The owner ${done.join("; ")}.`);
     this.store.markDirty();
     this.#emit(c.id, "company", null);
+  }
+
+  /**
+   * Work the owner orders by hand (research, a product, the site or a change to it), checked like the
+   * CEO's own moves and paid inside the daily budget. Returns the task, to follow in the flight recorder.
+   */
+  async commission(c: Company, w: Record<string, unknown>): Promise<Task> {
+    if (this.#busy.has(c.id)) throw new Error("A shift is running. Try again in a minute.");
+    const brief = plain(w.brief ?? "");
+    let decision: Decision;
+    if (w.kind === "research") {
+      if (brief.length < 20 || brief.length > 1500) throw new Error("Say what to research in 20 to 1500 characters.");
+      decision = { kind: "research", title: `Research: ${brief.slice(0, 70)}${brief.length > 70 ? "…" : ""}`, why: "Ordered by the owner.", brief };
+    } else if (w.kind === "build_product") {
+      const name = plain(w.name ?? ""), pitch = plain(w.pitch ?? ""), price = Number(w.priceUsd);
+      const kind = (["report", "template", "dataset"] as const).find((k) => k === w.productKind) ?? "report";
+      if (name.length < 3 || name.length > 80) throw new Error("Product name: between 3 and 80 characters.");
+      if (pitch.length < 8 || pitch.length > 240) throw new Error("Pitch: between 8 and 240 characters.");
+      if (!(price >= 1 && price <= 499)) throw new Error("Price: between $1 and $499.");
+      if (brief.length < 20 || brief.length > 1500) throw new Error("Say what goes inside in 20 to 1500 characters.");
+      decision = { kind: "build_product", title: `Build "${name}"`, why: "Ordered by the owner.", brief, product: { name, kind, pitch, priceUsd: Math.round(price * 100) / 100 } };
+    } else if (w.kind === "build_site") {
+      if (c.site) throw new Error("The company already has a site: order a change to it instead.");
+      if (!c.products.some((p) => p.status === "live")) throw new Error("A site needs something to sell first.");
+      decision = { kind: "build_site", title: "Put the company on the web", why: "Ordered by the owner.", brief: brief || `A one-page site for ${c.name}: the promise (${c.mission}), who it is for (${c.audience}), the products with prices and a buy button each, and a short FAQ.` };
+    } else if (w.kind === "improve_site") {
+      if (!c.site) throw new Error("There is no site yet: order the site first.");
+      if (brief.length < 20 || brief.length > 1500) throw new Error("Say what to change in 20 to 1500 characters.");
+      decision = { kind: "improve_site", title: `Change the site: ${brief.slice(0, 60)}${brief.length > 60 ? "…" : ""}`, why: "Ordered by the owner.", brief };
+    } else throw new Error("Order research, a product, the site or a change to the site.");
+    this.#busy.add(c.id);
+    try {
+      return await commission(c, this.#deps(c), decision);
+    } finally {
+      this.#busy.delete(c.id);
+      this.store.markDirty();
+      this.#emit(c.id, "company", null);
+    }
   }
 
   /**

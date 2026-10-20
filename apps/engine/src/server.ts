@@ -729,6 +729,10 @@ export function serve(engine: Engine) {
           return json(res, 200, { ok: true });
         }
         if (action === "policy") { engine.setPolicy(c, (await body(req)) as never); return json(res, 200, c.policy); }
+        if (action === "commission") {
+          if (limited(req, `commission:${c.id}`, 3, 60_000)) return json(res, 429, { error: "slow down" });
+          try { const t = await engine.commission(c, await body(req)); return json(res, 200, { ok: true, taskId: t.id, status: t.status, error: t.error }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
         if (action === "profile") {
           try { engine.updateProfile(c, await body(req)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
           return json(res, 200, { ok: true });
