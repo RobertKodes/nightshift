@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { type Flight, type FlightSpan, short, usd } from "./api";
+import { type Flight, type FlightMarket, type FlightSpan, type MarketVerdict, short, usd } from "./api";
 import { NxIcon } from "./nx/icons";
 
 /** How long something took, in the shortest honest words. */
@@ -18,6 +18,37 @@ function By({ m }: { m: NonNullable<Flight["mind"]> }) {
   if (m.by === "owner") return <>Ordered by the owner, not the CEO</>;
   if (m.by === "playbook") return <>Decided by the playbook{m.fallback ? `, because ${m.fallback}` : ""}</>;
   return <>Decided by the CEO's model{m.model ? <> (<code>{m.model}</code>)</> : null}{m.costUsd > 0 ? `, ${usd(m.costUsd, 4)} to think` : ""}</>;
+}
+
+const VERDICT: Record<MarketVerdict, string> = {
+  picked: "picked", relevant: "relevant", irrelevant: "not relevant", pricier: "not cheaper", over_max: "over the limit",
+  same_owner: "same owner", own: "its own", owned: "already owned", demo: "demo", cap: "daily cap", funds: "no USDC",
+};
+
+/** Market first: what the company searched for before paying the swarm, every candidate's score, and the decision. */
+function MarketFirst({ m }: { m: FlightMarket }) {
+  return (
+    <>
+      <h4>Market first</h4>
+      <p className={`fr-mdecision ${m.bought ? "bought" : ""}`}>{m.bought ? <NxIcon name="market" size={15} /> : null}{m.decision}</p>
+      <p className="fr-by">
+        Scored by {m.by === "model" ? "the CEO's model" : "the key terms in each free preview"}, relevant from <b>{m.threshold}</b> · the swarm would cost <b>{usd(m.swarmUsd)}</b>
+        {m.fallback ? ` · ${m.fallback}` : ""}{m.query ? <> · terms <code>{m.query}</code></> : null}
+      </p>
+      {m.candidates.length > 0 && (
+        <ol className="fr-cands">
+          {m.candidates.map((x) => (
+            <li key={`${x.slug}/${x.productId}`} className={x.verdict}>
+              <span className="fr-score">{x.score.toFixed(2)}</span>
+              <span className="fr-cand"><b>{x.name}</b><span className="dim"> · {x.company} · {usd(x.priceUsd)}</span>{x.why && <small>{x.why}</small>}</span>
+              <span className={`fr-verdict ${x.verdict}`}>{x.verdict === "picked" && m.bought ? "bought" : VERDICT[x.verdict]}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {m.pending && <p className="fr-by">The payment was sent and is waiting for Base.</p>}
+    </>
+  );
 }
 
 type Row = FlightSpan & { depth: number };
@@ -86,7 +117,7 @@ export function FlightDrawer({ load, onClose, accent = "#4ad8ff", share }: { loa
               <span className={`fr-st ${f.status}`}>{f.status.replace(/_/g, " ")}</span>
               <span>{f.kind.replace(/_/g, " ")}</span>
               <span><b>{took(f.durationMs)}</b>{f.endedAt ? "" : " so far"}</span>
-              <span><b>{f.money.costUsd > 0 ? usd(f.money.costUsd) : "free"}</b>{f.money.costImd > 0 ? ` · ${f.money.costImd} IMD` : ""}</span>
+              <span><b>{f.money.costUsd > 0 ? usd(f.money.costUsd) : "free"}</b>{f.money.costImd > 0 ? ` · ${f.money.costImd} IMD` : ""}{f.money.costUsdc ? " · USDC, bought on the market" : ""}</span>
               {pb?.kind === "product" && pb.ratio !== null && pb.status === "live" && <span className={pb.ratio >= 1 ? "fr-good" : ""}><b>{pb.ratio.toFixed(1)}×</b> paid back</span>}
             </div>
             {!f.recorded && <p className="fr-note">This shift ran before the flight recorder: only its start and its end were kept.</p>}
@@ -108,6 +139,8 @@ export function FlightDrawer({ load, onClose, accent = "#4ad8ff", share }: { loa
               </>
             ) : <p className="fr-by">Recorded before the CEO's view was kept.</p>}
             <blockquote>{f.why}</blockquote>
+
+            {f.market && <MarketFirst m={f.market} />}
 
             <h4>Replay</h4>
             <div className="fr-replay">
@@ -165,7 +198,10 @@ export function FlightDrawer({ load, onClose, accent = "#4ad8ff", share }: { loa
               {f.receipts.txHash && (f.receipts.txUrl ? <a href={f.receipts.txUrl} target="_blank" rel="noreferrer">payment {short(f.receipts.txHash)} <NxIcon name="external" size={13} /></a> : <span>payment <code>{short(f.receipts.txHash)}</code></span>)}
               {f.receipts.siteUrl && <a href={f.receipts.siteUrl} target="_blank" rel="noreferrer">the site <NxIcon name="external" size={13} /></a>}
               {Object.entries(f.receipts.files ?? {}).map(([k, v]) => <a key={k} href={v} target="_blank" rel="noreferrer">{k} <NxIcon name="external" size={13} /></a>)}
-              {!f.receipts.orderId && !f.receipts.siteUrl && <span className="faint">No order: this move cost nothing.</span>}
+              {f.market?.bought && <a href={`/c/${f.market.bought.slug}#${f.market.bought.productId}`}>bought from {f.market.bought.company}</a>}
+              {f.market?.bought?.tx && (f.market.bought.txUrl ? <a href={f.market.bought.txUrl} target="_blank" rel="noreferrer">x402 payment {short(f.market.bought.tx)} <NxIcon name="external" size={13} /></a> : <span>x402 payment <code>{short(f.market.bought.tx)}</code></span>)}
+              {f.market?.bought?.sim && <span>x402 payment signed and verified, settled in the simulation</span>}
+              {!f.receipts.orderId && !f.receipts.siteUrl && !f.market?.bought && <span className="faint">No order: this move cost nothing.</span>}
             </div>
             {f.brief && <details className="fr-brief"><summary>What the swarm was asked for</summary><p>{f.brief}</p></details>}
             {f.error && <p className="warn">{f.error}</p>}

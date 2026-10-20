@@ -4,10 +4,11 @@ import type { Ledger } from "@nightshift/ledger";
 import type { LlmClient } from "@nightshift/llm";
 import { inputHash, keywords } from "imd-mcp/lib";
 import { imdOrder } from "./catalog.js";
+import { type MarketDeps, type MarketReceipt, type Scored, RELEVANT, candidate, keywordScore, marketLimits, marketReserved, marketRule, marketSpentToday, modelScores, relevantByKeywords, terms } from "./market.js";
 import { type CompanyStats, type Decision, heuristicDecision, llmDecision } from "./planner.js";
 import { budgetFreesAt, canSpend } from "./policy.js";
-import type { Company, JournalEntry, Product, Task } from "./types.js";
-import { fromImd, usdc } from "./types.js";
+import type { Company, JournalEntry, MarketSearch, Product, Task } from "./types.js";
+import { fromImd, fromUsdc, usdc } from "./types.js";
 
 export interface ShiftDeps {
   imd: ImdPlane;
@@ -24,6 +25,8 @@ export interface ShiftDeps {
   now?: () => number;
   /** Writes the company state to disk now (the engine's store). Called once an order id exists, before paying. */
   persist?: () => Promise<void>;
+  /** The NIGHTSHIFT market: research is bought from another company first when a relevant, cheaper product is on sale. */
+  market?: MarketDeps;
 }
 
 const ACTIVE = new Set(["checking", "ordering", "building"]);
@@ -163,6 +166,13 @@ async function start(c: Company, d: ShiftDeps, decision: Decision, mind: Task["m
     }
   }
 
+  // Free first, then the market, then the swarm. The order body is kept either way, so the saver
+  // still knows this research was answered and never pays for the same body twice.
+  if (decision.kind === "research" && d.market) {
+    t.imd = { action: order.action, input: order.input };
+    if ((await shopFirst(c, t, decision.brief || decision.title, d, approved)) !== "none") return t;
+  }
+
   if (decision.kind === "build_product" && decision.product) {
     const p: Product = {
       // the full UUID: a product's private file and its download links are keyed on it
@@ -262,7 +272,7 @@ async function buy(c: Company, t: Task, d: ShiftDeps, approved: boolean): Promis
 function trimTasks(c: Company, d: ShiftDeps): void {
   for (let i = 0; c.tasks.length > 300 && i < c.tasks.length - 1;) {
     const x = c.tasks[i]!;
-    if ((x.costImd > 0n && now(d) - x.updatedAt < DAY) || x.status === "awaiting_approval") i++;
+    if (((x.costImd > 0n || (x.costUsdc ?? 0n) > 0n) && now(d) - x.updatedAt < DAY) || x.status === "awaiting_approval") i++;
     else c.tasks.splice(i, 1);
   }
 }
@@ -277,7 +287,143 @@ export async function approve(c: Company, taskId: string, d: ShiftDeps): Promise
   const t = c.tasks.find((x) => x.id === taskId);
   if (!t || t.status !== "awaiting_approval") throw new Error("nothing waiting with that id");
   note(c, d, "note", `You approved "${t.title}".`);
+  if (t.market?.pick && !t.market.paid) {
+    if ((await payMarket(c, t, d)) !== "none") return;
+    // the product is gone or no longer fits: the swarm order goes through its own limits
+    await buy(c, t, d, false);
+    return;
+  }
   await buy(c, t, d, true);
+}
+
+const usd = (v: bigint) => `$${fromUsdc(v).toFixed(2)}`;
+
+/**
+ * Market first: search the NIGHTSHIFT market for a product on the brief's topic, score each one's free
+ * preview against the brief, apply the rules, and buy the best relevant, cheaper one over x402. Every
+ * candidate, its score and the decision go on the task for the flight recorder. "none": order from
+ * the swarm as before.
+ */
+async function shopFirst(c: Company, t: Task, brief: string, d: ShiftDeps, approved: boolean): Promise<"bought" | "waiting" | "pending" | "none"> {
+  const m = d.market!;
+  const lim = marketLimits(c);
+  const at = now(d);
+  const record = (x: Partial<MarketSearch>): MarketSearch => (t.market = { at, doneAt: now(d), query: [...terms(brief)].join(" "), swarmUsd: 0, by: "keywords", threshold: RELEVANT.keywords, candidates: [], decision: "", ...x });
+  let swarmUsd: number;
+  try { swarmUsd = fromImd((await d.imd.capabilities()).price) * d.imdUsd(); } catch { return "none"; }
+  if (!lim.on) { record({ swarmUsd, decision: "Buying from the market is off for this company: ordering from the swarm." }); return "none"; }
+  const offers = await m.offers(c).catch(() => []);
+  const held = await m.usdc(c).catch(() => 0n);
+  const money = { swarmUsd, maxUsd: lim.maxUsd, dailyUsd: lim.dailyUsd, spentUsdc: marketSpentToday(c, now(d), t), availableUsdc: held - marketReserved(c, t) };
+  // only products that share a key term with the brief are candidates at all
+  const scored: Scored[] = offers.map((o) => ({ o, ...keywordScore(brief, o), why: "", rule: marketRule(c, o, money) })).filter((x) => x.shared.length > 0)
+    .sort((a, b) => b.score - a.score || Number(a.o.product.priceUsdc - b.o.product.priceUsdc));
+  for (const x of scored) x.why = `${x.shared.length} of ${x.of} key terms: ${x.shared.slice(0, 6).join(", ")}`;
+  let by: MarketSearch["by"] = "keywords", threshold: number = RELEVANT.keywords, costUsd = 0, fallback: string | undefined;
+  const allowed = scored.filter((x) => !x.rule);
+  let relevant = (x: Scored) => relevantByKeywords(x);
+  if (d.llm && allowed.length) {
+    const ask = allowed.slice(0, 6);
+    const r = await modelScores(d.llm, d.model, brief, ask.map((x) => x.o)).catch(() => null);
+    if (r) {
+      by = "model"; threshold = RELEVANT.model; costUsd = r.costUsd;
+      ask.forEach((x, i) => { x.score = r.scores[i]!.score; x.why = r.scores[i]!.why || x.why; });
+      const asked = new Set(ask);
+      relevant = (x) => asked.has(x) && x.score >= RELEVANT.model;
+      allowed.sort((a, b) => b.score - a.score || Number(a.o.product.priceUsdc - b.o.product.priceUsdc));
+    } else fallback = "the model's answer was not usable, so the keyword score decided";
+  }
+  const best = allowed.find(relevant);
+  const shown = [...(best ? [best] : []), ...scored.filter((x) => x !== best)].slice(0, 8);
+  const theirs = scored.filter((x) => x.rule?.verdict !== "own");
+  const candidates = shown.map((x) => x === best ? candidate(x, "picked", x.why)
+    : x.rule ? candidate(x, x.rule.verdict, `${x.rule.why}${x.rule.verdict !== "own" && relevantByKeywords(x) ? "; relevant otherwise" : ""}`)
+    : relevant(x) ? candidate(x, "relevant", x.why)
+    : candidate(x, "irrelevant", `${x.why}; below the ${threshold} needed`));
+  const base = { swarmUsd, by, threshold, candidates, ...(costUsd ? { costUsd } : {}), ...(fallback ? { fallback } : {}) };
+  if (!best) {
+    // its own products are not "on the market" for it
+    const blocked = scored.filter((x) => x.rule && x.rule.verdict !== "own" && relevantByKeywords(x));
+    record({ ...base, decision: !theirs.length
+      ? "Nothing on the NIGHTSHIFT market matches this research: ordering it from the swarm."
+      : blocked.length
+        ? `${blocked.length} relevant product${blocked.length === 1 ? "" : "s"} on the market, but none this company may buy (${[...new Set(blocked.map((x) => x.rule!.why))].slice(0, 2).join("; ")}): ordering from the swarm.`
+        : `No product on the market is relevant enough (best ${Math.max(...theirs.map((x) => x.score)).toFixed(2)}, needs ${threshold}): ordering from the swarm.` });
+    note(c, d, "note", `Market first: ${t.market!.decision}`);
+    return "none";
+  }
+  const o = best.o;
+  const pick = { sellerId: o.seller.id, company: o.seller.name, slug: o.seller.slug, productId: o.product.id, name: o.product.name, kind: o.product.kind, priceUsdc: o.product.priceUsdc, score: best.score };
+  record({ ...base, pick, decision: `Buy "${o.product.name}" from ${o.seller.name} for ${usd(o.product.priceUsdc)} instead of ordering the research from the swarm ($${swarmUsd.toFixed(2)}): it scored ${best.score.toFixed(2)} against the brief.` });
+  if (!approved && fromUsdc(o.product.priceUsdc) > c.policy.approvalOverUsd + 1e-9) {
+    const reason = `${usd(o.product.priceUsdc)} on the market is over the $${c.policy.approvalOverUsd} you approve by hand`;
+    touch(c, t, d, { status: "awaiting_approval", activity: reason });
+    note(c, d, "note", `Waiting for your approval: buy "${o.product.name}" from ${o.seller.name} on the NIGHTSHIFT market for ${usd(o.product.priceUsdc)} (${reason}), instead of research from the swarm at ~$${swarmUsd.toFixed(2)}.`);
+    return "waiting";
+  }
+  return payMarket(c, t, d);
+}
+
+/** Pays for the market pick: limits checked again (an approval may come hours later), then bought once. */
+async function payMarket(c: Company, t: Task, d: ShiftDeps): Promise<"bought" | "pending" | "none"> {
+  const s = t.market!, pick = s.pick!;
+  // reserved before anything is awaited: a second approval or shift cannot spend the same limit or buy it twice
+  touch(c, t, d, { status: "ordering", costUsdc: pick.priceUsdc, activity: `paying ${pick.company} ${usd(pick.priceUsdc)} over x402` });
+  const lim = marketLimits(c);
+  const spent = marketSpentToday(c, now(d), t);
+  const held = await d.market!.usdc(c).catch(() => 0n);
+  const stop = !lim.on ? "buying from the market was turned off"
+    : fromUsdc(pick.priceUsdc) > lim.maxUsd + 1e-9 ? `over the $${lim.maxUsd.toFixed(2)} limit per market buy`
+    : fromUsdc(spent + pick.priceUsdc) > lim.dailyUsd + 1e-9 ? `over the $${lim.dailyUsd.toFixed(2)} a day for the market`
+    : held - marketReserved(c, t) < pick.priceUsdc ? "not enough USDC"
+    : null;
+  try {
+    if (stop) throw new Error(stop);
+    const r = await d.market!.pay(c, pick, t);
+    finishMarketBuy(c, t, r, d);
+    return "bought";
+  } catch (err) {
+    const pending = (err as { pending?: string }).pending;
+    if (pending) {
+      s.pending = pending;
+      touch(c, t, d, { status: "building", activity: "paid · waiting for Base to confirm" });
+      note(c, d, "note", `The payment to ${pick.company} for "${pick.name}" was sent and is waiting for Base; following it instead of paying again.`);
+      return "pending";
+    }
+    const msg = (err as Error).message.slice(0, 200);
+    s.decision = `${s.decision} The purchase did not go through (${msg}), so nothing was paid: ordering from the swarm.`;
+    delete s.pick;
+    s.doneAt = now(d);
+    touch(c, t, d, { status: "planned", costUsdc: 0n, activity: null });
+    note(c, d, "warning", `Market first: could not buy "${pick.name}" from ${pick.company} (${msg}). Nothing was paid; ordering the research from the swarm.`);
+    return "none";
+  }
+}
+
+/**
+ * The market purchase is booked on both sides: the file becomes this shift's research, used exactly
+ * like research the swarm delivered. Once only; also called when a payment sent earlier lands.
+ */
+export function finishMarketBuy(c: Company, t: Task, r: MarketReceipt, d: ShiftDeps): void {
+  const s = t.market, pick = s?.pick;
+  if (!s || !pick || s.paid) return;
+  s.paid = { at: now(d), usdc: pick.priceUsdc, ledgerId: r.ledgerId, tx: r.tx, sim: r.sim };
+  delete s.pending;
+  s.doneAt = now(d);
+  const b2b = (c.b2b ??= { bought: [], sold: [] });
+  b2b.bought.push({ at: now(d), ledgerId: r.ledgerId, taskId: t.id, productId: pick.productId, product: pick.name, kind: pick.kind, usdc: pick.priceUsdc, with: { id: pick.sellerId, name: pick.company, slug: pick.slug }, tx: r.tx, sim: r.sim });
+  if (b2b.bought.length > 200) b2b.bought.splice(0, b2b.bought.length - 200);
+  touch(c, t, d, { status: "done", costUsdc: pick.priceUsdc, activity: null, error: null, result: { files: { research: r.url }, note: `Bought from ${pick.company} on the NIGHTSHIFT market: ${pick.name}` } });
+  note(c, d, "result", `${r.sim ? "[sim] " : ""}Market first: bought "${pick.name}" from ${pick.company} for ${usd(pick.priceUsdc)} instead of paying the swarm ~$${s.swarmUsd.toFixed(2)}. It is this shift's research and feeds the next product.`);
+  d.emit(c, "company", null);
+}
+
+/** A payment that was sent never landed: nothing was charged, the limit is back, and the next shift starts fresh. */
+export function dropMarketBuy(c: Company, t: Task, d: ShiftDeps, why: string): void {
+  if (!t.market || t.market.paid) return;
+  delete t.market.pending;
+  touch(c, t, d, { status: "failed", costUsdc: 0n, activity: null, error: why });
+  note(c, d, "note", `"${t.title}": ${why}`);
 }
 
 export function reject(c: Company, taskId: string, d: ShiftDeps): void {

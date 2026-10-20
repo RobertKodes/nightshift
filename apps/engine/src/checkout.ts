@@ -18,6 +18,8 @@ export interface Settlement {
   raw?: `0x${string}`;
   nonce?: number;
   booked?: boolean;
+  /** Paid by another NIGHTSHIFT company for one of its shifts: booked as B2B, never as a sale to a person. */
+  b2b?: { buyerId: string; taskId: string };
 }
 
 export interface CheckoutChain {
@@ -60,14 +62,14 @@ export class Checkout {
   }
 
   /** Settles (or finds the settlement of) this payment and returns its transaction hash once the sale is booked. */
-  async settle(companyId: string, wallet: `0x${string}`, productId: string, p: PaymentPayload): Promise<`0x${string}`> {
+  async settle(companyId: string, wallet: `0x${string}`, productId: string, p: PaymentPayload, b2b?: Settlement["b2b"]): Promise<`0x${string}`> {
     const a = p.payload.authorization;
     const key = saleKey(a.from, a.nonce);
     let r = this.records.get(key);
     if (r && (r.companyId !== companyId || r.productId !== productId)) throw new Error("This payment was made for another product.");
     if (r?.booked && r.hash) return r.hash;
     if (!r?.hash) {
-      r = { key, companyId, productId, payer: a.from, value: BigInt(a.value), at: this.now() };
+      r = { key, companyId, productId, payer: a.from, value: BigInt(a.value), at: this.now(), ...(b2b ? { b2b } : {}) };
       if (await this.chain.used(a.from, a.nonce)) {
         // used already (an earlier try whose answer was lost, or anyone who submitted it): find it, never settle again
         const hash = await this.chain.find(a.from, a.nonce, wallet, BigInt(a.value));

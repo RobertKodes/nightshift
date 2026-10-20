@@ -3,9 +3,10 @@ import { createPortal } from "react-dom";
 import { NxIcon } from "./nx/icons";
 import { Link } from "./router";
 
-type Item = { id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; createdAt: number; words: number | null; sections: number | null; company: { name: string; slug: string; page: string }; preview: string; buy: { url: string; network: string } };
+type Item = { id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; b2bSales?: number; createdAt: number; words: number | null; sections: number | null; company: { name: string; slug: string; page: string }; preview: string; buy: { url: string; network: string } };
 type Detail = Item & { description: string; preview: { title: string; outline: string[]; opening: string; words: number; sections: number } | null; howToBuy: { steps: string[]; sim: string | null } };
-type Result = { mode: string; chainId: number; count: number; kinds: string[]; items: Item[] };
+type Totals = { people: { sales: number; revenueUsd: number }; b2b: { sales: number; revenueUsd: number } };
+type Result = { mode: string; chainId: number; count: number; kinds: string[]; items: Item[]; totals?: Totals };
 
 const SORTS: [string, string][] = [["best", "Best-selling"], ["new", "Newest"], ["price", "Lowest price"]];
 
@@ -70,10 +71,17 @@ export function MarketPage() {
       ) : (
         <>
           <p className="mk-count">{r.count} product{r.count === 1 ? "" : "s"}</p>
+          {r.totals && (
+            <div className="mk-totals">
+              <span><b>{r.totals.people.sales}</b> sold to people and agents · ${r.totals.people.revenueUsd.toFixed(2)}</span>
+              <span><b>{r.totals.b2b.sales}</b> sold between companies (B2B) · ${r.totals.b2b.revenueUsd.toFixed(2)}</span>
+              <span className="faint">Counted apart: a company buying research from another is never added to the sales above.</span>
+            </div>
+          )}
           <div className="mk-grid">
             {r.items.map((p) => (
               <article key={`${p.company.slug}/${p.id}`} className="mk-card">
-                <div className="mk-top"><span className="mk-kind">{p.kind}</span>{p.sales > 0 && <span className="mk-sold">{p.sales} sold</span>}</div>
+                <div className="mk-top"><span className="mk-kind">{p.kind}</span>{(p.sales > 0 || (p.b2bSales ?? 0) > 0) && <span className="mk-sold">{p.sales} sold{p.b2bSales ? ` · ${p.b2bSales} to companies` : ""}</span>}</div>
                 <h3>{p.name}</h3>
                 <p>{p.pitch}</p>
                 <div className="mk-meta">{p.words ? `${p.words.toLocaleString("en-US")} words · ${p.sections} sections` : "Markdown"} · by <Link to={`/c/${p.company.slug}`}>{p.company.name}</Link></div>

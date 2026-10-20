@@ -9,7 +9,11 @@ export interface TaskView {
 }
 export interface ProductView { id: string; name: string; kind: string; pitch: string; priceUsdc: string; priceByOwner?: boolean; status: string; deliverableUrl: string | null; sales: number; revenueUsdc: string; createdAt: number }
 export interface JournalView { at: number; cycle: number; kind: string; text: string }
-export interface Policy { dailyBudgetUsd: number; approvalOverUsd: number; autopilot: boolean; shiftMinutes: number }
+export interface Policy {
+  dailyBudgetUsd: number; approvalOverUsd: number; autopilot: boolean; shiftMinutes: number;
+  /** Buy research from another company on the market first, within these USDC limits. */
+  marketBuy?: boolean; marketDailyUsd?: number; marketMaxUsd?: number;
+}
 
 export interface CompanyFull {
   id: string; slug: string; name: string; idea: string; mission: string; audience: string; createdAt: number;
@@ -31,7 +35,7 @@ export interface CompanyFull {
 
 export interface CompanyCard {
   id: string; slug: string; name: string; mission: string; status: string; cycle: number; site: string | null;
-  products: { id: string; name: string; priceUsd: number; sales: number; buyUrl: string; pitch: string; kind: string }[];
+  products: { id: string; name: string; priceUsd: number; sales: number; b2bSales?: number; buyUrl: string; pitch: string; kind: string }[];
   pnl: { revenueUsd: number; spentUsd: number; sales: number }; nextShiftAt: number | null;
   working: { title: string; status: string; activity: string | null } | null; createdAt: number; wallet: string;
   /** The signed-in viewer owns it: the card opens the owner's view instead of the public page. */
@@ -39,8 +43,20 @@ export interface CompanyCard {
 }
 
 export interface PublicCompany extends Omit<CompanyCard, "id" | "nextShiftAt" | "working"> {
-  audience: string; shifts: { id: string; cycle: number; kind: string; title: string; status: string; costUsd: number }[]; mode: "sim" | "live";
+  audience: string; shifts: { id: string; cycle: number; kind: string; title: string; status: string; costUsd: number; market?: boolean }[]; mode: "sim" | "live";
+  /** Sales to and purchases from other NIGHTSHIFT companies, never added to the sales above. */
+  b2b: { sales: number; revenueUsd: number; bought: number; spentUsd: number };
 }
+
+/** Why a product on the market was or was not bought, in the flight recorder. */
+export type MarketVerdict = "picked" | "relevant" | "irrelevant" | "pricier" | "over_max" | "same_owner" | "own" | "owned" | "demo" | "cap" | "funds";
+export interface FlightMarket {
+  at: number; by: "model" | "keywords"; threshold: number; swarmUsd: number; decision: string; fallback?: string; query?: string; pending: boolean;
+  candidates: { company: string; slug: string; productId: string; name: string; kind: string; priceUsd: number; score: number; verdict: MarketVerdict; why?: string }[];
+  bought: { company: string; slug: string; productId: string; name: string; usd: number; sim: boolean; tx: string | null; txUrl: string | null } | null;
+}
+/** One B2B purchase or sale, as the owner desk lists it. */
+export interface B2bItem { at: number; taskId: string; product: string; kind: string; usd: number; with: string; slug: string; tx: string | null; sim: boolean }
 
 /** One span of a shift's flight record (the @nightshift/trace shape). */
 export interface FlightSpan {
@@ -53,7 +69,9 @@ export interface Flight {
   createdAt: number; endedAt: number | null; durationMs: number; activity: string | null; recorded: boolean;
   mind: { by: "model" | "playbook" | "owner"; costUsd: number; model?: string; fallback?: string; saw: { visits7d: number; sales7d: number; revenue7dUsd: number; imdUsd: number; liveProducts: number; direction: boolean } } | null;
   plan: string[]; steps: { done: number; total: number }; trace: FlightSpan[];
-  money: { costImd: number; costUsd: number; imdUsd: number; ledger: { id: string; kind: string; memo?: string; at: number; legs: { account: string; asset: string; amount: number }[] }[] };
+  money: { costImd: number; costUsd: number; costUsdc?: number; imdUsd: number; ledger: { id: string; kind: string; memo?: string; at: number; legs: { account: string; asset: string; amount: number }[] }[] };
+  /** Research: the market search before paying the swarm (candidates, scores, decision). */
+  market?: FlightMarket | null;
   payback: { kind: "product"; name: string; status: string; sales: number; revenueUsd: number; costUsd: number; ratio: number | null; recent: { at: number; usd: number; payer?: string; tx?: string | null }[] } | { kind: "site"; visits: number; costUsd: number } | null;
   receipts: { orderId: string | null; jobId: string | null; jobUrl: string | null; txHash: string | null; txUrl: string | null; siteUrl: string | null; files: Record<string, string> | null };
   brief?: string;
@@ -67,11 +85,13 @@ export interface DeskCompany {
   /** Resting: the saver found nothing new worth paying for, or the day's budget is spent. A shift the owner runs ends it. */
   rest: { until: number; why: "saver" | "budget" } | null;
   policy: Policy; site: string | null; alerts: boolean;
-  products: { id: string; name: string; pitch: string; kind: string; status: string; priceUsd: number; priceByOwner: boolean; sales: number; revenueUsd: number; packaged: boolean }[];
+  products: { id: string; name: string; pitch: string; kind: string; status: string; priceUsd: number; priceByOwner: boolean; sales: number; revenueUsd: number; b2bSales: number; packaged: boolean }[];
   pnl: { revenueUsd: number; spentUsd: number; profitUsd: number };
+  /** Bought from and sold to other NIGHTSHIFT companies, apart from revenue from people and agents. */
+  b2b: { bought: { count: number; usd: number; items: B2bItem[] }; sold: { count: number; usd: number; items: B2bItem[] }; usdcUsd: number };
   stats: { visits7d: number; sales7d: number; revenue7dUsd: number };
   working: { id: string; title: string; status: string; activity: string | null } | null;
-  waiting: { id: string; cycle: number; title: string; why: string; costUsd: number }[];
+  waiting: { id: string; cycle: number; title: string; why: string; costUsd: number; market?: { product: string; company: string; swarmUsd: number } }[];
   last: { id: string; cycle: number; title: string; status: string; at: number } | null;
 }
 export interface Desk {

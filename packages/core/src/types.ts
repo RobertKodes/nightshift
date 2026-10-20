@@ -15,8 +15,12 @@ export interface Product {
   /** Where the buyer gets it after paying: the swarm's delivered file or hosted tool. */
   deliverableUrl: string | null;
   taskId: string;
+  /** Sales to people and outside agents. Sales to other NIGHTSHIFT companies are counted apart, in b2b*. */
   sales: number;
   revenueUsdc: bigint;
+  /** Bought by other NIGHTSHIFT companies (B2B): never added to `sales`, so no number is inflated by them. */
+  b2bSales?: number;
+  b2bRevenueUsdc?: bigint;
   createdAt: number;
 }
 
@@ -56,6 +60,75 @@ export interface Task {
   trail?: TrailEntry[];
   /** How the CEO chose this move and the numbers it was looking at. */
   mind?: Mind;
+  /** USDC base units paid (or reserved while paying) for a product bought from another company. */
+  costUsdc?: bigint;
+  /** Research only: the search of the NIGHTSHIFT market before paying the swarm, and what it decided. */
+  market?: MarketSearch;
+}
+
+/** Why a product on the market was or was not bought. */
+export type MarketVerdict = "picked" | "relevant" | "irrelevant" | "pricier" | "over_max" | "same_owner" | "own" | "owned" | "demo" | "cap" | "funds";
+
+export interface MarketCandidate {
+  sellerId: string;
+  company: string;
+  slug: string;
+  productId: string;
+  name: string;
+  kind: ProductKind;
+  priceUsd: number;
+  /** Relevance to the research brief, 0 to 1. */
+  score: number;
+  verdict: MarketVerdict;
+  why: string;
+}
+
+export interface MarketPick {
+  sellerId: string;
+  company: string;
+  slug: string;
+  productId: string;
+  name: string;
+  kind: ProductKind;
+  priceUsdc: bigint;
+  score: number;
+}
+
+export interface MarketSearch {
+  at: number;
+  doneAt: number;
+  /** The brief's key terms, matched against each product's free preview. */
+  query: string;
+  /** What the same research costs from the swarm, in USD at the IMD price of the moment. */
+  swarmUsd: number;
+  /** Who scored relevance: the CEO's model, or the keyword score when no model is set (or it failed). */
+  by: "model" | "keywords";
+  threshold: number;
+  costUsd?: number;
+  fallback?: string;
+  candidates: MarketCandidate[];
+  /** The decision, in one sentence. */
+  decision: string;
+  pick?: MarketPick;
+  /** Sent on chain, not landed yet (live only): the settlement key it is followed by. */
+  pending?: string;
+  paid?: { at: number; usdc: bigint; ledgerId: string; tx: string | null; sim: boolean };
+}
+
+/** One purchase between two NIGHTSHIFT companies, as each side keeps it. */
+export interface B2bLine {
+  at: number;
+  /** The one ledger transaction both sides share: b2b:<buyer task id>. */
+  ledgerId: string;
+  taskId: string;
+  productId: string;
+  product: string;
+  kind: ProductKind;
+  usdc: bigint;
+  /** The other company: the seller on a purchase, the buyer on a sale. */
+  with: { id: string; name: string; slug: string };
+  tx: string | null;
+  sim: boolean;
 }
 
 export interface TrailEntry {
@@ -84,6 +157,12 @@ export interface Policy {
   autopilot: boolean;
   /** Minutes between shifts on autopilot. */
   shiftMinutes: number;
+  /** Before paying the swarm for research, buy a relevant, cheaper product another company already sells. */
+  marketBuy: boolean;
+  /** USDC the company may spend on the market in 24 hours. */
+  marketDailyUsd: number;
+  /** USDC at most for one product bought on the market. */
+  marketMaxUsd: number;
 }
 
 export interface JournalEntry {
@@ -123,6 +202,8 @@ export interface Company {
   direction?: string;
   /** Where the owner hears about approvals, sales, deliveries and problems: a Telegram chat linked with a one-time code. */
   notify?: { telegram: string; at: number };
+  /** Products bought from and sold to other NIGHTSHIFT companies, newest last (the ledger holds every one). */
+  b2b?: { bought: B2bLine[]; sold: B2bLine[] };
 }
 
 export const USDC_DECIMALS = 6;

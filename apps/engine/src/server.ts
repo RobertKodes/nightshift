@@ -39,6 +39,7 @@ import { checkOrder as checkSwarmOrder, orders as swarmOrders, placeOrder as pla
 import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
 import { impact } from "./impact.js";
 import { flightFor } from "./flight.js";
+import { b2bBooks, deskLine, isB2b, marketTotals } from "./b2b.js";
 import { usdc } from "@nightshift/core";
 import { erc20Abi, getAddress } from "viem";
 
@@ -50,9 +51,6 @@ let streamsTotal = 0;
 const soloByIp = new Map<string, { id: string; until: number }>();
 const SOLO_RUN_MS = (MAX_TICKS / 240) * 1000 + 15_000;
 const releaseSolo = (req: IncomingMessage, id: string) => { const ip = clientIp(req); if (soloByIp.get(ip)?.id === id) soloByIp.delete(ip); };
-
-/** Payments being settled, one chain per company. */
-const settling = new Map<string, Promise<unknown>>();
 
 /** A small fixed-window limiter per IP and route; expired windows are swept. */
 const hits = new Map<string, { n: number; reset: number }>();
@@ -84,7 +82,10 @@ async function body(req: IncomingMessage, max = 64_000): Promise<Record<string, 
 /** The owner view: everything, including tasks, journal, ledger and wallet. */
 async function full(engine: Engine, c: Company) {
   const imd = await engine.ledger.balance(`co:${c.id}:imd`, "IMD");
-  const rev = await engine.ledger.balance(`co:${c.id}:usdc`, "USDC");
+  const held = await engine.ledger.balance(`co:${c.id}:usdc`, "USDC");
+  const b = await b2bBooks(engine.ledger, c.id);
+  // revenue from people and outside agents; B2B shown apart
+  const rev = held - b.soldUsdc + b.boughtUsdc;
   let spent = 0n;
   for (const t of c.tasks) spent += t.costImd;
   const stats = engine.stats(c);
@@ -98,8 +99,10 @@ async function full(engine: Engine, c: Company) {
       revenueUsd: fromUsdc(rev),
       spentImd: fromImd(spent),
       spentUsd: fromImd(spent) * config.imdUsd,
-      profitUsd: fromUsdc(rev) - fromImd(spent) * config.imdUsd,
+      profitUsd: fromUsdc(held) - fromImd(spent) * config.imdUsd,
       imdBalance: fromImd(imd),
+      b2bSoldUsd: fromUsdc(b.soldUsdc),
+      b2bBoughtUsd: fromUsdc(b.boughtUsdc),
     },
     recentSales: m.sales.slice(-20).reverse(),
     holder: tokenOn() ? { symbol: config.token.symbol, ...(await holderStatus(c.owner)), min: config.token.holderMin } : null,
@@ -116,8 +119,12 @@ async function desk(engine: Engine, owner: string | null) {
   const companies = await Promise.all(list.map(async (c) => {
     let spent = 0n;
     for (const t of c.tasks) spent += t.costImd;
-    const revenueUsd = fromUsdc(await engine.ledger.balance(`co:${c.id}:usdc`, "USDC"));
+    const held = await engine.ledger.balance(`co:${c.id}:usdc`, "USDC");
+    const b = await b2bBooks(engine.ledger, c.id);
+    // sales to people and outside agents; what it sold to and bought from other companies is shown apart
+    const revenueUsd = fromUsdc(held - b.soldUsdc + b.boughtUsdc);
     const spentUsd = fromImd(spent) * config.imdUsd;
+    const soldUsd = fromUsdc(b.soldUsdc), boughtUsd = fromUsdc(b.boughtUsdc);
     const working = c.tasks.find((t) => ["checking", "ordering", "building"].includes(t.status));
     const last = c.tasks.at(-1);
     const resting = c.restUntil && c.restUntil > Date.now() ? [...c.journal].reverse().find((j) => j.text.startsWith("Saver:") || j.text.startsWith("Skipped ")) : undefined;
@@ -126,11 +133,19 @@ async function desk(engine: Engine, owner: string | null) {
       status: c.status, cycle: c.cycle, createdAt: c.createdAt, nextShiftAt: c.nextShiftAt, wallet: c.wallet, sim: Boolean(c.sim),
       rest: c.restUntil && c.restUntil > Date.now() ? { until: c.restUntil, why: resting?.text.startsWith("Saver:") ? "saver" as const : "budget" as const } : null,
       policy: c.policy, site: c.site?.url ?? null, alerts: Boolean(c.notify?.telegram),
-      products: c.products.map((x) => ({ id: x.id, name: x.name, pitch: x.pitch, kind: x.kind, status: x.status, priceUsd: fromUsdc(x.priceUsdc), priceByOwner: Boolean(x.priceByOwner), sales: x.sales, revenueUsd: fromUsdc(x.revenueUsdc), packaged: engine.files.has(c, x) })),
-      pnl: { revenueUsd, spentUsd, profitUsd: revenueUsd - spentUsd },
+      products: c.products.map((x) => ({ id: x.id, name: x.name, pitch: x.pitch, kind: x.kind, status: x.status, priceUsd: fromUsdc(x.priceUsdc), priceByOwner: Boolean(x.priceByOwner), sales: x.sales, revenueUsd: fromUsdc(x.revenueUsdc), b2bSales: x.b2bSales ?? 0, packaged: engine.files.has(c, x) })),
+      pnl: { revenueUsd, spentUsd, profitUsd: revenueUsd + soldUsd - spentUsd - boughtUsd },
+      b2b: {
+        bought: { count: b.bought, usd: boughtUsd, items: (c.b2b?.bought ?? []).slice(-6).reverse().map(deskLine) },
+        sold: { count: b.sold, usd: soldUsd, items: (c.b2b?.sold ?? []).slice(-6).reverse().map(deskLine) },
+        usdcUsd: fromUsdc(held > 0n ? held : 0n),
+      },
       stats: engine.stats(c),
       working: working ? { id: working.id, title: working.title, status: working.status, activity: working.activity } : null,
-      waiting: c.tasks.filter((t) => t.status === "awaiting_approval").map((t) => ({ id: t.id, cycle: t.cycle, title: t.title, why: t.why, costUsd: fromImd(t.costImd) * config.imdUsd })),
+      waiting: c.tasks.filter((t) => t.status === "awaiting_approval").map((t) => {
+        const pick = t.market?.pick;
+        return { id: t.id, cycle: t.cycle, title: t.title, why: t.why, costUsd: pick ? fromUsdc(pick.priceUsdc) : fromImd(t.costImd) * config.imdUsd, ...(pick ? { market: { product: pick.name, company: pick.company, swarmUsd: t.market!.swarmUsd } } : {}) };
+      }),
       last: last ? { id: last.id, cycle: last.cycle, title: last.title, status: last.status, at: last.updatedAt } : null,
     };
   }));
@@ -151,7 +166,8 @@ async function books(engine: Engine, c: Company): Promise<string> {
     const abs = neg ? -y.amount : y.amount;
     const whole = abs / 10n ** BigInt(dec);
     const frac = (abs % 10n ** BigInt(dec)).toString().padStart(dec, "0").replace(/0+$/, "");
-    rows.push([new Date(x.at).toISOString(), x.kind, x.memo ?? "", y.account.slice(mine.length), y.asset, `${neg ? "-" : ""}${whole}${frac ? `.${frac}` : ""}`, String((x.ref as { chainTx?: string } | undefined)?.chainTx ?? "")]);
+    const kind = isB2b(x) ? `${x.kind.replace("b2b", y.amount < 0n ? "b2b_purchase" : "b2b_sale")}` : x.kind;
+    rows.push([new Date(x.at).toISOString(), kind, x.memo ?? "", y.account.slice(mine.length), y.asset, `${neg ? "-" : ""}${whole}${frac ? `.${frac}` : ""}`, String((x.ref as { chainTx?: string } | undefined)?.chainTx ?? "")]);
   }
   // quoted, and never read as a formula by a spreadsheet
   const cell = (v: string) => `"${(/^[=+\-@\t\r]/.test(v) && !/^-?\d/.test(v) ? `'${v}` : v).replace(/"/g, '""')}"`;
@@ -164,12 +180,20 @@ function publicView(engine: Engine, c: Company) {
   let spent = 0n;
   for (const t of c.tasks) spent += t.costImd;
   const revenue = c.products.reduce((a, p) => a + fromUsdc(p.revenueUsdc), 0);
+  const bought = c.b2b?.bought ?? [];
   return {
     slug: c.slug, name: c.name, mission: c.mission, audience: c.audience, createdAt: c.createdAt, wallet: c.wallet, status: c.status, cycle: c.cycle,
     site: c.site?.url ?? null,
-    products: c.products.filter((p) => p.status === "live").map((p) => ({ id: p.id, name: p.name, kind: p.kind, pitch: p.pitch, priceUsd: fromUsdc(p.priceUsdc), sales: p.sales, buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}` })),
+    products: c.products.filter((p) => p.status === "live").map((p) => ({ id: p.id, name: p.name, kind: p.kind, pitch: p.pitch, priceUsd: fromUsdc(p.priceUsdc), sales: p.sales, b2bSales: p.b2bSales ?? 0, buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}` })),
+    // sales to people and outside agents; sales to and purchases from other NIGHTSHIFT companies apart
     pnl: { revenueUsd: revenue, spentUsd: fromImd(spent) * config.imdUsd, sales: m.sales.length },
-    shifts: c.tasks.slice(-12).reverse().map((t) => ({ id: t.id, cycle: t.cycle, kind: t.kind, title: t.title, status: t.status, costUsd: fromImd(t.costImd) * config.imdUsd })),
+    b2b: {
+      sales: c.products.reduce((a, p) => a + (p.b2bSales ?? 0), 0),
+      revenueUsd: c.products.reduce((a, p) => a + fromUsdc(p.b2bRevenueUsdc ?? 0n), 0),
+      bought: bought.length,
+      spentUsd: bought.reduce((a, l) => a + fromUsdc(l.usdc), 0),
+    },
+    shifts: c.tasks.slice(-12).reverse().map((t) => ({ id: t.id, cycle: t.cycle, kind: t.kind, title: t.title, status: t.status, costUsd: fromImd(t.costImd) * config.imdUsd + fromUsdc(t.costUsdc ?? 0n), ...(t.market?.paid ? { market: true } : {}) })),
     mode: config.mode,
   };
 }
@@ -597,7 +621,8 @@ export function serve(engine: Engine) {
           const max = url.searchParams.get("maxUsd");
           const sort = url.searchParams.get("sort");
           const rows = search(live, { q: url.searchParams.get("q") ?? "", kind: url.searchParams.get("kind") ?? undefined, maxUsd: max ? Number(max) : undefined, sort: sort === "price" || sort === "new" ? sort : "best" });
-          return json(res, 200, { mode: config.mode, chainId: config.salesChainId, count: rows.length, kinds: [...new Set(live.map((l) => l.p.kind))], items: rows.slice(0, 100).map(card) });
+          const shown = [...engine.store.companies.values()].filter((c) => config.mode !== "live" || !c.sim);
+          return json(res, 200, { mode: config.mode, chainId: config.salesChainId, count: rows.length, kinds: [...new Set(live.map((l) => l.p.kind))], items: rows.slice(0, 100).map(card), totals: marketTotals(shown) });
         }
         if (p === "/api/market/catalog") return json(res, 200, catalog(live));
         if (seg[2] && seg[3]) {
@@ -852,9 +877,7 @@ export function serve(engine: Engine) {
           }
         }
         // Saved before it is broadcast and booked once it lands; the same header again never pays twice.
-        const prev = settling.get(c.id) ?? Promise.resolve();
-        const run = prev.catch(() => {}).then(() => engine.checkout.settle(c.id, c.wallet, product.id, payment));
-        settling.set(c.id, run.catch(() => {}));
+        const run = engine.settleInTurn(c.id, () => engine.checkout.settle(c.id, c.wallet, product.id, payment));
         let tx: `0x${string}`;
         try { tx = await run; } catch (e) {
           if (e instanceof PendingError) return json(res, 202, { ok: false, pending: true, error: e.message });

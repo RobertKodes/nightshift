@@ -31,10 +31,16 @@ export interface FlightInput {
   ledger: LedgerTx[];
   sales: { at: number; productId: string; usdc: string; payer: string; tx: string | null }[];
   visits: number[];
+  /** Where products are sold (Base or Base Sepolia), for the payment link of a market purchase. */
+  salesChainId?: number;
 }
 
-const ACCOUNT = (c: Company, a: string) =>
-  a === `co:${c.id}:imd` ? `${c.name} (IMD)` : a === `co:${c.id}:usdc` ? `${c.name} (USDC)` : a === "ext:imd-swarm" ? "IMD swarm" : a.startsWith("ext:platform") ? "NIGHTSHIFT fee" : a.replace(/^ext:/, "");
+const ACCOUNT = (c: Company, a: string, seller?: { id: string; name: string }) =>
+  a === `co:${c.id}:imd` ? `${c.name} (IMD)` : a === `co:${c.id}:usdc` ? `${c.name} (USDC)` : seller && a === `co:${seller.id}:usdc` ? `${seller.name} (USDC)` : a === "ext:imd-swarm" ? "IMD swarm" : a.startsWith("ext:platform") ? "NIGHTSHIFT fee" : a.replace(/^ext:/, "");
+
+/** A market purchase's phases are named for what happened: paying another company, not the swarm. */
+const marketPay = (g: TrailEntry[]) => /^paying .* over x402$/.test(g[0]?.activity ?? "");
+const marketWait = (g: TrailEntry[]) => (g[0]?.activity ?? "").startsWith("paid · waiting for Base") || (g[0]?.activity ?? "").startsWith("paid · confirming with Base");
 
 export function flight(c: Company, t: Task, o: FlightInput) {
   const recorded = Boolean(t.trail?.length);
@@ -43,7 +49,10 @@ export function flight(c: Company, t: Task, o: FlightInput) {
     { at: t.createdAt, status: "planned", activity: null, step: 0 },
     ...(t.status !== "planned" ? [{ at: t.updatedAt, status: t.status, activity: t.activity, step: t.stepsDone }] : []),
   ];
-  const costUsd = fromImd(t.costImd) * o.imdUsd;
+  const imdUsd = fromImd(t.costImd) * o.imdUsd;
+  const marketUsd = fromUsdc(t.costUsdc ?? 0n);
+  const costUsd = imdUsd + marketUsd;
+  const mk = t.market;
   const endedAt = END.has(t.status) ? trail.at(-1)!.at : null;
   const plan = t.imd?.plan ?? [];
   const spans: SpanRecord[] = [];
@@ -79,8 +88,19 @@ export function flight(c: Company, t: Task, o: FlightInput) {
         ...(m ? { saw: m.saw } : {}),
         why: t.why,
       }, m?.costUsd ?? 0);
+      // the market search before paying the swarm, right after the decision: every candidate scored, and what it decided
+      if (mk && i === 0) {
+        span(`${t.id}:market`, root.id, mk.by === "model" ? "llm_call" : "tool_call", "Search the NIGHTSHIFT market", mk.at, mk.doneAt, "ok", {
+          log: [{ at: mk.doneAt, text: mk.decision }], candidates: mk.candidates.length, by: mk.by,
+        }, mk.costUsd ?? 0);
+      }
+    } else if (status === "ordering" && marketPay(g)) {
+      const to = /^paying (.+) \$[\d.,]+ over x402$/.exec(g[0]!.activity ?? "")?.[1] ?? "the seller";
+      span(id, root.id, "tx", `Pay ${to} over x402`, start, end, end === null ? "running" : mk?.paid || next?.status === "building" ? "ok" : "error", { log }, mk?.paid ? marketUsd : 0);
     } else if (status === "ordering") {
-      span(id, root.id, "tx", PHASE.ordering, start, end, state, { log, orderId: t.imd?.orderId ?? null }, costUsd);
+      span(id, root.id, "tx", PHASE.ordering, start, end, state, { log, orderId: t.imd?.orderId ?? null }, imdUsd);
+    } else if (status === "building" && marketWait(g)) {
+      span(id, root.id, "custom", "Waiting for Base to confirm the payment", start, end, state, { log });
     } else if (status === "building") {
       span(id, root.id, "custom", PHASE.building, start, end, state, { log });
       const total = Math.max(t.stepsTotal, plan.length);
@@ -101,12 +121,15 @@ export function flight(c: Company, t: Task, o: FlightInput) {
   if (!recorded && trail.length > 1) {
     span(`${t.id}:legacy`, root.id, "custom", "Not kept in detail (before the recorder)", t.createdAt, trail.at(-1)!.at, "ok", {}, costUsd);
   }
+
   root.totalCostUsd = spans.reduce((a, s) => a + (s.id === root.id ? 0 : s.costUsd), 0);
 
   const ids = t.imd?.orderId ? new Set([`imd:${t.imd.orderId}`, `imd-reversal:${t.imd.orderId}`]) : new Set<string>();
+  if (mk?.paid) ids.add(mk.paid.ledgerId);
+  const seller = mk?.pick ? { id: mk.pick.sellerId, name: mk.pick.company } : undefined;
   const ledger = o.ledger.filter((x) => ids.has(x.id)).map((x) => ({
     id: x.id, kind: x.kind, memo: x.memo, at: new Date(x.at).getTime(),
-    legs: x.postings.map((p) => ({ account: ACCOUNT(c, p.account), asset: p.asset, amount: Number(p.amount) / (p.asset === "IMD" ? 1e18 : 1e6) })),
+    legs: x.postings.map((p) => ({ account: ACCOUNT(c, p.account, seller), asset: p.asset, amount: Number(p.amount) / (p.asset === "IMD" ? 1e18 : 1e6) })),
   }));
 
   // did it pay for itself: what the product it built has earned, or the visits the site it built has had
@@ -129,7 +152,19 @@ export function flight(c: Company, t: Task, o: FlightInput) {
     plan,
     steps: { done: t.stepsDone, total: Math.max(t.stepsTotal, plan.length) },
     trace: buildTree(spans),
-    money: { costImd: fromImd(t.costImd), costUsd, imdUsd: o.imdUsd, ledger },
+    money: { costImd: fromImd(t.costImd), costUsd, costUsdc: marketUsd, imdUsd: o.imdUsd, ledger },
+    market: mk ? {
+      at: mk.at, by: mk.by, threshold: mk.threshold, swarmUsd: mk.swarmUsd, decision: mk.decision,
+      ...(mk.fallback ? { fallback: mk.fallback } : {}),
+      ...(o.owner ? { query: mk.query } : {}),
+      // the products are public; the reasons quote the brief's terms, so they are the owner's
+      candidates: mk.candidates.map((x) => ({ company: x.company, slug: x.slug, productId: x.productId, name: x.name, kind: x.kind, priceUsd: x.priceUsd, score: x.score, verdict: x.verdict, ...(o.owner || !/key terms/.test(x.why) ? { why: x.why } : {}) })),
+      bought: mk.paid && mk.pick ? {
+        company: mk.pick.company, slug: mk.pick.slug, productId: mk.pick.productId, name: mk.pick.name, usd: fromUsdc(mk.paid.usdc), sim: mk.paid.sim, tx: mk.paid.tx,
+        txUrl: o.live && mk.paid.tx ? `https://${o.salesChainId === 8453 ? "" : "sepolia."}basescan.org/tx/${mk.paid.tx}` : null,
+      } : null,
+      pending: Boolean(mk.pending),
+    } : null,
     payback,
     receipts: {
       orderId: t.imd?.orderId ?? null,
@@ -152,5 +187,5 @@ export async function flightFor(engine: Engine, c: Company, taskId: string, owne
   const t = c.tasks.find((x) => x.id === taskId || String(x.cycle) === taskId);
   if (!t) return null;
   const m = engine.store.metricsOf(c.id);
-  return flight(c, t, { imdUsd: config.imdUsd, owner, live: config.mode === "live", ledger: await engine.ledger.store.list(`co:${c.id}:`), sales: m.sales, visits: m.visits });
+  return flight(c, t, { imdUsd: config.imdUsd, owner, live: config.mode === "live", ledger: await engine.ledger.store.list(`co:${c.id}:`), sales: m.sales, visits: m.visits, salesChainId: config.salesChainId });
 }

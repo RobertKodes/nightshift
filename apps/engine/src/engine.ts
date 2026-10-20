@@ -15,6 +15,8 @@ import {
   approve,
   budgetPrice,
   commission,
+  dropMarketBuy,
+  finishMarketBuy,
   found,
   fromUsdc,
   mark,
@@ -32,7 +34,8 @@ import { Auth } from "./auth.js";
 import { LlmClient } from "@nightshift/llm";
 import { balances, broadcastSales, ensurePermit2, eth, ethWallet, refusedByNode, sales, salesTxState, salesWallet, signSales } from "./chain.js";
 import { FEE_PARTS, Payouts } from "./payout.js";
-import { Checkout, type Settlement } from "./checkout.js";
+import { Checkout, PendingError, type Settlement, saleKey } from "./checkout.js";
+import { MarketDesk } from "./b2b.js";
 import { V4, findPool } from "./v4.js";
 import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
 import { forgive, judge, muteMinutes, strike, track } from "./moderation.js";
@@ -89,6 +92,8 @@ export class Engine {
   readonly sim: SimDeliveries;
   /** Private, packaged copies of what each company sells. */
   readonly files: ProductFiles;
+  /** Companies buying from each other on the NIGHTSHIFT market (B2B), booked on both sides. */
+  readonly b2b: MarketDesk;
   readonly #simPlane: SimImdPlane;
   readonly #livePlanes = new Map<string, ImdPlane>();
   readonly #inputOwner = new WeakMap<object, string>();
@@ -129,6 +134,35 @@ export class Engine {
       return id ? this.store.companies.get(id) : undefined;
     }, `${config.dataDir}/sim-files`);
     this.files = new ProductFiles(config.dataDir, this.vault.material, this.llm, config.model, config.publicUrl);
+    this.b2b = new MarketDesk({
+      mode: config.mode,
+      chainId: config.salesChainId,
+      ledger: this.ledger,
+      companies: () => this.store.companies.values(),
+      files: this.files,
+      account: (id) => this.vault.account(id),
+      chainUsdc: (c) => sales.readContract({ address: usdcAddr(), abi: erc20Abi, functionName: "balanceOf", args: [c.wallet] }),
+      settle: async (seller, productId, payment, tag) => {
+        const a = payment.payload.authorization;
+        // the seller pays the settlement gas on Base, as for any buyer: without it nothing is sent
+        if ((await this.checkout.fresh(a.from, a.nonce)) && (await sales.getBalance({ address: seller.wallet }).catch(() => 0n)) < 20_000_000_000_000n) {
+          throw new Error(`${seller.name} cannot take payments right now (no ETH on Base for the settlement gas); nothing was charged`);
+        }
+        try {
+          return await this.settleInTurn(seller.id, () => this.checkout.settle(seller.id, seller.wallet, productId, payment, tag));
+        } catch (e) {
+          // sent, or maybe sent: follow it instead of paying again
+          if (e instanceof PendingError || this.checkout.recordOf(a.from, a.nonce)) throw Object.assign(new Error((e as Error).message), { pending: saleKey(a.from, a.nonce) });
+          throw e;
+        }
+      },
+      sold: (seller, line) => {
+        note(seller, this.#deps(seller), "sale", `${line.sim ? "[sim] " : ""}B2B: sold ${line.product} for $${fromUsdc(line.usdc).toFixed(2)} to ${line.with.name}, another NIGHTSHIFT company. Counted apart from sales to people and agents.`);
+        if (!line.sim) void this.alert(`🤝 B2B: ${seller.name} sold ${line.product} for $${fromUsdc(line.usdc).toFixed(2)} to ${line.with.name}${line.tx ? ` · tx ${line.tx}` : ""}`, `b2b-${line.ledgerId}`);
+        this.#emit(seller.id, "sale", { productId: line.productId, amount: line.usdc.toString(), sim: line.sim, b2b: true });
+      },
+      sourcesDir: join(config.dataDir, "sources"),
+    });
     this.#simPlane = new SimImdPlane({ jobMs: config.simJobSeconds * 1000, deliver: (j, a, i) => this.sim.deliver(j, a, i) });
   }
 
@@ -472,11 +506,15 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
     let revenue = 0;
     let sales = 0;
     for (const c of all) for (const s of this.store.metricsOf(c.id).sales) if (s.at >= since) { revenue += Number(s.usdc) / 1e6; sales++; }
+    // between companies, counted apart: never added to the sales above
+    const b2b = all.flatMap((c) => (c.b2b?.sold ?? []).filter((l) => l.at >= since));
+    const b2bUsd = b2b.reduce((a, l) => a + fromUsdc(l.usdc), 0);
     const shipped = all.flatMap((c) => c.journal.filter((j) => j.at >= since && j.kind === "result").map((j) => `• ${esc(c.name)}: ${esc(j.text.replace(/^\[sim\] /, "").slice(0, 120))}`)).slice(0, 8);
     const warnings = all.reduce((a, c) => a + c.journal.filter((j) => j.at >= since && j.kind === "warning").length, 0);
     return [
       `📰 <b>Last 24 hours</b>${config.mode === "sim" ? " <i>(simulation)</i>" : ""}`, "",
       `💰 ${sales} sale${sales === 1 ? "" : "s"} · $${revenue.toFixed(2)}`,
+      ...(b2b.length ? [`🤝 ${b2b.length} B2B sale${b2b.length === 1 ? "" : "s"} between companies · $${b2bUsd.toFixed(2)} (counted apart)`] : []),
       `🏢 ${all.length} companies`,
       `⚠️ ${warnings} warning${warnings === 1 ? "" : "s"}`, "",
       shipped.length ? `<b>Shipped</b>\n${shipped.join("\n")}` : "Nothing shipped.",
@@ -820,6 +858,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       buyBase: (x) => `${config.publicUrl}/buy/${x.slug}`,
       emit: (x, type, payload) => this.#emit(x.id, type, payload),
       persist: () => this.store.save(),
+      market: this.b2b,
       findExisting: async (q) => {
         if (!q.trim()) return null;
         const r = await this.reads.publications(q, "research", 3);
@@ -1132,9 +1171,28 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
 
   /** After a restart: work cut off mid-step is closed honestly, and old logs lose the model's name. */
   #recover(): void {
+    for (const c of [...this.store.companies.values(), ...this.store.archived.values()]) c.policy = { ...DEFAULT_POLICY, ...c.policy };
     for (const c of this.store.companies.values()) {
       for (const j of c.journal) if (j.kind === "decision") j.text = j.text.replace(/ \([\w.-]+\/[\w.:-]+\)$/, "");
       for (const t of c.tasks) {
+        // A market purchase cut off while paying: booked already (finish it), sent on chain (follow it), or never paid.
+        if (t.status === "ordering" && t.market?.pick && !t.market.paid) {
+          const sent = config.mode === "live" ? [...this.store.settlements.values()].find((x) => x.b2b?.taskId === t.id && x.hash) : undefined;
+          const deps = this.#deps(c);
+          void this.b2b.receiptFor(t).then((r) => {
+            if (r) return finishMarketBuy(c, t, r, deps);
+            if (sent) {
+              t.market!.pending = sent.key;
+              Object.assign(t, { status: "building", activity: "paid · confirming with Base after a restart" });
+              mark(t, Date.now());
+              return;
+            }
+            Object.assign(t, { status: "failed", activity: null, costUsdc: 0n, error: "interrupted before payment; nothing was paid" });
+            mark(t, Date.now());
+            note(c, deps, "note", `"${t.title}" was cut off before paying for it on the market. Nothing was paid; the next shift starts fresh.`);
+          }).finally(() => this.store.markDirty());
+          continue;
+        }
         if (t.status === "failed" && /rejected by spendControls/.test(t.error ?? "") && t.costImd) { t.costImd = 0n; note(c, this.#deps(c), "note", `"${t.title}" was never paid (the payment library refused IMD before signing). Its budget is back.`); }
         // Cut off mid-payment with an order id: follow that order with IMD (paid → it builds; never paid → the budget comes back).
         if (t.status === "ordering" && t.imd?.orderId) {
@@ -1310,11 +1368,29 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     return { sent: r.sent, fee: r.fee, txs: config.mode === "live" ? [r.tx, ...r.feeTxs] : [] };
   }
 
-  /** A settled x402 payment, booked once. */
+  /** A settled x402 payment, booked once. One another company paid is booked as B2B, never as a sale to a person. */
   async #bookSale(s: Settlement & { hash: `0x${string}` }): Promise<void> {
     const c = this.store.companies.get(s.companyId);
     if (!c) throw new Error(`no company ${s.companyId} for sale ${s.hash}`);
+    if (s.b2b) {
+      const r = await this.b2b.book({ sellerId: c.id, productId: s.productId, buyerId: s.b2b.buyerId, taskId: s.b2b.taskId, value: s.value, tx: s.hash, sim: false });
+      const buyer = this.store.companies.get(s.b2b.buyerId);
+      const t = buyer?.tasks.find((x) => x.id === s.b2b!.taskId);
+      // a payment that landed after its shift was cut off still delivers the file it paid for
+      if (r && buyer && t?.market?.pick) finishMarketBuy(buyer, t, r, this.#deps(buyer));
+      await this.store.save();
+      return;
+    }
     await this.recordSale(c, s.productId, s.value, s.payer, s.hash, false);
+  }
+
+  readonly #settling = new Map<string, Promise<unknown>>();
+  /** Payments to one company settle one at a time (its wallet signs each settlement), whoever pays: a person, an agent or another company. */
+  settleInTurn<T>(companyId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.#settling.get(companyId) ?? Promise.resolve();
+    const run = prev.catch(() => {}).then(fn);
+    this.#settling.set(companyId, run.catch(() => {}));
+    return run;
   }
 
   readonly #lastAlert = new Map<string, number>();
@@ -1444,6 +1520,14 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     const now = Date.now();
     for (const c of this.store.companies.values()) {
       if (c.tasks.some((t) => t.status === "building")) await advance(c, this.#deps(c)).catch((e) => console.error("advance", c.slug, e));
+      // a market payment sent on chain is followed until it lands (booked by the checkout) or is dropped
+      for (const t of c.tasks) {
+        if (t.status !== "building" || !t.market?.pending || t.market.paid) continue;
+        if (this.store.settlements.has(t.market.pending)) continue;
+        const r = await this.b2b.receiptFor(t);
+        if (r) finishMarketBuy(c, t, r, this.#deps(c));
+        else dropMarketBuy(c, t, this.#deps(c), "the payment never landed on Base, so nothing was charged. Its market limit is back.");
+      }
       if (c.status === "active" && c.policy.autopilot && c.nextShiftAt && now >= c.nextShiftAt && !this.#busy.has(c.id)) {
         await this.shiftNow(c).catch((e) => console.error("shift", c.slug, e));
       }

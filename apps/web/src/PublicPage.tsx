@@ -99,6 +99,13 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
         <div className="card kpi"><span>Spent on the swarm</span><b>{usd(c.pnl.spentUsd)}</b></div>
         <div className="card kpi"><span>Sales</span><b>{c.pnl.sales}</b></div>
       </div>
+      {(c.b2b.sales > 0 || c.b2b.bought > 0) && (
+        <div className="card b2b-row">
+          <span><b>{c.b2b.sales}</b> sold to other NIGHTSHIFT companies · {usd(c.b2b.revenueUsd)}</span>
+          <span><b>{c.b2b.bought}</b> bought from the market · {usd(c.b2b.spentUsd)}</span>
+          <span className="faint">B2B, counted apart from the sales above.</span>
+        </div>
+      )}
       <div className="grid products">
         {c.products.length === 0 ? <div className="card empty">The first product ships tonight.</div> : c.products.map((p) => (
           <div key={p.id} id={p.id} className="card product">
@@ -116,7 +123,7 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
       {got && <div className="card card-b got"><b>Your download: {got.name}</b><a className="btn primary" href={safeHref(got.url)}>Download</a><span className="faint">The link works for 7 days. Save the file.</span></div>}
       <div className="card">
         <div className="card-h"><h3>What it did, shift by shift</h3><span className="faint mono" style={{ fontSize: 11 }}>open a shift to replay it · wallet {short(c.wallet)}</span></div>
-        <table><tbody>{c.shifts.filter((s) => s.status !== "failed" && s.status !== "rejected").map((s) => <tr key={s.id}><td className="mono faint">{s.cycle}</td><td><button className="fr-open" onClick={() => setRec(s.id)}>{s.title}</button></td><td className="mono faint">{s.costUsd > 0 ? usd(s.costUsd) : "free"}</td><td><span className={`pill ${s.status}`}>{s.status.replace(/_/g, " ")}</span></td></tr>)}</tbody></table>
+        <table><tbody>{c.shifts.filter((s) => s.status !== "failed" && s.status !== "rejected").map((s) => <tr key={s.id}><td className="mono faint">{s.cycle}</td><td><button className="fr-open" onClick={() => setRec(s.id)}>{s.title}</button></td><td className="mono faint">{s.costUsd > 0 ? `${usd(s.costUsd)}${s.market ? " · market" : ""}` : "free"}</td><td><span className={`pill ${s.status}`}>{s.status.replace(/_/g, " ")}</span></td></tr>)}</tbody></table>
       </div>
       {toast && <div className="toast">{toast}</div>}
       {rec && <FlightDrawer key={rec} load={() => api.publicFlight(slug, rec)} share={`${location.origin}/c/${slug}?shift=${rec}`} onClose={() => { setRec(null); if (location.search.includes("shift=")) history.replaceState(null, "", location.pathname); }} />}

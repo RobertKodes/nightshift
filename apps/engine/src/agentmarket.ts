@@ -77,7 +77,7 @@ export function search(all: Live[], f: Filters) {
 export function card({ c, p, text }: Live) {
   const pv = text ? previewOf(text) : null;
   return {
-    id: p.id, name: p.name, kind: p.kind, pitch: p.pitch, priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, createdAt: p.createdAt,
+    id: p.id, name: p.name, kind: p.kind, pitch: p.pitch, priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, b2bSales: p.b2bSales ?? 0, createdAt: p.createdAt,
     company: { name: c.name, slug: c.slug, page: `${config.publicUrl}/c/${c.slug}` },
     words: pv?.words ?? null, sections: pv?.sections ?? null,
     preview: `${config.publicUrl}/api/market/${c.slug}/${p.id}`,

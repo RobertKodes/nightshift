@@ -71,11 +71,13 @@ export function OwnerDesk({ health }: { health: Health | null }) {
 
       <div className="dk-sum">
         <span><b>{cos.length}</b>companies</span>
-        <span><b>{usd(sum((c) => c.pnl.revenueUsd))}</b>revenue</span>
+        <span><b>{usd(sum((c) => c.pnl.revenueUsd))}</b>revenue from people and agents</span>
         <span><b>{usd(sum((c) => c.pnl.spentUsd))}</b>spent on the swarm</span>
         <span className={sum((c) => c.pnl.profitUsd) >= 0 ? "dk-up" : "dk-down"}><b>{usd(sum((c) => c.pnl.profitUsd))}</b>profit</span>
         <span><b>{sum((c) => c.stats.sales7d)}</b>sales, 7 days</span>
         <span><b>{sum((c) => c.products.filter((p) => p.status === "live").length)}</b>products on sale</span>
+        <span><b>{usd(sum((c) => c.b2b.bought.usd))}</b>bought from the market · {sum((c) => c.b2b.bought.count)}</span>
+        <span><b>{usd(sum((c) => c.b2b.sold.usd))}</b>sold to other companies · {sum((c) => c.b2b.sold.count)}</span>
       </div>
 
       {(waiting.length > 0 || resting.length > 0) && (
@@ -83,7 +85,9 @@ export function OwnerDesk({ health }: { health: Health | null }) {
           <h2><NxIcon name="pulse" size={18} /> Needs you</h2>
           {waiting.map(({ c, w }) => (
             <div key={w.id} className="dk-need">
-              <div><b>{c.name}</b> wants to buy: {w.title}<span className="dim"> · {w.costUsd > 0 ? usd(w.costUsd) : "0.5 IMD"} · {w.why}</span></div>
+              {w.market
+                ? <div><b>{c.name}</b> wants to buy "{w.market.product}" from {w.market.company} on the market<span className="dim"> · {usd(w.costUsd)} USDC instead of research from the swarm at about {usd(w.market.swarmUsd)} · {w.title}</span></div>
+                : <div><b>{c.name}</b> wants to buy: {w.title}<span className="dim"> · {w.costUsd > 0 ? usd(w.costUsd) : "0.5 IMD"} · {w.why}</span></div>}
               <div className="dk-row">
                 <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`no:${w.id}`, () => api.reject(c.id, w.id), "Declined. Nothing was spent.")}>Decline</button>
                 <button className="nx-btn nx-btn-acc" disabled={busy !== null} onClick={() => void act(`yes:${w.id}`, () => api.approve(c.id, w.id), "Approved: the swarm is on it.")}>Approve and buy</button>
@@ -142,6 +146,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
                   <div><dt>Sales 7d</dt><dd>{c.stats.sales7d}</dd></div>
                   <div><dt>On sale</dt><dd>{live}</dd></div>
                 </dl>
+                <B2bLines c={c} onReplay={(task) => setRec({ co: c.id, task })} />
                 {c.last && <button className="dk-last" onClick={() => setRec({ co: c.id, task: c.last!.id })}>Last: shift {c.last.cycle}, {c.last.title} <span className={`dk-st ${c.last.status}`}>{c.last.status.replace(/_/g, " ")}</span> <span className="faint">{ago(c.last.at)}</span></button>}
                 <footer className="dk-row">
                   <Link to={`/co/${c.id}`} className="nx-btn">Open</Link>
@@ -259,6 +264,15 @@ function EditDrawer({ c, first, bot, live, imdUsd, onClose, onSaved, onDeleted, 
               <label className="dk-toggle"><input type="checkbox" checked={pol.autopilot} onChange={(e) => setPol({ ...pol, autopilot: e.target.checked })} /> Autopilot<span className="dim">runs shifts on its own</span></label>
             </div>
             {job > 0 && <p className={`dk-hint ${pol.dailyBudgetUsd < job ? "bad" : ""}`}>One swarm job costs about {usd(job)} now (0.5 IMD). {pol.dailyBudgetUsd < job ? "This budget cannot buy any: raise it." : `This budget buys up to ${Math.floor(pol.dailyBudgetUsd / job)} a day.`} {pol.approvalOverUsd < job ? "Every purchase will wait for your approval." : ""}</p>}
+            <div className="dk-market">
+              <label className="dk-toggle"><input type="checkbox" checked={pol.marketBuy ?? true} onChange={(e) => setPol({ ...pol, marketBuy: e.target.checked })} /> Buy from the market first<span className="dim">research another company already sells</span></label>
+              <div className="dk-two">
+                <label>Market, per day ($)<input className="field mono" type="number" min={0} max={1000} step="0.5" disabled={pol.marketBuy === false} value={pol.marketDailyUsd ?? 5} onChange={(e) => setPol({ ...pol, marketDailyUsd: Number(e.target.value) })} /></label>
+                <label>Market, per buy ($)<input className="field mono" type="number" min={0} max={500} step="0.5" disabled={pol.marketBuy === false} value={pol.marketMaxUsd ?? 3} onChange={(e) => setPol({ ...pol, marketMaxUsd: Number(e.target.value) })} /></label>
+              </div>
+              <p className="dk-hint">Before paying the swarm for research, the CEO searches the NIGHTSHIFT market. It buys a product only when its free preview is relevant to the research, it costs less than the swarm job{job > 0 ? ` (about ${usd(job)})` : ""}, and it fits these limits. Paid in USDC from what this company earned, never from a company you own, never twice. Over your "ask me over" limit it waits for you.</p>
+              {(pol.marketBuy ?? true) && c.b2b.usdcUsd <= 0 && <p className="dk-hint bad">{c.name} holds no USDC yet, so it cannot buy from the market until it makes a sale.</p>}
+            </div>
             <button className="nx-btn nx-btn-acc" disabled={saving}>{saving ? "Saving…" : "Save limits"}</button>
           </form>
         )}
@@ -267,10 +281,17 @@ function EditDrawer({ c, first, bot, live, imdUsd, onClose, onSaved, onDeleted, 
 
         {tab === "books" && (
           <div className="dk-form">
-            <p className="dk-hint">Every ledger line that touched this company: funding, each IMD order, each sale, the platform fee and each withdrawal, with the chain transaction. For your accountant, or a spreadsheet.</p>
+            <p className="dk-hint">Every ledger line that touched this company: funding, each IMD order, each sale, each purchase from or sale to another company, the platform fee and each withdrawal, with the chain transaction. For your accountant, or a spreadsheet.</p>
             <a className="nx-btn nx-btn-acc" href={`/api/companies/${c.id}/books.csv`} download><NxIcon name="money" size={15} />Download the books (CSV)</a>
             {c.last && <button className="nx-btn" onClick={() => onReplay(c.last!.id)}><NxIcon name="play" size={15} />Replay the last shift</button>}
             <Link to={`/co/${c.id}`} className="nx-btn">Every shift, on the company page</Link>
+            <h4 className="dk-sub">Bought from the market · {c.b2b.bought.count} · {usd(c.b2b.bought.usd)}</h4>
+            {c.b2b.bought.items.length === 0 ? <p className="dim dk-hint">Nothing yet. Research is bought from another company only when it is relevant, cheaper than the swarm and inside the market limits.</p>
+              : <ul className="dk-b2blist">{c.b2b.bought.items.map((x) => <li key={x.taskId}><button className="fr-open" onClick={() => onReplay(x.taskId)}>{x.product}</button><span className="dim"> from {x.with} · {usd(x.usd)}{x.sim ? " · demo" : ""} · {ago(x.at)}</span></li>)}</ul>}
+            <h4 className="dk-sub">Sold to other companies · {c.b2b.sold.count} · {usd(c.b2b.sold.usd)}</h4>
+            {c.b2b.sold.items.length === 0 ? <p className="dim dk-hint">No sales to other companies yet. They are counted apart from sales to people and agents.</p>
+              : <ul className="dk-b2blist">{c.b2b.sold.items.map((x) => <li key={`${x.taskId}`}><b>{x.product}</b><span className="dim"> to {x.with} · {usd(x.usd)}{x.sim ? " · demo" : ""} · {ago(x.at)}</span></li>)}</ul>}
+            <p className="faint dk-hint">In the CSV, B2B lines are <code>b2b_purchase</code> and <code>b2b_sale</code>: one transaction both companies see.</p>
           </div>
         )}
 
@@ -318,7 +339,7 @@ function OrderWork({ c, imdUsd, saving, setSaving, setError, onOrdered }: { c: D
   };
   return (
     <form className="dk-form" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-      <p className="dk-hint">Skip the CEO and order exactly what you want. It goes through IMD's free check, costs 0.5 IMD{imdUsd ? ` (about ${usd(imdUsd * 0.5)})` : ""} from the company's daily budget, and needs no approval because you are the one asking. You can follow it live in the flight recorder.</p>
+      <p className="dk-hint">Skip the CEO and order exactly what you want. It goes through IMD's free check, costs 0.5 IMD{imdUsd ? ` (about ${usd(imdUsd * 0.5)})` : ""} from the company's daily budget, and needs no approval because you are the one asking. You can follow it live in the flight recorder.{kind === "research" ? " Research looks on the NIGHTSHIFT market first: a relevant, cheaper product another company sells is bought instead, inside the market limits." : ""}</p>
       {busy && <p className="dk-hint bad">The company is working on "{c.working!.title}". Order more once it is delivered.</p>}
       {c.status !== "active" && <p className="dk-hint bad">The company is paused. Resume it to order work.</p>}
       <div className="dk-kinds" role="radiogroup" aria-label="What to order">
@@ -383,6 +404,26 @@ function Alerts({ c, bot, onSaved, say }: { c: DeskCompany; bot: boolean; onSave
   );
 }
 
+/** On each card: what the company bought from the market and sold to other companies, apart from its revenue. */
+function B2bLines({ c, onReplay }: { c: DeskCompany; onReplay: (task: string) => void }) {
+  const b = c.b2b.bought, s = c.b2b.sold;
+  const lastB = b.items[0], lastS = s.items[0];
+  return (
+    <div className="dk-b2b">
+      <div>
+        <span className="dk-b2b-h"><NxIcon name="market" size={13} /> Bought from the market</span>
+        <b>{b.count} · {usd(b.usd)}</b>
+        {lastB ? <button className="dk-link" onClick={() => onReplay(lastB.taskId)}>{lastB.product} <span className="dim">from {lastB.with}</span></button> : <span className="faint">nothing yet</span>}
+      </div>
+      <div>
+        <span className="dk-b2b-h"><NxIcon name="money" size={13} /> Sold to other companies</span>
+        <b>{s.count} · {usd(s.usd)}</b>
+        {lastS ? <span>{lastS.product} <span className="dim">to {lastS.with}</span></span> : <span className="faint">none yet</span>}
+      </div>
+    </div>
+  );
+}
+
 function ProductEdit({ co, x, saving, save }: { co: string; x: DeskCompany["products"][number]; saving: boolean; save: (fn: () => Promise<unknown>, done: string) => Promise<void> }) {
   const [name, setName] = useState(x.name);
   const [pitch, setPitch] = useState(x.pitch);
@@ -390,7 +431,7 @@ function ProductEdit({ co, x, saving, save }: { co: string; x: DeskCompany["prod
   const changed = name !== x.name || pitch !== x.pitch;
   return (
     <div className={`dk-prod ${x.status}`}>
-      <div className="dk-prod-h"><span className="mk-kind">{x.kind}</span><span className={`dk-st ${x.status}`}>{x.status === "live" ? "on sale" : x.status}</span><span className="faint">{x.sales} sold · {usd(x.revenueUsd)}</span></div>
+      <div className="dk-prod-h"><span className="mk-kind">{x.kind}</span><span className={`dk-st ${x.status}`}>{x.status === "live" ? "on sale" : x.status}</span><span className="faint">{x.sales} sold · {usd(x.revenueUsd)}{x.b2bSales ? ` · ${x.b2bSales} to other companies` : ""}</span></div>
       <input className="field" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} aria-label="Product name" />
       <textarea className="field" rows={2} value={pitch} maxLength={240} onChange={(e) => setPitch(e.target.value)} aria-label="Pitch" />
       <div className="dk-row">
