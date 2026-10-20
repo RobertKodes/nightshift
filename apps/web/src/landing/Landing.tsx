@@ -1,12 +1,11 @@
-import { StationDoors } from "../station/Station";
 import { useEffect, useRef, useState } from "react";
 import { short, useStaked } from "../StakedCounter";
 import { Icon } from "../Icon";
 import { safeHref } from "../safe";
 import { usd } from "../api";
 import { Link, go } from "../router";
-import { Crescent, Magnetic, SiteFooter, SiteHeader } from "./chrome";
-import { AppTabs } from "./app";
+import { Crescent, Magnetic } from "./chrome";
+import { Footer as NxFooter, NxTabs, StationBar } from "../nx/Shell";
 import { ImdVisitor } from "./visitor";
 import { EcosystemFlow, FEE_SPLIT, Faq, IMD_WINS, TokenomicsBars, UTILITY, symbolOf, useToken } from "./content";
 import { ANCHORS, ART_H, ART_W, startScene } from "./scene";
@@ -114,8 +113,8 @@ export function Landing() {
   const demo = () => (f ? go(`/c/${f.slug}`) : go("/launch"));
 
   return (
-    <div className="ns" ref={stage}>
-      <SiteHeader active="home" home />
+    <div className="ns nx-story" ref={stage}>
+      <header className="nx-head nx-story-head"><StationBar room={null} /></header>
 
       <section className="ns-hero" aria-label="NIGHTSHIFT">
         <div className="ns-art">
@@ -186,7 +185,7 @@ export function Landing() {
           <div className="ns-ctas">
             <Magnetic className="ns-cta" onClick={launch} href="/launch">LAUNCH A COMPANY <span className="arr">→</span></Magnetic>
             <Magnetic className="ns-ghost" onClick={demo} href="/companies">WATCH DEMO <span className="play">▶</span></Magnetic>
-            <a className="ns-ghost" href="#station">ENTER THE STATION <span className="arr">↓</span></a>
+            <Magnetic className="ns-ghost" onClick={() => go("/")} href="/">CHOOSE YOUR WAY <span className="arr">→</span></Magnetic>
           </div>
           <p className="ns-goodnight">GOOD NIGHT,<br />A BRIGHTER<br />TOMORROW IS<br />IN PROGRESS.</p>
         </div>
@@ -257,8 +256,6 @@ export function Landing() {
           </div>
         </div>
       </section>
-
-      <StationDoors />
 
       <section id="mission" className="ns-section" data-reveal>
         <span className="eyebrow">MISSION</span>
@@ -389,8 +386,8 @@ export function Landing() {
         </div>
       </section>
 
-      <SiteFooter />
-      <AppTabs active="home" />
+      <NxFooter room={null} />
+      <NxTabs room={null} />
     </div>
   );
 }

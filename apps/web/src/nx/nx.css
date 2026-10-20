@@ -1,0 +1,272 @@
+/* NIGHTSHIFT · STATION OS
+   One station, five rooms. Shared: night base, Space Grotesk for the interface, JetBrains Mono for
+   data, angled panels and buttons. Each room swaps its accent (--acc) and its own motif:
+   Breakroom arcade glow, Geek Room terminal grid, Info Room briefing sheets, HR & Economy ledger,
+   Command Room tactical brackets. */
+
+.nx-shell, .nx-gate, .nx-story {
+  --nx-bg: #03020a; --nx-bg2: #07061a; --nx-panel: rgba(12, 10, 28, .78); --nx-panel2: rgba(255, 255, 255, .025);
+  --nx-line: rgba(255, 255, 255, .09); --nx-line2: rgba(255, 255, 255, .16);
+  --nx-ink: #f3f1ff; --nx-dim: #a7a2c3; --nx-faint: #6f6a8c;
+  --nx-ui: "Space Grotesk", Inter, system-ui, sans-serif; --nx-mono: "JetBrains Mono", ui-monospace, monospace;
+  --nx-cut: 12px;
+  --acc: #a48bff; --acc2: #e9e2ff;
+  --acc-soft: color-mix(in srgb, var(--acc) 14%, transparent);
+  --acc-line: color-mix(in srgb, var(--acc) 38%, transparent);
+  background: var(--nx-bg); color: var(--nx-ink); font-family: var(--nx-ui);
+}
+.nx-shell .nx-dot, .nx-gate .nx-dot, .nx-story .nx-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 10px var(--acc); flex: none; }
+.nx-ic { flex: none; }
+
+/* ------------------------------------------------------------ buttons */
+.nx-btn { --c: var(--acc); position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 42px; padding: 0 18px;
+  font: 600 13.5px/1 var(--nx-ui); letter-spacing: .01em; color: var(--nx-ink); background: color-mix(in srgb, var(--c) 10%, transparent);
+  border: 0; cursor: pointer; text-decoration: none; white-space: nowrap;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent); transition: background .2s, color .2s, transform .2s; }
+.nx-btn:hover { background: color-mix(in srgb, var(--c) 22%, transparent); }
+.nx-btn:active { transform: translateY(1px); }
+.nx-btn-acc { background: var(--c); color: #05040c; box-shadow: none; }
+.nx-btn-acc:hover { background: color-mix(in srgb, var(--c) 86%, white); }
+
+/* ------------------------------------------------------------ the header: station bar + room bar */
+.nx-head { position: sticky; top: 0; z-index: 50; background: rgba(4, 3, 12, .86); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); }
+.nx-station { display: flex; align-items: center; gap: 18px; height: 42px; padding: 0 clamp(14px, 2.6vw, 36px); border-bottom: 1px solid var(--nx-line); font: 500 11px var(--nx-mono); letter-spacing: .08em; }
+.nx-mark { display: inline-flex; align-items: center; gap: 10px; color: var(--nx-ink); text-decoration: none; }
+.nx-mark span { font: 600 14px var(--nx-mono); letter-spacing: .26em; }
+.nx-rooms { display: flex; align-items: center; gap: 4px; margin-left: 12px; }
+.nx-rooms a { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; color: var(--nx-faint); text-decoration: none; text-transform: uppercase; border: 1px solid transparent; transition: color .2s, border-color .2s; }
+.nx-rooms a .nx-dot { width: 6px; height: 6px; box-shadow: none; opacity: .75; }
+.nx-rooms a:hover { color: var(--nx-ink); }
+.nx-rooms a.on { color: var(--nx-ink); border-color: color-mix(in srgb, var(--acc) 45%, transparent); background: color-mix(in srgb, var(--acc) 10%, transparent); }
+.nx-rooms a.on .nx-dot { box-shadow: 0 0 8px var(--acc); opacity: 1; }
+.nx-rooms a .nx-ic { color: var(--acc); }
+.nx-pulse { display: inline-flex; align-items: baseline; gap: 7px; margin-left: auto; color: var(--nx-ink); font: 600 12px var(--nx-mono); }
+.nx-pulse i { width: 7px; height: 7px; border-radius: 50%; background: #b8ff4a; box-shadow: 0 0 10px #b8ff4a; align-self: center; animation: nx-blink 2.4s ease-in-out infinite; }
+.nx-pulse small { color: var(--nx-faint); font-size: 10px; letter-spacing: .14em; }
+@keyframes nx-blink { 50% { opacity: .35; } }
+.nx-sim { padding: 3px 7px; border: 1px solid rgba(255, 200, 97, .5); color: #ffc861; font: 600 10px var(--nx-mono); letter-spacing: .14em; }
+.nx-acct { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; border: 1px solid var(--nx-line2); background: transparent; color: var(--nx-ink); font: 600 11px var(--nx-mono); letter-spacing: .06em; cursor: pointer; }
+.nx-acct:hover { border-color: var(--acc); }
+
+.nx-roombar { display: flex; align-items: center; gap: 22px; height: 60px; padding: 0 clamp(14px, 2.6vw, 36px); border-bottom: 1px solid var(--acc-line);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--acc) 12%, transparent), transparent 45%); position: relative; }
+.nx-roombar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: linear-gradient(90deg, var(--acc), transparent 60%); opacity: .8; }
+.nx-roomid { display: flex; align-items: center; gap: 12px; color: var(--nx-ink); text-decoration: none; flex: none; }
+.nx-roomid img { width: 40px; height: 40px; object-fit: cover; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); box-shadow: 0 0 0 1px var(--acc-line); }
+.nx-roomid span { display: grid; gap: 2px; }
+.nx-roomid small { font: 600 9.5px var(--nx-mono); letter-spacing: .26em; color: var(--acc); }
+.nx-roomid b { font: 600 19px/1 var(--nx-ui); letter-spacing: -.01em; }
+.nx-roomnav { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nx-roomnav::-webkit-scrollbar { display: none; }
+.nx-roomnav a { position: relative; display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; color: var(--nx-dim); font: 500 13.5px var(--nx-ui); text-decoration: none; white-space: nowrap; transition: color .2s; }
+.nx-roomnav a .nx-ic { color: var(--nx-faint); transition: color .2s; }
+.nx-roomnav a:hover { color: var(--nx-ink); }
+.nx-roomnav a:hover .nx-ic, .nx-roomnav a.on .nx-ic { color: var(--acc); }
+.nx-roomnav a.on { color: var(--nx-ink); }
+.nx-roomnav a.on::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -12px; height: 2px; background: var(--acc); box-shadow: 0 0 12px var(--acc); }
+.nx-roomcta { margin-left: auto; min-height: 38px; }
+
+/* ------------------------------------------------------------ the room's backdrop motif */
+.nx-shell { position: relative; min-height: 100vh; display: flex; flex-direction: column; overflow-x: clip; }
+.nx-shell > main { position: relative; z-index: 1; flex: 1; width: 100%; }
+.nx-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+[data-room="breakroom"] .nx-backdrop { background: radial-gradient(900px 500px at 85% 10%, rgba(255, 92, 168, .12), transparent 70%), radial-gradient(700px 500px at 0% 90%, rgba(124, 92, 255, .12), transparent 70%), repeating-linear-gradient(0deg, rgba(255, 255, 255, .018) 0 1px, transparent 1px 4px); }
+[data-room="geek"] .nx-backdrop { background: radial-gradient(800px 500px at 90% 0%, rgba(74, 216, 255, .1), transparent 70%), linear-gradient(rgba(74, 216, 255, .045) 1px, transparent 1px) 0 0 / 32px 32px, linear-gradient(90deg, rgba(74, 216, 255, .045) 1px, transparent 1px) 0 0 / 32px 32px; }
+[data-room="info"] .nx-backdrop { background: radial-gradient(900px 600px at 80% 0%, rgba(201, 194, 255, .1), transparent 70%), radial-gradient(rgba(201, 194, 255, .14) 1px, transparent 1.4px) 0 0 / 26px 26px; }
+[data-room="economy"] .nx-backdrop { background: radial-gradient(800px 500px at 90% 0%, rgba(255, 200, 97, .1), transparent 70%), repeating-linear-gradient(180deg, transparent 0 35px, rgba(255, 200, 97, .05) 35px 36px); }
+[data-room="command"] .nx-backdrop { background: radial-gradient(circle at 88% 12%, rgba(184, 255, 74, .1) 0, transparent 40%), repeating-radial-gradient(circle at 88% 12%, transparent 0 79px, rgba(184, 255, 74, .05) 79px 80px); }
+
+/* ------------------------------------------------------------ every page inside a room takes the room's look */
+.nx-shell .docs { --s-acc: var(--acc); --s-acc-bg: var(--acc-soft); --s-line: var(--nx-line); --s-line2: var(--nx-line2); --s-bg: var(--nx-panel); --s-bg2: var(--nx-panel2); --s-text: var(--nx-ink); --s-dim: var(--nx-dim); --s-faint: var(--nx-faint); font-family: var(--nx-ui); }
+.nx-shell .docs h1, .nx-shell .ns-app .docs h1 { font: 600 clamp(38px, 5vw, 64px)/1.02 var(--nx-ui) !important; letter-spacing: -.035em !important; }
+.nx-shell .docs h1 em { font-style: normal !important; color: var(--acc) !important; }
+.nx-shell .docs > h2, .nx-shell .docs .guide-h2 { font-family: var(--nx-ui) !important; letter-spacing: -.02em; }
+.nx-shell .docs .eyebrow, .nx-shell .eyebrow { color: var(--acc) !important; font: 600 11px var(--nx-mono) !important; letter-spacing: .24em !important; text-transform: uppercase !important; }
+.nx-shell .docs .tkn-card, .nx-shell .docs .card, .nx-shell .card { border-radius: 0 !important; clip-path: polygon(var(--nx-cut) 0, 100% 0, 100% calc(100% - var(--nx-cut)), calc(100% - var(--nx-cut)) 100%, 0 100%, 0 var(--nx-cut));
+  background: var(--nx-panel) !important; border: 0 !important; box-shadow: inset 0 0 0 1px var(--nx-line) !important; }
+.nx-shell .btn { border-radius: 0 !important; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); font-family: var(--nx-ui); }
+.nx-shell .btn.primary, .nx-shell .ns-cta { background: var(--acc) !important; color: #05040c !important; border-color: transparent !important; box-shadow: none !important; border-radius: 0 !important;
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); font-family: var(--nx-ui) !important; letter-spacing: .02em !important; }
+.nx-shell .ns-cta::before { display: none; }
+.nx-shell .field, .nx-shell input.field, .nx-shell textarea, .nx-shell select { border-radius: 0 !important; background: rgba(3, 2, 10, .7) !important; border-color: var(--nx-line2) !important; }
+.nx-shell .field:focus, .nx-shell textarea:focus { outline: none; border-color: var(--acc) !important; box-shadow: 0 0 0 3px var(--acc-soft) !important; }
+.nx-shell .pill { border-radius: 0 !important; font-family: var(--nx-mono); }
+.nx-shell table th { font-family: var(--nx-mono); }
+.nx-shell a:not([class]):hover { color: var(--acc); }
+
+/* the older pages: their serif headings and violet accents follow the room (they read these variables) */
+.ns.nx-shell, .ns.nx-story { --serif: "Space Grotesk", Inter, system-ui, sans-serif; --uv-hi: var(--acc); --uv-soft: var(--acc-soft); --edge: var(--acc-line); --moon: var(--acc2); }
+.nx-shell :is(h1, h2, h3) { font-weight: 600 !important; letter-spacing: -.03em; }
+.nx-shell :is(h1, h2, h3, p, b, span) em, .nx-story :is(h1, h2, h3) em { font-style: normal !important; color: var(--acc) !important; background: none !important; -webkit-text-fill-color: currentColor; }
+.ns.nx-story { --acc: #a48bff; --acc2: #e9e2ff; }
+.nx-story-head { position: sticky; top: 0; z-index: 60; }
+
+/* the station hubs (rooms, league) under the new chrome */
+.nx-shell .st-switch { display: none; }
+.nx-shell main > .st-room { margin-top: -28px; }
+.nx-shell .st-hero { min-height: min(68vh, 680px); padding-top: 80px; }
+.nx-shell .st-hero.slim { min-height: min(54vh, 520px); }
+.nx-shell .st-hero h1 { font: 600 clamp(54px, 7.4vw, 108px)/.92 var(--nx-ui); letter-spacing: -.045em; }
+.nx-shell .st-deck { font-family: var(--nx-mono); }
+.nx-shell .st-stat { border-radius: 0; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); box-shadow: inset 0 0 0 1px var(--nx-line); border: 0; }
+.nx-shell .st-stat b { color: var(--nx-ink); }
+.nx-shell .st-body > h2 { font: 600 clamp(26px, 3vw, 36px)/1.1 var(--nx-ui); letter-spacing: -.025em; display: flex; align-items: center; gap: 12px; }
+.nx-shell .st-body > h2::before { content: ""; width: 18px; height: 2px; background: var(--acc); box-shadow: 0 0 10px var(--acc); flex: none; }
+.nx-shell .st-tile, .nx-shell .st-panel, .nx-shell .st-table-wrap, .nx-shell .st-mission, .nx-shell .st-code, .nx-shell .st-orders > a, .nx-shell .st-archive {
+  border-radius: 0; border: 0; box-shadow: inset 0 0 0 1px var(--nx-line); background: var(--nx-panel);
+  clip-path: polygon(var(--nx-cut) 0, 100% 0, 100% calc(100% - var(--nx-cut)), calc(100% - var(--nx-cut)) 100%, 0 100%, 0 var(--nx-cut)); }
+.nx-shell .st-tile:hover { box-shadow: inset 0 0 0 1px var(--acc-line), inset 0 0 40px var(--acc-soft); background: var(--nx-panel); }
+.nx-shell .st-tile-ic { border-radius: 0; background: var(--acc-soft); color: var(--acc); clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
+.nx-shell .st-tile-tx b { font-family: var(--nx-ui); }
+.nx-shell .st-tile-tx b i, .nx-shell .st-tag { border-radius: 0; background: var(--acc-soft); color: var(--acc); }
+.nx-shell .st-cta { border-radius: 0; border: 0; background: var(--acc); color: #05040c; font-family: var(--nx-ui); clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
+.nx-shell .st-panel h3 { font-family: var(--nx-ui); }
+.nx-shell .st-note a, .nx-shell .st-panel a, .nx-shell .st-table a, .nx-shell .st-empty a, .nx-shell .st-link { color: var(--acc); }
+.nx-shell .st-mission > span { color: var(--acc); }
+.nx-shell .st-mission button { border-radius: 0; border-color: var(--acc-line); background: var(--acc-soft); color: var(--nx-ink); }
+
+/* ------------------------------------------------------------ each room's own character */
+/* Breakroom: arcade. Rounder, glowing, playful. */
+[data-room="breakroom"] { --nx-cut: 18px; }
+[data-room="breakroom"] .st-tile:hover, [data-room="breakroom"] .nx-roomcta { box-shadow: 0 0 28px rgba(255, 92, 168, .35); }
+[data-room="breakroom"] .st-hero h1 { text-shadow: 0 0 30px rgba(255, 92, 168, .55), 0 0 2px #fff; }
+[data-room="breakroom"] .st-body > h2::before { width: 10px; height: 10px; border-radius: 50%; }
+/* Geek Room: terminal. Square, mono, prompts. */
+[data-room="geek"] { --nx-cut: 4px; }
+[data-room="geek"] .st-body > h2 { font-family: var(--nx-mono); font-weight: 500; letter-spacing: -.01em; font-size: clamp(22px, 2.6vw, 30px); }
+[data-room="geek"] .st-body > h2::before { content: ">"; width: auto; height: auto; background: none; box-shadow: none; color: var(--acc); }
+[data-room="geek"] .st-body > h2::after { content: "_"; color: var(--acc); animation: nx-blink 1.1s steps(1) infinite; }
+[data-room="geek"] .st-hero h1, [data-room="geek"] .docs h1 { font-family: var(--nx-mono) !important; font-weight: 600; letter-spacing: -.05em !important; }
+[data-room="geek"] .st-table th, [data-room="geek"] .st-tile-tx b { font-family: var(--nx-mono); }
+/* Info Room: briefing. Fine lines, double rules, a dossier feel. */
+[data-room="info"] { --nx-cut: 0px; }
+[data-room="info"] .st-tile, [data-room="info"] .st-panel, [data-room="info"] .st-table-wrap { box-shadow: inset 0 0 0 1px var(--nx-line), inset 0 0 0 4px var(--nx-bg), inset 0 0 0 5px rgba(201, 194, 255, .08); }
+[data-room="info"] .st-body > h2::before { content: "◆"; width: auto; height: auto; background: none; box-shadow: none; color: var(--acc); font-size: 14px; }
+[data-room="info"] .st-hero h1 { font-weight: 500; letter-spacing: -.05em; }
+/* HR & Economy: ledger. Tabular numbers, ruled panels. */
+[data-room="economy"] .st-table td, [data-room="economy"] .st-stat b, [data-room="economy"] .docs { font-variant-numeric: tabular-nums; }
+[data-room="economy"] .st-panel, [data-room="economy"] .st-table-wrap { background: repeating-linear-gradient(180deg, var(--nx-panel) 0 43px, rgba(255, 200, 97, .05) 43px 44px); }
+[data-room="economy"] .st-body > h2::before { content: "§"; width: auto; height: auto; background: none; box-shadow: none; color: var(--acc); font: 500 26px var(--nx-ui); }
+/* Command Room: tactical. Bracketed panels, uppercase mono heads. */
+[data-room="command"] { --nx-cut: 0px; }
+[data-room="command"] .st-tile, [data-room="command"] .st-panel, [data-room="command"] .st-mission, [data-room="command"] .st-table-wrap {
+  background: linear-gradient(var(--acc), var(--acc)) 0 0 / 14px 2px no-repeat, linear-gradient(var(--acc), var(--acc)) 0 0 / 2px 14px no-repeat,
+    linear-gradient(var(--acc), var(--acc)) 100% 100% / 14px 2px no-repeat, linear-gradient(var(--acc), var(--acc)) 100% 100% / 2px 14px no-repeat, var(--nx-panel); }
+[data-room="command"] .st-body > h2 { font: 600 clamp(20px, 2.4vw, 26px) var(--nx-mono); text-transform: uppercase; letter-spacing: .08em; }
+[data-room="command"] .st-body > h2::before { content: "//"; width: auto; height: auto; background: none; box-shadow: none; color: var(--acc); }
+
+/* ------------------------------------------------------------ footer */
+.nx-foot { position: relative; z-index: 1; margin-top: 40px; border-top: 1px solid var(--nx-line); background: rgba(3, 2, 10, .9); }
+.nx-foot-map { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 24px; max-width: 1240px; margin: 0 auto; padding: 40px clamp(16px, 4vw, 40px) 26px; }
+.nx-foot-map div { display: grid; gap: 9px; align-content: start; }
+.nx-foot-map b { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font: 600 11px var(--nx-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--nx-ink); }
+.nx-foot-map a { color: var(--nx-dim); font-size: 13.5px; text-decoration: none; }
+.nx-foot-map a:hover { color: var(--acc); }
+.nx-foot-map .here b { color: var(--acc); }
+.nx-foot-line { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 26px; max-width: 1240px; margin: 0 auto; padding: 18px clamp(16px, 4vw, 40px) 30px; border-top: 1px solid var(--nx-line); }
+.nx-foot-line nav { display: flex; gap: 18px; }
+.nx-foot-line nav a, .nx-built, .nx-built a { color: var(--nx-faint); font: 500 11px var(--nx-mono); letter-spacing: .12em; text-transform: uppercase; text-decoration: none; }
+.nx-foot-line nav a:hover, .nx-built a:hover { color: var(--nx-ink); }
+.nx-built { margin-left: auto; }
+
+/* ------------------------------------------------------------ phone tabs */
+.nx-tabs { display: none; }
+@media (max-width: 820px) {
+  .nx-tabs { position: fixed; z-index: 60; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(6, 1fr);
+    height: calc(var(--tabs-h, 64px) + env(safe-area-inset-bottom, 0px)); padding: 6px max(6px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(6px, env(safe-area-inset-left, 0px));
+    background: rgba(5, 4, 14, .94); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-top: 1px solid rgba(255, 255, 255, .1); }
+  .nx-tabs a { display: grid; justify-items: center; align-content: center; gap: 4px; min-height: 48px; color: var(--nx-faint, #6f6a8c); font: 600 9.5px "JetBrains Mono", monospace; letter-spacing: .08em; text-transform: uppercase; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+  .nx-tabs a .nx-ic { color: currentColor; }
+  .nx-tabs a.on { color: #f3f1ff; }
+  .nx-tabs a.on .nx-ic { color: var(--acc); filter: drop-shadow(0 0 8px var(--acc)); }
+  .nx-tabs a:active { transform: scale(.94); }
+  .nx-shell .ns-frog { display: none !important; }
+}
+
+/* ------------------------------------------------------------ narrow screens */
+@media (max-width: 1180px) { .nx-rooms a span { display: none; } .nx-rooms a { padding: 0 8px; } .nx-rooms a .nx-dot { width: 8px; height: 8px; } }
+@media (max-width: 980px) { .nx-roomcta { display: none; } .nx-foot-map { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 820px) {
+  .nx-station { gap: 10px; }
+  .nx-rooms, .nx-pulse small { display: none; }
+  .nx-roombar { height: auto; flex-wrap: wrap; gap: 10px; padding-top: 10px; padding-bottom: 0; }
+  .nx-roomid img { width: 32px; height: 32px; }
+  .nx-roomid b { font-size: 17px; }
+  .nx-roomnav { order: 3; width: 100%; padding-bottom: 6px; }
+  .nx-roomnav a { height: 34px; padding: 0 10px; font-size: 13px; }
+  .nx-roomnav a.on::after { bottom: 0; }
+  .nx-foot-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nx-built { margin-left: 0; }
+  .nx-shell .st-hero { padding-top: 200px; }
+}
+
+/* ============================================================ THE GATE */
+.nx-gate { position: relative; min-height: 100vh; min-height: 100dvh; overflow: hidden; margin: 0 calc(50% - 50vw); width: 100vw; isolation: isolate; }
+.nx-sky { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; }
+.nx-gate-art { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.nx-gate-art img { width: 100%; height: 100%; object-fit: cover; object-position: 72% 40%; opacity: .92; animation: nx-float 26s ease-in-out infinite alternate; }
+.nx-gate-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #03020a 0%, rgba(3, 2, 10, .9) 30%, rgba(3, 2, 10, .35) 58%, rgba(3, 2, 10, .1) 100%), linear-gradient(0deg, #03020a 0%, transparent 30%); }
+@keyframes nx-float { to { transform: scale(1.04) translate(-1%, -1%); } }
+@media (prefers-reduced-motion: reduce) { .nx-gate-art img { animation: none; } }
+.nx-gate-top { display: flex; align-items: center; gap: 22px; padding: 22px clamp(18px, 4vw, 56px); }
+.nx-gate-top nav { display: flex; gap: 20px; margin-left: 18px; }
+.nx-gate-top nav a { color: var(--nx-dim); font: 500 11px var(--nx-mono); letter-spacing: .16em; text-transform: uppercase; text-decoration: none; }
+.nx-gate-top nav a:hover { color: var(--nx-ink); }
+.nx-gate-top .nx-pulse { margin-left: auto; }
+.nx-gate-in { max-width: 1400px; padding: clamp(20px, 5vh, 70px) clamp(18px, 4vw, 56px) 40px; }
+.nx-eyebrow { font: 600 11px var(--nx-mono); letter-spacing: .3em; color: #a48bff; }
+.nx-gate h1 { margin: 16px 0 14px; font: 600 clamp(56px, 9vw, 132px)/.88 var(--nx-ui); letter-spacing: -.055em; }
+.nx-gate h1 em { font-style: normal; background: linear-gradient(100deg, #ff5ca8, #a48bff 30%, #4ad8ff 55%, #ffc861 78%, #b8ff4a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.nx-gate-lead { max-width: 560px; margin: 0 0 22px; color: var(--nx-dim); font-size: 18px; line-height: 1.55; }
+.nx-continue { display: inline-flex; align-items: center; gap: 10px; margin: 0 0 22px; padding: 10px 16px; border: 0; background: color-mix(in srgb, var(--acc) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc) 50%, transparent); color: var(--nx-ink); font: 600 13px var(--nx-ui); cursor: pointer;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
+.nx-continue .nx-ic { color: var(--acc); }
+.nx-ways { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; max-width: 1320px; }
+.nx-way { position: relative; display: grid; grid-template-columns: 76px 1fr 20px; gap: 14px; align-items: center; min-height: 132px; padding: 14px 16px 14px 14px; color: var(--nx-ink); text-decoration: none;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--acc) 9%, rgba(10, 8, 24, .82)), rgba(6, 5, 16, .86)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc) 26%, transparent);
+  transition: transform .3s cubic-bezier(.2, .8, .2, 1), box-shadow .3s, background .3s; }
+.nx-way::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 2px; background: var(--acc); box-shadow: 0 0 14px var(--acc); opacity: .7; transition: opacity .3s; }
+.nx-way:hover, .nx-way:focus-visible { transform: translateY(-4px); box-shadow: inset 0 0 0 1px var(--acc), 0 18px 50px -20px var(--acc); background: linear-gradient(135deg, color-mix(in srgb, var(--acc) 18%, rgba(10, 8, 24, .86)), rgba(6, 5, 16, .9)); outline: none; }
+.nx-way:hover::before { opacity: 1; }
+.nx-way-art { width: 76px; height: 76px; overflow: hidden; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); background: #05040c; }
+.nx-way-art img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s cubic-bezier(.2, .8, .2, 1); }
+.nx-way:hover .nx-way-art img { transform: scale(1.1); }
+.nx-way-tx { display: grid; gap: 4px; min-width: 0; }
+.nx-way-who { display: flex; align-items: center; gap: 8px; color: var(--acc); font: 600 10.5px var(--nx-mono); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+.nx-way-who .nx-ic { margin-left: auto; color: var(--acc); opacity: .9; }
+.nx-gate kbd { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border: 1px solid color-mix(in srgb, var(--acc, #a48bff) 50%, transparent); color: var(--nx-ink); font: 600 10px var(--nx-mono); }
+.nx-way b { font: 600 21px/1.1 var(--nx-ui); letter-spacing: -.02em; }
+.nx-way-line { color: var(--nx-dim); font-size: 13px; line-height: 1.4; }
+.nx-way-stat { color: var(--nx-ink); opacity: .8; font: 500 10.5px/1.3 var(--nx-mono); letter-spacing: .02em; }
+.nx-way-go { color: var(--acc); transition: transform .25s; }
+.nx-way:hover .nx-way-go { transform: translateX(4px); }
+.nx-way:nth-child(1) { grid-column: span 2; }
+.nx-way:nth-child(1) .nx-way-art, .nx-way:nth-child(1) { grid-template-columns: 110px 1fr 20px; }
+.nx-way:nth-child(1) .nx-way-art { width: 110px; height: 110px; }
+.nx-gate-keys { margin: 18px 0 0; color: var(--nx-faint); font: 500 12px var(--nx-mono); letter-spacing: .04em; }
+.nx-gate-keys a { color: var(--nx-dim); }
+.nx-gate-foot { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; padding: 18px clamp(18px, 4vw, 56px) 26px; color: var(--nx-faint); font: 500 11px var(--nx-mono); letter-spacing: .1em; text-transform: uppercase; }
+.nx-gate-foot nav { display: flex; gap: 18px; margin-left: auto; }
+.nx-gate-foot a { color: var(--nx-faint); text-decoration: none; }
+.nx-gate-foot a:hover { color: var(--nx-ink); }
+@media (max-width: 1200px) { .nx-ways { grid-template-columns: repeat(3, minmax(0, 1fr)); } .nx-way:nth-child(1) { grid-column: span 1; grid-template-columns: 76px 1fr 20px; } .nx-way:nth-child(1) .nx-way-art { width: 76px; height: 76px; } }
+@media (max-width: 900px) { .nx-ways { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 820px) {
+  .nx-gate-top nav, .nx-gate-top .nx-pulse small { display: none; }
+  .nx-gate-art { bottom: auto; height: 72vh; }
+  .nx-gate-art img { object-position: 50% 0%; opacity: .95; }
+  .nx-gate-art::after { background: linear-gradient(180deg, rgba(3, 2, 10, .15) 0%, rgba(3, 2, 10, 0) 30%, rgba(3, 2, 10, .7) 58%, #03020a 92%); }
+  .nx-gate-in { padding-top: 40vh; }
+  .nx-ways { grid-template-columns: 1fr; gap: 10px; }
+  .nx-way { min-height: 0; grid-template-columns: 64px 1fr 16px; }
+  .nx-way-art { width: 64px; height: 64px; }
+  .nx-gate-keys { display: none; }
+  .nx-gate-foot { padding-bottom: calc(26px + var(--tabs-h, 64px)); }
+}
+
+/* the game room's own action buttons take the room's colour too */
+.nx-shell .lg-btn:not(.ghost), .nx-shell .lv-watch, .nx-shell .pb-promo .pb-promo-play {
+  background: var(--acc) !important; color: #05040c !important; border-color: transparent !important; box-shadow: 0 0 24px color-mix(in srgb, var(--acc) 40%, transparent) !important; border-radius: 0 !important;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }

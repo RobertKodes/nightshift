@@ -3,8 +3,10 @@ import { createRoot } from "react-dom/client";
 import { type Health, api } from "./api";
 import { CompanyPage } from "./CompanyPage";
 import { Home } from "./Home";
-import { type Active, NightFrog, SiteFooter, SiteHeader } from "./landing/chrome";
-import { AppTabs } from "./landing/app";
+import { type Active } from "./landing/chrome";
+import { Gate } from "./nx/Gate";
+import { RoomShell } from "./nx/Shell";
+import { roomOf } from "./nx/map";
 import "./landing/app.css";
 import { Landing } from "./landing/Landing";
 import { McpPage } from "./McpPage";
@@ -45,8 +47,9 @@ function App() {
   const [health, setHealth] = useState<Health | null>(null);
   useEffect(() => { api.health().then(setHealth).catch(() => setHealth(null)); }, []);
   const seg = path.split("/").filter(Boolean);
-  // The landing is a full-bleed experience with its own header; every other route uses the app shell.
-  if (seg.length === 0) return <Landing />;
+  // The gate: choose your way. The cinematic landing is now the story; every other page lives in a room.
+  if (seg.length === 0) return <Gate />;
+  if (seg[0] === "story") return <Landing />;
   // Space Pinball is a full-screen arcade with its own bar, like the landing.
   if (seg[0] === "games" && seg[1] === "pinball") return <PinballPage />;
   // NIGHT CHESS brings three.js: its own chunk, loaded only on this page.
@@ -80,15 +83,8 @@ function App() {
   const active: Active = seg[0] === "co" ? "company" : named.includes(key as Active) ? (key as Active) : "companies";
   // Each page names itself in the tab; pages that know more (a company, a product) set their own.
   document.title = `${seg[0] === "games" && seg[1] === "live" ? "Watch live" : TITLES[key ?? ""] ?? "Companies"} · NIGHTSHIFT`;
-  return (
-    <div className="ns ns-app">
-      <SiteHeader active={active} />
-      <main>{page}</main>
-      <SiteFooter />
-      <NightFrog />
-      <AppTabs active={active} />
-    </div>
-  );
+  void active;
+  return <RoomShell room={roomOf(path) ?? "geek"} path={path}>{page}</RoomShell>;
 }
 
 const TITLES: Record<string, string> = {
