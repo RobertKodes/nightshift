@@ -522,7 +522,7 @@
 .dk-b2b-h { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--nx-faint); }
 .dk-b2b-h .nx-ic { color: var(--acc); }
 .dk-b2b b { font: 600 14px var(--nx-mono); font-variant-numeric: tabular-nums; }
-.dk-b2b .dk-link { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+.dk-b2b .dk-link { display: block; font-size: 12.5px; line-height: 1.4; overflow-wrap: anywhere; }
 .dk-market { display: grid; gap: 12px; padding: 14px; background: var(--nx-panel2); box-shadow: inset 0 0 0 1px var(--nx-line); }
 .dk-sub { margin: 10px 0 0; font: 600 14px var(--nx-ui); color: var(--nx-ink); }
 .dk-b2blist { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13.5px; }

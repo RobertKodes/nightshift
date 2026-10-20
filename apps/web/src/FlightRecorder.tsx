@@ -22,7 +22,7 @@ function By({ m }: { m: NonNullable<Flight["mind"]> }) {
 
 const VERDICT: Record<MarketVerdict, string> = {
   picked: "picked", relevant: "relevant", irrelevant: "not relevant", pricier: "not cheaper", over_max: "over the limit",
-  same_owner: "same owner", own: "its own", owned: "already owned", demo: "demo", cap: "daily cap", funds: "no USDC",
+  same_owner: "same owner", own: "own product", owned: "already owned", demo: "demo", cap: "daily cap", funds: "no USDC",
 };
 
 /** Market first: what the company searched for before paying the swarm, every candidate's score, and the decision. */
