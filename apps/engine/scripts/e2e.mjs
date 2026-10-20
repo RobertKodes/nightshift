@@ -91,6 +91,8 @@ const order = { kind: "research", brief: "What do freelance designers pay for to
 ok((await post(`/api/companies/${made.id}/commission`, order, tStranger)).status === 403, "a stranger cannot order work");
 const paused = await post(`/api/companies/${made.id}/commission`, order);
 ok(paused.status === 400 && /paused/.test((await paused.json()).error), "a paused company takes no orders");
+const noBot = await post(`/api/companies/${created.id}/alerts`, {});
+ok(desk3.bot === false && noBot.status === 400 && /bot/.test((await noBot.json()).error), "alerts say plainly when the engine has no bot");
 
 engine.kill();
 console.log("\nall good");

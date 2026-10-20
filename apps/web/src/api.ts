@@ -66,7 +66,7 @@ export interface DeskCompany {
   status: "active" | "paused"; cycle: number; createdAt: number; nextShiftAt: number | null; wallet: string; sim: boolean;
   /** Resting: the saver found nothing new worth paying for, or the day's budget is spent. A shift the owner runs ends it. */
   rest: { until: number; why: "saver" | "budget" } | null;
-  policy: Policy; site: string | null;
+  policy: Policy; site: string | null; alerts: boolean;
   products: { id: string; name: string; pitch: string; kind: string; status: string; priceUsd: number; priceByOwner: boolean; sales: number; revenueUsd: number; packaged: boolean }[];
   pnl: { revenueUsd: number; spentUsd: number; profitUsd: number };
   stats: { visits7d: number; sales7d: number; revenue7dUsd: number };
@@ -75,7 +75,7 @@ export interface DeskCompany {
   last: { id: string; cycle: number; title: string; status: string; at: number } | null;
 }
 export interface Desk {
-  mode: "sim" | "live"; requireAuth: boolean; signedIn: boolean; imdUsd: number;
+  mode: "sim" | "live"; requireAuth: boolean; signedIn: boolean; imdUsd: number; bot: boolean;
   companies: DeskCompany[];
   archived: { id: string; slug: string; name: string; mission: string; archivedAt: number; products: number; sales: number }[];
 }
@@ -121,6 +121,8 @@ export const api = {
   profile: (id: string, p: Partial<Pick<DeskCompany, "name" | "mission" | "audience" | "idea" | "direction">>) => req("POST", `/api/companies/${id}/profile`, p),
   product: (id: string, product: string, p: { name?: string; pitch?: string; status?: "live" | "retired" }) => req("POST", `/api/companies/${id}/products/${product}`, p),
   commission: (id: string, w: { kind: "research" | "build_product" | "build_site" | "improve_site"; brief?: string; name?: string; pitch?: string; priceUsd?: number; productKind?: string }) => req<{ ok: boolean; taskId: string; status: string; error: string | null }>("POST", `/api/companies/${id}/commission`, w),
+  alertLink: (id: string) => req<{ url: string; code: string }>("POST", `/api/companies/${id}/alerts`),
+  alertsOff: (id: string) => req("POST", `/api/companies/${id}/alerts/off`),
   remove: (id: string, confirm: string) => req("POST", `/api/companies/${id}/delete`, { confirm }),
   restore: (id: string) => req<{ ok: boolean; id: string }>("POST", `/api/my/archived/${id}/restore`),
 };

@@ -121,6 +121,8 @@ export interface Company {
   social?: { bluesky?: { handle: string; auto: boolean } };
   /** The owner's standing direction to the CEO: read every shift and passed to the swarm with each order. */
   direction?: string;
+  /** Where the owner hears about approvals, sales, deliveries and problems: a Telegram chat linked with a one-time code. */
+  notify?: { telegram: string; at: number };
 }
 
 export const USDC_DECIMALS = 6;

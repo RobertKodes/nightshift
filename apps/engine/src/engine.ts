@@ -1,11 +1,12 @@
 import { startLeague } from "./league-routes.js";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   type Company,
   type CompanyStats,
   type Decision,
+  type JournalEntry,
   DEFAULT_POLICY,
   type Policy,
   type ShiftDeps,
@@ -155,6 +156,7 @@ export class Engine {
         // Raids are off: a shared X post is not reposted to the community.
         adminText: async () => null,
         joined: (chat, names) => { const w = welcome(names); void sendCard(chat, "welcome", w.text, w.buttons); },
+        link: (chat, code) => this.#linkAlerts(chat, code),
       });
       startCommunity();
     }
@@ -732,6 +734,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
 
   #emit(companyId: string, type: EngineEvent["type"], payload: unknown): void {
     this.store.markDirty();
+    if (type === "journal") this.#ownerAlert(companyId, payload as JournalEntry);
     if (type === "journal" && config.mode === "live" && (payload as { kind?: string }).kind === "warning") {
       const c = this.store.companies.get(companyId);
       void this.alert(`${c?.name ?? companyId}: ${(payload as { text: string }).text}`, companyId);
@@ -1045,6 +1048,66 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     this.store.markDirty();
     this.#emit(c.id, "company", null);
     return c;
+  }
+
+  // ---- owner alerts on Telegram: a one-time code links a chat, then the company reports what needs its owner
+  readonly #alertCodes = new Map<string, { companyId: string; until: number }>();
+  readonly #alertsSent = new Map<string, number[]>();
+
+  /** A one-time link (10 minutes) that opens the bot and turns this company's alerts on in that chat. */
+  async alertLink(c: Company): Promise<{ url: string; code: string }> {
+    if (!config.telegramToken) throw new Error("Alerts need the NIGHTSHIFT bot, which is not set up on this engine.");
+    if (this.#botName === null) this.#botName = (await tgCall<{ username: string }>(config.telegramToken, "getMe", {}))?.username?.toLowerCase() ?? "";
+    if (!this.#botName) throw new Error("The bot did not answer. Try again in a minute.");
+    for (const [k, v] of this.#alertCodes) if (v.until < Date.now()) this.#alertCodes.delete(k);
+    const code = randomBytes(12).toString("base64url");
+    this.#alertCodes.set(code, { companyId: c.id, until: Date.now() + 10 * 60_000 });
+    return { url: `https://t.me/${this.#botName}?start=${code}`, code };
+  }
+
+  alertsOff(c: Company): void {
+    if (!c.notify) return;
+    delete c.notify;
+    note(c, this.#deps(c), "note", "Telegram alerts turned off by the owner.");
+    this.store.markDirty();
+    this.#emit(c.id, "company", null);
+  }
+
+  async #linkAlerts(chat: string, code: string): Promise<Reply | null> {
+    const entry = this.#alertCodes.get(code);
+    if (!entry) return /^[\w-]{16}$/.test(code) ? { text: "🌙 This alert link has expired. Make a new one from your owner desk." } : null;
+    this.#alertCodes.delete(code);
+    const c = this.store.companies.get(entry.companyId);
+    if (!c || entry.until < Date.now()) return { text: "🌙 This alert link has expired. Make a new one from your owner desk." };
+    c.notify = { telegram: chat, at: Date.now() };
+    note(c, this.#deps(c), "note", "Telegram alerts are on.");
+    this.store.markDirty();
+    this.#emit(c.id, "company", null);
+    return {
+      text: `🌙 <b>Alerts on for ${esc(c.name)}.</b>\nYou will hear here when a purchase waits for your approval, when something sells, when the swarm delivers, and when something goes wrong. Turn them off from your owner desk.`,
+      buttons: [[{ text: "Open the owner desk", url: `${config.publicUrl}/my` }]],
+    };
+  }
+
+  /** What the owner should hear about, from the company's log: approvals always, the rest at most 20 an hour. */
+  #ownerAlert(companyId: string, e: JournalEntry): void {
+    const c = this.store.companies.get(companyId);
+    const chat = c?.notify?.telegram;
+    if (!c || !chat || !config.telegramToken) return;
+    const text = e.text.replace(/^\[sim\] /, "");
+    const approval = e.kind === "note" && text.startsWith("Waiting for your approval");
+    const icon = approval ? "✋" : e.kind === "sale" ? "💰" : e.kind === "result" ? "✅" : e.kind === "warning" ? "⚠️" : null;
+    if (!icon) return;
+    if (!approval) {
+      const hour = Date.now() - 3600_000;
+      const sent = (this.#alertsSent.get(c.id) ?? []).filter((t) => t > hour);
+      if (sent.length >= 20) return;
+      sent.push(Date.now());
+      this.#alertsSent.set(c.id, sent);
+    }
+    const sim = e.text.startsWith("[sim] ") || c.sim ? " · simulation" : "";
+    const where = approval ? `${config.publicUrl}/my` : `${config.publicUrl}/co/${c.id}`;
+    void telegram(config.telegramToken, chat, `${icon} <b>${esc(c.name)}</b>${sim}\n${esc(text)}`, [[{ text: approval ? "Approve or decline" : "Open the company", url: where }]]);
   }
 
   /** A deleted company, by id or slug: for its buyers' downloads and its owner's list. */

@@ -124,7 +124,7 @@ async function desk(engine: Engine, owner: string | null) {
       id: c.id, slug: c.slug, name: c.name, idea: c.idea, mission: c.mission, audience: c.audience, direction: c.direction ?? "",
       status: c.status, cycle: c.cycle, createdAt: c.createdAt, nextShiftAt: c.nextShiftAt, wallet: c.wallet, sim: Boolean(c.sim),
       rest: c.restUntil && c.restUntil > Date.now() ? { until: c.restUntil, why: resting?.text.startsWith("Saver:") ? "saver" as const : "budget" as const } : null,
-      policy: c.policy, site: c.site?.url ?? null,
+      policy: c.policy, site: c.site?.url ?? null, alerts: Boolean(c.notify?.telegram),
       products: c.products.map((x) => ({ id: x.id, name: x.name, pitch: x.pitch, kind: x.kind, status: x.status, priceUsd: fromUsdc(x.priceUsdc), priceByOwner: Boolean(x.priceByOwner), sales: x.sales, revenueUsd: fromUsdc(x.revenueUsdc), packaged: engine.files.has(c, x) })),
       pnl: { revenueUsd, spentUsd, profitUsd: revenueUsd - spentUsd },
       stats: engine.stats(c),
@@ -135,7 +135,7 @@ async function desk(engine: Engine, owner: string | null) {
   }));
   const archived = [...engine.store.archived.values()].filter(mineOf).sort((a, b) => b.archivedAt - a.archivedAt)
     .map((c) => ({ id: c.id, slug: c.slug, name: c.name, mission: c.mission, archivedAt: c.archivedAt, products: c.products.length, sales: c.products.reduce((a, x) => a + x.sales, 0) }));
-  return { mode: config.mode, requireAuth: config.requireAuth, signedIn: owner !== null, imdUsd: config.imdUsd, companies, archived };
+  return { mode: config.mode, requireAuth: config.requireAuth, signedIn: owner !== null, imdUsd: config.imdUsd, bot: Boolean(config.telegramToken), companies, archived };
 }
 
 /** The books as CSV: every ledger line that touched the company's accounts, oldest first. */
@@ -729,6 +729,11 @@ export function serve(engine: Engine) {
           return json(res, 200, { ok: true });
         }
         if (action === "policy") { engine.setPolicy(c, (await body(req)) as never); return json(res, 200, c.policy); }
+        if (action === "alerts" && !seg[4]) {
+          if (limited(req, `alerts:${c.id}`, 5, 60_000)) return json(res, 429, { error: "slow down" });
+          try { return json(res, 200, await engine.alertLink(c)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
+        if (action === "alerts" && seg[4] === "off") { engine.alertsOff(c); return json(res, 200, { ok: true }); }
         if (action === "commission") {
           if (limited(req, `commission:${c.id}`, 3, 60_000)) return json(res, 429, { error: "slow down" });
           try { const t = await engine.commission(c, await body(req)); return json(res, 200, { ok: true, taskId: t.id, status: t.status, error: t.error }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }

@@ -96,6 +96,8 @@ export type BotHandlers = {
   guard?: (m: GroupMessage) => Promise<boolean>;
   /** A question in a private chat with the bot, from anyone who is not an operator. */
   ask?: (m: GroupMessage) => Promise<void>;
+  /** A private /start with a code: an owner linking a company's alerts to this chat (null: not a code). */
+  link?: (chat: string, code: string) => Promise<Reply | null>;
 };
 /** Where an operator command was typed, and whose message it answered (for /mute and /unmute). */
 export type CommandContext = { chat: string; group: boolean; replyTo?: { id: string; name: string } };
@@ -169,6 +171,10 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
         if (q) void tg(token, "answerCallbackQuery", { callback_query_id: q.id });
         const [raw, ...args] = text.trim().split(/\s+/);
         const cmd = raw!.slice(1).split("@")[0]!.toLowerCase();
+        if (cmd === "start" && args[0] && m?.chat.type === "private" && h.link) {
+          const linked = await h.link(chat, args[0]).catch(() => null);
+          if (linked) { await telegram(token, chat, linked.text, linked.buttons); continue; }
+        }
         const pub = await h.open(cmd, args).catch(() => null);
         const rt = m?.reply_to_message?.from;
         // a button press has no m: its chat type comes from the message the button sits on, so a group stays a group

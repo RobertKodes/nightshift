@@ -539,6 +539,9 @@
 .dk-kinds button.on { background: var(--acc-soft); box-shadow: inset 0 0 0 1px var(--acc); }
 .dk-form select.field { width: 100%; }
 @media (max-width: 520px) { .dk-kinds { grid-template-columns: 1fr; } }
+.dk-alerts { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13.5px; color: var(--nx-dim); }
+.dk-alerts b { color: var(--nx-ink); }
+.dk-on { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 600; }
 .dk-presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .dk-presets button { padding: 7px 11px; border: 0; background: var(--nx-panel2); box-shadow: inset 0 0 0 1px var(--nx-line); color: var(--nx-dim); font: 12.5px/1.35 var(--nx-ui); text-align: left; cursor: pointer; }
 .dk-presets button:hover { color: var(--nx-ink); box-shadow: inset 0 0 0 1px var(--acc-line); }

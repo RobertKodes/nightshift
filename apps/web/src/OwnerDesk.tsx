@@ -171,7 +171,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
         </section>
       )}
 
-      {edit && <EditDrawer key={edit.id} c={edit} first={tab} live={d.mode === "live"} imdUsd={d.imdUsd} onClose={() => { setEditing(null); if (location.search.includes("edit=")) history.replaceState(null, "", "/my"); }} onSaved={load} say={say} onDeleted={() => { setEditing(null); history.replaceState(null, "", "/my"); void load(); say("Deleted. It waits under Deleted if you change your mind."); }} onReplay={(task) => setRec({ co: edit.id, task })} />}
+      {edit && <EditDrawer key={edit.id} c={edit} first={tab} bot={d.bot} live={d.mode === "live"} imdUsd={d.imdUsd} onClose={() => { setEditing(null); if (location.search.includes("edit=")) history.replaceState(null, "", "/my"); }} onSaved={load} say={say} onDeleted={() => { setEditing(null); history.replaceState(null, "", "/my"); void load(); say("Deleted. It waits under Deleted if you change your mind."); }} onReplay={(task) => setRec({ co: edit.id, task })} />}
       {rec && <FlightDrawer key={`${rec.co}:${rec.task}`} load={() => api.flight(rec.co, rec.task)} onClose={() => setRec(null)} />}
       {toast && <div className="toast">{toast}</div>}
       {health?.mode === "sim" && cos.length > 0 && <p className="dk-note">Simulation: money here is pretend. Live companies are funded from your wallet and pay out to it.</p>}
@@ -179,7 +179,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
   );
 }
 
-const TABS = [["profile", "Profile"], ["direction", "Direction"], ["order", "Order work"], ["products", "Products"], ["limits", "Limits"], ["books", "Books"], ["delete", "Delete"]] as const;
+const TABS = [["profile", "Profile"], ["direction", "Direction"], ["order", "Order work"], ["products", "Products"], ["limits", "Limits"], ["alerts", "Alerts"], ["books", "Books"], ["delete", "Delete"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 const PRESETS = [
@@ -190,7 +190,7 @@ const PRESETS = [
 ];
 
 /** Edits one company: who it is, the CEO's direction, its products, its limits; the books; delete. */
-function EditDrawer({ c, first, live, imdUsd, onClose, onSaved, onDeleted, onReplay, say }: { c: DeskCompany; first: Tab; live: boolean; imdUsd: number; onClose: () => void; onSaved: () => Promise<void> | void; onDeleted: () => void; onReplay: (task: string) => void; say: (m: string) => void }) {
+function EditDrawer({ c, first, bot, live, imdUsd, onClose, onSaved, onDeleted, onReplay, say }: { c: DeskCompany; first: Tab; bot: boolean; live: boolean; imdUsd: number; onClose: () => void; onSaved: () => Promise<void> | void; onDeleted: () => void; onReplay: (task: string) => void; say: (m: string) => void }) {
   const [tab, setTab] = useState<Tab>(first);
   const [p, setP] = useState({ name: c.name, mission: c.mission, audience: c.audience, idea: c.idea });
   const [dir, setDir] = useState(c.direction);
@@ -262,6 +262,8 @@ function EditDrawer({ c, first, live, imdUsd, onClose, onSaved, onDeleted, onRep
             <button className="nx-btn nx-btn-acc" disabled={saving}>{saving ? "Saving…" : "Save limits"}</button>
           </form>
         )}
+
+        {tab === "alerts" && <Alerts c={c} bot={bot} onSaved={onSaved} say={say} />}
 
         {tab === "books" && (
           <div className="dk-form">
@@ -336,6 +338,48 @@ function OrderWork({ c, imdUsd, saving, setSaving, setError, onOrdered }: { c: D
       {kind === "build_site" && <p className="dk-hint">The swarm builds one page: the promise, who it is for, every product with its price and buy link, and a short FAQ.</p>}
       <button className="nx-btn nx-btn-acc" disabled={saving || busy || c.status !== "active"}>{saving ? "Ordering…" : "Order it · 0.5 IMD"}</button>
     </form>
+  );
+}
+
+/** Telegram alerts for one company: a one-time link opens the bot, Start turns them on in that chat. */
+function Alerts({ c, bot, onSaved, say }: { c: DeskCompany; bot: boolean; onSaved: () => Promise<void> | void; say: (m: string) => void }) {
+  const [link, setLink] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // waiting for Start in Telegram: the desk refreshes until the alerts are on, for the link's ten minutes
+  useEffect(() => {
+    if (!link || c.alerts) return;
+    const t = setInterval(() => void onSaved(), 3000);
+    const stop = setTimeout(() => clearInterval(t), 10 * 60_000);
+    return () => { clearInterval(t); clearTimeout(stop); };
+  }, [link, c.alerts, onSaved]);
+  const connect = async () => {
+    setError(null);
+    try { const r = await api.alertLink(c.id); setLink(r.url); window.open(r.url, "_blank", "noopener"); } catch (e) { setError((e as Error).message); }
+  };
+  if (!bot) return <div className="dk-form"><p className="dk-hint">Alerts come from the NIGHTSHIFT Telegram bot, which is not set up on this engine.</p></div>;
+  return (
+    <div className="dk-form">
+      <p className="dk-hint">Hear about {c.name} on Telegram instead of watching the desk:</p>
+      <ul className="dk-alerts">
+        <li><b>✋ Approvals.</b> A purchase over your limit is waiting. Always sent.</li>
+        <li><b>💰 Sales.</b> Something sold, and for how much.</li>
+        <li><b>✅ Deliveries.</b> A product, the site or research is ready.</li>
+        <li><b>⚠️ Problems.</b> An order failed or the budget ran out.</li>
+      </ul>
+      {error && <p className="warn" style={{ margin: 0 }}>{error}</p>}
+      {c.alerts ? (
+        <>
+          <p className="dk-on"><span className="dk-dot" /> Alerts are on.</p>
+          <div className="dk-row">
+            <button className="nx-btn" onClick={() => void connect()}>Move them to another chat</button>
+            <button className="nx-btn" onClick={() => void (async () => { try { await api.alertsOff(c.id); await onSaved(); say("Alerts turned off."); } catch (e) { setError((e as Error).message); } })()}>Turn off</button>
+          </div>
+        </>
+      ) : (
+        <button className="nx-btn nx-btn-acc" onClick={() => void connect()}>Connect Telegram</button>
+      )}
+      {link && !c.alerts && <p className="dk-hint">Telegram opens the NIGHTSHIFT bot: press <b>Start</b>. Nothing opened? <a href={link} target="_blank" rel="noreferrer">Open the link</a>. It works once, for ten minutes.</p>}
+    </div>
   );
 }
 
