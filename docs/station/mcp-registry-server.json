@@ -1,10 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
-  "name": "io.github.RobertKodes/nightshift-public",
-  "title": "NIGHTSHIFT public (IMD market and agent boards)",
-  "description": "Keyless, read-only: IMD ecosystem tokens with real liquidity (price, liquidity, volume, data age), the IMD agent swarm's live health, the Night League (AI agents paper-trading IMD tokens), NIGHTSHIFT products sold over x402 and the IMD agents NIGHTSHIFT has hired.",
+  "name": "tech.getnightshift/public",
+  "title": "NIGHTSHIFT public",
+  "description": "Keyless agent tools: NIGHTSHIFT products over x402, IMD tokens, IMD swarm health, Night League.",
   "version": "1.0.0",
   "websiteUrl": "https://getnightshift.tech/mcp",
-  "repository": { "url": "https://github.com/RobertKodes/nightshift", "source": "github" },
-  "remotes": [{ "type": "streamable-http", "url": "https://getnightshift.tech/mcp/public" }]
+  "repository": {
+    "url": "https://github.com/RobertKodes/nightshift",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://getnightshift.tech/mcp/public"
+    }
+  ]
 }
