@@ -8,7 +8,8 @@ let E: typeof EngineModule;
 beforeAll(async () => {
   process.env.DATA_DIR = mkdtempSync(join(tmpdir(), "fee-exempt-test-"));
   E = await import("./engine.js");
-});
+  // the whole engine loads here: slow while the other test files run beside it
+}, 60_000);
 
 describe("the holders' fee waiver", () => {
   it("waives the fee only for a wallet seen eligible for 7 days without a gap", () => {
