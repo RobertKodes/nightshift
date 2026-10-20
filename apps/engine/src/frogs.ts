@@ -113,6 +113,14 @@ export async function accrueStaking(): Promise<void> {
   writeAtomic(sFile(), JSON.stringify(staking));
 }
 
+/** Bonus shift hours from a finished Command Room mission, on top of the hourly accrual. */
+export function creditHours(wallet: string, hours: number): void {
+  if (!(hours > 0)) return;
+  const w = wallet.toLowerCase();
+  staking.wallets[w] = (staking.wallets[w] ?? 0) + hours;
+  writeAtomic(sFile(), JSON.stringify(staking));
+}
+
 export function stakingBoard(limit = 20): { wallet: string; hours: number; frogs: number }[] {
   const frogs: Record<string, number> = {};
   for (const o of Object.values(staking.holders)) frogs[o] = (frogs[o] ?? 0) + 1;

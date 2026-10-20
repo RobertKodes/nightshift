@@ -1,3 +1,4 @@
+import { startLeague } from "./league-routes.js";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -162,6 +163,8 @@ export class Engine {
       if (d.getUTCDay() === 1 && d.getUTCHours() === 0 && built !== day) { built = day; void this.frogEpoch(); }
     }, 60_000);
     setInterval(() => void houseTick().catch((e) => console.error("house", e)), 60_000);
+    // The Night League: market reads, Monday seasons and the house agents, every five minutes.
+    startLeague();
     // Work bought from IMD with the operator's wallet (e.g. the NFT collection): every stage to Telegram.
     setInterval(() => void followOrders().then((changed) => {
       for (const o of changed) {

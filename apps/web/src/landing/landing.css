@@ -477,3 +477,6 @@
 .staked-card .staked-row span { font: 500 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
 .staked-card .staked-bar { height: 6px; border-radius: 3px; background: var(--uv-soft); overflow: hidden; }
 .staked-card .staked-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--uv), var(--acid)); box-shadow: 0 0 12px var(--uv); transition: width .8s ease; }
+
+/* the Rooms menu's colour dots */
+.room-dot { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; vertical-align: 1px; box-shadow: 0 0 8px currentColor; }

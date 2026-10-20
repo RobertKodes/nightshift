@@ -1,3 +1,4 @@
+import { StationDoors } from "../station/Station";
 import { useEffect, useRef, useState } from "react";
 import { short, useStaked } from "../StakedCounter";
 import { Icon } from "../Icon";
@@ -185,6 +186,7 @@ export function Landing() {
           <div className="ns-ctas">
             <Magnetic className="ns-cta" onClick={launch} href="/launch">LAUNCH A COMPANY <span className="arr">→</span></Magnetic>
             <Magnetic className="ns-ghost" onClick={demo} href="/companies">WATCH DEMO <span className="play">▶</span></Magnetic>
+            <a className="ns-ghost" href="#station">ENTER THE STATION <span className="arr">↓</span></a>
           </div>
           <p className="ns-goodnight">GOOD NIGHT,<br />A BRIGHTER<br />TOMORROW IS<br />IN PROGRESS.</p>
         </div>
@@ -255,6 +257,8 @@ export function Landing() {
           </div>
         </div>
       </section>
+
+      <StationDoors />
 
       <section id="mission" className="ns-section" data-reveal>
         <span className="eyebrow">MISSION</span>

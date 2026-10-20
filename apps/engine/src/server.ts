@@ -28,6 +28,11 @@ import { chessRoutes } from "./chess-routes.js";
 import { chess } from "./chess.js";
 import { gamesRoutes } from "./games-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
+import { leagueRoutes } from "./league-routes.js";
+import { labRoutes } from "./hashlab.js";
+import { stationRoutes, withPageHead } from "./station-routes.js";
+import { liveArena } from "./arena.js";
+import { live as gameLobby } from "./games-routes.js";
 import { spectateRoutes } from "./spectate.js";
 import { betsRoutes } from "./bets-routes.js";
 import { prices } from "./prices.js";
@@ -205,7 +210,8 @@ function serveStatic(res: ServerResponse, path: string, head = false): boolean {
   if (!f.startsWith(resolve(config.webDist) + sep) || !existsSync(f) || statSync(f).isDirectory()) f = join(config.webDist, "index.html");
   if (!existsSync(f)) return false;
   const type = MIME[extname(f)] ?? "application/octet-stream";
-  const data = readFileSync(f);
+  // the app's page carries this route's title, description and a readable summary for crawlers
+  const data = f.endsWith("index.html") && f.startsWith(resolve(config.webDist)) ? Buffer.from(withPageHead(readFileSync(f, "utf8"), path)) : readFileSync(f);
   res.writeHead(200, { "Content-Type": type, "Content-Length": data.length, ...(type.startsWith("text/html") ? { "Content-Security-Policy": CSP, "Cache-Control": "no-cache" } : {}) });
   res.end(head ? undefined : data);
   return true;
@@ -393,6 +399,9 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/bets/") && await betsRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
+      if ((p.startsWith("/api/league") || p === "/league/agents.md") && await leagueRoutes(req, res, p, { json, body, limited, url, vault: engine.vault })) return;
+      if (p.startsWith("/api/lab") && await labRoutes(req, res, p, { json, body, limited, owner, agentOf: (k) => liveArena(() => gameLobby(engine.vault)).authenticate(k) })) return;
+      if (await stationRoutes(req, res, p, { json, body, limited, owner, vault: engine.vault, market: (q) => engine.market(q) })) return;
       if (p.startsWith("/api/pinball/")) {
         const parts = p.split("/").filter(Boolean); // api pinball …
         if (p === "/api/pinball/stakes") return json(res, 200, pinStakes());

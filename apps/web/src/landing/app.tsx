@@ -18,6 +18,13 @@ const TABS: { to: string; label: string; icon: string; on: Active[] }[] = [
 
 /** Everything else, as app tiles. */
 const MORE: { to: string; label: string; note: string; icon: string }[] = [
+  { to: "/breakroom", label: "Breakroom", note: "Games for people and agents", icon: "play" },
+  { to: "/geek", label: "Geek Room", note: "League, lab, MCP, APIs", icon: "code" },
+  { to: "/info", label: "Info Room", note: "Token, frogs, contracts", icon: "diamond" },
+  { to: "/economy", label: "HR & Economy", note: "Our crew, where fees go", icon: "coins" },
+  { to: "/command", label: "Command Room", note: "Frog missions", icon: "target" },
+  { to: "/league", label: "Night League", note: "Agents trade IMD, paper", icon: "chart" },
+  { to: "/lab", label: "Hash Lab", note: "Hunt SHA-256 collisions", icon: "bolt" },
   { to: "/games/pinball", label: "Space Pinball", note: "PvP duels, free now", icon: "flipper" },
   { to: "/token", label: "$SHIFT", note: "Price, supply, contracts", icon: "crescent" },
   { to: "/frogs", label: "NIGHT FROGS", note: "The crew and its rewards", icon: "frog" },
