@@ -26,7 +26,8 @@ import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
 import { burnTotals, marketSnapshot } from "./community.js";
 import { chessRoutes } from "./chess-routes.js";
 import { chess } from "./chess.js";
-import { gamesRoutes } from "./games-routes.js";
+import { gamesRoutes, live as gameLobby } from "./games-routes.js";
+import { tgRoutes } from "./tg-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
 import { leagueRoutes } from "./league-routes.js";
 import { stationRoutes, withPageHead } from "./station-routes.js";
@@ -238,6 +239,16 @@ const CSP = [
   "frame-src https://verify.walletconnect.com https://verify.walletconnect.org",
   "worker-src 'self'", "manifest-src 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
 ].join("; ");
+/**
+ * The Telegram Mini App (/tg): the same policy, but Telegram Web may frame it (web.telegram.org, and
+ * the older webk/webz hosts). Telegram's phone and desktop apps open it as their own page, unframed.
+ */
+export const TG_FRAME_ANCESTORS = "frame-ancestors https://web.telegram.org https://webk.telegram.org https://webz.telegram.org";
+const TG_CSP = CSP.replace("frame-ancestors 'none'", TG_FRAME_ANCESTORS);
+/** /tg and anything under it, but not files such as /tg/telegram-web-app.js. */
+export const isTgPage = (path: string) => /^\/tg(\/[^.]*)?\/?$/.test(path);
+/** Telegram's WebApp script (vendored: our CSP allows our own scripts only), first in the page's head. */
+export const withTelegramScript = (html: string) => html.replace("<head>", '<head>\n    <script src="/tg/telegram-web-app.js"></script>');
 /** Pages made from company or model text (sim sites): no script at all, whatever they contain. */
 const SANDBOX_CSP = "sandbox allow-popups allow-popups-to-escape-sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; frame-ancestors 'none'";
 
@@ -260,8 +271,11 @@ function serveStatic(res: ServerResponse, path: string, head = false): boolean {
   if (!existsSync(f)) return false;
   const type = MIME[extname(f)] ?? "application/octet-stream";
   // the app's page carries this route's title, description and a readable summary for crawlers
-  const data = f.endsWith("index.html") && f.startsWith(resolve(config.webDist)) ? Buffer.from(withPageHead(readFileSync(f, "utf8"), path)) : readFileSync(f);
-  res.writeHead(200, { "Content-Type": type, "Content-Length": data.length, ...(type.startsWith("text/html") ? { "Content-Security-Policy": CSP, "Cache-Control": "no-cache" } : {}) });
+  const page = f.endsWith("index.html") && f.startsWith(resolve(config.webDist)), tg = page && isTgPage(path);
+  const data = page ? Buffer.from(tg ? withTelegramScript(readFileSync(f, "utf8")) : withPageHead(readFileSync(f, "utf8"), path)) : readFileSync(f);
+  // inside Telegram Web the Mini App is framed: no X-Frame-Options there, and its frame-ancestors name Telegram
+  if (tg) res.removeHeader("X-Frame-Options");
+  res.writeHead(200, { "Content-Type": type, "Content-Length": data.length, ...(type.startsWith("text/html") ? { "Content-Security-Policy": tg ? TG_CSP : CSP, "Cache-Control": "no-cache" } : {}) });
   res.end(head ? undefined : data);
   return true;
 }
@@ -448,6 +462,7 @@ export function serve(engine: Engine) {
         const w = new URL(req.url ?? "/", config.publicUrl).searchParams.get("wallet") ?? "";
         return json(res, 200, { board: stakingBoard(20), me: /^0x[0-9a-fA-F]{40}$/.test(w) ? stakingOf(w) : null });
       }
+      if (p.startsWith("/api/tg/") && await tgRoutes(req, res, p, { json, body, limited, url, auth: engine.auth, profiles: engine.tgProfiles, play: engine.tgPlay, challenges: () => gameLobby(engine.vault).escrow.open(undefined, null) })) return;
       if (await spectateRoutes(req, res, p, { json, limited })) return;
       if (p.startsWith("/api/chess/") && await chessRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/bets/") && await betsRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;

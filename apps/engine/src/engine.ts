@@ -64,6 +64,9 @@ import { type Button, type CommandContext, type GroupMessage, type Reply, bluesk
 import { IMD_TOKEN, completeContracts, followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { writeSettings } from "./settings.js";
+import { Profiles, appUrl } from "./tg.js";
+import { type TgPlay, tgPlay } from "./tg-play.js";
+import { GameBot } from "./tg-bot.js";
 
 /** A NIGHT FROG market card with the frog's own picture on top; the plain card if the photo can't be sent. */
 async function frogPost(id: number, caption: string, buttons: Button[][], kind: Anim): Promise<boolean> {
@@ -96,6 +99,10 @@ export class Engine {
   /** Withdrawals, leg by leg, and x402 settlements: both saved before broadcast and booked once they land. */
   readonly payouts: Payouts;
   readonly checkout: Checkout;
+  /** Telegram players (the Mini App and the bot's game commands), their games, and the bot side that talks to them. */
+  readonly tgProfiles = new Profiles();
+  readonly tgPlay: TgPlay = tgPlay(this.tgProfiles);
+  readonly gameBot = new GameBot({ profiles: this.tgProfiles, play: this.tgPlay });
 
   constructor() {
     this.auth = new Auth(this.vault.material, this.store.apiKeys, () => this.store.markDirty());
@@ -157,7 +164,13 @@ export class Engine {
         adminText: async () => null,
         joined: (chat, names) => { const w = welcome(names); void sendCard(chat, "welcome", w.text, w.buttons); },
         link: (chat, code) => this.#linkAlerts(chat, code),
+        // the games: the Mini App's button, /play /live /profile /challenge, "@bot chess", DMs after Start
+        started: (u) => this.gameBot.started(u),
+        games: (cmd, args, ctx) => this.gameBot.command(cmd, args, ctx),
+        inline: (q) => this.gameBot.inline(q),
+        menu: { text: "Play", url: appUrl() },
       });
+      this.tgPlay.onNote((p, n) => void this.gameBot.note(p, n).catch(() => {}));
       startCommunity();
     }
     setInterval(() => void this.#followTokenLaunch(), 60_000);

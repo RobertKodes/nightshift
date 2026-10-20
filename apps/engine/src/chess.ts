@@ -14,6 +14,8 @@ import { publicName } from "./names.js";
 export const STAKED_SHOW_MS = 5 * 60_000;
 export const CONTROLS = { "3+2": { time: 180_000, increment: 2_000 }, "5+0": { time: 300_000, increment: 0 }, "10+0": { time: 600_000, increment: 0 } };
 export type TimeControl = keyof typeof CONTROLS;
+/** A free game for two invited players (a Telegram challenge) starts once both are here; it closes unplayed if one never comes within this. */
+export const INVITE_SHOW_MS = 5 * 60_000;
 /** An open free game stays in the lounge this long after its host's last stream closed (a phone asleep, a tab switch)… */
 export const LOUNGE_GRACE_MS = 90_000;
 /** …and at most this long in all, waiting for a rival. */
@@ -46,6 +48,8 @@ type Match = {
   expired?: Expired;
   /** An open game folded into an older one in the same time control: its host's stream follows there. */
   movedTo?: string;
+  /** A free game for two invited players: no clock until both are connected (showBy is its deadline). */
+  held?: boolean;
 };
 /** An open free game as the lounge lists it: the host's public name and rating only, never a seat or a wallet. */
 export type OpenChess = { id: string; tc: TimeControl; any: boolean; host: { name: string; rating: number; agent?: boolean }; since: number; away: boolean; awayUntil: number | null };
@@ -99,12 +103,12 @@ export class ChessGames {
   }
   private match(id: string) { const m = this.matches.get(id); if (!m) throw new Error("No such match"); return m; }
   private rating(p: Pick<Player, "name" | "wallet">) { return this.boards.ratings.find((r) => r.key === keyOf(p))?.rating ?? 1200; }
-  private create(tc: TimeControl, players: Player[], staked?: Pick<Match, "currency" | "escrow" | "stake" | "showBy" | "onResult">): Match {
+  private create(tc: TimeControl, players: Player[], staked?: Pick<Match, "currency" | "escrow" | "stake" | "showBy" | "onResult" | "held">): Match {
     const now = this.now();
     const m: Match = { ...staked, id: randomBytes(10).toString("hex"), tc, currency: staked?.currency ?? "FREE", createdAt: now, startedAt: null, turnAt: now, game: new Chess(), players,
       clocks: { w: CONTROLS[tc].time, b: CONTROLS[tc].time }, moves: [], version: 0, done: false, winner: null, reason: null, drawOffer: null, rematch: new Set(), rematchId: null, endedAt: null };
     this.matches.set(m.id, m);
-    if (players.length === 2 && !m.escrow) this.start(m);
+    if (players.length === 2 && !m.escrow && !m.held) this.start(m);
     return m;
   }
   /**
@@ -122,6 +126,19 @@ export class ChessGames {
     const colorA: Color = randomInt(2) ? "w" : "b", a = seat(o.a, colorA), b = seat(o.b, opposite(colorA));
     const m = this.create(o.tc, [a, b], { currency: o.currency, escrow: o.escrow, stake: o.stake, showBy: this.now() + STAKED_SHOW_MS, onResult: o.onResult });
     return { id: m.id, seats: { [a.wallet!]: a.id, [b.wallet!]: b.id } };
+  }
+  /**
+   * A free game for exactly two invited players (a challenge accepted in Telegram): both seats made
+   * now, each given only to its own player. The clock starts once both are connected; if one never
+   * comes within INVITE_SHOW_MS the game closes unplayed (no result, no rating).
+   */
+  invite(tc: TimeControl, a: { name: string; wallet: string | null }, b: { name: string; wallet: string | null }): { id: string; seats: [string, string] } {
+    if (!Object.hasOwn(CONTROLS, tc)) throw new Error("Choose 3+2, 5+0 or 10+0");
+    if (this.matches.size >= 10_000) throw new Error("The arcade is full. Try again shortly.");
+    const pa = this.newPlayer(a.name, a.wallet, false), pb = this.newPlayer(b.name, b.wallet, false);
+    pb.color = opposite(pa.color);
+    const m = this.create(tc, [pa, pb], { currency: "FREE", held: true, showBy: this.now() + INVITE_SHOW_MS });
+    return { id: m.id, seats: [pa.id, pb.id] };
   }
   private start(m: Match) { m.startedAt = this.now() + 5_000; m.turnAt = m.startedAt; this.emit(m); }
   /** A free game waiting for its second player. */
@@ -257,7 +274,7 @@ export class ChessGames {
     const m = this.match(id), p = this.player(m, me);
     const set = this.listeners.get(id) ?? new Set(); set.add(f); this.listeners.set(id, set);
     p.streams++; p.offlineAt = null;
-    if (m.escrow && !m.startedAt && !m.done && m.players.every((x) => x.streams > 0)) this.start(m); else this.emit(m);
+    if ((m.escrow || m.held) && !m.startedAt && !m.done && m.players.every((x) => x.streams > 0)) this.start(m); else this.emit(m);
     let closed = false;
     return () => { if (closed) return; closed = true; set.delete(f); p.streams = Math.max(0, p.streams - 1); if (!p.streams) p.offlineAt = this.now(); this.emit(m); };
   }
@@ -402,6 +419,8 @@ export class ChessGames {
   }
   tick() {
     for (const m of this.matches.values()) {
+      // an invited game whose second player never came: closed unplayed, kept an hour so both are told
+      if (m.held && !m.startedAt && !m.done && m.showBy !== undefined && this.now() >= m.showBy) { m.done = true; m.expired = "away"; m.endedAt = this.now(); this.emit(m); }
       // a staked game not started by its deadline: played by whoever came, a draw if nobody did
       if (m.escrow && !m.startedAt && !m.done && m.showBy !== undefined && this.now() >= m.showBy) {
         if (m.players.some((p) => p.streams > 0)) this.start(m);

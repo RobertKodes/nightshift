@@ -53,18 +53,37 @@ export async function blueskyPost(handle: string, appPassword: string, text: str
   return `https://bsky.app/profile/${s.handle}/post/${r.uri.split("/").pop()}`;
 }
 
-export type Button = { text: string; data?: string; url?: string };
+/** A button: a callback (data), a link (url), the Mini App (web_app: private chats only), or "share in a chat" (an inline query). */
+export type Button = { text: string; data?: string; url?: string; web_app?: string; switch_inline?: string };
 export type Reply = { text: string; buttons?: Button[][] };
-const kb = (b?: Button[][]) => (b?.length ? { inline_keyboard: b.map((row) => row.map((x) => (x.url ? { text: x.text, url: x.url } : { text: x.text, callback_data: x.data ?? x.text }))) } : undefined);
+export const kb = (b?: Button[][]) => (b?.length ? { inline_keyboard: b.map((row) => row.map((x) => (x.url ? { text: x.text, url: x.url } : x.web_app ? { text: x.text, web_app: { url: x.web_app } } : x.switch_inline !== undefined ? { text: x.text, switch_inline_query: x.switch_inline } : { text: x.text, callback_data: x.data ?? x.text }))) } : undefined);
 
+/**
+ * How Bot API calls go out: fetch, unless TELEGRAM_OFFLINE=1 (nothing ever reaches Telegram), or a
+ * test put its own in.
+ */
+type Transport = (url: string, init: { method: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
+let transport: Transport | null = null;
+let offline = process.env.TELEGRAM_OFFLINE === "1";
+/** Tests: every Bot API call goes to `t` instead (null: back to the network, or offline). */
+export function setTelegramTransport(t: Transport | null): void { transport = t; }
+export function setTelegramOffline(on: boolean): void { offline = on; }
+const send: Transport = (url, init) => (transport ?? fetch)(url, init);
+
+/** One Bot API call, with Telegram's answer: ok and the result, or its error code and description. Never throws. */
+export async function tgResult<T = unknown>(token: string, method: string, body: unknown): Promise<{ ok: boolean; result?: T; code?: number; description?: string }> {
+  if (offline && !transport) return { ok: false, description: "offline" };
+  try {
+    const r = await send(`https://api.telegram.org/bot${token}/${method}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+    const j = (await r.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string; error_code?: number };
+    if (!j.ok) { console.error(`telegram ${method}: ${j.description ?? r.status}`); return { ok: false, code: j.error_code ?? r.status, description: j.description }; }
+    return { ok: true, result: (j.result ?? true) as T };
+  } catch { return { ok: false }; }
+}
 /** One Bot API call; the result, or null when it failed. Never throws. */
 export async function tgCall<T = unknown>(token: string, method: string, body: unknown): Promise<T | null> {
-  try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
-    const j = (await r.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string };
-    if (!j.ok) { console.error(`telegram ${method}: ${j.description ?? r.status}`); return null; }
-    return (j.result ?? true) as T;
-  } catch { return null; }
+  const r = await tgResult<T>(token, method, body);
+  return r.ok ? (r.result as T) : null;
 }
 const tg = async (token: string, method: string, body: unknown) => (await tgCall(token, method, body)) !== null;
 
@@ -98,16 +117,42 @@ export type BotHandlers = {
   ask?: (m: GroupMessage) => Promise<void>;
   /** A private /start with a code: an owner linking a company's alerts to this chat (null: not a code). */
   link?: (chat: string, code: string) => Promise<Reply | null>;
+  /** Someone pressed Start in a private chat with the bot (any /start): they may be sent DMs from now on. */
+  started?: (user: TgFrom) => void;
+  /** The games (/play, /live, /profile, /challenge, a plain /start): tried before the public commands (null: not one). */
+  games?: (cmd: string, args: string[], ctx: GameContext) => Promise<Reply | null>;
+  /** "@bot chess" typed in any chat. */
+  inline?: (q: { id: string; from: TgFrom; query: string; chatType?: string }) => Promise<void>;
+  /** The chat menu button: opens the Mini App (operators keep their command list). */
+  menu?: { text: string; url: string };
 };
+export type TgFrom = { id: number; first_name?: string; last_name?: string; username?: string; is_bot?: boolean };
+/** Who typed a game command, and where. */
+export type GameContext = { chat: string; private: boolean; group: boolean; admin: boolean; from: TgFrom | null; callback: boolean };
 /** Where an operator command was typed, and whose message it answered (for /mute and /unmute). */
 export type CommandContext = { chat: string; group: boolean; replyTo?: { id: string; name: string } };
 export type GroupMessage = { chat: string; chatUsername?: string; messageId: number; user: string; name: string; text: string; replyToBot?: boolean; private?: boolean };
+
+/** One update from Telegram, as far as the bot reads it. */
+export type Update = {
+  update_id: number;
+  message?: { message_id: number; chat: { id: number; type: string; username?: string }; from?: TgFrom; text?: string; caption?: string; new_chat_members?: { first_name: string; is_bot?: boolean }[]; reply_to_message?: { from?: TgFrom } };
+  callback_query?: { id: string; from: TgFrom; data?: string; message?: { chat: { id: number; type?: string }; message_id: number } };
+  inline_query?: { id: string; from: TgFrom; query: string; chat_type?: string };
+};
 
 /**
  * The bot: long-polls Telegram, answers public commands for anyone, operator commands and button
  * presses for the listed user ids only, and registers its command menus and description once.
  */
 export function telegramCommands(token: string, admins: string[], h: BotHandlers): void {
+  if (offline && !transport) { console.log("telegram: TELEGRAM_OFFLINE=1, the bot is not started and nothing is sent"); return; }
+  const games = [
+    { command: "play", description: "Open the Game Room in Telegram" },
+    { command: "live", description: "Live games: watch them in Telegram" },
+    { command: "challenge", description: "Challenge this chat to NIGHT CHESS" },
+    { command: "profile", description: "Your Elo, games and wins" },
+  ];
   const open = [
     { command: "price", description: "Price, market cap, liquidity" },
     { command: "ca", description: "The official contract address" },
@@ -117,11 +162,9 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "chess", description: "NIGHT CHESS" },
     { command: "frogs", description: "NIGHT FROGS on OpenSea" },
     { command: "memes", description: "Memes and art from the night crew" },
+    ...(h.games ? games : []),
   ];
-  void tg(token, "setMyCommands", { commands: open });
-  void tg(token, "setMyCommands", { scope: { type: "all_group_chats" }, commands: open });
-  for (const id of admins.filter((x) => Number(x) < 0)) void tg(token, "deleteMyCommands", { scope: { type: "chat", chat_id: Number(id) } });
-  for (const id of admins.filter((x) => Number(x) > 0)) void tg(token, "setMyCommands", { scope: { type: "chat", chat_id: Number(id) }, commands: [
+  const adminCommands = [
     { command: "status", description: "Mode, companies, swarm, price" },
     { command: "companies", description: "Every company and its money" },
     { command: "market", description: "What is on sale" },
@@ -136,58 +179,79 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "unmute", description: "Unmute someone: reply to them, or /unmute @user" },
     { command: "mute", description: "Mute someone: reply, or /mute @user [minutes]" },
     { command: "help", description: "All commands" },
-    ...open,
-  ] });
+  ];
+  void tg(token, "setMyCommands", { commands: open });
+  void tg(token, "setMyCommands", { scope: { type: "all_group_chats" }, commands: open });
+  for (const id of admins.filter((x) => Number(x) < 0)) void tg(token, "deleteMyCommands", { scope: { type: "chat", chat_id: Number(id) } });
+  // an operator's own /live stays the site's visitor count, listed once
+  for (const id of admins.filter((x) => Number(x) > 0)) void tg(token, "setMyCommands", { scope: { type: "chat", chat_id: Number(id) }, commands: [...adminCommands, ...open.filter((c) => !adminCommands.some((a) => a.command === c.command))] });
+  // the chat menu button opens the Mini App; operators keep the command list there
+  if (h.menu?.url.startsWith("https://")) {
+    void tg(token, "setChatMenuButton", { menu_button: { type: "web_app", text: h.menu.text, web_app: { url: h.menu.url } } });
+    for (const id of admins.filter((x) => Number(x) > 0)) void tg(token, "setChatMenuButton", { chat_id: Number(id), menu_button: { type: "commands" } });
+  }
   void tg(token, "setMyDescription", { description: "NIGHTSHIFT: autonomous AI companies built by the IMD swarm. Buy alerts, price and the official links." });
   void tg(token, "setMyShortDescription", { short_description: "NIGHTSHIFT · buys, price, official links" });
   let offset = 0;
+  const kinds = JSON.stringify(h.inline ? ["message", "callback_query", "inline_query"] : ["message", "callback_query"]);
   const loop = async (): Promise<void> => {
     try {
-      const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates?timeout=25&offset=${offset}&allowed_updates=${encodeURIComponent('["message","callback_query"]')}`, { signal: AbortSignal.timeout(35000) });
-      const j = (await r.json()) as { result?: { update_id: number; message?: { message_id: number; chat: { id: number; type: string; username?: string }; from?: { id: number; is_bot?: boolean; first_name?: string; username?: string }; text?: string; caption?: string; new_chat_members?: { first_name: string; is_bot?: boolean }[]; reply_to_message?: { from?: { id: number; is_bot?: boolean; first_name?: string; username?: string } } }; callback_query?: { id: string; from: { id: number }; data?: string; message?: { chat: { id: number; type?: string }; message_id: number } } }[] };
+      const r = await send(`https://api.telegram.org/bot${token}/getUpdates?timeout=25&offset=${offset}&allowed_updates=${encodeURIComponent(kinds)}`, { method: "GET", signal: AbortSignal.timeout(35000) });
+      const j = (await r.json()) as { result?: Update[] };
       for (const u of j.result ?? []) {
         offset = u.update_id + 1;
-        const q = u.callback_query;
-        const m = u.message;
-        const from = String(q?.from.id ?? m?.from?.id ?? "");
-        const chat = String(q?.message?.chat.id ?? m?.chat.id ?? "");
-        const text = q?.data ?? m?.text ?? "";
-        const isAdmin = admins.includes(from);
-        if (!chat) continue;
-        // The community guard sees every group message from someone who is not an operator.
-        if (m && (m.chat.type === "group" || m.chat.type === "supergroup") && m.from && !m.from.is_bot) {
-          const name = m.from.username ? `@${m.from.username}` : (m.from.first_name ?? "someone");
-          const gm: GroupMessage = { chat, chatUsername: m.chat.username, messageId: m.message_id, user: String(m.from.id), name, text: m.text ?? m.caption ?? "", replyToBot: Boolean(m.reply_to_message?.from?.is_bot) };
-          if (!isAdmin && h.guard) { if (await h.guard(gm).catch(() => false)) continue; }
-          else if (isAdmin && h.ask && !gm.text.startsWith("/")) void h.ask(gm).catch(() => {});
-        }
-        const people = (m?.new_chat_members ?? []).filter((x) => !x.is_bot).map((x) => x.first_name);
-        if (people.length && h.joined) { h.joined(chat, people); continue; }
-        if (!text.startsWith("/")) {
-          if (isAdmin && m?.chat.type === "private" && h.adminText) { const rep = await h.adminText(text).catch(() => null); if (rep) await telegram(token, chat, rep.text, rep.buttons); }
-          else if (!isAdmin && m?.chat.type === "private" && m.from && h.ask) void h.ask({ chat, messageId: m.message_id, user: String(m.from.id), name: m.from.first_name ?? "", text, private: true }).catch(() => {});
-          continue;
-        }
-        if (q) void tg(token, "answerCallbackQuery", { callback_query_id: q.id });
-        const [raw, ...args] = text.trim().split(/\s+/);
-        const cmd = raw!.slice(1).split("@")[0]!.toLowerCase();
-        if (cmd === "start" && args[0] && m?.chat.type === "private" && h.link) {
-          const linked = await h.link(chat, args[0]).catch(() => null);
-          if (linked) { await telegram(token, chat, linked.text, linked.buttons); continue; }
-        }
-        const pub = await h.open(cmd, args).catch(() => null);
-        const rt = m?.reply_to_message?.from;
-        // a button press has no m: its chat type comes from the message the button sits on, so a group stays a group
-        const chatType = m?.chat.type ?? q?.message?.chat.type;
-        const ctx: CommandContext = { chat, group: chatType === "group" || chatType === "supergroup" || chatType === "channel", replyTo: rt && !rt.is_bot ? { id: String(rt.id), name: rt.username ? `@${rt.username}` : (rt.first_name ?? String(rt.id)) } : undefined };
-        const adminHere = isAdmin && (!ctx.group || cmd === "mute" || cmd === "unmute");
-        const reply: Reply | null = pub ?? (adminHere ? await h.admin(cmd, args, ctx).catch((e) => ({ text: `⚠️ ${esc((e as Error).message)}` })) : m?.chat.type === "private" ? { text: "🌙 Public commands: /price · /ca · /links" } : null);
-        if (!reply) continue;
-        if (q?.message && cmd !== "stop") await tg(token, "editMessageText", { chat_id: chat, message_id: q.message.message_id, text: reply.text, parse_mode: "HTML", disable_web_page_preview: true, reply_markup: kb(reply.buttons) });
-        else await telegram(token, chat, reply.text, reply.buttons);
+        await handleUpdate(token, admins, h, u);
       }
     } catch { await new Promise((r) => setTimeout(r, 5000)); }
     setTimeout(() => void loop(), 300);
   };
   void loop();
+}
+
+/** One update: an inline query, a button press, a group message or a command. */
+export async function handleUpdate(token: string, admins: string[], h: BotHandlers, u: Update): Promise<void> {
+  const iq = u.inline_query;
+  if (iq) { if (h.inline && !iq.from.is_bot) await h.inline({ id: iq.id, from: iq.from, query: iq.query ?? "", chatType: iq.chat_type }).catch(() => {}); return; }
+  const q = u.callback_query;
+  const m = u.message;
+  const from = String(q?.from.id ?? m?.from?.id ?? "");
+  const chat = String(q?.message?.chat.id ?? m?.chat.id ?? "");
+  const text = q?.data ?? m?.text ?? "";
+  const isAdmin = admins.includes(from);
+  if (!chat) return;
+  // The community guard sees every group message from someone who is not an operator.
+  if (m && (m.chat.type === "group" || m.chat.type === "supergroup") && m.from && !m.from.is_bot) {
+    const name = m.from.username ? `@${m.from.username}` : (m.from.first_name ?? "someone");
+    const gm: GroupMessage = { chat, chatUsername: m.chat.username, messageId: m.message_id, user: String(m.from.id), name, text: m.text ?? m.caption ?? "", replyToBot: Boolean(m.reply_to_message?.from?.is_bot) };
+    if (!isAdmin && h.guard) { if (await h.guard(gm).catch(() => false)) return; }
+    else if (isAdmin && h.ask && !gm.text.startsWith("/")) void h.ask(gm).catch(() => {});
+  }
+  const people = (m?.new_chat_members ?? []).filter((x) => !x.is_bot).map((x) => x.first_name);
+  if (people.length && h.joined) { h.joined(chat, people); return; }
+  if (!text.startsWith("/")) {
+    if (isAdmin && m?.chat.type === "private" && h.adminText) { const rep = await h.adminText(text).catch(() => null); if (rep) await telegram(token, chat, rep.text, rep.buttons); }
+    else if (!isAdmin && m?.chat.type === "private" && m.from && h.ask) void h.ask({ chat, messageId: m.message_id, user: String(m.from.id), name: m.from.first_name ?? "", text, private: true }).catch(() => {});
+    return;
+  }
+  if (q) void tg(token, "answerCallbackQuery", { callback_query_id: q.id });
+  const [raw, ...args] = text.trim().split(/\s+/);
+  const cmd = raw!.slice(1).split("@")[0]!.toLowerCase();
+  // pressing Start in a private chat is what allows DMs (game notifications)
+  if (cmd === "start" && m?.chat.type === "private" && m.from && !m.from.is_bot && h.started) { try { h.started(m.from); } catch { /* a profile store error never stops the bot */ } }
+  if (cmd === "start" && args[0] && m?.chat.type === "private" && h.link) {
+    const linked = await h.link(chat, args[0]).catch(() => null);
+    if (linked) { await telegram(token, chat, linked.text, linked.buttons); return; }
+  }
+  // a button press has no m: its chat type comes from the message the button sits on, so a group stays a group
+  const chatType = m?.chat.type ?? q?.message?.chat.type;
+  const group = chatType === "group" || chatType === "supergroup" || chatType === "channel";
+  const game = h.games ? await h.games(cmd, args, { chat, private: chatType === "private", group, admin: isAdmin, from: q?.from ?? m?.from ?? null, callback: !!q }).catch(() => null) : null;
+  const pub = game ?? await h.open(cmd, args).catch(() => null);
+  const rt = m?.reply_to_message?.from;
+  const ctx: CommandContext = { chat, group, replyTo: rt && !rt.is_bot ? { id: String(rt.id), name: rt.username ? `@${rt.username}` : (rt.first_name ?? String(rt.id)) } : undefined };
+  const adminHere = isAdmin && (!ctx.group || cmd === "mute" || cmd === "unmute");
+  const reply: Reply | null = pub ?? (adminHere ? await h.admin(cmd, args, ctx).catch((e) => ({ text: `⚠️ ${esc((e as Error).message)}` })) : m?.chat.type === "private" ? { text: "🌙 Public commands: /price · /ca · /links" } : null);
+  if (!reply) return;
+  if (q?.message && cmd !== "stop") await tg(token, "editMessageText", { chat_id: chat, message_id: q.message.message_id, text: reply.text, parse_mode: "HTML", disable_web_page_preview: true, reply_markup: kb(reply.buttons) });
+  else await telegram(token, chat, reply.text, reply.buttons);
 }
