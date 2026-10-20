@@ -9,6 +9,7 @@ import { arenaTools } from "./arena-routes.js";
 import { type Agent, ArenaError, liveArena } from "./arena.js";
 import { live } from "./games-routes.js";
 import { leagueTools } from "./league-routes.js";
+import { card, detail, search } from "./agentmarket.js";
 
 /** The agent an MCP call acts as: the arena key's own agent, or one of the key owner's agents named by agentId. */
 function agentFor(engine: Engine, owner: string | null, key: string) {
@@ -56,11 +57,24 @@ function build(engine: Engine, owner: string | null) {
   };
   const run = <A,>(fn: (a: A) => Promise<unknown> | unknown) => async (a: A) => { try { return text(await fn(a)); } catch (e) { return err((e as Error).message); } };
 
+  const live = () => [...engine.store.companies.values()].flatMap((c) => c.products.filter((x) => x.status === "live" && engine.files.has(c, x)).map((x) => ({ c, p: x, text: engine.files.read(c, x) })));
   server.registerTool("nightshift_market", {
     title: "Browse what the companies sell",
-    description: "Searches every product on sale across NIGHTSHIFT companies. Each result has an x402 buyUrl: GET it for the USDC price, pay with an x402 client, and the response holds a download link.",
-    inputSchema: { query: z.string().max(200).default("") },
-  }, run(async ({ query }: { query: string }) => ({ mode: config.mode, products: engine.market(query).slice(0, 25) })));
+    description: "Searches every product on sale across NIGHTSHIFT companies, by words, kind and maximum price. Each result has a free preview URL and an x402 buy URL: GET it for the USDC price, pay with an x402 client, and the response holds a download link.",
+    inputSchema: { query: z.string().max(200).default(""), kind: z.string().max(40).optional(), maxPriceUsd: z.number().positive().optional(), sort: z.enum(["best", "new", "price"]).default("best") },
+  }, run(async (a: { query: string; kind?: string; maxPriceUsd?: number; sort: "best" | "new" | "price" }) => {
+    const rows = search(live(), { q: a.query, kind: a.kind, maxUsd: a.maxPriceUsd, sort: a.sort });
+    return { mode: config.mode, count: rows.length, items: rows.slice(0, 25).map(card) };
+  }));
+  server.registerTool("nightshift_product", {
+    title: "One product, with its free preview",
+    description: "A product's outline, opening lines, size, price and the exact x402 steps to buy it.",
+    inputSchema: { company: z.string().max(80), product: z.string().max(80) },
+  }, run(async (a: { company: string; product: string }) => {
+    const hit = live().find((l) => l.c.slug === a.company && l.p.id === a.product);
+    if (!hit) throw new Error("No such product on sale.");
+    return { mode: config.mode, ...detail(hit) };
+  }));
 
   server.registerTool("nightshift_companies", { title: "Your companies", description: "Every company you run, with revenue, spend and what each is doing.", inputSchema: {} },
     run(async () => mine().map((c) => { const b = brief(c); return { id: b.id, name: b.name, status: b.status, shift: b.shift, revenueUsd: b.revenueUsd, spentImd: b.spentImd, waiting: b.waitingForApproval.length, working: b.working[0]?.title ?? null }; })));

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Capabilities, CheckResult, ImdAction, ImdPlane, JobResult, JobStatus, Order } from "./types.js";
+import type { Capabilities, CheckResult, ImdAction, ImdPlane, JobResult, JobStatus, OpenHooks, Order } from "./types.js";
 
 export interface SimOptions {
   /** How long a simulated job takes, end to end. */
@@ -54,10 +54,11 @@ export class SimImdPlane implements ImdPlane {
     return { action, blockers, suggestions: [], plan: STEPS[action] ?? [] };
   }
 
-  async open(action: ImdAction, input: unknown): Promise<Order> {
+  async open(action: ImdAction, input: unknown, hooks?: OpenHooks): Promise<Order> {
     const check = await this.check(action, input);
     if (check.blockers.length) return { orderId: randomUUID(), action, state: "refused", problems: check.blockers.map((b) => b.message) };
     const orderId = randomUUID();
+    await hooks?.onQuote?.(orderId);
     const jobId = randomUUID();
     const order: Order = { orderId, action, state: "payment_pending", jobId, txHash: `0x${randomUUID().replace(/-/g, "")}${randomUUID().replace(/-/g, "")}` };
     this.#orders.set(orderId, { order, at: this.#now(), input });

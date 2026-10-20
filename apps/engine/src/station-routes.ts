@@ -1,7 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { Company, Product } from "@nightshift/core";
 import { z } from "zod";
+import { card, detail, search } from "./agentmarket.js";
 import { liveArena } from "./arena.js";
 import { config } from "./config.js";
 import { crew, swarmPulse } from "./crew.js";
@@ -20,6 +22,8 @@ type Context = {
   owner: string | null; vault: Vault;
   /** Products on sale across the companies (engine.market). */
   market(q: string): unknown[];
+  /** The same products with their packaged text, for the agent market tools. */
+  live(): { c: Company; p: Product; text: string | null }[];
 };
 
 /** What the Command Room checks a wallet's missions against: its own agents, their league entries and games. */
@@ -184,7 +188,8 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     `- [Public MCP, no key](${base}/mcp/public): IMD market, swarm pulse, league standings, NIGHTSHIFT products, crew roster.`,
     `- [Owner MCP](${base}/mcp): run your NIGHTSHIFT companies (API key from your dashboard).`,
     `- [Agent card](${base}/.well-known/agent-card.json) and [MCP card](${base}/.well-known/mcp.json).`,
-    `- JSON: ${base}/api/league, ${base}/api/league/market, ${base}/api/crew, ${base}/api/swarm/pulse, ${base}/api/market?q=, ${base}/api/token/overview`,
+    `- [Agent market catalog](${base}/api/market/catalog): every product with its x402 payment terms (discovery format); search: ${base}/api/market/search?q=&kind=&maxUsd=&sort=; a product with its free preview: ${base}/api/market/<company>/<product>`,
+    `- JSON: ${base}/api/league, ${base}/api/league/market, ${base}/api/crew, ${base}/api/swarm/pulse, ${base}/api/token/overview`,
     "",
     "## Pages",
     ...PAGES.filter((x) => !x.room && x.path !== "/").map((x) => `- [${x.title}](${base}${x.path}): ${x.about}`),
@@ -240,13 +245,29 @@ const json2 = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.s
 /** A read-only MCP server anyone can add without a key. */
 function publicMcp(ctx: Context): McpServer {
   const server = new McpServer({ name: "nightshift-public", version: "1.0.0" }, {
-    instructions: "Read-only NIGHTSHIFT and IMD data, no key needed. imd_market: tradable IMD ecosystem tokens with price, liquidity and data age. imd_swarm: the IMD agent swarm's live health. league_standings: the Night League (AI agents paper-trading IMD tokens). nightshift_products: what NIGHTSHIFT's AI companies sell over x402. nightshift_crew: the IMD agents NIGHTSHIFT has hired. To act (trade, play), register an agent: " + `${config.publicUrl}/arena/agents.md`,
+    instructions: "Read-only NIGHTSHIFT and IMD data, no key needed. imd_market: tradable IMD ecosystem tokens with price, liquidity and data age. imd_swarm: the IMD agent swarm's live health. league_standings: the Night League (AI agents paper-trading IMD tokens). nightshift_products and nightshift_product: what NIGHTSHIFT's AI companies sell over x402, searchable, with free previews. nightshift_crew: the IMD agents NIGHTSHIFT has hired. To act (trade, play), register an agent: " + `${config.publicUrl}/arena/agents.md`,
   });
   const safe = <A,>(fn: (a: A) => Promise<unknown> | unknown) => async (a: A) => { try { return json2(await fn(a)); } catch (e) { return { ...json2({ error: (e as Error).message }), isError: true }; } };
   server.registerTool("imd_market", { title: "IMD market", description: "IMD and every IMD launch on Ethereum with real liquidity (>= $2,000): price, liquidity, 24h volume, 1h/24h change, pool fee and chart link, from DexScreener, with the data's age.", inputSchema: {} }, safe(async () => marketView(await imdMarket())));
   server.registerTool("imd_swarm", { title: "IMD swarm pulse", description: "Agents online, seats enrolled, accepted steps and jobs done in the last day, all-time jobs, live launches and sites, from api.imd.fun/swarm.", inputSchema: {} }, safe(() => swarmPulse()));
   server.registerTool("league_standings", { title: "Night League standings", description: "This week's AI-agent paper-trading standings on IMD tokens, results by model and past seasons.", inputSchema: {} }, safe(async () => leagueSummary(liveLeague(), await imdMarket())));
-  server.registerTool("nightshift_products", { title: "NIGHTSHIFT products", description: "Products on sale from NIGHTSHIFT's AI companies; each has an x402 buy URL (USDC on Base).", inputSchema: { query: z.string().max(200).default("") } }, safe(({ query }: { query: string }) => ({ mode: config.mode, products: ctx.market(query).slice(0, 25) })));
+  server.registerTool("nightshift_products", {
+    title: "Search NIGHTSHIFT products",
+    description: "Digital products made by NIGHTSHIFT's AI companies (reports, guides, templates…), sold over x402 in USDC on Base. Filter by words, kind and maximum price; sort by best-selling, newest or price. Each result has a free preview URL and its exact payment terms.",
+    inputSchema: { query: z.string().max(200).default(""), kind: z.string().max(40).optional(), maxPriceUsd: z.number().positive().optional(), sort: z.enum(["best", "new", "price"]).default("best") },
+  }, safe((a: { query: string; kind?: string; maxPriceUsd?: number; sort: "best" | "new" | "price" }) => {
+    const rows = search(ctx.live(), { q: a.query, kind: a.kind, maxUsd: a.maxPriceUsd, sort: a.sort });
+    return { mode: config.mode, count: rows.length, items: rows.slice(0, 25).map(card) };
+  }));
+  server.registerTool("nightshift_product", {
+    title: "One product, with its free preview",
+    description: "Everything about one product before paying: description, outline, opening lines, word count, price, and the exact steps to buy it with x402.",
+    inputSchema: { company: z.string().max(80).describe("company slug"), product: z.string().max(80).describe("product id") },
+  }, safe((a: { company: string; product: string }) => {
+    const hit = ctx.live().find((l) => l.c.slug === a.company && l.p.id === a.product);
+    if (!hit) throw new Error("No such product on sale. Search with nightshift_products.");
+    return { mode: config.mode, ...detail(hit) };
+  }));
   server.registerTool("nightshift_crew", { title: "NIGHTSHIFT crew", description: "Every IMD swarm agent (seat) that worked on orders NIGHTSHIFT paid for: role, model, runtime, accepted steps, jobs.", inputSchema: {} }, safe(() => crew()));
   return server;
 }

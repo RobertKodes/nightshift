@@ -3,7 +3,7 @@ import { type IncomingMessage, type ServerResponse, createServer } from "node:ht
 import { extname, join, normalize, resolve, sep } from "node:path";
 import type { Company } from "@nightshift/core";
 import { fromImd, fromUsdc } from "@nightshift/core";
-import { type PaymentPayload, USDC, challenge, decodeHeader, encodeHeader, requirement, verifyPayment } from "@nightshift/x402";
+import { type PaymentPayload, USDC, challenge as challenge402, decodeHeader, encodeHeader, requirement, verifyPayment } from "@nightshift/x402";
 import { balances, eth, sales } from "./chain.js";
 import { PendingError } from "./checkout.js";
 import { findPool } from "./v4.js";
@@ -30,6 +30,7 @@ import { gamesRoutes } from "./games-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
 import { leagueRoutes } from "./league-routes.js";
 import { stationRoutes, withPageHead } from "./station-routes.js";
+import { bazaar, card, catalog, describe, detail, previewOf, search } from "./agentmarket.js";
 import { spectateRoutes } from "./spectate.js";
 import { betsRoutes } from "./bets-routes.js";
 import { prices } from "./prices.js";
@@ -250,6 +251,11 @@ async function tokenOverview(): Promise<unknown> {
   return v;
 }
 
+/** Every product on sale whose file is packaged, with its text for previews. */
+function liveProducts(engine: Engine) {
+  return [...engine.store.companies.values()].flatMap((c) => c.products.filter((x) => x.status === "live" && engine.files.has(c, x)).map((x) => ({ c, p: x, text: engine.files.read(c, x) })));
+}
+
 export function serve(engine: Engine) {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", config.publicUrl);
@@ -397,7 +403,7 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
       if ((p.startsWith("/api/league") || p === "/league/agents.md") && await leagueRoutes(req, res, p, { json, body, limited, url, vault: engine.vault })) return;
-      if (await stationRoutes(req, res, p, { json, body, limited, owner, vault: engine.vault, market: (q) => engine.market(q) })) return;
+      if (await stationRoutes(req, res, p, { json, body, limited, owner, vault: engine.vault, market: (q) => engine.market(q), live: () => liveProducts(engine) })) return;
       if (p.startsWith("/api/pinball/")) {
         const parts = p.split("/").filter(Boolean); // api pinball …
         if (p === "/api/pinball/stakes") return json(res, 200, pinStakes());
@@ -517,6 +523,23 @@ export function serve(engine: Engine) {
         });
       }
       if (p === "/api/market") return json(res, 200, { mode: config.mode, chainId: config.salesChainId, products: engine.market(url.searchParams.get("q") ?? "") });
+      // ---- the market for agents: search with filters, the discovery catalog, one product with its free preview
+      if (p.startsWith("/api/market/")) {
+        if (limited(req, "market-read", 240, 60_000)) return json(res, 429, { error: "slow down" });
+        const live = liveProducts(engine);
+        if (p === "/api/market/search") {
+          const max = url.searchParams.get("maxUsd");
+          const sort = url.searchParams.get("sort");
+          const rows = search(live, { q: url.searchParams.get("q") ?? "", kind: url.searchParams.get("kind") ?? undefined, maxUsd: max ? Number(max) : undefined, sort: sort === "price" || sort === "new" ? sort : "best" });
+          return json(res, 200, { mode: config.mode, chainId: config.salesChainId, count: rows.length, kinds: [...new Set(live.map((l) => l.p.kind))], items: rows.slice(0, 100).map(card) });
+        }
+        if (p === "/api/market/catalog") return json(res, 200, catalog(live));
+        if (seg[2] && seg[3]) {
+          const hit = live.find((l) => l.c.slug === seg[2] && l.p.id === seg[3]);
+          return hit ? json(res, 200, { mode: config.mode, ...detail(hit) }) : json(res, 404, { error: "no such product on sale" });
+        }
+        return json(res, 404, { error: "not found" });
+      }
 
       // ---- sign-in with a wallet
       if (p === "/api/auth/nonce") {
@@ -680,7 +703,10 @@ export function serve(engine: Engine) {
         // Never take money for something that cannot be handed over yet.
         if (!engine.files.has(c, product)) return json(res, 409, { error: "This product is being packaged. Try again in a few minutes." });
         const req402 = requirement(config.salesChainId, c.wallet, product.priceUsdc);
-        const resource = { url: `${config.publicUrl}/buy/${c.slug}/${product.id}`, description: `${product.name}: ${product.pitch}`, mimeType: "application/json" };
+        // what the agent is buying, in the same words the discovery catalog uses
+        const text = engine.files.read(c, product);
+        const resource = { url: `${config.publicUrl}/buy/${c.slug}/${product.id}`, description: describe(c, product, text ? previewOf(text) : null), mimeType: "application/json" };
+        const challenge = (r: typeof req402, res0: typeof resource, error?: string) => ({ ...challenge402(r, res0, error), extensions: bazaar(c, product) });
         const sig = req.headers["payment-signature"] ?? req.headers["x-payment"];
         if (config.mode === "sim" && url.searchParams.get("sim") === "1" && req.method === "POST") {
           await engine.recordSale(c, product.id, product.priceUsdc, "0xdemo000000000000000000000000000000buyer", null, true);

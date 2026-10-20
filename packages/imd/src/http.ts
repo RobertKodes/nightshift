@@ -4,7 +4,7 @@ import { encodePaymentSignatureHeader } from "@x402/core/http";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
 import type { LocalAccount } from "viem";
 import { paymentHash } from "./canon.js";
-import {
+import { type OpenHooks,
   type Capabilities,
   type CheckResult,
   type ImdAction,
@@ -107,10 +107,12 @@ export class HttpImdPlane implements ImdPlane {
     };
   }
 
-  async open(action: ImdAction, input: unknown): Promise<Order> {
+  async open(action: ImdAction, input: unknown, hooks?: OpenHooks): Promise<Order> {
     // 1. Quote
     const quote = await this.#call<{ order: { id: string } }>("POST", "/requests/quote", { requestKey: randomUUID(), action, input }, this.#auth());
     const orderId = quote.json.order.id;
+    // the caller keeps the id before anything is signed: after a crash it follows this order, never buys twice
+    await hooks?.onQuote?.(orderId);
     const url = `/requests/${orderId}/submit`;
 
     // 2. The challenge: x402 v2 requirements plus the quote, scope hash and resource URL

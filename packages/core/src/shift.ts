@@ -22,6 +22,8 @@ export interface ShiftDeps {
   /** The saver's first rule: look for shipped public work before paying for research. */
   findExisting?: (query: string) => Promise<{ title: string; url: string } | null>;
   now?: () => number;
+  /** Writes the company state to disk now (the engine's store). Called once an order id exists, before paying. */
+  persist?: () => Promise<void>;
 }
 
 const ACTIVE = new Set(["checking", "ordering", "building"]);
@@ -167,7 +169,9 @@ async function buy(c: Company, t: Task, d: ShiftDeps, approved: boolean): Promis
   // approval cannot spend the same budget twice, and an order that may have been paid keeps counting.
   touch(c, t, d, { status: "ordering", costImd: caps.price, activity: "quote, pay 0.5 IMD, submit" });
   try {
-    const order = await d.imd.open(o.action as never, o.input);
+    const order = await d.imd.open(o.action as never, o.input, {
+      onQuote: async (id) => { o.orderId = id; touch(c, t, d, { activity: "quoted · paying 0.5 IMD" }); await d.persist?.(); },
+    });
     if (order.state === "refused") throw new Error(order.problems?.join("; ") || "refused");
     o.orderId = order.orderId;
     o.txHash = order.txHash;
@@ -189,7 +193,7 @@ async function buy(c: Company, t: Task, d: ShiftDeps, approved: boolean): Promis
     const msg = (err as Error).message;
     // Refused before signing (the free path, or a challenge we would not sign): nothing was paid.
     const unpaid = /refused to pay|challenge without accepts|^refused|IMD would refuse/i.test(msg);
-    const sent = (err as { orderId?: string }).orderId;
+    const sent = (err as { orderId?: string }).orderId ?? o.orderId;
     if (sent && !unpaid) {
       // Sent but not confirmed: follow it like any paid order instead of buying it again.
       o.orderId = sent;
@@ -255,6 +259,7 @@ export async function advance(c: Company, d: ShiftDeps): Promise<void> {
         if (!o.jobId) { touch(c, t, d, { activity: o.state.replace(/_/g, " ") }); continue; }
         t.imd.jobId = o.jobId;
         t.imd.txHash ??= o.txHash;
+        await bookOrder(c, t, d);
       }
       const j = await d.imd.job(t.imd.jobId);
       if (j.state === "failed" || j.state === "cancelled") {
@@ -281,6 +286,16 @@ export async function advance(c: Company, d: ShiftDeps): Promise<void> {
       touch(c, t, d, { activity: `retrying: ${(err as Error).message.slice(0, 80)}` });
     }
   }
+}
+
+/** Books a paid order that a restart cut off before its ledger entry was written; once only. */
+async function bookOrder(c: Company, t: Task, d: ShiftDeps): Promise<void> {
+  const id = t.imd?.orderId;
+  if (!id || !t.costImd || (await d.ledger.store.get(`imd:${id}`))) return;
+  await d.ledger.post({
+    id: `imd:${id}`, at: new Date(now(d)), kind: "imd_order", memo: `${t.title} (confirmed after a restart)`, ref: { chainTx: t.imd?.txHash },
+    postings: [{ account: `co:${c.id}:imd`, asset: "IMD", amount: -t.costImd }, { account: "ext:imd-swarm", asset: "IMD", amount: t.costImd }],
+  });
 }
 
 /** Takes back the IMD posting of an order IMD never charged for. */

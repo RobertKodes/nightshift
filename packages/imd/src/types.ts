@@ -63,13 +63,18 @@ export interface JobResult {
   summary: string | null;
 }
 
+export type OpenHooks = { onQuote?: (orderId: string) => void | Promise<void> };
+
 /** The only surface the company engine sees. The live and simulated planes both implement it. */
 export interface ImdPlane {
   readonly mode: "live" | "sim";
   capabilities(): Promise<Capabilities>;
   check(action: ImdAction, input: unknown): Promise<CheckResult>;
-  /** Quotes, pays and submits. Never call without a passing `check` first. */
-  open(action: ImdAction, input: unknown): Promise<Order>;
+  /**
+   * Quotes, pays and submits. Never call without a passing `check` first. `onQuote` hears the order
+   * id as soon as IMD quotes it, before anything is signed, so a restart mid-payment can follow it.
+   */
+  open(action: ImdAction, input: unknown, hooks?: OpenHooks): Promise<Order>;
   order(orderId: string): Promise<Order>;
   job(jobId: string): Promise<JobStatus>;
   result(jobId: string): Promise<JobResult>;

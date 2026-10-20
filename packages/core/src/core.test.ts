@@ -153,6 +153,30 @@ describe("money edge cases", () => {
     expect(spentTodayUsd(c, 6, now.t)).toBe(0);
   });
 
+  it("keeps the order id from the quote, before paying, and follows that order if the payment is cut off", async () => {
+    const now = { t: 1_000_000 };
+    const sim = new SimImdPlane({ jobMs: 10_000, now: () => now.t });
+    const calls: string[] = [];
+    const imd = { ...sim, mode: "sim" as const, capabilities: () => sim.capabilities(), check: (a: never, i: unknown) => sim.check(a, i),
+      // IMD quotes the order, then the connection drops while paying: no answer, no order id in the error
+      open: async (_a: never, _i: unknown, hooks?: { onQuote?: (id: string) => void | Promise<void> }) => { await hooks?.onQuote?.("o9"); calls.push("signed"); throw new Error("socket hang up"); },
+      order: async () => ({ orderId: "o9", action: "research" as never, state: "admitted" as const, jobId: "j9", txHash: "0xabc" }),
+      job: async () => ({ jobId: "j9", state: "running" as const, stepsDone: 1, stepsTotal: 3, activity: "building" }),
+      result: (j: string) => sim.result(j) };
+    const d = { ...deps(now, imd as never), persist: async () => { calls.push("saved"); } };
+    const c = company();
+    const t = await runShift(c, d);
+    expect(calls).toEqual(["saved", "signed"]); // on disk before anything is signed
+    expect(t?.imd?.orderId).toBe("o9");
+    expect(t?.status).toBe("building"); // followed, not bought again and not written off
+    await advance(c, d);
+    expect(t?.imd?.jobId).toBe("j9");
+    // the order IMD confirms is booked once, even though the payment's answer never came
+    expect(await d.ledger.balance("co:c1:imd", "IMD")).toBe(-500000000000000000n);
+    await advance(c, d);
+    expect(await d.ledger.balance("co:c1:imd", "IMD")).toBe(-500000000000000000n);
+  });
+
   it("free moves cannot push today's paid work out of the task list and reopen the budget", async () => {
     const now = { t: 10_000_000 };
     const c = company();
