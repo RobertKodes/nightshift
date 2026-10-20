@@ -78,7 +78,7 @@ export function TokenLaunch({ call, token }: { call: (token: string, path: strin
     try {
       const refused = refuseBody(ACTION, res.body);
       if (refused) throw new Error(refused);
-      const eth = await chooseWallet({ ask: true });
+      const eth = await chooseWallet({ chain: 1 });
       const wallet = createWalletClient({ chain: mainnet, transport: custom(eth as never) });
       setBusy("Connect your dev wallet…");
       const [me] = await wallet.requestAddresses();

@@ -1,0 +1,22 @@
+/*
+ * The wallet modal (Reown AppKit) in the NIGHTSHIFT night: AppKit reads these tokens from :root
+ * through its shadow DOM. :root:root outranks the :root block AppKit writes when it starts; the
+ * accent (lime), the font and the radius come from its theme options in walletkit.ts.
+ */
+:root:root {
+  --apkt-tokens-theme-overlay: rgba(3, 2, 10, .74);
+  --apkt-tokens-theme-backgroundPrimary: #0d0a1f;
+  --apkt-tokens-theme-backgroundInvert: #f2efff;
+  --apkt-tokens-theme-textPrimary: #f2efff;
+  --apkt-tokens-theme-textSecondary: #a9a3c4;
+  --apkt-tokens-theme-textTertiary: #cfc9e6;
+  --apkt-tokens-theme-textInvert: #0d0a1f;
+  --apkt-tokens-theme-borderPrimary: #2c2550;
+  --apkt-tokens-theme-borderPrimaryDark: #221c40;
+  --apkt-tokens-theme-borderSecondary: #3d3470;
+  --apkt-tokens-theme-foregroundPrimary: #15112b;
+  --apkt-tokens-theme-foregroundSecondary: #1d1738;
+  --apkt-tokens-theme-foregroundTertiary: #2c2550;
+  --apkt-tokens-theme-iconDefault: #a9a3c4;
+  --apkt-tokens-theme-iconInverse: #f2efff;
+}

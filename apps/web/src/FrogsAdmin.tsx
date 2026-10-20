@@ -44,7 +44,7 @@ export function FrogsAdmin() {
     if (!addr) return;
     setErr(null);
     try {
-      const eth = await chooseWallet({ ask: true });
+      const eth = await chooseWallet({ chain: 1 });
       const wallet = createWalletClient({ chain: mainnet, transport: custom(eth as never) });
       const [me] = await wallet.requestAddresses();
       if (!me) throw new Error("No account.");

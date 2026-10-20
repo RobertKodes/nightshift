@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { chooseWallet } from "./wallet";
+import { chooseWallet, forgetWallet } from "./wallet";
 import { createWalletClient, custom, getAddress } from "viem";
 import { api } from "./api";
 
@@ -24,7 +24,11 @@ export function checkSignIn(message: string, address: string, nonce: string, sit
   if (!(Date.parse(field("Expiration Time") ?? "") > now)) refuse("the message has expired");
 }
 
-/** Sign-in with a wallet: the engine gives a nonce, the wallet signs, the engine sets a session cookie (never shown to the page). */
+/**
+ * Sign-in with a wallet: the engine gives a nonce, the wallet signs, the engine sets a session cookie
+ * (never shown to the page). Any wallet the modal connects can sign, a smart wallet too (the engine
+ * checks those on Ethereum): it is put on Ethereum first, the chain the message names.
+ */
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,7 +39,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     setBusy(true);
     try {
-      const eth = await chooseWallet({ ask: true });
+      const eth = await chooseWallet({ chain: 1 });
       const wallet = createWalletClient({ transport: custom(eth as never) });
       const [acct] = await wallet.requestAddresses();
       if (!acct) throw new Error("No account selected");
@@ -51,10 +55,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setBusy(false);
     }
   }, []);
-  const signOut = useCallback(async () => { await api.logout().catch(() => {}); setAddress(null); }, []);
+  // signing out also disconnects the wallet here, so the next sign-in can pick another one
+  const signOut = useCallback(async () => { await api.logout().catch(() => {}); setAddress(null); await forgetWallet(); }, []);
   /** Reads the session again (a sign-in made elsewhere on the page, e.g. the Telegram Mini App's wallet link). */
   const refresh = useCallback(async () => { const m = await api.me().catch(() => null); setAddress(m?.address ?? null); }, []);
   /** Every session of this wallet, on every device, stops working (a lost phone, a shared computer). */
-  const signOutEverywhere = useCallback(async () => { await api.logoutAll().catch(() => {}); await api.logout().catch(() => {}); setAddress(null); }, []);
+  const signOutEverywhere = useCallback(async () => { await api.logoutAll().catch(() => {}); await api.logout().catch(() => {}); setAddress(null); await forgetWallet(); }, []);
   return <Ctx.Provider value={{ address, signIn, signOut, signOutEverywhere, busy, error, refresh }}>{children}</Ctx.Provider>;
 }

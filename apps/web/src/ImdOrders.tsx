@@ -69,7 +69,7 @@ export function ImdOrders({ call, token }: { call: (token: string, path: string,
     try {
       const refused = refuseBody(r.actionId, r.body);
       if (refused) throw new Error(refused);
-      const eth = await chooseWallet({ ask: true });
+      const eth = await chooseWallet({ chain: 1 });
       const wallet = createWalletClient({ chain: mainnet, transport: custom(eth as never) });
       setStep("Connect your wallet…");
       const [me] = await wallet.requestAddresses();

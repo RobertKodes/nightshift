@@ -9,13 +9,17 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
-    "@walletconnect/ethereum-provider": "2.17.0",
-    "@walletconnect/modal": "2.7.0",
+    "@reown/appkit": "1.8.24",
+    "@reown/appkit-adapter-wagmi": "1.8.24",
+    "@tanstack/react-query": "5.104.5",
+    "@wagmi/connectors": "6.2.0",
+    "@wagmi/core": "2.22.1",
     "chess.js": "1.0.0-beta.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "0.169.0",
-    "viem": "^2.21.54"
+    "viem": "^2.21.54",
+    "wagmi": "2.19.5"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

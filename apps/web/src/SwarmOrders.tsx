@@ -72,7 +72,7 @@ export function SwarmOrders({ call, token }: { call: (token: string, path: strin
     try {
       const refused = refuseBody(o.intake, c.body);
       if (refused) throw new Error(refused);
-      const wallet = createWalletClient({ chain: mainnet, transport: custom((await chooseWallet({ ask: true })) as never) });
+      const wallet = createWalletClient({ chain: mainnet, transport: custom((await chooseWallet({ chain: 1 })) as never) });
       step("Connect your dev wallet…");
       const [me] = await wallet.requestAddresses();
       if (!me) throw new Error("No account.");
