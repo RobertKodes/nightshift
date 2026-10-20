@@ -212,7 +212,10 @@ export async function tokenVerdict(ctx: Ctx, chain: string, tokenIn: string, dep
   if (key && key.hooks !== NATIVE) labels[key.hooks] = labels[key.hooks] ?? "the pool's hook";
   const deployBlock = (hit?.artifact.blockNumber ?? (src?.verified ? src.deployBlock : null)) ?? null;
   try {
-    const h = await holdersOf(ctx.d.rpc, { token, supply: basics.totalSupply, deployBlock, head, maxChunks: depth === "deep" ? 40 : 12, labels });
+    const supply = basics.totalSupply;
+    const scan = () => holdersOf(ctx.d.rpc, { token, supply, deployBlock, head, maxChunks: depth === "deep" ? 40 : 12, labels });
+    // the free nodes sometimes refuse a burst of log reads: once more before giving up
+    const h = await scan().catch(() => scan());
     // name the contracts among the largest holders (staking, vaults, lockers) from their verified source
     await Promise.all(h.top.filter((x) => x.kind === "contract" && !x.label).slice(0, 5).map(async (x) => { const s = await ctx.source(1, x.address).catch(() => null); if (s?.verified && s.contract) x.label = `${s.contract} (verified contract)`; }));
     const eH = ev.add(`Transfer events from block ${h.fromBlock} to ${h.toBlock} (${h.transfers} transfers${h.complete ? ", from deployment: exact" : ", recent window only: partial"})`, "eth_getLogs");

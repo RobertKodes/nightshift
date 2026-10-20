@@ -217,7 +217,9 @@ describe("x402 on the services", () => {
     expect(P.decodeHeader<{ success: boolean }>(ok.headers!["PAYMENT-RESPONSE"]!).success).toBe(true);
     expect(settled).toEqual(["token-verdict-quick"]);
     // a token the tape has never seen: the read fails, the answer is 503 and the payment is not settled
-    const fail = (await s.handle(io("/api/v1/verdict/ethereum/0x9999999999999999999999999999999999999999", {}, { "payment-signature": await pay(20_000n) })))!;
+    const quiet = console.error;
+    console.error = () => {}; // the handler logs the failed read
+    const fail = (await s.handle(io("/api/v1/verdict/ethereum/0x9999999999999999999999999999999999999999", {}, { "payment-signature": await pay(20_000n) })).finally(() => { console.error = quiet; }))!;
     expect(fail.status).toBe(503);
     expect(settled).toHaveLength(1);
   });

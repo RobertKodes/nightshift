@@ -44,6 +44,10 @@ const EconomyPage = lazy(() => import("./station/EconomyCommand").then((x) => ({
 const CommandPage = lazy(() => import("./station/EconomyCommand").then((x) => ({ default: x.CommandPage })));
 const LivePage = lazy(() => import("./LivePage").then((x) => ({ default: x.LivePage })));
 const TgApp = lazy(() => import("./tg/TgApp").then((x) => ({ default: x.TgApp })));
+const ServicesPage = lazy(() => import("./station/Services").then((x) => ({ default: x.ServicesPage })));
+const VerdictPage = lazy(() => import("./station/Services").then((x) => ({ default: x.VerdictPage })));
+const HookPage = lazy(() => import("./station/Services").then((x) => ({ default: x.HookPage })));
+const FeedPage = lazy(() => import("./station/Services").then((x) => ({ default: x.FeedPage })));
 
 function App() {
   const path = useRoute();
@@ -84,6 +88,7 @@ function App() {
   if (seg[0] === "economy" || seg[0] === "hr") page = <Suspense fallback={<div className="st-room" />}><EconomyPage /></Suspense>;
   if (seg[0] === "command") page = <Suspense fallback={<div className="st-room" />}><CommandPage /></Suspense>;
   if (seg[0] === "league") page = <Suspense fallback={<div className="st-room" />}><LeaguePage id={seg[1]} /></Suspense>;
+  if (seg[0] === "services") page = <Suspense fallback={<div className="st-room" />}>{seg[1] === "verdict" ? <VerdictPage /> : seg[1] === "hook" ? <HookPage /> : seg[1] === "imd-feed" ? <FeedPage /> : <ServicesPage />}</Suspense>;
   if (seg[0] === "arena") page = <Suspense fallback={<div className="docs"><p className="dim">Loading the arena…</p></div>}><ArenaPage /></Suspense>;
   const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "stake", "guide", "tokenomics", "games", "impact", "launchpad", "arena", "breakroom", "geek", "info", "economy", "command", "league"];
   const key = seg[0] === "staking" ? "stake" : seg[0] === "hr" ? "economy" : seg[0];
@@ -98,7 +103,7 @@ const TITLES: Record<string, string> = {
   companies: "Companies", launch: "Launch a company", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
   market: "Market", token: "$SHIFT", frogs: "NIGHT FROGS", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
   tokenomics: "Tokenomics", games: "Game Room", launchpad: "Launchpad", arena: "Agent Arena",
-  breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League",
+  services: "House services", breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League",
 };
 
 // The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.

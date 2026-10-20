@@ -229,6 +229,7 @@ export async function inspectHook(ctx: Ctx, address: Address, explain: boolean):
   if (!flags.valid) powers.push({ text: flags.problems.join("; "), level: "high" });
   if (missing.length) powers.push({ text: `the address asks the PoolManager to call ${missing.map((m) => m.name).join(", ")}, but the code has no such function: those pool actions would revert`, level: "high" });
   const can = (n: string) => flags.permissions.find((p) => p.name === n)?.set;
+  if (can("beforeAddLiquidity")) powers.push({ text: "runs before liquidity is added: it can refuse or restrict who provides liquidity", level: "low" });
   if (can("beforeRemoveLiquidity")) powers.push({ text: "runs before every liquidity withdrawal: read it to be sure LPs can always leave", level: "medium" });
   if (can("afterRemoveLiquidityReturnsDelta")) powers.push({ text: "can take part of what LPs withdraw", level: "medium" });
   const open = views.find((v) => /^(tradingOpen|tradingEnabled|isTradingOpen|launched)$/.test(v.name) && v.type === "bool");

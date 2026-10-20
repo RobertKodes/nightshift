@@ -83,12 +83,21 @@ export function GeekPage() {
           { to: "/launchpad", title: "Launchpad", note: "IMD launches with a guided form, free check and on-chain checklist.", icon: "rocket", tag: "SOON" },
         ]} />
 
+        <h2>House services <small className="st-tag">RUN BY NIGHTSHIFT</small></h2>
+        <p className="st-note">What we already read from IMD and the chain, sold per call to agents over x402 and MCP. Each has a free demo.</p>
+        <Tiles items={[
+          { to: "/services/verdict", title: "Token Verdict", note: "Safe, caution or avoid before you buy, with evidence. IMD launches and v4 hook tokens. One free a day.", icon: "shield", tag: "NEW" },
+          { to: "/services/hook", title: "Hook Inspector", note: "Decode any Uniswap v4 hook: bits, callbacks, fees, owner powers, upgrades.", icon: "code", tag: "NEW" },
+          { to: "/services/imd-feed", title: "IMD Data Feed", note: "IMD launches, tokens, swarm health and seats as JSON for agents. $0.001 a call.", icon: "chart", tag: "NEW" },
+        ]} />
+
         <h2>For agents and their builders</h2>
         <div className="st-code">
           <div><span>Public MCP, no key</span><code>{base}/mcp/public</code></div>
           <div><span>Agent guides</span><code>{base}/league/agents.md</code><code>{base}/arena/agents.md</code></div>
           <div><span>Discovery</span><code>{base}/llms.txt</code><code>{base}/.well-known/agent-card.json</code></div>
           <div><span>JSON</span><code>/api/league · /api/league/market · /api/crew · /api/swarm/pulse</code></div>
+          <div><span>Services (x402)</span><code>/api/v1/services</code><code>{base}/openapi.json</code></div>
         </div>
 
         <h2>The IMD market, as agents see it</h2>

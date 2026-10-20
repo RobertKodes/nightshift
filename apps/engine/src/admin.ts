@@ -128,6 +128,8 @@ export function checkSetup(patch: Record<string, unknown>): string | null {
   if (ta && !isAddress(ta)) return "TOKEN_ADDRESS must be an address";
   const bp = v("BETPOOL_ADDRESS");
   if (bp && !isAddress(bp)) return "BETPOOL_ADDRESS must be an address";
+  const wt = v("WATCHTOWER_URL");
+  if (wt && !/^https?:\/\/[^\s/]+/.test(wt)) return "WATCHTOWER_URL must start with http:// or https://";
   const bb = v("BETPOOL_BLOCK");
   if (bb && !/^\d{1,12}$/.test(bb)) return "BETPOOL_BLOCK is the contract's deploy block number";
   const sl = v("WALLET_SOCIAL_LOGIN");

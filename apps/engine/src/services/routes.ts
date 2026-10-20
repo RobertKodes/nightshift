@@ -6,6 +6,7 @@ import { OFFERS, type Offer, type OfferId, bazaarOf, offer, openapi, usdOf } fro
 import { type Ctx, RUN_BY } from "./context.js";
 import { type Feed, feed } from "./feed.js";
 import { type HookReport, KNOWN_HOOKS, decodeFlags, inspectHook } from "./hook.js";
+import { tokenBasics } from "./evm.js";
 import { chainIdOf, hookOf, launchUrl, tokenOf } from "./imd.js";
 import { type VerdictReport, ServiceError, tokenVerdict } from "./verdict.js";
 
@@ -63,7 +64,8 @@ export function services(ctx: Ctx, payer: Payer) {
       const l = hit?.launch;
       const p = l?.seeded?.pools?.find((x) => x.currency0.toLowerCase() === t || x.currency1.toLowerCase() === t);
       const best = m?.best;
-      const sym = best?.baseToken.address.toLowerCase() === t ? best.baseToken.symbol : null;
+      // the symbol from the chain: DexScreener lists few launch tokens
+      const sym = (await tokenBasics(ctx.d.rpc, t as Address).catch(() => null))?.symbol ?? (best?.baseToken.address.toLowerCase() === t ? best.baseToken.symbol : null);
       const same = sym ? (await ctx.imd.sameSymbol(1, sym).catch(() => [])).filter((x) => tokenOf(x)?.address.toLowerCase() !== t).map((x) => x.launchNumber) : [];
       const hk = p?.hooks.toLowerCase();
       return {
@@ -133,7 +135,7 @@ export function services(ctx: Ctx, payer: Payer) {
         if (io.limited("svc-free", 120, 60_000)) return { status: 429, body: { error: "slow down" } };
         return { status: 200, body: {
           provider: "NIGHTSHIFT Services", runBy: RUN_BY, house: true, x402Version: 2, network: `eip155:${payer.chainId}`, payTo: payer.payTo(), mode: payer.mode,
-          offers: OFFERS.map((o) => ({ id: o.id, name: o.name, priceUsd: usdOf(o), route: `${io.base}${o.route}`, example: `${io.base}${o.example}`, page: `${io.base}${o.page}`, description: o.description, accepts: terms(o) ? [terms(o)] : [] })),
+          offers: OFFERS.map((o) => ({ id: o.id, name: o.name, pitch: o.pitch, priceUsd: usdOf(o), route: `${io.base}${o.route}`, example: `${io.base}${o.example}`, page: `${io.base}${o.page}`, description: o.description, accepts: terms(o) ? [terms(o)] : [] })),
           free: { verdictPreview: `${io.base}/api/v1/verdict/ethereum/<token>/preview`, verdictDemo: "one quick verdict per IP per day: add demo=1", hookFlags: `${io.base}/api/v1/hook/<address>/flags`, feedSample: "add sample=1 to any /api/v1/imd/* call" },
           mcp: `${io.base}/mcp/public`, openapi: `${io.base}/openapi.json`,
         } };

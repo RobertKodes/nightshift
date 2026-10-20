@@ -1,0 +1,74 @@
+/* The house services (Geek Room): verdict card, reasons, hook bits, forms. The room's accent is cyan. */
+.svc-runby { justify-self: start; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid rgba(74, 216, 255, .35); border-radius: 999px; background: rgba(3, 2, 10, .6); font: 600 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #9debff; }
+.svc-runby i { width: 7px; height: 7px; border-radius: 50%; background: #4ad8ff; box-shadow: 0 0 10px #4ad8ff; }
+
+.svc-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.svc-form input { flex: 1 1 380px; min-width: 0; min-height: 46px; padding: 0 14px; border: 1px solid var(--s-line); border-radius: 10px; background: #07060e; color: var(--ink); font: 500 14px var(--mono); }
+.svc-form input:focus { outline: none; border-color: #4ad8ff; box-shadow: 0 0 0 3px rgba(74, 216, 255, .15); }
+.svc-link { padding: 0; border: 0; background: none; color: #9debff; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.svc-err { margin: 0; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255, 122, 138, .35); background: rgba(255, 122, 138, .07); color: #ffc2ca; font-size: 14px; }
+.svc-small { font-size: 12.5px; }
+.svc-pad { padding: 12px 14px 14px; }
+.svc-wrap { white-space: normal !important; min-width: 280px; color: var(--dim); font-size: 13.5px; line-height: 1.5; }
+
+.svc-copy { position: relative; display: grid; gap: 6px; }
+.svc-copy > span { font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--faint, #6c6688); }
+.svc-copy pre { padding-right: 78px; white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere; }
+.svc-copy button { position: absolute; right: 8px; bottom: 8px; min-height: 30px; padding: 0 12px; border: 1px solid var(--s-line); border-radius: 8px; background: #100e1c; color: var(--ink); font: 600 12px Inter, sans-serif; cursor: pointer; }
+.svc-copy button:hover { border-color: #4ad8ff; }
+
+.svc-verdict { --v: #5fd38a; display: grid; gap: 14px; padding: 20px; border: 1px solid color-mix(in srgb, var(--v) 40%, transparent); border-radius: 16px; background: linear-gradient(180deg, color-mix(in srgb, var(--v) 7%, #0b0a13), #0b0a13 60%); }
+.svc-verdict.caution { --v: #ffc861; }
+.svc-verdict.avoid { --v: #ff7a8a; }
+.svc-vhead { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.svc-vhead > div { display: grid; gap: 2px; flex: 1; min-width: 220px; }
+.svc-vhead b { font: 600 20px Inter, sans-serif; }
+.svc-vhead b small { font: 500 13px var(--mono); color: var(--dim); }
+.svc-vhead .mono { font-size: 12px; color: var(--faint, #6c6688); word-break: break-all; }
+.svc-pill { padding: 8px 16px; border-radius: 10px; font: 700 16px var(--mono); letter-spacing: .12em; color: #03020a; background: #5fd38a; }
+.svc-pill.caution { background: #ffc861; }
+.svc-pill.avoid { background: #ff7a8a; }
+.svc-conf { padding: 4px 10px; border: 1px solid var(--s-line); border-radius: 999px; font: 500 12px var(--mono); color: var(--dim); }
+.svc-summary { margin: 0; font-size: 16px; line-height: 1.55; }
+.svc-reasons { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.svc-reasons li { display: grid; grid-template-columns: 70px 1fr auto; gap: 10px; align-items: baseline; padding: 10px 12px; border: 1px solid var(--s-line); border-radius: 10px; background: rgba(3, 2, 10, .45); font-size: 14px; line-height: 1.5; }
+.svc-reasons li i { font: 700 10px var(--mono); font-style: normal; letter-spacing: .12em; text-transform: uppercase; }
+.svc-reasons li span { color: var(--ink); }
+.svc-reasons li small { font: 500 11px var(--mono); color: var(--faint, #6c6688); }
+.svc-reasons li.avoid i { color: #ff7a8a; }
+.svc-reasons li.caution i { color: #ffc861; }
+.svc-reasons li.note i { color: #9debff; }
+.svc-reasons li.good i { color: #5fd38a; }
+@media (max-width: 600px) { .svc-reasons li { grid-template-columns: 1fr; gap: 4px; } }
+.svc-evidence summary { cursor: pointer; font: 600 13px Inter, sans-serif; color: #9debff; }
+.svc-evidence ol { margin: 10px 0 0; padding-left: 0; list-style: none; display: grid; gap: 6px; font-size: 13px; color: var(--dim); }
+.svc-evidence b { font: 600 12px var(--mono); color: var(--ink); }
+.svc-evidence small { font: 500 11px var(--mono); color: var(--faint, #6c6688); }
+.svc-evidence a { color: #9debff; }
+
+.svc-bits { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px; }
+.svc-bits span { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 8px 10px; border: 1px solid var(--s-line); border-radius: 9px; font: 500 12.5px var(--mono); color: var(--faint, #6c6688); }
+.svc-bits span i { flex: none; width: 8px; height: 8px; border-radius: 50%; border: 1px solid currentColor; }
+.svc-bits span.on { color: #9debff; border-color: rgba(74, 216, 255, .4); background: rgba(74, 216, 255, .06); }
+.svc-bits span.on i { background: #4ad8ff; border-color: #4ad8ff; box-shadow: 0 0 8px #4ad8ff; }
+
+.svc-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.svc-tabs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.svc-tabs > button { min-height: 38px; padding: 0 14px; border: 1px solid var(--s-line); border-radius: 999px; background: transparent; color: var(--dim); font: 600 13px Inter, sans-serif; text-transform: capitalize; cursor: pointer; }
+.svc-tabs > button.on { color: #03020a; background: #4ad8ff; border-color: #4ad8ff; }
+.svc-tabs form { display: flex; gap: 8px; }
+.svc-tabs input { width: 90px; min-height: 38px; padding: 0 10px; border: 1px solid var(--s-line); border-radius: 9px; background: #07060e; color: var(--ink); font: 500 13px var(--mono); }
+.svc-tabs .st-cta { min-height: 38px; }
+
+/* inside the station shell: the room's square, cut-corner terminal look */
+.nx-shell .st-cta.ghost { background: transparent; color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc-line); }
+.nx-shell .svc-runby, .nx-shell .svc-pill, .nx-shell .svc-conf, .nx-shell .svc-form input, .nx-shell .svc-err, .nx-shell .svc-copy button, .nx-shell .svc-tabs > button, .nx-shell .svc-tabs input, .nx-shell .svc-bits span, .nx-shell .svc-reasons li { border-radius: 0; }
+.nx-shell .svc-verdict { border: 0; border-radius: 0; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v) 45%, transparent), inset 0 0 60px color-mix(in srgb, var(--v) 6%, transparent);
+  clip-path: polygon(var(--nx-cut) 0, 100% 0, 100% calc(100% - var(--nx-cut)), calc(100% - var(--nx-cut)) 100%, 0 100%, 0 var(--nx-cut)); }
+.nx-shell .svc-reasons li { border: 0; box-shadow: inset 0 0 0 1px var(--nx-line); background: var(--nx-panel2); }
+.nx-shell .svc-form input { border-color: var(--nx-line2); background: var(--nx-panel); font-family: var(--nx-mono); }
+.nx-shell .svc-form input:focus { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-soft); }
+.nx-shell .svc-tabs > button { font-family: var(--nx-mono); }
+.nx-shell .svc-tabs > button.on { background: var(--acc); border-color: var(--acc); }
+.nx-shell .svc-vhead b, .nx-shell .svc-copy button { font-family: var(--nx-ui); }
+.nx-shell .svc-link, .nx-shell .svc-evidence summary, .nx-shell .svc-evidence a { color: var(--acc); }

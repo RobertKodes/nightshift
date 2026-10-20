@@ -113,8 +113,11 @@ export function feed(ctx: Ctx) {
         const total = supply?.ok && supply.data !== "0x" ? BigInt(supply.data) : 0n;
         const labels: Record<string, string> = {};
         for (const a of row.artifacts ?? []) labels[a.address.toLowerCase()] = `IMD launch ${a.role} (${a.name})`;
-        const h = await holdersOf(ctx.d.rpc, { token: t.address as Address, supply: total, deployBlock: t.blockNumber ?? null, head: await ctx.head(), maxChunks: 20, labels }).catch(() => null);
-        out.holders = h ? { count: h.count, complete: h.complete, fromBlock: h.fromBlock, toBlock: h.toBlock, top: h.top.slice(0, 10), top10Pct: h.top10Pct, top10PctExInfra: h.top10PctExInfra, source: "eth_getLogs Transfer events" } : null;
+        const scan = async () => holdersOf(ctx.d.rpc, { token: t.address as Address, supply: total, deployBlock: t.blockNumber ?? null, head: await ctx.head(), maxChunks: 20, labels });
+        // the free nodes sometimes refuse a burst of log reads: once more before giving up
+        let failed = "";
+        const h = await scan().catch(() => scan()).catch((e: Error) => { failed = String(e?.message ?? e).split(/\r?\n/)[0]!.slice(0, 120); return null; });
+        out.holders = h ? { count: h.count, complete: h.complete, fromBlock: h.fromBlock, toBlock: h.toBlock, top: h.top.slice(0, 10), top10Pct: h.top10Pct, top10PctExInfra: h.top10PctExInfra, source: "eth_getLogs Transfer events" } : { error: `holder scan failed: ${failed}` };
       }
       out.builders = d?.jobs?.length ? await buildersOf(ctx.d, d.jobs) : [];
       out.sources = [launchUrl(row), "api.imd.fun/jobs/:id/submissions", "api.dexscreener.com", "Ethereum RPC (eth_getLogs, eth_getStorageAt)"];

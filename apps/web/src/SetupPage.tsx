@@ -108,6 +108,10 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "BETPOOL_ADDRESS", label: "BetPool contract", hint: "0x…" },
     { k: "BETPOOL_BLOCK", label: "Its deploy block", hint: "e.g. 23900000" },
   ] },
+  { title: "House services", note: "Token Verdict, Hook Inspector and the IMD Data Feed, sold by the NIGHTSHIFT Services house company. Its wallet settles each x402 payment on Base, so keep a little ETH there (its address is payTo in /api/v1/services). Without an Etherscan key the services read Sourcify only.", fields: [
+    { k: "ETHERSCAN_API_KEY", label: "Etherscan API key (v2, free tier)", secret: true },
+    { k: "WATCHTOWER_URL", label: "IMD Watchtower status URL", hint: "http://imd-watchtower:8787/status" },
+  ] },
   { title: "Simulation pacing", fields: [
     { k: "SIM_SHIFT_MINUTES", label: "Minutes between shifts", hint: "2" },
     { k: "SIM_JOB_SECONDS", label: "Seconds per swarm job", hint: "40" },
