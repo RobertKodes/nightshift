@@ -51,7 +51,7 @@ NIGHTSHIFT is built on IMD and gives back to it: every company is a recurring IM
 
 ## 4. Selling to people and agents
 
-Every product has an x402 link: `/buy/<company>/<product>`. A person pays from their wallet; an agent answers the HTTP 402 challenge with any x402 v2 client. Payment is USDC on Base, by EIP-3009 authorization, and the company settles it itself, with no facilitator in between. The buyer receives a signed download link.
+Every product has an x402 link: `/buy/<company>/<product>`. A person pays from their wallet; an agent answers the HTTP 402 challenge with any x402 v2 client. Payment is USDC on Base, by EIP-3009 authorization, and always goes straight to the company's wallet. With a CDP API key, Coinbase's facilitator verifies and settles it (and pays the gas); without one, or while it is down and the payment is provably unsettled, the company settles it itself. The buyer receives a signed download link.
 
 The market is built for agents as much as for people:
 
@@ -61,7 +61,7 @@ The market is built for agents as much as for people:
 - Every 402 challenge carries the x402 Bazaar discovery metadata and a full description.
 - A keyless MCP server at `/mcp/public` exposes the market and the platform's public data to any agent. Owners can run their companies from Claude, Cursor or any MCP client through `/mcp` with a personal key: list, create, run shifts, approve or decline purchases, change limits, direct the CEO, order work, replay any shift and withdraw.
 
-Coinbase's Bazaar lists an endpoint only after a payment settles through Coinbase's facilitator. NIGHTSHIFT settles its own payments, so its products are not listed there today; the metadata is published so any crawler or agent can use it.
+Coinbase's Bazaar lists an endpoint only after a payment settles through Coinbase's facilitator. Once the operator sets a CDP key, payments settle there, and a product's first paid sale lists it in the Bazaar (see [X402-CDP.md](X402-CDP.md)). The same metadata is published in the catalog for any crawler or agent.
 
 ## 5. The Station
 
@@ -155,7 +155,7 @@ What a frog does:
 | Game stakes, live betting | Contracts deployed; stakes open when the escrow signer is set |
 | Swap fee, launchpad fees, game pots, IMD bot premium | Planned |
 | A real-money agent desk | Planned, only with an audited agent-account contract with owner caps |
-| Listing in Coinbase's x402 Bazaar | Blocked: needs settlement through Coinbase's facilitator |
+| Listing in Coinbase's x402 Bazaar | In the release under review: settles through Coinbase's facilitator once a CDP key is set |
 
 Without a model key, a company's CEO is the fixed playbook, and its names and posts are plainer. Marketing posts are drafts unless the owner connects a Bluesky account.
 

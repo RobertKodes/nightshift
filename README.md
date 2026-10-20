@@ -27,7 +27,7 @@ Around it sits a small onchain economy:
 2. **Check for free.** Every paid move goes through IMD's free `/requests/check` first. If IMD would refuse the body, nothing is spent.
 3. **Respect the owner.** A purchase over your per-action limit waits for your approval. Nothing ever breaks the daily budget.
 4. **Build with the swarm.** Products and the site are bought from IMD (0.5 IMD per order, x402 + Permit2 + quote approval), then followed through payment, admission and every job step.
-5. **Sell to people and agents.** Every product is an x402 link (`/buy/<company>/<product>`). Humans pay from a wallet; AI agents pay automatically. USDC goes straight to the company wallet (EIP-3009, settled by the company itself, no facilitator).
+5. **Sell to people and agents.** Every product is an x402 link (`/buy/<company>/<product>`). Humans pay from a wallet; AI agents pay automatically. USDC goes straight to the company wallet (EIP-3009). With a CDP API key, Coinbase's facilitator settles each payment and lists the product in the CDP Bazaar; without one, or when it is down, the company settles it itself ([docs/X402-CDP.md](docs/X402-CDP.md)).
 
 ## Run it locally
 
@@ -49,6 +49,8 @@ By default everything runs in **simulation**: the swarm, the buyers and a 20 IMD
 | `NIGHTSHIFT_MODEL` | `anthropic/claude-sonnet-5.5` | The CEO model on OpenRouter |
 | `PUBLIC_URL` | `http://localhost:8787` | Used in buy links and site links |
 | `SALES_CHAIN_ID` | `84532` | `8453` for Base mainnet |
+| `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | — | A CDP secret API key (Ed25519): x402 payments settle through Coinbase's facilitator and products are listed in the CDP Bazaar |
+| `X402_FACILITATOR` | `cdp` with a key, else `self` | `self`: every company settles its own payments |
 | `WALLETCONNECT_PROJECT_ID` | — | Enables phone wallets through WalletConnect |
 | `TELEGRAM_BOT_TOKEN` | — | Buy alerts, burn proofs, the community assistant, and the Game Room Mini App (`/tg`) with its bot commands |
 | `TELEGRAM_BOT_USERNAME` | `nightshiftimdbot` | The bot's username in the Mini App's t.me links |
@@ -66,7 +68,7 @@ Every setting can also be changed from the `/setup` dashboard (admin token in `d
 | `apps/web` | The site and phone app (Vite + React): companies, market, $SHIFT, swap, staking, NIGHT FROGS, Game Room |
 | `packages/core` | The company: types, spending policy, CEO planner, IMD order catalog, shift state machine |
 | `packages/imd` | IMD client (free check, quote, x402/Permit2 payment, jobs) and a simulator with the same shapes |
-| `packages/x402` | x402 "exact" seller over EIP-3009: challenge, verification, self-settlement |
+| `packages/x402` | x402 "exact" seller over EIP-3009: challenge, verification, self-settlement, and the CDP facilitator client |
 | `packages/ledger`, `trace`, `llm` | Double-entry ledger, tracing, OpenRouter client |
 | `deploy` | Docker compose, Caddy snippet, VPS scripts |
 
