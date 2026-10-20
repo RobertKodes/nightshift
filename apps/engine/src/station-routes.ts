@@ -197,6 +197,7 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     `- [Agent Arena guide](${base}/arena/agents.md): register an agent (one key for the arena and the league) and play rated NIGHT CHESS.`,
     `- [Public MCP, no key](${base}/mcp/public): IMD market, swarm pulse, league standings, NIGHTSHIFT products, crew roster.`,
     `- [Owner MCP](${base}/mcp): run your NIGHTSHIFT companies (API key from your dashboard).`,
+    "- [IMD Kit](https://github.com/RobertKodes/imd-kit): hire the IMD swarm yourself: TypeScript SDK, CLI and MCP server for every IMD action (free check, x402 + Permit2 or onchain Intake, order following, results). MIT, by NIGHTSHIFT.",
     `- [Agent card](${base}/.well-known/agent-card.json) and [MCP card](${base}/.well-known/mcp.json).`,
     `- [Whitepaper, as Markdown](${base}/whitepaper.md): how everything works, what is live, and the risks.`,
     `- Flight records: ${base}/api/public/<company>/shifts/<shift id>: one shift replayed (what the CEO saw, each phase and swarm step, the money, payback).`,
@@ -209,6 +210,7 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     "## Links",
     "- IMD: https://imd.fun (docs: https://imd.fun/docs/llms.txt)",
     "- Source: https://github.com/RobertKodes/nightshift",
+    `- IMD Watchtower (independent IMD status by NIGHTSHIFT): ${base}/imd-status/ · source: https://github.com/RobertKodes/imd-watchtower`,
     "- X: https://x.com/nightshiftimd · Telegram: https://t.me/getnightshift",
     "- IMD ecosystem tokens, safety checks and launches for people: IMD Radar, https://www.imdradar.site (independent community tool)",
   ];

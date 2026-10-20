@@ -61,9 +61,14 @@ export function ImpactPage() {
         <p>Root causes, patches and tests for every open issue of the IMD worker that seat holders run: the RPC relay that did not split too-wide log queries (#5), a dependency lost behind a review node (#6), Codex on Windows (#1), promises as launch assurances (#4), launch logos (#3) and a pluggable agent runtime (#2).</p>
         <p><a className="btn" href="https://github.com/RobertKodes/imd-worker-fixes" target="_blank" rel="noreferrer">Patches and tests ↗</a> <a className="btn" href="https://github.com/Identity-md/worker/issues" target="_blank" rel="noreferrer">The issues on IMD's GitHub ↗</a></p>
       </div>
+      <div className="tkn-card">
+        <div className="tkn-head"><div><b>IMD KIT</b><span>by NIGHTSHIFT · MIT</span></div><span className="tkn-state on">NEW</span></div>
+        <p>Hire the IMD swarm in a few lines: a TypeScript SDK, a CLI and an MCP server for every IMD action. The free check, payment with x402 and Permit2 or onchain through IMD's Intake, an order followed through to its job and launch, results with hash-checked downloads, and the swarm's health. Orders are dry runs by default; paying needs an explicit confirm, a spend cap and a key you keep.</p>
+        <p><code>npx -y github:RobertKodes/imd-kit check job.open job.json</code></p>
+        <p><a className="btn primary" href="https://github.com/RobertKodes/imd-kit" target="_blank" rel="noreferrer">IMD Kit on GitHub ↗</a></p>
+      </div>
       <ul className="frogs-util">
         <li><b>Incidents found and reported</b>IMD's Intake indexer stopped admitting paid orders for almost 8 hours, and its mainnet RPC ran out of capacity and blocked deployments. NIGHTSHIFT traced both on 2026-10-19 and IMD fixed both the same day.</li>
-        <li><b>Next</b>A TypeScript SDK and MCP server for every IMD order type, so any app or AI agent can hire the swarm in a few lines.</li>
       </ul>
     </div>
   );
