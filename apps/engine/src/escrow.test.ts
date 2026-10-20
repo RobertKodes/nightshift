@@ -148,7 +148,7 @@ async function chessDuel(o: { relay?: boolean } = {}) {
   const t = setup();
   let clock = t.now();
   const games = new ChessGames(null, () => clock);
-  const lobby = new Lobby(t.escrow, { pinball: () => { throw new Error("no pinball here"); }, chess: (x) => games.createStaked(x) });
+  const lobby = new Lobby(t.escrow, { pinball: () => { throw new Error("no pinball here"); }, pool: () => { throw new Error("no pool here"); }, chess: (x) => games.createStaked(x) });
   const r = await t.escrow.create(A, { game: "chess", token: "IMD", amount: "5", tc: "3+2", name: "Pearl" }), id = r.matchId as Hex;
   t.f.open(id, E.TOKENS.IMD, 5n * IMD, E.GAMES.chess, A, t.sec());
   await t.escrow.sync();
@@ -286,7 +286,7 @@ describe("staked NIGHT CHESS", () => {
     const file = join(mkdtempSync(join(tmpdir(), "escrow-redeal-")), "escrow.json");
     const games = new ChessGames(null, t.now);
     const one = new E.Escrow({ file, client: t.f.client, signer: t.signer, now: t.now });
-    const lobbyOne = new Lobby(one, { pinball: () => { throw new Error("no pinball here"); }, chess: (x) => games.createStaked(x) });
+    const lobbyOne = new Lobby(one, { pinball: () => { throw new Error("no pinball here"); }, pool: () => { throw new Error("no pool here"); }, chess: (x) => games.createStaked(x) });
     const r = await one.create(A, { game: "chess", token: "IMD", amount: "5", tc: "3+2" }), id = r.matchId as Hex;
     t.f.open(id, E.TOKENS.IMD, 5n * IMD, E.GAMES.chess, A, t.sec()); t.f.join(id, B, t.sec());
     await one.sync();
@@ -298,7 +298,7 @@ describe("staked NIGHT CHESS", () => {
     // restart mid-game (say the loser's position was hopeless): no fresh game, a draw that refunds both
     const two = new E.Escrow({ file, client: t.f.client, signer: t.signer, relay: t.f.relay, now: t.now });
     const made: unknown[] = [];
-    const lobbyTwo = new Lobby(two, { pinball: () => { throw new Error("no pinball here"); }, chess: (x) => { made.push(x); return games.createStaked(x); } });
+    const lobbyTwo = new Lobby(two, { pinball: () => { throw new Error("no pinball here"); }, pool: () => { throw new Error("no pool here"); }, chess: (x) => { made.push(x); return games.createStaked(x); } });
     await two.sync();
     expect(made).toHaveLength(0);
     expect(lobbyTwo.tables.size).toBe(0);
@@ -311,7 +311,7 @@ describe("staked NIGHT CHESS", () => {
     const s = await two.create(A, { game: "chess", token: "IMD", amount: "5", tc: "3+2" }), id2 = s.matchId as Hex;
     t.f.open(id2, E.TOKENS.IMD, 5n * IMD, E.GAMES.chess, A, t.sec()); t.f.join(id2, C, t.sec());
     const three = new E.Escrow({ file, client: t.f.client, signer: t.signer, now: t.now });
-    const lobbyThree = new Lobby(three, { pinball: () => { throw new Error("no pinball here"); }, chess: (x) => games.createStaked(x) });
+    const lobbyThree = new Lobby(three, { pinball: () => { throw new Error("no pinball here"); }, pool: () => { throw new Error("no pool here"); }, chess: (x) => games.createStaked(x) });
     await three.sync();
     expect(lobbyThree.tables.has(id2)).toBe(true);
     expect(three.challenges.get(id2)!.outcome).toBeUndefined();

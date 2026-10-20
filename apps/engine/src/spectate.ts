@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { clientIp } from "./auth.js";
 import { chess } from "./chess.js";
 import { getWatch as pinWatchView, live as pinLive, watch as pinWatch } from "./pinball.js";
+import { pool } from "./pool.js";
 
 /**
  * Spectator mode: anyone can watch any game being played right now. The list of live games and a
@@ -12,11 +13,14 @@ type Context = {
   json(res: ServerResponse, status: number, body: unknown): void;
   limited(req: IncomingMessage, key: string, n: number, ms: number): boolean;
 };
-export type Game = "chess" | "pinball";
+export type Game = "chess" | "pinball" | "pool";
 export type LiveGame = {
   game: Game; id: string; players: { name: string; avatar?: string; agent?: boolean }[];
-  stake: { currency: "FREE" | "IMD" | "SHIFT"; amount: number }; startedAt: number; watch: string; viewers: number; tc?: string;
+  stake: { currency: "FREE" | "IMD" | "SHIFT"; amount: number }; startedAt: number; watch: string; viewers: number; tc?: string; rules?: string;
 };
+
+/** The games the Telegram Mini App and its bot list: NIGHT POOL is a website game only (Telegram links to it as a page). */
+export const telegramGames = (games: LiveGame[]): LiveGame[] => games.filter((g) => g.game !== "pool");
 
 /** Spectators per match at most, and spectator streams per IP and in all. */
 export const MAX_VIEWERS = 200;
@@ -30,7 +34,7 @@ export const viewersOf = (game: Game, id: string) => viewers.get(`${game}:${id}`
 const sources: (() => LiveGame[])[] = [];
 export const addLiveSource = (fn: () => LiveGame[]) => { sources.push(fn); };
 
-/** Every match in progress across both games, the newest first. */
+/** Every match in progress across the games, the newest first. */
 export function liveGames(): LiveGame[] {
   const games: LiveGame[] = [
     ...sources.flatMap((fn) => { try { return fn(); } catch { return []; } }),
@@ -38,6 +42,8 @@ export function liveGames(): LiveGame[] {
       stake: { currency: m.currency, amount: Number(m.stake ?? 0) || 0 }, startedAt: m.startedAt, watch: `/games/chess?watch=${m.id}`, viewers: viewersOf("chess", m.id) })),
     ...pinLive().map((m) => ({ game: "pinball" as const, id: m.id, players: m.players.map((p) => ({ name: p.name, ...(p.avatar ? { avatar: p.avatar } : {}), ...(p.agent ? { agent: true } : {}) })),
       stake: { currency: m.currency, amount: m.stake }, startedAt: m.startedAt, watch: `/games/pinball?watch=${m.id}`, viewers: viewersOf("pinball", m.id) })),
+    ...pool.live().map((m) => ({ game: "pool" as const, id: m.id, rules: m.rules, players: m.players.map((p) => ({ name: p.name, ...(p.agent ? { agent: true } : {}) })),
+      stake: { currency: m.currency, amount: Number(m.stake ?? 0) || 0 }, startedAt: m.startedAt, watch: `/games/pool?watch=${m.id}`, viewers: viewersOf("pool", m.id) })),
   ];
   return games.sort((a, b) => b.startedAt - a.startedAt);
 }
@@ -104,7 +110,7 @@ export async function spectateRoutes(req: IncomingMessage, res: ServerResponse, 
     ctx.json(res, 200, { games: liveGames() });
     return true;
   }
-  const route = /^\/api\/(chess|pinball)\/match\/([a-f0-9]{1,40})\/watch$/.exec(p);
+  const route = /^\/api\/(chess|pinball|pool)\/match\/([a-f0-9]{1,40})\/watch$/.exec(p);
   if (!route) return false;
   // a spectator only ever reads
   if (req.method !== "GET") { ctx.json(res, 405, { error: "Spectators cannot play" }); return true; }
@@ -113,6 +119,11 @@ export async function spectateRoutes(req: IncomingMessage, res: ServerResponse, 
   if (game === "chess") {
     // the first frame carries the whole move list; then compact frames, as for the players
     return stream(req, res, ctx, game, id, (first) => ({ ...chess.watchView(id, !first), spectating: true, viewers: viewersOf(game, id) }), (f) => chess.watch(id, f));
+  }
+  if (game === "pool") {
+    // a shot's keyframes go to each spectator once, the frame after the shot
+    let sent = -1;
+    return stream(req, res, ctx, game, id, (first) => { const v = pool.watchView(id, first ? -1 : sent); sent = Math.max(sent, v.last?.n ?? -1); return { ...v, spectating: true, viewers: viewersOf(game, id) }; }, (f) => pool.watch(id, f));
   }
   return stream(req, res, ctx, game, id, () => { const v = pinWatchView(id); return v && { ...v, spectating: true, viewers: viewersOf(game, id) }; }, (f) => pinWatch(id, f));
 }

@@ -6,8 +6,8 @@ import "./live.css";
 
 /** A game being played right now, as GET /api/games/live lists it. */
 export type LiveGame = {
-  game: "chess" | "pinball"; id: string; players: { name: string; avatar?: string; agent?: boolean }[];
-  stake: { currency: "FREE" | "IMD" | "SHIFT"; amount: number }; startedAt: number; watch: string; viewers: number; tc?: string;
+  game: "chess" | "pinball" | "pool"; id: string; players: { name: string; avatar?: string; agent?: boolean }[];
+  stake: { currency: "FREE" | "IMD" | "SHIFT"; amount: number }; startedAt: number; watch: string; viewers: number; tc?: string; rules?: string;
 };
 
 /** The live list, polled while the page is visible. `null` until the first answer. */
@@ -36,9 +36,9 @@ export function LiveRow({ g, now }: { g: LiveGame; now: number }) {
   const [a, b] = g.players;
   const who = (p?: LiveGame["players"][number]) => <span className="lv-name">{p?.name ?? "Player"}{p?.agent && <i className="lv-agent" title="An AI agent plays this seat">AGENT</i>}</span>;
   return <li className="lv-row">
-    <span className={`lv-game ${g.game}`} aria-hidden="true"><Icon name={g.game === "chess" ? "chess-knight" : "orbit"} size={20} /></span>
+    <span className={`lv-game ${g.game}`} aria-hidden="true"><Icon name={g.game === "chess" ? "chess-knight" : g.game === "pool" ? "pool" : "orbit"} size={20} /></span>
     <div className="lv-who">
-      <span className="lv-kind">{g.game === "chess" ? `NIGHT CHESS${g.tc ? ` · ${g.tc}` : ""}` : "SPACE PINBALL"}</span>
+      <span className="lv-kind">{g.game === "chess" ? `NIGHT CHESS${g.tc ? ` · ${g.tc}` : ""}` : g.game === "pool" ? `NIGHT POOL · ${g.rules === "quick" ? "QUICK" : "WPA"}` : "SPACE PINBALL"}</span>
       <b>{who(a)}<em>vs</em>{who(b)}</b>
     </div>
     <span className={`lv-stake ${g.stake.currency === "FREE" ? "" : "on"}`}>{stakeText(g.stake)}</span>
@@ -51,7 +51,7 @@ export function LiveRow({ g, now }: { g: LiveGame; now: number }) {
 export function LiveList({ games, limit }: { games: LiveGame[] | null; limit?: number }) {
   const now = useNow();
   if (games === null) return <p className="lv-empty" role="status">Looking for live games…</p>;
-  if (!games.length) return <p className="lv-empty">No games right now. Start one: <Link to="/games/pinball">Space Pinball</Link> or <Link to="/games/chess">Night Chess</Link>.</p>;
+  if (!games.length) return <p className="lv-empty">No games right now. Start one: <Link to="/games/pool">Night Pool</Link>, <Link to="/games/chess">Night Chess</Link> or <Link to="/games/pinball">Space Pinball</Link>.</p>;
   return <ul className="lv-list" aria-live="polite">{games.slice(0, limit).map((g) => <LiveRow key={`${g.game}-${g.id}`} g={g} now={now} />)}</ul>;
 }
 

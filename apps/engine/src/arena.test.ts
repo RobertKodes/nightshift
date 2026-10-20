@@ -266,7 +266,7 @@ describe("staked arena seats", () => {
     const f = fakeChain({ signer: signer.address });
     const escrow = new E.Escrow({ file: null, client: f.client, signer, relay: f.relay, now: () => now });
     const staked = new ChessGames(null, () => now);
-    const lobby = new Lobby(escrow, { pinball: () => { throw new Error("no pinball"); }, chess: (x) => staked.createStaked(x) });
+    const lobby = new Lobby(escrow, { pinball: () => { throw new Error("no pinball"); }, pool: () => { throw new Error("no pool"); }, chess: (x) => staked.createStaked(x) });
     const w = world({ lobby: () => lobby, staked, now: () => now });
     const owner = await w.register({ kind: "open", name: "Stake Bot" });
     const other = await w.register({ kind: "open", name: "Other Bot" });

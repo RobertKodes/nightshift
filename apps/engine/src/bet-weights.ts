@@ -7,10 +7,13 @@ import { Chess } from "chess.js";
  *
  *   progress   p ∈ [0, 1]   how far the game is. Chess: plies against a typical 80-ply game, or the
  *                           share of both clocks used up, whichever is further. Pinball: the
- *                           duel's clock against its longest game.
+ *                           duel's clock against its longest game. Pool: object balls pocketed
+ *                           against the fifteen.
  *   confidence c ∈ [0, 1)   how clear the leader is. Chess: c = tanh(|e| / 5) for an evaluation e
  *                           in pawns (material, check, a mate threat, the clock edge). Pinball:
- *                           c = |a − b| / max(a + b, 40 000) on the live scores.
+ *                           c = |a − b| / max(a + b, 40 000) on the live scores. Pool:
+ *                           c = tanh(d / 4) for the difference d in balls each side has left,
+ *                           with a side on the 8-ball four balls ahead.
  *
  *   base    = 1 − 0.65·p                  early bets count fully, the last ones about a third
  *   leader  = base · (1 − 0.8·c)          backing the side that is ahead counts less…
@@ -27,6 +30,9 @@ import { Chess } from "chess.js";
  *            open.
  *   pinball  the duel is over or not started; the last 20% of its clock; a table has drained its
  *            last ball; a table stopped counting; a player reconnecting.
+ *   pool     the game is over or not started; balls still rolling (the server already knows how the
+ *            shot ends); the first 8 s after a ball dropped or a foul; a choice after the break
+ *            pending; the shooter on the 8-ball; a player reconnecting.
  *   both     SWING_PAUSE_MS after the lead swung by SWING or more between two looks (SwingGuard).
  */
 export const MIN_WEIGHT = 500;
@@ -183,4 +189,37 @@ export function pinballWeights(s: PinballInput): Weights {
     : playing && !(s.connected[0] && s.connected[1]) ? "A player is reconnecting."
     : null;
   return shape(p, Math.abs(a - b) / Math.max(a + b, 40_000), leader, locked);
+}
+
+// ---- NIGHT POOL
+
+export type PoolInput = {
+  status: "waiting" | "countdown" | "playing" | "finished";
+  /** Balls each side has left (7 each while the table is open), and whether each is on the 8-ball. */
+  left: [number, number]; eight: [boolean, boolean]; open: boolean;
+  /** Object balls already pocketed, of fifteen. */
+  pocketed: number;
+  /** The seat to shoot; a shot still rolling (its end already decided on the server); a choice pending. */
+  turn: 0 | 1; rolling: boolean; deciding: boolean;
+  connected: [boolean, boolean];
+  /** Time since the last ball dropped or foul, if there was one. */
+  sinceSwingMs: number | null;
+};
+/** Betting pauses this long after a ball dropped or a foul. */
+export const POOL_SWING_MS = 8_000;
+/** Weights for NIGHT POOL: side A is the first seat, side B the second. */
+export function poolWeights(s: PoolInput): Weights {
+  const p = clamp01(s.pocketed / 15);
+  const ahead = (i: 0 | 1) => (s.eight[i] ? -4 : s.left[i]);
+  const d = s.open ? 0 : ahead(1) - ahead(0);
+  const leader = d === 0 ? null : d > 0 ? 0 : 1;
+  const locked = s.status === "finished" ? "The game is over."
+    : s.status !== "playing" ? "Waiting for the break."
+    : s.rolling ? "The balls are rolling."
+    : s.sinceSwingMs !== null && s.sinceSwingMs < POOL_SWING_MS ? "A ball just dropped. Betting reopens in a few seconds."
+    : s.deciding ? "A choice after the break is pending."
+    : s.eight[s.turn] ? "The shooter is on the 8-ball."
+    : !(s.connected[0] && s.connected[1]) ? "A player is reconnecting."
+    : null;
+  return shape(p, Math.tanh(Math.abs(d) / 4), leader, locked);
 }

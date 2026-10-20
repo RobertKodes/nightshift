@@ -5,7 +5,7 @@ import { chess } from "./chess.js";
 import { config } from "./config.js";
 import { lounge } from "./lounge.js";
 import * as pinball from "./pinball.js";
-import { liveGames } from "./spectate.js";
+import { liveGames, telegramGames } from "./spectate.js";
 import { type GameKind, type InitData, type Profile, type Profiles, initDataOf, parseStartParam, playKey, selfView, startLink, validateInitData } from "./tg.js";
 import type { TgPlay } from "./tg-play.js";
 
@@ -63,9 +63,11 @@ export async function tgRoutes(req: IncomingMessage, res: ServerResponse, p: str
       return reply(200, meView(me, play));
     }
     if (p === "/api/tg/lounge" && !post) {
-      return reply(200, lounge({ chess, pinball, challenges: ctx.challenges ?? (() => []), live: liveGames }, playKey(me)));
+      // NIGHT POOL stays out of the Mini App: its tables and challenges are the website's
+      const challenges = () => (ctx.challenges?.() ?? []).filter((c) => (c as { game?: string }).game !== "pool");
+      return reply(200, lounge({ chess, pinball, challenges, live: () => telegramGames(liveGames()) }, playKey(me)));
     }
-    if (p === "/api/tg/live" && !post) return reply(200, { games: liveGames() });
+    if (p === "/api/tg/live" && !post) return reply(200, { games: telegramGames(liveGames()) });
     if (p === "/api/tg/start" && !post) return reply(200, play.resolve(me, parseStartParam(url.searchParams.get("p") ?? who.data.startParam ?? "")));
     if (p === "/api/tg/play" && post) {
       const b = await body(req, 2_000), game = String(b.game ?? ""), action = String(b.action ?? "");

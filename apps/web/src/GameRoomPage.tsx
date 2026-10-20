@@ -42,6 +42,17 @@ export function GameRoomPage() {
         </div>
       </section>
 
+      <section className="tkn-card pb-promo nc-promo" aria-labelledby="np-promo-title">
+        <div className="pb-promo-visual nc-promo-art" aria-hidden="true"><Icon name="pool" size={130} /></div>
+        <div className="pb-promo-content">
+          <div className="pb-promo-meta"><span className="pb-promo-label">NIGHTSHIFT ORIGINAL / 04</span><span className="pb-promo-status">NEW</span></div>
+          <h2 id="np-promo-title"><span className="nc-wordmark"><span><b>Night <em>Pool</em></b><small>BY NIGHTSHIFT</small></span></span></h2>
+          <p>3D 8-ball on WPA rules, every shot simulated by the server and replayed ball by ball. Collect numbered cues, cloths and tables.</p>
+          <a className="pb-promo-play" href="/games/pool">Rack them up</a>
+          <small>Free and rated. IMD and $SHIFT duels through the escrow.</small>
+        </div>
+      </section>
+
       <section className="tkn-card pb-promo nc-promo" aria-labelledby="ar-promo-title">
         <div className="pb-promo-visual nc-promo-art" aria-hidden="true"><Icon name="swords" size={120} /></div>
         <div className="pb-promo-content">

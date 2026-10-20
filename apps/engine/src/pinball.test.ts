@@ -249,7 +249,7 @@ describe("space pinball server", () => {
     const { privateKeyToAccount, generatePrivateKey } = await import("viem/accounts");
     const signer = privateKeyToAccount(generatePrivateKey()), f = fakeChain({ signer: signer.address });
     const escrow = new E.Escrow({ file: null, client: f.client, signer, relay: f.relay });
-    const lobby = new Lobby(escrow, { pinball: pb.createStaked, chess: () => { throw new Error("no chess here"); } });
+    const lobby = new Lobby(escrow, { pinball: pb.createStaked, chess: () => { throw new Error("no chess here"); }, pool: () => { throw new Error("no pool here"); } });
     const wa = "0x1111111111111111111111111111111111111111", wb = "0x2222222222222222222222222222222222222222";
     const r = await escrow.create(wa, { game: "pinball", token: "IMD", amount: "3", name: "Alice" }), id = r.matchId as `0x${string}`;
     const now = Math.floor(Date.now() / 1000);

@@ -33,6 +33,8 @@ import { leagueRoutes } from "./league-routes.js";
 import { stationRoutes, withPageHead } from "./station-routes.js";
 import { card, catalog, detail, offerFor, productIdOf, search } from "./agentmarket.js";
 import { spectateRoutes } from "./spectate.js";
+import { poolRoutes } from "./pool-routes.js";
+import { lockerRoutes } from "./locker-routes.js";
 import { betsRoutes } from "./bets-routes.js";
 import { prices } from "./prices.js";
 import { checkOrder as checkSwarmOrder, orders as swarmOrders, placeOrder as placeSwarmOrder } from "./swarm.js";
@@ -507,6 +509,8 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/tg/") && await tgRoutes(req, res, p, { json, body, limited, url, auth: engine.auth, profiles: engine.tgProfiles, play: engine.tgPlay, challenges: () => gameLobby(engine.vault).escrow.open(undefined, null) })) return;
       if (await spectateRoutes(req, res, p, { json, limited })) return;
       if (p.startsWith("/api/chess/") && await chessRoutes(req, res, p, { json, body, limited, owner, url })) return;
+      if (p.startsWith("/api/pool/") && await poolRoutes(req, res, p, { json, body, limited, owner, url })) return;
+      if (p.startsWith("/api/locker/") && await lockerRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/bets/") && await betsRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;

@@ -25,6 +25,7 @@ const MORE: { to: string; label: string; note: string; icon: string }[] = [
   { to: "/command", label: "Command Room", note: "Frog missions", icon: "target" },
   { to: "/league", label: "Night League", note: "Agents trade IMD, paper", icon: "chart" },
   { to: "/games/pinball", label: "Space Pinball", note: "PvP duels, free now", icon: "flipper" },
+  { to: "/games/pool", label: "NIGHT POOL", note: "3D 8-ball, WPA rules", icon: "pool" },
   { to: "/token", label: "$SHIFT", note: "Price, supply, contracts", icon: "crescent" },
   { to: "/frogs", label: "NIGHT FROGS", note: "The crew and its rewards", icon: "frog" },
   { to: "/market", label: "Market", note: "Everything companies sell", icon: "bag" },

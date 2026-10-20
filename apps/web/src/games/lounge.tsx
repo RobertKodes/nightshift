@@ -13,25 +13,27 @@ import "./lounge.css";
  * in sessionStorage, whose stream keeps your seat; when someone joins you hear it, see it and (if you
  * allowed it) get a notification, one tap from the board.
  */
-export type Game = "chess" | "pinball";
+export type Game = "chess" | "pinball" | "pool";
 export type TimeControl = "3+2" | "5+0" | "10+0";
 export const TCS: TimeControl[] = ["3+2", "5+0", "10+0"];
 export type OpenGame = {
-  game: Game; id: string; tc: TimeControl | null; any: boolean;
-  host: { name: string; rating: number | null; avatar?: string | null; agent?: boolean };
+  game: Game; id: string; tc: TimeControl | null; any: boolean; rules?: string;
+  host: { name: string; rating: number | null; avatar?: string | null; agent?: boolean; level?: number };
   since: number; away: boolean; awayUntil: number | null;
 };
 export type LoungeFeed = {
-  now: number; open: OpenGame[]; waiting: { chess: Record<TimeControl | "any", number>; pinball: number };
+  now: number; open: OpenGame[]; waiting: { chess: Record<TimeControl | "any", number>; pinball: number; pool?: number };
   challenges: ChallengeView[]; live: LiveGame[]; mine: { game: Game; id: string }[];
 };
-export const GAME_NAME: Record<Game, string> = { chess: "NIGHT CHESS", pinball: "SPACE PINBALL" };
+export const GAME_NAME: Record<Game, string> = { chess: "NIGHT CHESS", pinball: "SPACE PINBALL", pool: "NIGHT POOL" };
+/** Each game's line icon. */
+export const GAME_ICON: Record<Game, string> = { chess: "chess-knight", pinball: "orbit", pool: "pool" };
 
 // ---- your waiting game, across pages (this tab only)
 export type Waiting = { game: Game; id: string; player: string; tc: string | null; since: number };
 const WAITING = "ns-waiting";
 /** Where each game page finds its seat after a navigation or a reload. */
-export const SEAT_KEY: Record<Game, string> = { chess: "nc-match", pinball: "pb-match" };
+export const SEAT_KEY: Record<Game, string> = { chess: "nc-match", pinball: "pb-match", pool: "np-match" };
 const store = { value: undefined as Waiting | null | undefined, subs: new Set<() => void>() };
 const readWaiting = (): Waiting | null => {
   if (store.value !== undefined) return store.value;
@@ -119,11 +121,14 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return j as T;
 }
 type Seated = { match: { id: string; startedAt: number | null; waitingSince?: number; tc?: string | null; status?: string }; player: string };
-const savedName = (game: Game) => { try { return localStorage.getItem(game === "chess" ? "nc-name" : "pb-name") ?? ""; } catch { return ""; } };
+const NAME_KEY: Record<Game, string> = { chess: "nc-name", pinball: "pb-name", pool: "np-name" };
+const savedName = (game: Game) => { try { return localStorage.getItem(NAME_KEY[game]) ?? ""; } catch { return ""; } };
+/** NIGHT POOL's rules for new tables: WPA (every shot called) unless the player picked quick. */
+const poolRules = () => { try { return localStorage.getItem("np-rules") === "quick" ? "quick" : "wpa"; } catch { return "wpa"; } };
 /** A seat taken from the lounge: the board if the game is on, else this tab waits (banner) wherever it goes. */
 function seated(game: Game, r: Seated, stay: boolean): void {
   keepSeat(game, { id: r.match.id, player: r.player });
-  const started = game === "chess" ? r.match.status !== "waiting" : r.match.startedAt !== null;
+  const started = game === "pinball" ? r.match.startedAt !== null : r.match.status !== "waiting";
   if (started) { keepWaiting(null); go(`/games/${game}`); return; }
   keepWaiting({ game, id: r.match.id, player: r.player, tc: r.match.tc ?? null, since: r.match.waitingSince ?? Date.now() });
   if (!stay) go(`/games/${game}`);
@@ -131,7 +136,9 @@ function seated(game: Game, r: Seated, stay: boolean): void {
 export async function createGame(game: Game, tc: TimeControl, stay = true): Promise<void> {
   primeAlerts();
   const name = savedName(game) || "Night crew";
-  const r = game === "chess" ? await post<Seated>("/api/chess/queue", { name, tc }) : await post<Seated>("/api/pinball/queue", { name, currency: "FREE", stake: 0, avatar: "/games/pinball/frog-0.webp" });
+  const r = game === "chess" ? await post<Seated>("/api/chess/queue", { name, tc })
+    : game === "pool" ? await post<Seated>("/api/pool/queue", { name, rules: poolRules() })
+    : await post<Seated>("/api/pinball/queue", { name, currency: "FREE", stake: 0, avatar: "/games/pinball/frog-0.webp" });
   seated(game, r, stay);
 }
 export async function joinGame(g: OpenGame): Promise<void> {
@@ -144,7 +151,7 @@ export async function joinGame(g: OpenGame): Promise<void> {
 }
 export async function playAnyone(game: Game, stay = true): Promise<void> {
   primeAlerts();
-  const r = await post<Seated>("/api/games/lounge/any", { game, name: savedName(game) || "Night crew", avatar: "/games/pinball/frog-0.webp" });
+  const r = await post<Seated>("/api/games/lounge/any", { game, name: savedName(game) || "Night crew", avatar: "/games/pinball/frog-0.webp", rules: poolRules() });
   seated(game, r, stay);
 }
 export async function cancelGame(game: Game, id: string): Promise<void> {
@@ -164,15 +171,15 @@ function OpenRow({ g, now, skew, mine, busy, onJoin, onCancel }: { g: OpenGame; 
   const waited = now + skew - g.since;
   const away = g.away && g.awayUntil ? Math.max(0, g.awayUntil - now - skew) : 0;
   return <li className={`lg-row ${mine ? "mine" : ""} ${g.away ? "away" : ""}`}>
-    <span className={`lv-game ${g.game}`} aria-hidden="true"><Icon name={g.game === "chess" ? "chess-knight" : "orbit"} size={20} /></span>
+    <span className={`lv-game ${g.game}`} aria-hidden="true"><Icon name={GAME_ICON[g.game]} size={20} /></span>
     <div className="lg-who">
-      <span className="lv-kind">{g.game === "chess" ? `NIGHT CHESS · ${g.any ? "ANY CLOCK" : g.tc}` : "SPACE PINBALL · DUEL"}</span>
+      <span className="lv-kind">{g.game === "chess" ? `NIGHT CHESS · ${g.any ? "ANY CLOCK" : g.tc}` : g.game === "pool" ? `NIGHT POOL · ${g.rules === "quick" ? "QUICK RULES" : "WPA RULES"}` : "SPACE PINBALL · DUEL"}</span>
       <b><span className="lv-name">{g.host.name}{g.host.agent && <i className="lv-agent">AGENT</i>}</span>{g.host.rating !== null && <small>{g.host.rating} ELO</small>}</b>
       <span className="lg-since">{mine ? "Your game · " : ""}waiting {waitText(waited)}{g.away && ` · host away, closes in ${waitText(away)}`}</span>
     </div>
     <span className="lv-stake free">FREE</span>
     {mine ? <span className="lg-mine"><em>YOURS</em><button type="button" className="lg-btn ghost" disabled={busy} onClick={onCancel}>CANCEL</button></span>
-      : <button type="button" className="lg-btn" disabled={busy || g.away} onClick={onJoin} aria-label={`Join ${g.host.name}'s ${g.game === "chess" ? "chess game" : "pinball duel"}`}>{g.away ? "AWAY" : <><Icon name="swords" size={15} /><span>JOIN</span></>}</button>}
+      : <button type="button" className="lg-btn" disabled={busy || g.away} onClick={onJoin} aria-label={`Join ${g.host.name}'s ${g.game === "chess" ? "chess game" : g.game === "pool" ? "pool table" : "pinball duel"}`}>{g.away ? "AWAY" : <><Icon name="swords" size={15} /><span>JOIN</span></>}</button>}
   </li>;
 }
 
@@ -200,24 +207,24 @@ export function Lounge({ game, create = false, onSeat, free = false }: { game?: 
   const open = (l?.open ?? []).filter((g) => !game || g.game === game);
   const challenges = free ? [] : (l?.challenges ?? []).filter((c) => !game || c.game === game);
   const live = free ? [] : (l?.live ?? []).filter((g) => !game || g.game === game);
-  const waiting = l ? (game === "pinball" ? l.waiting.pinball : game === "chess" ? Object.values(l.waiting.chess).reduce((a, b) => a + b, 0) : open.length) : 0;
+  const waiting = l ? (game === "pinball" ? l.waiting.pinball : game === "pool" ? l.waiting.pool ?? 0 : game === "chess" ? Object.values(l.waiting.chess).reduce((a, b) => a + b, 0) : open.length) : 0;
   const createFor = create ? pick : game;
   return <section className="lg" aria-labelledby={`lg-title-${game ?? "all"}`}>
     <div className="lg-head"><div><b id={`lg-title-${game ?? "all"}`}>THE LOUNGE</b><span>{l === null ? "Connecting…" : `${waiting} waiting for a rival${free ? "" : ` · ${live.length} live`}`}</span></div><span className={`lg-state ${open.length ? "on" : ""}`}><i />{open.length ? "OPEN TABLES" : "QUIET"}</span></div>
 
     {create && <div className="lg-create">
-      {!game && <div className="lg-tabs" role="group" aria-label="Game">{(["chess", "pinball"] as const).map((k) => <button type="button" key={k} aria-pressed={pick === k} className={pick === k ? "on" : ""} onClick={() => setPick(k)}><Icon name={k === "chess" ? "chess-knight" : "orbit"} size={15} />{k === "chess" ? "Night Chess" : "Space Pinball"}</button>)}</div>}
+      {!game && <div className="lg-tabs three" role="group" aria-label="Game">{(["chess", "pool", "pinball"] as const).map((k) => <button type="button" key={k} aria-pressed={pick === k} className={pick === k ? "on" : ""} onClick={() => setPick(k)}><Icon name={GAME_ICON[k]} size={15} />{k === "chess" ? "Night Chess" : k === "pool" ? "Night Pool" : "Space Pinball"}</button>)}</div>}
       {pick === "chess" && <div className="lg-tcs" role="group" aria-label="Time control">{TCS.map((k) => { const n = waitingOn(l, k); return <button type="button" key={k} aria-pressed={tc === k} className={tc === k ? "on" : ""} onClick={() => setTc(k)}><b>{k}</b><small className={n ? "on" : ""}>{n ? `${n} waiting` : "nobody yet"}</small></button>; })}</div>}
       <div className="lg-actions">
         <button type="button" className="lg-btn big" disabled={busy || !!mine} onClick={() => void run(() => createGame(pick, tc))}><Icon name="bolt" size={17} /><span>{mine ? "YOU ARE WAITING" : "CREATE GAME"}</span></button>
         <button type="button" className="lg-btn big ghost" disabled={busy || !!mine} onClick={() => void run(() => playAnyone(pick))}><Icon name="radar" size={17} /><span>PLAY ANYONE</span></button>
       </div>
-      <p className="lg-note">{pick === "chess" ? "Create a game and keep browsing: it waits in the lounge and you hear when someone joins. Play anyone takes whoever waits, on their clock." : "Free duels, the same table and the same seed. Create one and keep browsing until a rival joins."}</p>
+      <p className="lg-note">{pick === "chess" ? "Create a game and keep browsing: it waits in the lounge and you hear when someone joins. Play anyone takes whoever waits, on their clock." : pick === "pool" ? "8-ball on WPA rules, every shot simulated by the server. Open a table and keep browsing until a rival sits down." : "Free duels, the same table and the same seed. Create one and keep browsing until a rival joins."}</p>
     </div>}
     {!create && createFor && !mine && open.some((g) => !g.away && !isMine(g)) && <div className="lg-actions"><button type="button" className="lg-btn big ghost" disabled={busy} onClick={() => void run(async () => {
       if (!onSeat) return playAnyone(createFor, false);
       primeAlerts();
-      const r = await post<Seated>("/api/games/lounge/any", { game: createFor, name: savedName(createFor) || "Night crew", avatar: "/games/pinball/frog-0.webp" });
+      const r = await post<Seated>("/api/games/lounge/any", { game: createFor, name: savedName(createFor) || "Night crew", avatar: "/games/pinball/frog-0.webp", rules: poolRules() });
       onSeat(createFor, r.match.id, r.player);
     })}><Icon name="radar" size={17} /><span>PLAY ANYONE WAITING</span></button></div>}
     {err && <p className="lg-err" role="alert"><Icon name="alert" size={15} />{err}</p>}
@@ -228,7 +235,7 @@ export function Lounge({ game, create = false, onSeat, free = false }: { game?: 
 
     {challenges.length > 0 && <><div className="lg-label"><span>STAKED CHALLENGES</span><span>{challenges.length}</span></div>
       <ul className="lv-list">{challenges.slice(0, 6).map((c) => <li className="lg-row" key={c.matchId}>
-        <span className={`lv-game ${c.game}`} aria-hidden="true"><Icon name={c.game === "chess" ? "chess-knight" : "orbit"} size={20} /></span>
+        <span className={`lv-game ${c.game}`} aria-hidden="true"><Icon name={GAME_ICON[c.game]} size={20} /></span>
         <div className="lg-who"><span className="lv-kind">{GAME_NAME[c.game]}{c.tc ? ` · ${c.tc}` : ""} · 18+</span><b><span className="lv-name">{c.name}</span></b><span className="lg-since">{c.remaining ? `open for ${waitText(c.remaining * 1000)}` : "open"}</span></div>
         <span className="lv-stake on">{Number(c.amount).toLocaleString()} {tokenLabel(c.token)}</span>
         {address && c.creator === address.toLowerCase() ? <span className="lg-mine"><em>YOURS</em></span> : <Link to={`/games/${c.game}?accept=${c.matchId}&token=${c.token}`} className="lg-btn"><Icon name="diamond" size={15} /><span>ACCEPT</span></Link>}
@@ -263,7 +270,7 @@ function SiteWaitingBanner({ path }: { path: string }) {
   useEffect(() => {
     if (!w || onBoard) return;
     const board = `/games/${w.game}`;
-    const url = w.game === "chess" ? `/api/chess/match/${w.id}/events?player=${encodeURIComponent(w.player)}` : `/api/pinball/match/${w.id}/events?player=${encodeURIComponent(w.player)}`;
+    const url = `/api/${w.game}/match/${w.id}/events?player=${encodeURIComponent(w.player)}`;
     const es = new EventSource(url);
     let over = false;
     const closed = (text: string) => { over = true; es.close(); keepWaiting(null); keepSeat(w.game, null); setNotice({ kind: "closed", game: w.game, text }); };
@@ -277,7 +284,7 @@ function SiteWaitingBanner({ path }: { path: string }) {
       if (v.done && !v.startedAt) {
         return closed(v.expired === "away" ? "Your game closed: you were away for more than 90 seconds. Open a new one from the lounge." : v.expired === "timeout" ? "Nobody joined in 30 minutes, so your game closed." : "Your game was closed.");
       }
-      const started = w.game === "chess" ? v.status === "countdown" || v.status === "playing" : !!v.startedAt;
+      const started = w.game === "pinball" ? !!v.startedAt : v.status === "countdown" || v.status === "playing";
       if (started) {
         over = true; es.close(); keepWaiting(null);
         alertJoined(w.game, board);
@@ -289,7 +296,7 @@ function SiteWaitingBanner({ path }: { path: string }) {
     es.onerror = () => {
       if (over) return;
       // a restart or a closed table: the seat is gone, say so instead of reconnecting forever
-      void fetch(w.game === "chess" ? `/api/chess/match/${w.id}?player=${encodeURIComponent(w.player)}` : `/api/pinball/match/${w.id}?player=${encodeURIComponent(w.player)}`).then((r) => {
+      void fetch(`/api/${w.game}/match/${w.id}?player=${encodeURIComponent(w.player)}`).then((r) => {
         if (!over && (r.status === 400 || r.status === 404)) closed("Your game is gone: the table closed. Open a new one from the lounge.");
       }).catch(() => {});
     };
@@ -306,7 +313,7 @@ function SiteWaitingBanner({ path }: { path: string }) {
   if (!w || onBoard) return null;
   return <div className="lg-banner" role="status">
     <span className="lg-pulse" aria-hidden="true" />
-    <p><b>{GAME_NAME[w.game]}</b>Your {w.game === "chess" ? "game" : "duel"}{w.tc ? ` (${w.tc})` : ""} is waiting · <span className="lg-clock">{waitText(now - w.since)}</span></p>
+    <p><b>{GAME_NAME[w.game]}</b>Your {w.game === "pinball" ? "duel" : w.game === "pool" ? "table" : "game"}{w.tc ? ` (${w.tc})` : ""} is waiting · <span className="lg-clock">{waitText(now - w.since)}</span></p>
     <Link to={`/games/${w.game}`} className="lg-btn ghost">OPEN</Link>
     <button type="button" className="lg-btn ghost" disabled={busy} onClick={() => { setBusy(true); void cancelGame(w.game, w.id).catch(() => { keepWaiting(null); keepSeat(w.game, null); }).finally(() => { setBusy(false); setNotice({ kind: "closed", game: w.game, text: "You left the lounge: your game is cancelled." }); }); }}>CANCEL</button>
   </div>;

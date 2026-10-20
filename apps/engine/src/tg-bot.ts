@@ -1,7 +1,7 @@
 import { CONTROLS, type TimeControl } from "./chess.js";
 import { config } from "./config.js";
 import { type Button, type GameContext, type Reply, type TgFrom, esc, kb, tgResult } from "./social.js";
-import { type LiveGame, liveGames } from "./spectate.js";
+import { type LiveGame, liveGames, telegramGames } from "./spectate.js";
 import { type Profile, type Profiles, appUrl, startLink } from "./tg.js";
 import type { Note, TgPlay } from "./tg-play.js";
 
@@ -74,7 +74,7 @@ export class GameBot {
   #live: () => LiveGame[];
   #token: () => string;
   constructor(private d: BotDeps) {
-    this.#live = d.live ?? liveGames;
+    this.#live = d.live ?? (() => telegramGames(liveGames()));
     this.#token = d.token ?? (() => config.telegramToken);
   }
   #profile(from: TgFrom | null): Profile | null {

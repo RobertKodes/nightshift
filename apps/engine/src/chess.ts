@@ -70,7 +70,8 @@ export function flagFor(times: number[]): { meanMs: number; sdMs: number } | nul
 type Rating = { key: string; name: string; rating: number; games: number; wins: number; at: number };
 type NightResult = { key: string; at: number; win: boolean };
 type Boards = { ratings: Rating[]; results: NightResult[] };
-export type ChessEvent = { kind: "result"; white: string; black: string; winner: string | null; reason: Reason; moves: number; tc: TimeControl };
+/** A finished game; `keys` are the players' profile keys (a wallet, or a Telegram player's tg:<pid>) for the gaming profiles, `rated` when it counted for Elo. */
+export type ChessEvent = { kind: "result"; white: string; black: string; winner: string | null; reason: Reason; moves: number; tc: TimeControl; keys: [string | null, string | null]; rated: boolean; won: Color | null };
 const arcade: ((e: ChessEvent) => void)[] = [];
 export const onChess = (f: (e: ChessEvent) => void) => { arcade.push(f); };
 const opposite = (c: Color): Color => c === "w" ? "b" : "w";
@@ -387,9 +388,10 @@ export class ChessGames {
     if (m.done) return;
     m.clocks = this.clocks(m); m.done = true; m.reason = reason; m.endedAt = this.now(); m.drawOffer = null;
     m.winner = m.players.find((p) => p.color === winner)?.id ?? null;
-    if (m.players.every((p) => p.moves >= 2)) this.record(m);
+    const rated = m.players.every((p) => p.moves >= 2);
+    if (rated) this.record(m);
     const white = m.players.find((p) => p.color === "w")!, black = m.players.find((p) => p.color === "b")!;
-    for (const f of arcade) try { f({ kind: "result", white: white.name, black: black.name, winner: m.winner === white.id ? white.name : m.winner === black.id ? black.name : null, reason, moves: m.moves.length, tc: m.tc }); } catch (err) { console.error("chess arcade", err); }
+    for (const f of arcade) try { f({ kind: "result", white: white.name, black: black.name, winner: m.winner === white.id ? white.name : m.winner === black.id ? black.name : null, reason, moves: m.moves.length, tc: m.tc, keys: [white.agent ? null : white.wallet, black.agent ? null : black.wallet], rated, won: winner }); } catch (err) { console.error("chess arcade", err); }
     // the server's verdict of a staked game, by wallet, to the escrow (signed there after its own checks)
     if (m.onResult) try { m.onResult({ draw: m.winner === null, winner: m.players.find((p) => p.id === m.winner)?.wallet ?? null }); } catch (err) { console.error("chess stake result", err); }
     this.emit(m);

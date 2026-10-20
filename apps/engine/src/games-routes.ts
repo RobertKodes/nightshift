@@ -3,6 +3,7 @@ import { formatUnits } from "viem";
 import { isAdmin } from "./admin.js";
 import { chess, type TimeControl } from "./chess.js";
 import { createStaked as pinballStaked } from "./pinball.js";
+import { pool } from "./pool.js";
 import { type Challenge, ESCROW, Escrow, GameError, liveEscrow } from "./escrow.js";
 import { keeperAccount } from "./keeper.js";
 import { eth } from "./chain.js";
@@ -21,23 +22,25 @@ type Seat = { wallet: string; name: string };
 export type StakedGames = {
   pinball: (o: { escrow: string; currency: "IMD" | "SHIFT"; stake: number; a: Seat; b: Seat; onResult: (r: Result) => void }) => { id: string; seats: Record<string, string> };
   chess: (o: { escrow: string; tc: TimeControl; currency: "IMD" | "SHIFT"; stake: string; a: Seat; b: Seat; onResult: (r: Result) => void }) => { id: string; seats: Record<string, string> };
+  pool: (o: { escrow: string; currency: "IMD" | "SHIFT"; stake: string; a: Seat; b: Seat; onResult: (r: Result) => void }) => { id: string; seats: Record<string, string> };
 };
+export type StakedGame = keyof StakedGames;
 
 /**
- * The challenge lobby shared by Space Pinball and NIGHT CHESS. When the escrow sees a Joined event
+ * The challenge lobby shared by Space Pinball, NIGHT CHESS and NIGHT POOL. When the escrow sees a Joined event
  * that matches a challenge exactly, the game is made for those two wallets; each player then takes
  * their seat (a private player token) with their signed-in session, and the game's verdict goes back
  * to the escrow to be checked against the chain, signed and relayed.
  */
 export class Lobby {
   /** Escrow match id → the game made for it and each wallet's seat (memory only). */
-  readonly tables = new Map<string, { game: "pinball" | "chess"; id: string; seats: Record<string, string> }>();
-  #ended: ((game: "pinball" | "chess", id: string) => void)[] = [];
+  readonly tables = new Map<string, { game: StakedGame; id: string; seats: Record<string, string> }>();
+  #ended: ((game: StakedGame, id: string) => void)[] = [];
   constructor(readonly escrow: Escrow, private games: StakedGames) {
     escrow.onJoined((c) => this.#deal(c));
   }
   /** Called the moment a staked game has its verdict (live betting closes its markets at once). */
-  onEnded(f: (game: "pinball" | "chess", id: string) => void): void { this.#ended.push(f); }
+  onEnded(f: (game: StakedGame, id: string) => void): void { this.#ended.push(f); }
   #deal(c: Challenge): void {
     // a game is dealt once per match, ever: one dealt before a restart ends as a draw (escrow.ts), never again
     if (this.tables.has(c.matchId) || !c.playerB || c.outcome || c.closed || c.dealtAt) return;
@@ -49,12 +52,14 @@ export class Lobby {
     };
     const t = c.game === "pinball"
       ? this.games.pinball({ escrow: c.matchId, currency: c.token, stake: Number(formatUnits(BigInt(c.stake), 18)), a, b, onResult })
-      : this.games.chess({ escrow: c.matchId, tc: (c.tc ?? "3+2") as TimeControl, currency: c.token, stake: formatUnits(BigInt(c.stake), 18), a, b, onResult });
+      : c.game === "pool"
+        ? this.games.pool({ escrow: c.matchId, currency: c.token, stake: formatUnits(BigInt(c.stake), 18), a, b, onResult })
+        : this.games.chess({ escrow: c.matchId, tc: (c.tc ?? "3+2") as TimeControl, currency: c.token, stake: formatUnits(BigInt(c.stake), 18), a, b, onResult });
     this.tables.set(c.matchId, { game: c.game, ...t });
     this.escrow.dealt(c.matchId);
   }
   /** A player's seat at their staked game: only for the wallet that deposited as player A or B. */
-  seat(matchId: string, wallet: string | null): { game: "pinball" | "chess"; id: string; player: string } | { waiting: true } {
+  seat(matchId: string, wallet: string | null): { game: StakedGame; id: string; player: string } | { waiting: true } {
     if (!wallet) throw new GameError(401, "Sign in with your wallet to take your seat.");
     const c = this.escrow.challenges.get(matchId), me = wallet.toLowerCase();
     if (!c || (me !== c.creator && me !== c.playerB)) throw new GameError(404, "No such match for this wallet.");
@@ -68,7 +73,7 @@ let lobby: Lobby | null = null;
 /** The live lobby, made on the first request (the vault holds the signer). */
 export function live(vault: Vault): Lobby {
   if (!lobby) {
-    lobby = new Lobby(liveEscrow(vault), { pinball: pinballStaked, chess: (o) => chess.createStaked(o) });
+    lobby = new Lobby(liveEscrow(vault), { pinball: pinballStaked, chess: (o) => chess.createStaked(o), pool: (o) => pool.createStaked(o) });
     lobby.escrow.start();
   }
   return lobby;

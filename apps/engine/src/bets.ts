@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { type AbiEvent, type Address, type Hex, type LocalAccount, decodeEventLog, encodeAbiParameters, erc20Abi, formatUnits, getAddress, keccak256, parseAbi, parseAbiItem, parseUnits, stringToHex, toEventSelector } from "viem";
 import { writeAtomic } from "./atomic.js";
-import { type Weights, MAX_WEIGHT, MIN_WEIGHT, SwingGuard, TRAILER_MAX_WEIGHT, chessWeights, pinballWeights } from "./bet-weights.js";
+import { type Weights, MAX_WEIGHT, MIN_WEIGHT, SwingGuard, TRAILER_MAX_WEIGHT, chessWeights, pinballWeights, poolWeights } from "./bet-weights.js";
 import { CONTROLS, type ChessGames } from "./chess.js";
 import { GameError, TOKENS, type Token } from "./escrow.js";
 
@@ -37,7 +37,7 @@ import { GameError, TOKENS, type Token } from "./escrow.js";
  * Nothing here can move a bet: the most a server signature can do is open a market for a real match,
  * admit a bet the bettor pays for, and name the side that won.
  */
-export const BOARDS = { chess: stringToHex("chess", { size: 32 }), pinball: stringToHex("pinball", { size: 32 }), arena: stringToHex("arena", { size: 32 }) } as const;
+export const BOARDS = { chess: stringToHex("chess", { size: 32 }), pinball: stringToHex("pinball", { size: 32 }), pool: stringToHex("pool", { size: 32 }), arena: stringToHex("arena", { size: 32 }) } as const;
 export type Board = keyof typeof BOARDS;
 /**
  * A ticket is good for this long (the contract allows at most 120 s): a weight is only true for a
@@ -225,6 +225,23 @@ export function fromPinball(id: string, s: PinballState, now: number): MatchStat
   const tied = [a.wallet, b.wallet].filter((x): x is string => !!x).map(lc);
   const stake = stakeOf(s.escrow, s.currency, Number.isFinite(s.stake) ? s.stake.toFixed(18).replace(/\.?0+$/, "") : "0");
   return { board: "pinball", id, names: [a.name, b.name], stake: { currency: s.currency, amount: String(s.stake) }, weights, eligible: s.escrow ? stake.small : NOT_ELIGIBLE, staked: stake.staked, tied, result, reason: s.void ?? (s.done ? (s.draw ? "draw" : "verified by replay") : null) };
+}
+
+/** What pool.ts betInfo() gives. */
+export type PoolState = {
+  escrow: string | null; currency: string; stake: string; status: "waiting" | "countdown" | "playing" | "finished"; names: (string | undefined)[];
+  wallets: (string | null)[]; connected: boolean[]; left: [number, number]; eight: [boolean, boolean]; groups: [string | null, string | null];
+  turn: 0 | 1; phase: string; shots: number; rolling: boolean; swingAt: number | null; done: boolean; winner: 0 | 1 | null; draw: boolean; reason: string | null;
+  pocketed: number; deciding: boolean;
+};
+/** A NIGHT POOL game: side A is the first seat, side B the second. Only a staked duel gets a market; its players may not bet on it. */
+export function fromPool(id: string, s: PoolState, now: number): MatchState {
+  const weights = poolWeights({ status: s.status, left: s.left, eight: s.eight, open: s.groups[0] === null, pocketed: s.pocketed, turn: s.turn, rolling: s.rolling, deciding: s.deciding,
+    connected: [!!s.connected[0], !!s.connected[1]], sinceSwingMs: s.swingAt === null ? null : now - s.swingAt });
+  const tied = s.wallets.filter((x): x is string => !!x && /^0x/.test(x)).map(lc);
+  const stake = stakeOf(s.escrow, s.currency, s.stake ?? "0");
+  const result: Outcome | null = !s.done ? null : s.winner === 0 ? 0 : s.winner === 1 ? 1 : 2;
+  return { board: "pool", id, names: [s.names[0] ?? "Seat 1", s.names[1] ?? "Seat 2"], stake: { currency: s.currency, amount: s.stake ?? "0" }, weights, eligible: s.escrow ? stake.small : NOT_ELIGIBLE, staked: stake.staked, tied, result, reason: s.reason };
 }
 
 export type FeedBet = { key: string; bettor: string; side: 0 | 1; amount: string; weightBps: number; shares: string; tx: string; at: number };

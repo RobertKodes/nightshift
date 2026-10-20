@@ -22,8 +22,8 @@ export const ESCROW: Address = "0xf460fd9ad76f18414f54a2431870e8a116193489";
 export const DEPLOY_BLOCK = 26_222_893n;
 export const TOKENS = { IMD: "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7", SHIFT: "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac" } as const satisfies Record<string, Address>;
 export type Token = keyof typeof TOKENS;
-/** The game label in each match: UTF-8, right-padded to bytes32. */
-export const GAMES = { pinball: stringToHex("pinball", { size: 32 }), chess: stringToHex("chess", { size: 32 }) } as const;
+/** The game label in each match: UTF-8, right-padded to bytes32 (the contract takes any label). */
+export const GAMES = { pinball: stringToHex("pinball", { size: 32 }), chess: stringToHex("chess", { size: 32 }), pool: stringToHex("pool", { size: 32 }) } as const;
 export type Game = keyof typeof GAMES;
 export const JOIN_TIMEOUT = 3_600;
 export const SETTLE_TIMEOUT = 86_400;

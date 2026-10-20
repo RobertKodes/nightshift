@@ -111,7 +111,7 @@ type Score = { name: string; score: number; at: number };
 const boardFile = () => join(config.dataDir, "pinball.json");
 /** What the arcade tells the community chat: every verified result, flagged when it tops a board. */
 export type ArcadeEvent =
-  | { kind: "duel"; a: Score; b: Score; winner: string | null; draw: boolean; record: boolean; tonightTop: boolean }
+  | { kind: "duel"; a: Score; b: Score; winner: string | null; draw: boolean; record: boolean; tonightTop: boolean; keys?: [string | null, string | null] }
   | { kind: "solo"; run: Score; record: boolean; tonightTop: boolean };
 const arcade: ((e: ArcadeEvent) => void)[] = [];
 export const onArcade = (f: (e: ArcadeEvent) => void) => { arcade.push(f); };
@@ -648,7 +648,7 @@ function settle(m: Match): void {
   if (a.inputs && b.inputs) {
     const flags = tops("duel", Math.max(a.score, b.score));
     record([a, b].map((p) => ({ name: p.name, score: p.score ?? 0, at: p.finishedAt ?? Date.now() })));
-    tell({ kind: "duel", a: { name: a.name, score: a.score, at: Date.now() }, b: { name: b.name, score: b.score, at: Date.now() }, winner: m.players.find((p) => p.id === m.winner)?.name ?? null, draw: m.draw, ...flags });
+    tell({ kind: "duel", a: { name: a.name, score: a.score, at: Date.now() }, b: { name: b.name, score: b.score, at: Date.now() }, winner: m.players.find((p) => p.id === m.winner)?.name ?? null, draw: m.draw, ...flags, keys: [a.agent ? null : a.wallet?.toLowerCase() ?? null, b.agent ? null : b.wallet?.toLowerCase() ?? null] });
   }
   // the verified verdict of a staked duel, by wallet, to the escrow (signed there after its own checks)
   if (m.onResult) try { m.onResult({ draw: m.draw, winner: m.draw ? null : m.players.find((p) => p.id === m.winner)?.wallet ?? null }); } catch (e) { console.error("pinball stake result", e); }

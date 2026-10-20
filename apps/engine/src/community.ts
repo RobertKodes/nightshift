@@ -291,6 +291,9 @@ export async function publicCommand(cmd: string): Promise<{ text: string; button
   if (cmd === "chess") {
     return { text: ["♟ <b>NIGHT CHESS</b>", "3D real-time chess on a NIGHTSHIFT board: blitz 3+2 and 5+0, rapid 10+0, rated, clocks kept by the server. No rival online? Play Frog #7, the bot.", "", "Live now, free to play. Real IMD and $SHIFT stakes open with the escrow."].join("\n"), buttons: [[{ text: "♟ Play NIGHT CHESS", url: `${config.publicUrl}/games/chess` }]] };
   }
+  if (cmd === "pool" || cmd === "8ball" || cmd === "billiards") {
+    return { text: ["🎱 <b>NIGHT POOL</b>", "3D 8-ball on WPA rules: called shots, the open table, ball in hand after a foul, the 8 in the called pocket. Every shot is simulated by the server, the same for both players and every spectator.", "", "Live now, free and rated. Collect numbered cues, cloths and tables in your locker."].join("\n"), buttons: [[{ text: "🎱 Play NIGHT POOL", url: `${config.publicUrl}/games/pool` }]] };
+  }
   if (cmd === "games" || cmd === "game" || cmd === "play" || cmd === "arcade") {
     // the Game Room: what is live, tonight's best, where to play
     const top = (() => { try { const b = pinballBoard() as { board?: { name: string; score: number }[] }; return b.board?.[0]; } catch { return undefined; } })();
@@ -299,13 +302,14 @@ export async function publicCommand(cmd: string): Promise<{ text: string; button
       "🎱 <b>Space Pinball</b> · live, free", "PvP duels on the same table and seed, every score verified by replay. Solo board too.",
       top ? `🥇 Tonight's best: <b>${esc(top.name)}</b> · ${top.score.toLocaleString("en-US")}` : "🥇 Tonight's board is open: be the first.", "",
       "♟ <b>NIGHT CHESS</b> · live, free", "3D real-time chess: blitz and rapid, rated, or practise against the bot.", "",
+      "🎱 <b>NIGHT POOL</b> · live, free", "3D 8-ball on WPA rules, every shot simulated by the server, rated.", "",
       "<b>Planned</b>",
       "🪙 Frog Flip · two players, one coin, randomness from Chainlink VRF",
       "✊ Rock, Paper, Frog · secret picks, then reveal",
       "🎲 Night Dice · highest roll takes the pot",
       "🏁 Moon Race · a short race of reflexes", "",
       "💎 Games with real IMD and $SHIFT stakes open once the IMD swarm's escrow contract is deployed and audited.",
-    ].join("\n"), buttons: [[{ text: "🎱 Space Pinball", url: `${config.publicUrl}/games/pinball` }, { text: "♟ NIGHT CHESS", url: `${config.publicUrl}/games/chess` }], [{ text: "🎮 The Game Room", url: `${config.publicUrl}/games` }]] };
+    ].join("\n"), buttons: [[{ text: "🎱 Space Pinball", url: `${config.publicUrl}/games/pinball` }, { text: "♟ NIGHT CHESS", url: `${config.publicUrl}/games/chess` }], [{ text: "🎱 NIGHT POOL", url: `${config.publicUrl}/games/pool` }, { text: "🎮 The Game Room", url: `${config.publicUrl}/games` }]] };
   }
   if (cmd === "frogs" || cmd === "opensea" || cmd === "nft" || cmd === "nfts") return { text: "🐸 <b>NIGHT FROGS</b>\n500 onchain frogs, the crew of the 3 AM shift. Holders share half of every NIGHTSHIFT reward, by shift hours.\n\nOnly trust this collection link.", buttons: [[{ text: "🌊 NIGHT FROGS on OpenSea", url: OPENSEA_URL }], [{ text: "🐸 Rewards and the crew", url: `${config.publicUrl}/frogs` }]] };
   if (cmd === "links" || cmd === "site") return { text: "🌙 <b>NIGHTSHIFT links</b>\nOnly trust these.", buttons: links };

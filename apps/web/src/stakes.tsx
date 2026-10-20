@@ -8,7 +8,7 @@ import { type Step, canBatch, sendSteps } from "./batch";
 import "./stakes.css";
 
 /**
- * Real-money duels in IMD or $SHIFT through GameEscrow v2, shared by Space Pinball and NIGHT CHESS.
+ * Real-money duels in IMD or $SHIFT through GameEscrow v2, shared by Space Pinball, NIGHT CHESS and NIGHT POOL.
  * The contract, the tokens and the game labels are pinned here in the page: every transaction the
  * browser builds goes to these and checks what the server says against them, so a compromised
  * server cannot redirect a stake. Approvals are for the exact stake only.
@@ -16,8 +16,9 @@ import "./stakes.css";
 export const ESCROW: Address = "0xf460fd9ad76f18414f54a2431870e8a116193489";
 export const STAKE_TOKENS = { IMD: "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7", SHIFT: "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac" } as const satisfies Record<string, Address>;
 export type StakeToken = keyof typeof STAKE_TOKENS;
-export type StakeGame = "pinball" | "chess";
-const LABELS: Record<StakeGame, Hex> = { pinball: stringToHex("pinball", { size: 32 }), chess: stringToHex("chess", { size: 32 }) };
+export type StakeGame = "pinball" | "chess" | "pool";
+const LABELS: Record<StakeGame, Hex> = { pinball: stringToHex("pinball", { size: 32 }), chess: stringToHex("chess", { size: 32 }), pool: stringToHex("pool", { size: 32 }) };
+const GAME_LABEL: Record<StakeGame, string> = { pinball: "Space Pinball", chess: "NIGHT CHESS", pool: "NIGHT POOL (8-ball, WPA rules)" };
 const ABI = parseAbi([
   "function open(bytes32 matchId, address token, uint256 stake, bytes32 game)",
   "function join(bytes32 matchId)",
@@ -169,7 +170,7 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     // the server's answer must be exactly what was asked, on the pinned contract
     if (r.escrow.toLowerCase() !== ESCROW || r.token.toLowerCase() !== tokenAddress || r.game !== LABELS[game] || BigInt(r.stake) !== stake || !/^0x[0-9a-f]{64}$/.test(r.matchId)) throw new Error("The server's challenge does not match what you asked for. Nothing was sent.");
     const ap = await approval(a, tokenAddress, stake, tokenLabel(token));
-    if (!(await confirm("Open the challenge", [["Contract", `GameEscrow ${ESCROW}`], ["Your stake", `${formatUnits(stake, 18)} ${tokenLabel(token)}`], ["Winner receives", `${formatUnits(payoutOf(stake), 18)} ${tokenLabel(token)} (95% of the pot)`], ["Game", game === "chess" ? `NIGHT CHESS ${tc ?? ""}` : "Space Pinball"], ["Match", short(r.matchId)]]))) throw new Error("Cancelled.");
+    if (!(await confirm("Open the challenge", [["Contract", `GameEscrow ${ESCROW}`], ["Your stake", `${formatUnits(stake, 18)} ${tokenLabel(token)}`], ["Winner receives", `${formatUnits(payoutOf(stake), 18)} ${tokenLabel(token)} (95% of the pot)`], ["Game", game === "chess" ? `NIGHT CHESS ${tc ?? ""}` : GAME_LABEL[game]], ["Match", short(r.matchId)]]))) throw new Error("Cancelled.");
     const open: Step = { call: { address: ESCROW, abi: ABI, functionName: "open", args: [r.matchId, tokenAddress, stake, LABELS[game]] }, sign: "Opening in your wallet…", wait: "Waiting for the stake to confirm…" };
     if (!(await send(w, a, ap, open, "open the challenge", () => track(r.matchId))).ok) throw new Error("Opening the challenge failed.");
   });
@@ -231,7 +232,7 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
       <span><b>{c.name}</b><small>{short(c.creator)}{c.tc ? ` · ${c.tc}` : ""} · {clock(Math.max(0, Math.floor((c.joinBy ?? 0) - now)))} left</small></span>
       <strong>{Number(c.amount).toLocaleString()} {tokenLabel(c.token)}</strong>
       {c.you === "A" ? <em>YOURS</em> : <button type="button" className="sk-btn small" disabled={!live || !!step || !!waiting} onClick={() => void accept(c)}>ACCEPT</button>}
-    </li>)}</ul> : <p className="sk-note">No open {game === "chess" ? "chess" : "pinball"} challenges. Create one; it stays open for an hour.</p>}
+    </li>)}</ul> : <p className="sk-note">No open {game === "chess" ? "chess" : game === "pool" ? "pool" : "pinball"} challenges. Create one; it stays open for an hour.</p>}
     <p className="sk-note sk-fine">Contract <a href={`https://etherscan.io/address/${ESCROW}`} target="_blank" rel="noreferrer">{short(ESCROW)} ↗</a> · results signed by the server, paid by the contract.</p>
 
     {waiting && <div className={`sk-overlay ${theme}-overlay`} role="dialog" aria-modal="true" aria-labelledby="sk-wait">

@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import type { Address, Hex } from "viem";
 import { type Arena, liveArena } from "./arena.js";
-import { type ArenaParties, type ArenaSeat, type Board, BETS_ABI, Bets, type BetsReader, type CreateCall, type Lookup, type SettleCall, fromChess, fromPinball } from "./bets.js";
+import { type ArenaParties, type ArenaSeat, type Board, BETS_ABI, Bets, type BetsReader, type CreateCall, type Lookup, type SettleCall, fromChess, fromPinball, fromPool } from "./bets.js";
 import { eth } from "./chain.js";
 import { type ChessGames, chess } from "./chess.js";
 import { config } from "./config.js";
@@ -10,6 +10,7 @@ import { GameError, gameSignerAccount } from "./escrow.js";
 import { live as lobby } from "./games-routes.js";
 import { keeperAccount, keeperWrite } from "./keeper.js";
 import { betState } from "./pinball.js";
+import { pool as poolGames } from "./pool.js";
 import type { Vault } from "./vault.js";
 
 type Context = {
@@ -52,6 +53,7 @@ function partiesOf(arena: Arena, id: string): ArenaParties | null {
 export function liveLookup(vault: Vault): Lookup {
   return (game, id) => {
     if (game === "pinball") { const s = betState(id); return s ? fromPinball(id, s, Date.now()) : null; }
+    if (game === "pool") { try { return fromPool(id, poolGames.betInfo(id), Date.now()); } catch { return null; } }
     const arena = liveArena(() => lobby(vault));
     if (game === "arena") {
       const b = arena.boardOf(id);
@@ -83,9 +85,10 @@ export function liveBets(vault: Vault): Bets {
       return keeperWrite(account, request);
     });
     const receipt = async (hash: Hex) => (await eth.waitForTransactionReceipt({ hash, timeout: 600_000 })).status;
-    // every change of a chess game (its end included) reaches its markets at once; staked pinball ends through the lobby
+    // every change of a chess or pool game (its end included) reaches its markets at once; staked pinball ends through the lobby
     const watch = (board: Board, id: string, f: () => void) => {
       if (board === "pinball") return null;
+      if (board === "pool") { try { return poolGames.watch(id, f); } catch { return null; } }
       const games = board === "arena" ? liveArena(() => lobby(vault)).boardOf(id)?.games : chess;
       return games ? games.watch(id, f) : null;
     };

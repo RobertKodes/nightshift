@@ -160,6 +160,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "games", description: "The Game Room: Space Pinball and more" },
     { command: "pinball", description: "Space Pinball and its best players" },
     { command: "chess", description: "NIGHT CHESS" },
+    { command: "pool", description: "NIGHT POOL: 3D 8-ball on the website" },
     { command: "frogs", description: "NIGHT FROGS on OpenSea" },
     { command: "memes", description: "Memes and art from the night crew" },
     ...(h.games ? games : []),
