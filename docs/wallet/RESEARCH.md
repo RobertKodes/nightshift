@@ -66,8 +66,8 @@ malicious website"; and in the Telegram Mini App, MetaMask errored.
     - `social_login` with `config: null`, so the local value decides
   - With Reown Authentication on, every connected wallet got a second "Sign In" prompt to Reown
     before ours. That is confirmed headless; the screenshot was taken before the fix.
-  - `walletkit.ts` therefore switches SIWX, swaps, on-ramp, activity, payments, email and socials
-    off itself, after `modal.ready()`.
+  - `walletkit.ts` therefore switches SIWX, swaps, on-ramp, activity and payments off itself,
+    after `modal.ready()`. Email and socials follow `/setup` (section 4).
 - **`enableBaseAccount: false` does nothing in 1.8.24.**
   - The client never calls `OptionsController.setEnableBaseAccount`, so the adapter adds Base's
     account SDK for everyone: 92 kB gz, plus 38 kB of the `@wagmi/connectors` index, plus an
@@ -93,46 +93,61 @@ malicious website"; and in the Telegram Mini App, MetaMask errored.
   `--w3m-color-mix` tints the accent too, so `walletkit.css` sets the NIGHTSHIFT surfaces
   directly under `:root:root`, and the lime accent comes through untouched.
 
-## 3. The Telegram Mini App: no EVM wallet at all
+## 3. Telegram: the Mini App has no EVM wallet, Telegram's in-app browser does
 
 - The rule: Telegram's Bot Platform Developer Terms (sections 7.2 to 7.4) and its blockchain
   guidelines say a Mini App may interface with crypto wallets **only through TON Connect**. It
   must not promote non-TON assets or wallets, or send people to outside sites for them.
-- What changed:
-  - v0.150 removed from `/tg`:
-    - wallet linking
-    - the IMD and $SHIFT stake options and their "opening soon" labels
-    - the real-money notices
-    - staked challenges, staked live games and stake badges
-    - the NIGHT FROG avatar in embedded pinball
-  - `wallet.ts` `inTelegramApp()` refuses before the wallet layer is even downloaded when any of
-    these is true:
-    - the path is `/tg`
-    - the hash carries `tgWebAppData`
-    - `Telegram.WebApp.initData` is set
-    - `TelegramWebviewProxy` exists
-  - `walletkit.ts` checks the same again.
-- Reown's own Telegram guidance ("works out of the box") and its double-encoded Android deep links
-  therefore do not apply here.
-- If wallets ever come back to the Mini App, the allowed route is TON Connect (`@tonconnect/ui`),
+- The Mini App:
+  - v0.150 removed wallet linking, stakes and token labels from `/tg`. That commit is live on
+    main as v0.138, and the Mini App is now being retired.
+  - `wallet.ts` `inTelegramApp()` still refuses before the wallet layer is even downloaded when
+    the page is a real Mini App: the path is `/tg`, the hash carries `tgWebAppData`, or
+    `Telegram.WebApp.initData` is set.
+- Telegram's in-app browser:
+  - The bot's buttons are plain website links, and they open in Telegram's own browser on iOS and
+    Android. That is not a Mini App: it has no initData, and our site does not load
+    telegram-web-app.js there.
+  - The wallet modal works there like in any phone browser. `TelegramWebviewProxy` is no longer a
+    reason to refuse, because the in-app browser may carry it.
+- How AppKit behaves once it sees `TelegramWebviewProxy` or `window.Telegram` (source:
+  `CoreHelperUtil`, `OptionsUtil`, `appkit.js`):
+  - Deep links open with `window.open(href, "_blank")`, and the wc URI is encoded twice on Android.
+  - Google and X are dropped on iPhone.
+  - Social logins return by full-page redirect with `?result_uri=`, with
+    `@appkit/social_provider` in localStorage. `wallet.ts` `returningFromWalletLogin()` then
+    loads the wallet layer at once, so AppKit can finish the login, and `session.tsx` signs in.
+- Reown's FAQ: Android in-app browsers, Telegram named, may refuse custom URL schemes such as
+  `metamask://`. The modal therefore keeps every other way in:
+  - email and social sign-in, first in an app's browser
+  - "Search Wallet" with WalletConnect's QR code, and "Copy link" in each wallet's view
+  - a line above the modal (`inAppTip`) with "Copy page link", for opening the page in Safari,
+    Chrome or a wallet's browser
+- If wallets ever come back to a Mini App, the allowed route is TON Connect (`@tonconnect/ui`),
   not AppKit.
 
 ## 4. Email and social login
 
-- Embedded wallets: `features.email`, `features.socials`. They are non-custodial (Magic behind
-  Reown) and use the `https://secure.walletconnect.org` iframe; OAuth goes through `auth.magic.link`.
+- Embedded wallets: `features.email`, `features.socials`.
+  - They are non-custodial (Magic behind Reown) and use the `https://secure.walletconnect.org`
+    iframe.
+  - OAuth goes through `auth.magic.link`.
+  - Reown blocks them on an unverified domain (APKT005).
 - The free Starter plan allows 500 "Authenticated (SIWX/SIWE) or Embedded Wallet MAUs", then
   "Cut off at limit", which pauses the project, WalletConnect included. Pro is $89 a month for
   7,500 MAU.
-- Google refuses OAuth in embedded webviews (`disallowed_useragent`), and AppKit itself drops
-  Google inside Telegram on iOS (`OptionsUtil.filterSocialsByPlatform`).
-- Decision: **off**. One hard cap would take every wallet connection down with it.
-- To offer them later:
-  - set `email: true` and `socials: [...]` in the `features` of `walletkit.ts`
-  - remove `email`/`socials` from the post-ready override
-  - switch them on in the dashboard
-  - add `frame-src https://secure.walletconnect.org`
-  - have the owner accept the MAU cap
+- Google refuses OAuth in embedded browsers (`disallowed_useragent`). AppKit drops Google itself
+  only inside Telegram on iOS (`OptionsUtil.filterSocialsByPlatform`).
+- Decision: **on**, as the owner asked, for the in-app browser where no wallet is installed, with
+  a switch that applies at once: `/setup`, Wallets, `WALLET_SOCIAL_LOGIN`.
+  - The engine reads the switch on every `/api/wallet-config`, with no restart.
+  - Set to 0, the modal shows wallets only.
+  - Logins offered: email, Google, X, Discord, Apple and GitHub. Google is left out in any app's
+    browser.
+  - Embedded wallets are plain keys (`defaultAccountTypes: eoa`), so our engine checks their
+    sign-in like any wallet's.
+- Watch the MAU count on dashboard.reown.com. Before it reaches 500, switch the login off or move
+  to a paid plan.
 
 ## 5. Domain verification (the "malicious website" warning)
 
@@ -167,7 +182,8 @@ malicious website"; and in the Telegram Mini App, MetaMask errored.
     - `wss://relay.walletconnect.*`
     - `wss://www.walletlink.org`
     - `https://cca-lite.coinbase.com`
-  - `frame-src`: `verify.walletconnect.*`, `secure.walletconnect.*`
+  - `frame-src`: `verify.walletconnect.*`, `secure.walletconnect.*` (the email and social
+    login iframe: needed now)
   - `img-src`: `* data: blob:` plus Reown's hosts
   - `font-src`: `https://fonts.reown.com`
   - `Cross-Origin-Opener-Policy: same-origin-allow-popups`

@@ -66,6 +66,9 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
   { title: "IMD", note: "Leave empty: a free public Ethereum RPC is already used. The IMD price follows the market by itself (DexScreener, every 10 minutes).", fields: [
     { k: "ETH_RPC", label: "Ethereum RPC (optional)", hint: "https://ethereum-rpc.publicnode.com" },
   ] },
+  { title: "Wallets", note: "Email and social sign-in in the wallet modal give someone without a wallet app a wallet in a minute. Reown's free plan allows 500 of those users a month, then pauses the whole project, WalletConnect included: switch it off here when that line comes near. It applies at once, no restart.", fields: [
+    { k: "WALLET_SOCIAL_LOGIN", label: "Email and social sign-in", options: [["", "Default (on)"], ["1", "On"], ["0", "Off"]] },
+  ] },
   { title: "CEO", note: "Optional. Without a key a free playbook decides.", fields: [
     { k: "OPENROUTER_API_KEY", label: "OpenRouter API key", secret: true },
     { k: "NIGHTSHIFT_MODEL", label: "Model (free only, ends in :free)", hint: "nvidia/nemotron-3-super-120b-a12b:free" },

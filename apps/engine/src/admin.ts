@@ -4,6 +4,7 @@ import { isAddress } from "viem";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { EDITABLE, SECRET_KEYS, adminToken, readSettings } from "./settings.js";
+import { socialLogin } from "./wallet-config.js";
 
 export const ADMIN = adminToken();
 
@@ -35,6 +36,8 @@ export async function setupState(engine: Engine) {
     TELEGRAM_BOT_TOKEN: config.telegramToken ? "set" : "", TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","),
     TOKEN_ADDRESS: config.token.address, TOKEN_SYMBOL: config.token.symbol, TOKEN_HOLDER_MIN: String(config.token.holderMin), TOKEN_BUY_URL: config.token.buyUrl,
     GUMROAD_CLIENT_ID: config.gumroad.clientId,
+    // read live by /api/wallet-config: a saved change applies at once, never "pending a restart"
+    WALLET_SOCIAL_LOGIN: socialLogin() ? "1" : "0",
   };
   const shown: Record<string, string> = {};
   for (const k of EDITABLE) shown[k] = SECRET_KEYS.has(k) ? (saved[k] ? "set" : "") : (saved[k] ?? "");
@@ -96,6 +99,7 @@ export function pendingChanges(): string[] {
     BETPOOL_ADDRESS: config.betPool.address, BETPOOL_BLOCK: String(config.betPool.block),
     TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","), PUBLIC_URL: config.publicUrl, REQUIRE_AUTH: config.requireAuth ? "1" : "0",
     GUMROAD_CLIENT_ID: config.gumroad.clientId,
+    WALLET_SOCIAL_LOGIN: socialLogin() ? "1" : "0",
   };
   return EDITABLE.filter((k) => saved[k] !== undefined && (SECRET_KEYS.has(k) || running[k] === undefined || saved[k] !== running[k]));
 }
@@ -126,6 +130,8 @@ export function checkSetup(patch: Record<string, unknown>): string | null {
   if (bp && !isAddress(bp)) return "BETPOOL_ADDRESS must be an address";
   const bb = v("BETPOOL_BLOCK");
   if (bb && !/^\d{1,12}$/.test(bb)) return "BETPOOL_BLOCK is the contract's deploy block number";
+  const sl = v("WALLET_SOCIAL_LOGIN");
+  if (sl && sl !== "0" && sl !== "1") return "WALLET_SOCIAL_LOGIN is 1 (on) or 0 (off)";
   // A masked secret coming back unchanged means "keep it".
   for (const k of SECRET_KEYS) if (patch[k] === "set") delete patch[k];
   return null;

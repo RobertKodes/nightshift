@@ -20,3 +20,8 @@
   --apkt-tokens-theme-iconDefault: #a9a3c4;
   --apkt-tokens-theme-iconInverse: #f2efff;
 }
+
+/* Above the modal inside an app's browser (walletkit.ts inAppTip): the other ways in. */
+.nsw-tip { position: fixed; z-index: 2147483001; top: max(10px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(420px, calc(100% - 20px)); box-sizing: border-box; display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #3d3470; border-radius: 12px; background: #0d0a1f; box-shadow: 0 14px 40px rgba(0, 0, 0, .55); color: #cfc9e6; font: 400 12.5px/1.45 "Space Grotesk", Inter, system-ui, sans-serif; }
+.nsw-tip p { margin: 0; flex: 1; }
+.nsw-tip button { flex: none; min-height: 36px; padding: 0 10px; border: 1px solid #b8ff4a; border-radius: 8px; background: transparent; color: #b8ff4a; font: 600 12px/1 "Space Grotesk", Inter, system-ui, sans-serif; cursor: pointer; }

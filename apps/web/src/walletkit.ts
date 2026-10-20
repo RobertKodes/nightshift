@@ -1,9 +1,10 @@
 /**
  * The website's wallet layer, loaded on first use only (sign in, stake, swap, buy…): Reown AppKit
  * with its wagmi adapter. Browser extensions (EIP-6963), wallet apps on a phone (WalletConnect deep
- * links, a QR code on a computer), a wallet app's own browser and Coinbase's smart wallet all end in
- * one EIP-1193 provider that every page signs and sends with through viem. Never inside Telegram's
- * Mini App, where Telegram allows TON Connect only (wallet.ts refuses before this is even loaded).
+ * links, a QR code and a copyable link as fallbacks), a wallet app's own browser, Coinbase's smart
+ * wallet and email or social sign-in (Reown's embedded wallet, for an in-app browser with no wallet)
+ * all end in one EIP-1193 provider that every page signs and sends with through viem. Never inside
+ * Telegram's Mini App, where Telegram allows TON Connect only (wallet.ts refuses before this loads).
  */
 import { createAppKit } from "@reown/appkit";
 import { type AppKitNetwork, base, baseSepolia, mainnet } from "@reown/appkit/networks";
@@ -11,7 +12,7 @@ import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { coinbaseWallet } from "@wagmi/connectors";
 import { type CreateConnectorFn, getAccount, watchAccount } from "@wagmi/core";
 import { fallback, http, numberToHex } from "viem";
-import { type Eip1193, inTelegramApp, remember } from "./wallet";
+import { type Eip1193, inAppBrowser, inTelegramApp, remember } from "./wallet";
 import "./walletkit.css";
 
 /** Wallet ids in Reown's catalogue (api.web3modal.org/getWallets), shown first in this order. */
@@ -24,7 +25,7 @@ const FEATURED = {
   okx: "971e689d0a5be527bac79629b4ee9b925e82208e5168b733496a09c0faed0709",
 };
 
-type Cfg = { walletConnect?: string | null; site?: string; salesChainId?: number };
+type Cfg = { walletConnect?: string | null; site?: string; salesChainId?: number; social?: boolean };
 type Req = { method: string; params?: unknown };
 type Kit = {
   modal: ReturnType<typeof createAppKit>;
@@ -76,6 +77,7 @@ async function init(): Promise<Kit> {
   const projectId = cfg.walletConnect;
   if (!projectId) throw new Error("Wallet connections are not switched on for this site yet.");
   const url = metadataUrl(cfg.site);
+  const social = cfg.social !== false;
   const icon = `${url}/brand/shift-icon-512.png`;
   const networks: [AppKitNetwork, ...AppKitNetwork[]] = cfg.salesChainId === 84532 ? [mainnet, base, baseSepolia] : [mainnet, base];
   noThirdParty();
@@ -98,10 +100,16 @@ async function init(): Promise<Kit> {
     enableBaseAccount: false,
     defaultAccountTypes: { eip155: "eoa" },
     termsConditionsUrl: `${url}/terms`,
-    // No email or social login (Reown's embedded wallets): the free plan counts them against 500 active
-    // users a month and then cuts the whole project off, and Google refuses its sign-in inside in-app
-    // browsers. To offer them: email and socials here, the same switches on dashboard.reown.com.
-    features: { email: false, socials: false, emailShowWallets: true, swaps: false, onramp: false, send: false, receive: false, history: false, analytics: false, legalCheckbox: false },
+    // Email and social sign-in (Reown's embedded wallet, a plain key: our engine checks it like any
+    // wallet) unless /setup switched it off: the free plan counts them against 500 active users a
+    // month, then pauses the project. Inside an app's browser, with no wallet, they come first, without
+    // Google, which refuses its sign-in in embedded browsers (disallowed_useragent); AppKit itself drops
+    // the rest a platform refuses (X inside Telegram on Android, Facebook on phones).
+    features: {
+      email: social, socials: social ? (inAppBrowser() ? ["x", "discord", "apple", "github"] : ["google", "x", "discord", "apple", "github"]) : false, emailShowWallets: true,
+      connectMethodsOrder: social && inAppBrowser() ? ["email", "social", "wallet"] : ["wallet", "email", "social"],
+      swaps: false, onramp: false, send: false, receive: false, history: false, analytics: false, legalCheckbox: false,
+    },
     themeMode: "dark",
     themeVariables: {
       "--w3m-font-family": "\"Space Grotesk\", Inter, system-ui, sans-serif",
@@ -115,11 +123,36 @@ async function init(): Promise<Kit> {
   await modal.ready().catch(() => {});
   // The dashboard's switches win over `features`. Reown Authentication (SIWX) would ask every wallet
   // for a second signature, to Reown, before ours, and count it against the free plan; swaps,
-  // on-ramp and activity are not NIGHTSHIFT's; email and socials would show a login with no wallet
-  // behind it (the adapter set its connectors from `features` above). Our engine's sign-in is the only one.
-  modal.updateRemoteFeatures({ ...modal.getRemoteFeatures(), reownAuthentication: false, email: false, socials: false, swaps: false, onramp: false, activity: false, payWithExchange: false, payments: false, emailCapture: false });
+  // on-ramp and activity are not NIGHTSHIFT's; with /setup's switch off, email and socials would show
+  // a login with no wallet behind it (the adapter set its connectors from `features` above).
+  modal.updateRemoteFeatures({ ...modal.getRemoteFeatures(), reownAuthentication: false, swaps: false, onramp: false, activity: false, payWithExchange: false, payments: false, emailCapture: false, ...(social ? {} : { email: false, socials: false }) });
   modal.updateOptions({ siwx: undefined });
+  if (inAppBrowser()) inAppTip(modal);
   return k;
+}
+
+/**
+ * Inside an app's browser (the bot's links open in Telegram's) a wallet app does not always open: a
+ * line above the modal names the other ways in, with the page's link to open it elsewhere.
+ */
+function inAppTip(modal: Kit["modal"]): void {
+  let tip: HTMLElement | null = null;
+  const telegram = /Telegram/i.test(navigator.userAgent) || "TelegramWebviewProxy" in window;
+  modal.subscribeState((s) => {
+    if (!s.open) { tip?.remove(); tip = null; return; }
+    if (tip) return;
+    tip = document.createElement("div");
+    tip.className = "nsw-tip";
+    tip.setAttribute("role", "note");
+    const text = document.createElement("p");
+    text.textContent = `Wallet app not opening from ${telegram ? "Telegram" : "this app"}? Sign in with email, scan the QR code under Search Wallet, or open this page in Safari or Chrome${telegram ? " (⋯ menu, Open in browser)" : ""}.`;
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.textContent = "Copy page link";
+    copy.onclick = () => { void navigator.clipboard?.writeText(location.href).then(() => { copy.textContent = "Link copied"; }, () => { copy.textContent = location.host; }); };
+    tip.append(text, copy);
+    document.body.append(tip);
+  });
 }
 
 let kit: Promise<Kit> | null = null;

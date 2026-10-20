@@ -10,15 +10,35 @@ export type Eip1193 = {
 };
 
 /**
- * The Telegram Mini App (/tg, or a page Telegram opened as one): Telegram's rules for Mini Apps allow
- * wallets through TON Connect only, so no EVM wallet is offered, connected or linked there.
+ * A Telegram Mini App (/tg, or a page Telegram opened as one: it carries signed initData): Telegram's
+ * rules for Mini Apps allow wallets through TON Connect only, so no EVM wallet is offered there.
+ * Telegram's in-app browser, where the bot's plain links open, is not a Mini App (no initData): the
+ * wallet modal works there like in any phone browser.
  */
 export function inTelegramApp(): boolean {
   if (typeof window === "undefined") return false;
-  const w = window as unknown as { Telegram?: { WebApp?: { initData?: string } }; TelegramWebviewProxy?: unknown };
-  return /^\/tg(\/|$)/.test(location.pathname) || /tgWebApp(Data|Version)=/.test(location.hash) || Boolean(w.Telegram?.WebApp?.initData) || w.TelegramWebviewProxy !== undefined;
+  const w = window as unknown as { Telegram?: { WebApp?: { initData?: string } } };
+  return /^\/tg(\/|$)/.test(location.pathname) || /tgWebApp(Data|Version)=/.test(location.hash) || Boolean(w.Telegram?.WebApp?.initData);
 }
-const notInTelegram = () => { if (inTelegramApp()) throw new Error("Wallets are not available inside Telegram."); };
+const notInTelegram = () => { if (inTelegramApp()) throw new Error("Wallets are not available inside Telegram's Mini App."); };
+
+/**
+ * An app's own browser with no wallet in it (Telegram, Instagram, Facebook, X, TikTok, Line…): wallet
+ * apps do not always open from there, so the modal shows the other ways in.
+ */
+export function inAppBrowser(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent;
+  return "TelegramWebviewProxy" in window || /Telegram|FBAN|FBAV|Instagram|Line\/|Twitter|TikTok|musical_ly|Snapchat|; wv\)/i.test(ua);
+}
+
+/**
+ * Back from an email or social sign-in that left the page (inside Telegram, Reown's login returns by
+ * redirect with ?result_uri=): the wallet layer loads at once so it can finish that sign-in.
+ */
+export function returningFromWalletLogin(): boolean {
+  try { return new URLSearchParams(location.search).has("result_uri") && Boolean(localStorage.getItem("@appkit/social_provider")); } catch { return false; }
+}
 
 const KEY = "ns-wallet";
 /** A wallet was connected on this device: the next visit may bring it back without asking. */

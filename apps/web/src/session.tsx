@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { chooseWallet, forgetWallet } from "./wallet";
+import { chooseWallet, forgetWallet, returningFromWalletLogin } from "./wallet";
 import { createWalletClient, custom, getAddress } from "viem";
 import { api } from "./api";
 
@@ -55,6 +55,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setBusy(false);
     }
   }, []);
+  // back from an email or social login that left the page (Telegram's browser): it finishes, then signs in
+  useEffect(() => { if (returningFromWalletLogin()) void api.me().then((m) => { if (!m.address) void signIn(); }).catch(() => void signIn()); }, [signIn]);
   // signing out also disconnects the wallet here, so the next sign-in can pick another one
   const signOut = useCallback(async () => { await api.logout().catch(() => {}); setAddress(null); await forgetWallet(); }, []);
   /** Reads the session again (a sign-in made elsewhere on the page, e.g. the Telegram Mini App's wallet link). */

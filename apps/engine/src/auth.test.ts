@@ -4,7 +4,7 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
 import { describe, expect, it } from "vitest";
 import { Auth, type ApiKey, MAX_KEYS_PER_OWNER } from "./auth.js";
-import { walletConfig } from "./wallet-config.js";
+import { socialLogin, walletConfig } from "./wallet-config.js";
 
 const req = (token: string) => ({ headers: { authorization: `Bearer ${token}` } }) as unknown as IncomingMessage;
 
@@ -113,9 +113,16 @@ describe("wallet sign-in and API keys", () => {
   });
 
   it("gives the wallet layer the site's exact origin for Reown's domain check", () => {
-    expect(walletConfig({ walletConnect: "adbab93f28eb7aa847cbe829b7a530d3", publicUrl: "https://getnightshift.tech", salesChainId: 8453 }))
-      .toEqual({ walletConnect: "adbab93f28eb7aa847cbe829b7a530d3", site: "https://getnightshift.tech", salesChainId: 8453 });
-    expect(walletConfig({ walletConnect: "", publicUrl: "http://localhost:8784", salesChainId: 84532 }).walletConnect).toBeNull();
+    expect(walletConfig({ walletConnect: "adbab93f28eb7aa847cbe829b7a530d3", publicUrl: "https://getnightshift.tech", salesChainId: 8453 }, true))
+      .toEqual({ walletConnect: "adbab93f28eb7aa847cbe829b7a530d3", site: "https://getnightshift.tech", salesChainId: 8453, social: true });
+    expect(walletConfig({ walletConnect: "", publicUrl: "http://localhost:8784", salesChainId: 84532 }, false).walletConnect).toBeNull();
+  });
+
+  it("offers email and social sign-in unless /setup or the environment switches it off, /setup first", () => {
+    expect(socialLogin({}, {})).toBe(true);
+    expect(socialLogin({}, { WALLET_SOCIAL_LOGIN: "0" })).toBe(false);
+    expect(socialLogin({ WALLET_SOCIAL_LOGIN: "1" }, { WALLET_SOCIAL_LOGIN: "0" })).toBe(true);
+    expect(socialLogin({ WALLET_SOCIAL_LOGIN: "0" }, {})).toBe(false);
   });
 
   it("mints, recognises and revokes API keys, storing only their hash", () => {
