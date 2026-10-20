@@ -34,6 +34,15 @@ export const config = {
   /** Where products are sold: Base (8453) or Base Sepolia (84532). */
   salesChainId: num(env.SALES_CHAIN_ID, 84532),
   salesRpc: env.SALES_RPC ?? (num(env.SALES_CHAIN_ID, 84532) === 8453 ? "https://mainnet.base.org" : "https://sepolia.base.org"),
+  /** A CDP secret API key (portal.cdp.coinbase.com): its id, and its Ed25519 secret in base64. Never logged or shown. */
+  cdpApiKeyId: env.CDP_API_KEY_ID ?? "",
+  cdpApiKeySecret: env.CDP_API_KEY_SECRET ?? "",
+  /**
+   * Who settles x402 payments. cdp: Coinbase's CDP facilitator (it pays the gas, and each settled payment
+   * lists the product in the CDP Bazaar), with the company settling itself when the facilitator is down.
+   * self: the company always does. Default: cdp once a CDP key is set.
+   */
+  x402Facilitator: (env.X402_FACILITATOR === "self" || !(env.CDP_API_KEY_ID && env.CDP_API_KEY_SECRET) ? "self" : "cdp") as "cdp" | "self",
   /** Demo pacing: minutes between autopilot shifts and seconds per swarm job in sim mode. */
   simShiftMinutes: num(env.SIM_SHIFT_MINUTES, 2),
   simJobSeconds: num(env.SIM_JOB_SECONDS, 40),

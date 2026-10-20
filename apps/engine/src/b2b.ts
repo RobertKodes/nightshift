@@ -6,6 +6,7 @@ import { type PaymentPayload, requirement, signPayment, verifyPayment } from "@n
 import type { LocalAccount } from "viem";
 import { previewOf, search } from "./agentmarket.js";
 import { writeAtomic } from "./atomic.js";
+import type { SettledBy } from "./checkout.js";
 
 /**
  * Companies buying from each other (B2B), on the engine's side: the market search with free previews,
@@ -104,7 +105,7 @@ export class MarketDesk implements MarketDeps {
    * Books one purchase, once (the ledger id is the buyer's shift): the buyer's expense and the seller's
    * sale in one transaction tagged b2b, the seller's B2B count, and the buyer's own copy of the file.
    */
-  async book(x: { sellerId: string; productId: string; buyerId: string; taskId: string; value: bigint; tx: string | null; sim: boolean }): Promise<MarketReceipt | null> {
+  async book(x: { sellerId: string; productId: string; buyerId: string; taskId: string; value: bigint; tx: string | null; sim: boolean; via?: SettledBy }): Promise<MarketReceipt | null> {
     const seller = this.#company(x.sellerId);
     const buyer = this.#company(x.buyerId);
     const product = seller?.products.find((p) => p.id === x.productId);
@@ -113,7 +114,7 @@ export class MarketDesk implements MarketDeps {
       id, at: new Date(), kind: x.sim ? "b2b_sim" : "b2b",
       memo: `${buyer?.name ?? "A company"} bought ${product?.name ?? x.productId} from ${seller?.name ?? "a company"}`,
       ref: x.tx ? { chainTx: x.tx } : undefined,
-      meta: { b2b: true, buyer: x.buyerId, seller: x.sellerId, product: x.productId, task: x.taskId },
+      meta: { b2b: true, buyer: x.buyerId, seller: x.sellerId, product: x.productId, task: x.taskId, ...(x.via ? { settledBy: x.via } : {}) },
       postings: [
         { account: `co:${x.buyerId}:usdc`, asset: "USDC", amount: -x.value },
         { account: `co:${x.sellerId}:usdc`, asset: "USDC", amount: x.value },

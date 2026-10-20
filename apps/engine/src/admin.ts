@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import { isAddress } from "viem";
+import { isCdpSecret } from "@nightshift/x402";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { EDITABLE, SECRET_KEYS, adminToken, readSettings } from "./settings.js";
@@ -31,6 +32,7 @@ export async function setupState(engine: Engine) {
     NIGHTSHIFT_MODE: config.mode, PUBLIC_URL: config.publicUrl, REQUIRE_AUTH: config.requireAuth ? "1" : "0",
     OPENROUTER_API_KEY: config.openrouterKey ? "set" : "", NIGHTSHIFT_MODEL: config.model,
     ETH_RPC: config.ethRpc, SALES_CHAIN_ID: String(config.salesChainId), SALES_RPC: config.salesRpc,
+    X402_FACILITATOR: config.x402Facilitator, CDP_API_KEY_ID: config.cdpApiKeyId ? "set" : "", CDP_API_KEY_SECRET: config.cdpApiKeySecret ? "set" : "",
     PLATFORM_FEE_BPS: String(config.platformFeeBps), PLATFORM_TREASURY: config.platformTreasury, PLATFORM_DEV: config.platformDev, MAX_COMPANIES_PER_OWNER: String(config.maxCompaniesPerOwner),
     SIM_SHIFT_MINUTES: String(config.simShiftMinutes), SIM_JOB_SECONDS: String(config.simJobSeconds),
     TELEGRAM_BOT_TOKEN: config.telegramToken ? "set" : "", TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","),
@@ -43,14 +45,20 @@ export async function setupState(engine: Engine) {
   for (const k of EDITABLE) shown[k] = SECRET_KEYS.has(k) ? (saved[k] ? "set" : "") : (saved[k] ?? "");
   const pending = EDITABLE.some((k) => (saved[k] ?? "") !== "" && !SECRET_KEYS.has(k) && saved[k] !== running[k])
     || Boolean(saved.OPENROUTER_API_KEY) !== Boolean(config.openrouterKey) || Boolean(saved.TELEGRAM_BOT_TOKEN) !== Boolean(config.telegramToken)
-    || Boolean(saved.GUMROAD_CLIENT_SECRET) !== Boolean(config.gumroad.clientSecret);
+    || Boolean(saved.GUMROAD_CLIENT_SECRET) !== Boolean(config.gumroad.clientSecret)
+    || Boolean(saved.CDP_API_KEY_ID) !== Boolean(config.cdpApiKeyId) || Boolean(saved.CDP_API_KEY_SECRET) !== Boolean(config.cdpApiKeySecret);
 
-  const [eth, base, swarm, or] = await Promise.all([
+  const network = `eip155:${config.salesChainId}`;
+  const [eth, base, swarm, or, cdp] = await Promise.all([
     rpcChain(config.ethRpc),
     rpcChain(config.salesRpc),
     engine.reads.health().catch(() => null),
     config.openrouterKey
       ? fetch("https://openrouter.ai/api/v1/key", { headers: { Authorization: `Bearer ${config.openrouterKey}` }, signal: AbortSignal.timeout(5000) }).then((r) => r.ok).catch(() => false)
+      : Promise.resolve(null),
+    // one read-only call with the key: does the facilitator take it, and does it settle where we sell?
+    engine.facilitator
+      ? engine.facilitator.supported().then((r) => r.kinds.some((k) => k.x402Version === 2 && k.scheme === "exact" && k.network === network)).catch(() => false)
       : Promise.resolve(null),
   ]);
   const live = config.mode === "live";
@@ -67,6 +75,11 @@ export async function setupState(engine: Engine) {
       detail: config.publicUrl.startsWith("https://") ? config.publicUrl : "Plain HTTP on an IP address. Works, but get a domain (Caddy adds HTTPS by itself) before real money moves" },
     { id: "url", label: "Public address", state: /localhost|127\.0\.0\.1/.test(config.publicUrl) ? "block" : "ok", detail: `${config.publicUrl} (used in buy links and company sites)` },
     { id: "llm", label: "CEO model", state: or === false ? "warn" : "ok", detail: or === null ? "No OpenRouter key: the free playbook decides. Fine to start" : or ? `${config.model} via OpenRouter` : "OpenRouter rejected the key" },
+    { id: "x402", label: "x402 settlement (CDP Bazaar)", state: cdp === true ? "ok" : "warn",
+      detail: cdp === true ? `CDP facilitator: Coinbase pays the gas and every paid product is listed in the CDP Bazaar (exact on ${network}). If it is down, companies settle themselves`
+        : cdp === false ? `The CDP facilitator refused the key or did not answer for ${network}: companies settle payments themselves until it works`
+        : config.cdpApiKeyId && config.cdpApiKeySecret ? "Companies settle payments themselves (X402_FACILITATOR=self): products are not listed in the CDP Bazaar"
+        : "Companies settle payments themselves, so products are not listed in the CDP Bazaar. Add a CDP API key (portal.cdp.coinbase.com) to settle through Coinbase" },
     { id: "fee", label: "Platform fee", state: config.platformFeeBps > 0 && !isAddress(config.platformTreasury || "0x") ? "block" : "ok",
       detail: config.platformFeeBps > 0 ? `${config.platformFeeBps / 100}% of withdrawals: 20% to dev ${config.platformDev}, 80% to treasury ${config.platformTreasury || "missing"}` : "None" },
     { id: "price", label: "IMD price for budgets", state: config.imdUsdPinned || Date.now() - config.imdUsdAt < 30 * 60_000 ? "ok" : "warn",
@@ -88,14 +101,14 @@ export async function setupState(engine: Engine) {
 
 /** Settings that move money or trust: every change is announced, so a leaked admin token cannot act quietly. */
 export const ANNOUNCED = ["NIGHTSHIFT_MODE", "PLATFORM_TREASURY", "PLATFORM_DEV", "PLATFORM_FEE_BPS", "ETH_RPC", "SALES_RPC", "SALES_CHAIN_ID", "TOKEN_ADDRESS", "NFT_ADDRESS", "REQUIRE_AUTH",
-  "BETPOOL_ADDRESS", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS", "LAUNCH_NOTIFY", "PUBLIC_URL", "GUMROAD_CLIENT_ID", "GUMROAD_CLIENT_SECRET"];
+  "X402_FACILITATOR", "CDP_API_KEY_ID", "CDP_API_KEY_SECRET", "BETPOOL_ADDRESS", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS", "LAUNCH_NOTIFY", "PUBLIC_URL", "GUMROAD_CLIENT_ID", "GUMROAD_CLIENT_SECRET"];
 
 /** Saved settings that differ from what runs now, by name: what a restart would apply. */
 export function pendingChanges(): string[] {
   const saved = readSettings();
   const running: Record<string, string> = {
     NIGHTSHIFT_MODE: config.mode, PLATFORM_TREASURY: config.platformTreasury, PLATFORM_DEV: config.platformDev, PLATFORM_FEE_BPS: String(config.platformFeeBps),
-    ETH_RPC: config.ethRpc, SALES_RPC: config.salesRpc, SALES_CHAIN_ID: String(config.salesChainId), TOKEN_ADDRESS: config.token.address, NFT_ADDRESS: config.nft.address,
+    ETH_RPC: config.ethRpc, SALES_RPC: config.salesRpc, SALES_CHAIN_ID: String(config.salesChainId), TOKEN_ADDRESS: config.token.address, NFT_ADDRESS: config.nft.address, X402_FACILITATOR: config.x402Facilitator,
     BETPOOL_ADDRESS: config.betPool.address, BETPOOL_BLOCK: String(config.betPool.block),
     TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","), PUBLIC_URL: config.publicUrl, REQUIRE_AUTH: config.requireAuth ? "1" : "0",
     GUMROAD_CLIENT_ID: config.gumroad.clientId,
@@ -134,6 +147,13 @@ export function checkSetup(patch: Record<string, unknown>): string | null {
   if (bb && !/^\d{1,12}$/.test(bb)) return "BETPOOL_BLOCK is the contract's deploy block number";
   const sl = v("WALLET_SOCIAL_LOGIN");
   if (sl && sl !== "0" && sl !== "1") return "WALLET_SOCIAL_LOGIN is 1 (on) or 0 (off)";
+  const fac = v("X402_FACILITATOR");
+  if (fac && fac !== "cdp" && fac !== "self") return "X402_FACILITATOR is cdp or self";
+  // checked without ever being repeated back: a message names the field, never its value
+  const kid = v("CDP_API_KEY_ID");
+  if (kid && kid !== "set" && !/^[\w./-]{8,200}$/.test(kid)) return "CDP_API_KEY_ID is the id of the CDP key file (a UUID)";
+  const ks = v("CDP_API_KEY_SECRET");
+  if (ks && ks !== "set" && !isCdpSecret(ks)) return "CDP_API_KEY_SECRET is the privateKey of the CDP key file: an Ed25519 key in base64 (64 bytes)";
   // A masked secret coming back unchanged means "keep it".
   for (const k of SECRET_KEYS) if (patch[k] === "set") delete patch[k];
   return null;

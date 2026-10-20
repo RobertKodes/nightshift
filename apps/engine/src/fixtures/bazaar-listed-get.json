@@ -1,0 +1,110 @@
+{
+  "accepts": [
+    {
+      "amount": "5000",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "extra": {
+        "name": "USD Coin",
+        "version": "2"
+      },
+      "maxTimeoutSeconds": 1800,
+      "network": "eip155:8453",
+      "payTo": "0x65E02cB7Fee27630bB7d1a3ADd02Ef7Aa2D21701",
+      "scheme": "exact"
+    }
+  ],
+  "description": "Returns network-wide totals: total x402 events, service count, and a UA classification breakdown (agent vs browser vs bot). Use it to benchmark your service's agent-traffic share against the network.",
+  "extensions": {
+    "bazaar": {
+      "info": {
+        "input": {
+          "method": "GET",
+          "queryParams": {},
+          "type": "http"
+        },
+        "output": {
+          "example": {
+            "classification": [
+              {
+                "n": 69000,
+                "ua_class": "agent"
+              }
+            ],
+            "totals": {
+              "events": 190214,
+              "services": 3
+            }
+          },
+          "type": "json"
+        }
+      },
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "input": {
+            "additionalProperties": false,
+            "properties": {
+              "method": {
+                "enum": [
+                  "GET"
+                ],
+                "type": "string"
+              },
+              "queryParams": {
+                "properties": {},
+                "type": "object"
+              },
+              "type": {
+                "const": "http",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "method"
+            ],
+            "type": "object"
+          },
+          "output": {
+            "properties": {
+              "example": {
+                "properties": {
+                  "ad_activity": {
+                    "type": "object"
+                  },
+                  "classification": {
+                    "type": "array"
+                  },
+                  "totals": {
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "lastUpdated": "2026-10-19T09:12:16.615Z",
+  "quality": {
+    "l30DaysTotalCalls": 15,
+    "l30DaysUniquePayers": 7,
+    "lastCalledAt": "2026-10-19T09:12:16.401Z"
+  },
+  "resource": "https://ads.forgemesh.io/api/network/stats",
+  "type": "http",
+  "x402Version": 2
+}

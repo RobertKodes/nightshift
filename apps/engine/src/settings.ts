@@ -9,7 +9,7 @@ import { writeAtomic } from "./atomic.js";
  */
 export const EDITABLE = [
   "NIGHTSHIFT_MODE", "PUBLIC_URL", "REQUIRE_AUTH", "OPENROUTER_API_KEY", "NIGHTSHIFT_MODEL",
-  "ETH_RPC", "SALES_CHAIN_ID", "SALES_RPC", "IMD_USD",
+  "ETH_RPC", "SALES_CHAIN_ID", "SALES_RPC", "IMD_USD", "X402_FACILITATOR", "CDP_API_KEY_ID", "CDP_API_KEY_SECRET",
   "PLATFORM_FEE_BPS", "PLATFORM_TREASURY", "PLATFORM_DEV", "MAX_COMPANIES_PER_OWNER",
   "SIM_SHIFT_MINUTES", "SIM_JOB_SECONDS",
   "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS",
@@ -21,7 +21,7 @@ export const EDITABLE = [
 ] as const;
 export type SettingKey = (typeof EDITABLE)[number];
 /** Shown as set / not set, never sent back to the browser. */
-export const SECRET_KEYS = new Set<SettingKey>(["OPENROUTER_API_KEY", "TELEGRAM_BOT_TOKEN", "BLUESKY_APP_PASSWORD", "LAUNCH_NOTIFY", "OPENSEA_API_KEY", "GUMROAD_CLIENT_SECRET", "ETHERSCAN_API_KEY"]);
+export const SECRET_KEYS = new Set<SettingKey>(["OPENROUTER_API_KEY", "TELEGRAM_BOT_TOKEN", "BLUESKY_APP_PASSWORD", "LAUNCH_NOTIFY", "OPENSEA_API_KEY", "GUMROAD_CLIENT_SECRET", "ETHERSCAN_API_KEY", "CDP_API_KEY_ID", "CDP_API_KEY_SECRET"]);
 
 const dataDir = resolve(process.env.DATA_DIR ?? "data");
 const file = join(dataDir, "settings.json");

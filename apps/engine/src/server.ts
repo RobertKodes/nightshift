@@ -5,7 +5,7 @@ import type { Company } from "@nightshift/core";
 import { fromImd, fromUsdc } from "@nightshift/core";
 import { type PaymentPayload, USDC, challenge as challenge402, decodeHeader, encodeHeader, requirement, verifyPayment } from "@nightshift/x402";
 import { balances, eth, sales } from "./chain.js";
-import { PendingError } from "./checkout.js";
+import { NoGasError, PaymentRefused, PendingError } from "./checkout.js";
 import { findPool } from "./v4.js";
 import { liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
 import { keeperAccount } from "./keeper.js";
@@ -31,7 +31,7 @@ import { tgRoutes } from "./tg-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
 import { leagueRoutes } from "./league-routes.js";
 import { stationRoutes, withPageHead } from "./station-routes.js";
-import { bazaar, card, catalog, describe, detail, previewOf, search } from "./agentmarket.js";
+import { card, catalog, detail, offerFor, productIdOf, search } from "./agentmarket.js";
 import { spectateRoutes } from "./spectate.js";
 import { betsRoutes } from "./bets-routes.js";
 import { prices } from "./prices.js";
@@ -871,22 +871,22 @@ export function serve(engine: Engine) {
       // x402: pay in USDC, get the product. Agents and people use the same door.
       if (seg[0] === "buy" && seg[1] && seg[2]) {
         const c = engine.get(seg[1]);
-        const product = c?.products.find((x) => x.id === seg[2] && x.status === "live");
+        const id = productIdOf(seg[2]);
+        const product = c?.products.find((x) => x.id === id && x.status === "live");
         if (!c || !product) return json(res, 404, { error: "no such product" });
         // Never take money for something that cannot be handed over yet.
         if (!engine.files.has(c, product)) return json(res, 409, { error: "This product is being packaged. Try again in a few minutes." });
-        const req402 = requirement(config.salesChainId, c.wallet, product.priceUsdc);
-        // what the agent is buying, in the same words the discovery catalog uses
-        const text = engine.files.read(c, product);
-        const resource = { url: `${config.publicUrl}/buy/${c.slug}/${product.id}`, description: describe(c, product, text ? previewOf(text) : null), mimeType: "application/json" };
-        const challenge = (r: typeof req402, res0: typeof resource, error?: string) => ({ ...challenge402(r, res0, error), extensions: bazaar(c, product) });
+        // what the agent is buying, in the same words the discovery catalog uses: the facilitator settles against exactly this
+        const offer = offerFor(c, product, engine.files.read(c, product));
+        const req402 = offer.requirement;
+        const challenge = (error?: string) => challenge402(offer.requirement, offer.resource, error, offer.extensions);
         const sig = req.headers["payment-signature"] ?? req.headers["x-payment"];
         if (config.mode === "sim" && url.searchParams.get("sim") === "1" && req.method === "POST") {
           await engine.recordSale(c, product.id, product.priceUsdc, "0xdemo000000000000000000000000000000buyer", null, true);
           return json(res, 200, { ok: true, sim: true, deliverable: engine.files.link(c, product, `sim-${Date.now()}`) });
         }
         if (!sig || Array.isArray(sig)) {
-          const ch = challenge(req402, resource, "payment required");
+          const ch = challenge("payment required");
           return json(res, 402, ch, { "PAYMENT-REQUIRED": encodeHeader(ch) });
         }
         const payment = decodeHeader<PaymentPayload>(sig);
@@ -895,26 +895,28 @@ export function serve(engine: Engine) {
         const prior = auth?.from && auth.nonce ? engine.checkout.recordOf(auth.from, auth.nonce) : undefined;
         const reqPay = prior ? requirement(config.salesChainId, c.wallet, prior.value) : req402;
         const v = await verifyPayment(payment, reqPay, prior ? Math.floor(prior.at / 1000) : undefined);
-        if (!v.ok) return json(res, 402, challenge(req402, resource, v.reason), { "PAYMENT-REQUIRED": encodeHeader(challenge(req402, resource, v.reason)) });
+        if (!v.ok) return json(res, 402, challenge(v.reason), { "PAYMENT-REQUIRED": encodeHeader(challenge(v.reason)) });
         if (config.mode === "sim") return json(res, 400, { error: "sim mode does not settle real payments" });
-        // Settling costs the company gas: limit it per caller and per payer, check the payer can
-        // actually pay, and settle one payment at a time per company.
+        // Settling costs the facilitator or the company gas: limit it per caller and per payer, check
+        // the payer can actually pay, and settle one payment at a time per company.
         if (limited(req, "settle", 6, 60_000) || limited(req, `settle-payer:${v.payer.toLowerCase()}`, 3, 60_000)) return json(res, 429, { error: "Too many payments at once; try again in a minute." });
         if (await engine.checkout.fresh(auth.from, auth.nonce)) {
           const value = BigInt(auth.value);
           const bal = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [v.payer as `0x${string}`] }).catch(() => 0n);
-          if (bal < value) return json(res, 402, challenge(req402, resource, "insufficient USDC balance"), { "PAYMENT-REQUIRED": encodeHeader(challenge(req402, resource, "insufficient USDC balance")) });
-          // The company pays the settlement gas on Base: without it, refuse before anything is sent.
-          if ((await sales.getBalance({ address: c.wallet }).catch(() => 0n)) < 20_000_000_000_000n) {
-            void engine.alert(`${c.name} cannot take a payment: its wallet has no ETH on Base for the settlement gas.`, `nogas-${c.id}`);
-            return json(res, 503, { error: "This company cannot take payments right now. Nothing was charged; try again later." });
-          }
+          if (bal < value) return json(res, 402, challenge("insufficient USDC balance"), { "PAYMENT-REQUIRED": encodeHeader(challenge("insufficient USDC balance")) });
         }
-        // Saved before it is broadcast and booked once it lands; the same header again never pays twice.
-        const run = engine.settleInTurn(c.id, () => engine.checkout.settle(c.id, c.wallet, product.id, payment));
+        // Through the CDP facilitator when it is on (it pays the gas); otherwise the company settles,
+        // saved before it is broadcast. Booked once it lands; the same header again never pays twice.
+        const run = engine.settleInTurn(c.id, () => engine.checkout.settle(c.id, c.wallet, product.id, payment, undefined, offer));
         let tx: `0x${string}`;
         try { tx = await run; } catch (e) {
           if (e instanceof PendingError) return json(res, 202, { ok: false, pending: true, error: e.message });
+          if (e instanceof PaymentRefused) return json(res, 402, challenge(e.reason), { "PAYMENT-REQUIRED": encodeHeader(challenge(e.reason)) });
+          // the company settles this one itself and has no gas on Base: refused before anything is sent
+          if (e instanceof NoGasError) {
+            void engine.alert(`${c.name} cannot take a payment: its wallet has no ETH on Base for the settlement gas.`, `nogas-${c.id}`);
+            return json(res, 503, { error: e.message });
+          }
           throw e;
         }
         return json(res, 200, { ok: true, tx, deliverable: engine.files.link(c, product, tx) }, { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network: req402.network, payer: v.payer }) });

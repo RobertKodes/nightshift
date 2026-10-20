@@ -1,5 +1,6 @@
 import type { Company, Product } from "@nightshift/core";
-import { requirement } from "@nightshift/x402";
+import { type Offer, requirement } from "@nightshift/x402";
+import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { config } from "./config.js";
 
 /**
@@ -7,8 +8,9 @@ import { config } from "./config.js";
  * reads a route's description, input/output schema and a realistic output example; agents also need
  * to judge a product before paying. So every product gets a free preview (outline and opening, never
  * the whole file), a catalog entry in the discovery shape with its exact payment terms, and 402
- * challenges that carry the same metadata. The CDP Bazaar itself lists only endpoints settled through
- * the CDP facilitator; NIGHTSHIFT settles its own payments, so its catalog is published here.
+ * challenges that carry the same metadata. The CDP Bazaar lists only resources settled through the
+ * CDP facilitator: with a CDP key, payments settle there (checkout.ts) and the first one lists the
+ * product; the catalog here lists everything either way.
  */
 export type Preview = { title: string; outline: string[]; opening: string; words: number; sections: number; format: "text/markdown" };
 
@@ -28,35 +30,59 @@ export function previewOf(text: string): Preview {
   return { title, outline: heads.slice(1, 13), opening, words, sections: heads.length, format: "text/markdown" };
 }
 
+/** A path segment that is only a UUID, an address or a hash: the Bazaar folds every such URL into one entry. */
+const BARE_ID = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|0x[0-9a-f]{40}|0x[0-9a-f]{64})$/i;
+/** The product's buy URL, one Bazaar entry per product: a bare UUID id gets a prefix (/buy/<company>/p-<uuid>). */
+export const buyUrl = (c: Company, p: Product) => `${config.publicUrl}/buy/${c.slug}/${BARE_ID.test(p.id) ? `p-${p.id}` : p.id}`;
+/** The product id in a buy path, with or without that prefix. */
+export const productIdOf = (seg: string) => (seg.startsWith("p-") && BARE_ID.test(seg.slice(2)) ? seg.slice(2) : seg);
+
+/** The CDP facilitator refuses a description over 500 characters. */
 const MAX_DESC = 480;
 export function describe(c: Company, p: Product, pv: Preview | null): string {
   const d = `${p.name}: ${p.pitch}${pv ? ` A ${pv.words.toLocaleString("en-US")}-word ${p.kind} (markdown, ${pv.sections} sections)` : ""} by ${c.name}, an AI company on NIGHTSHIFT. Free preview: ${config.publicUrl}/api/market/${c.slug}/${p.id}`;
   return d.length > MAX_DESC ? `${d.slice(0, MAX_DESC - 1)}…` : d;
 }
 
-/** The discovery metadata a 402 challenge carries (x402 v2 "bazaar" extension shape). */
-export function bazaar(c: Company, p: Product) {
-  return {
-    bazaar: {
-      info: {
-        input: { type: "http", method: "GET" },
-        output: { type: "json", example: { ok: true, tx: "0x5f2c…e1a9", deliverable: `${config.publicUrl}/download/${c.slug}/${p.id}/1793000000/3a9f…?ref=0x5f2c…e1a9` } },
-      },
+const EXAMPLE_TX = "0x5f2c9d41b7e8a3c06f1d2e4b8a9c7d3e5f60718293a4b5c6d7e8f90a1b2ce1a9";
+/**
+ * The discovery metadata a 402 challenge carries: the x402 "bazaar" extension, built by the x402
+ * project's own declareDiscoveryExtension and pinned to GET the way its resource server does per
+ * request, so it is the shape the CDP facilitator validates (info against schema) and lists. No
+ * input: the product is the URL. The output is what a paid request returns.
+ */
+export function bazaar(c: Company, p: Product): { bazaar: Record<string, unknown> } {
+  const { bazaar: declared } = declareDiscoveryExtension({
+    output: {
+      example: { ok: true, tx: EXAMPLE_TX, deliverable: `${config.publicUrl}/download/${c.slug}/${p.id}/1793000000/kQ3vYb8Zr1Lx0Wm5Tn7Pc2Hd9Ja4Fs6E?ref=${EXAMPLE_TX}` },
       schema: {
-        $schema: "https://json-schema.org/draft/2020-12/schema", type: "object",
         properties: {
-          input: { type: "object", properties: { method: { const: "GET" } }, description: "No body: pay the 402 with an x402 client (EIP-3009 USDC) and repeat the request with the PAYMENT-SIGNATURE header." },
-          output: {
-            type: "object", required: ["ok", "deliverable"],
-            properties: {
-              ok: { type: "boolean" },
-              tx: { type: "string", description: "Settlement transaction on Base" },
-              deliverable: { type: "string", format: "uri", description: "Signed download link to the product (text/markdown), valid for 7 days" },
-            },
-          },
+          ok: { type: "boolean", description: "True once the payment is settled" },
+          tx: { type: "string", pattern: "^0x[0-9a-fA-F]{64}$", description: "The USDC settlement transaction on Base" },
+          deliverable: { type: "string", description: `Signed download link to the ${p.kind} (text/markdown), valid for 7 days` },
         },
+        required: ["ok", "tx", "deliverable"],
       },
     },
+  });
+  const path = new URL(buyUrl(c, p)).pathname;
+  return { bazaar: bazaarResourceServerExtension.enrichDeclaration!(declared, { method: "GET", adapter: { getPath: () => path } }) as Record<string, unknown> };
+}
+
+const tag = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 32);
+/**
+ * What a product's 402 challenge advertises, and so what the facilitator settles against: the exact
+ * terms, the resource (with the service name, tags and icon the Bazaar shows) and the bazaar extension.
+ */
+export function offerFor(c: Company, p: Product, text: string | null): Offer {
+  return {
+    requirement: requirement(config.salesChainId, c.wallet, p.priceUsdc),
+    resource: {
+      url: buyUrl(c, p), description: describe(c, p, text ? previewOf(text) : null), mimeType: "application/json",
+      serviceName: "NIGHTSHIFT", tags: [...new Set([tag(p.kind), "markdown", "ai-company", "nightshift"].filter(Boolean))],
+      ...(config.publicUrl.startsWith("https://") ? { iconUrl: `${config.publicUrl}/app/icon-512.png` } : {}),
+    },
+    extensions: bazaar(c, p),
   };
 }
 
@@ -81,7 +107,7 @@ export function card({ c, p, text }: Live) {
     company: { name: c.name, slug: c.slug, page: `${config.publicUrl}/c/${c.slug}` },
     words: pv?.words ?? null, sections: pv?.sections ?? null,
     preview: `${config.publicUrl}/api/market/${c.slug}/${p.id}`,
-    buy: { url: `${config.publicUrl}/buy/${c.slug}/${p.id}`, protocol: "x402 v2", asset: "USDC", chainId: config.salesChainId, network: `eip155:${config.salesChainId}`, payTo: c.wallet },
+    buy: { url: buyUrl(c, p), protocol: "x402 v2", asset: "USDC", chainId: config.salesChainId, network: `eip155:${config.salesChainId}`, payTo: c.wallet },
   };
 }
 
@@ -91,7 +117,7 @@ export function detail(l: Live) {
 }
 
 export function howToBuy(c: Company, p: Product) {
-  const url = `${config.publicUrl}/buy/${c.slug}/${p.id}`;
+  const url = buyUrl(c, p);
   return {
     steps: [
       `GET ${url}: the answer is 402 with the payment terms (also base64 in the PAYMENT-REQUIRED header).`,
@@ -107,14 +133,17 @@ export function howToBuy(c: Company, p: Product) {
 export function catalog(all: Live[]) {
   return {
     x402Version: 2, provider: { name: "NIGHTSHIFT", url: config.publicUrl }, updatedAt: new Date().toISOString(), count: all.length,
+    // each item as the CDP Bazaar lists one (resource, accepts, description, extensions, serviceName, tags), plus the product card
     items: search(all, {}).map((l) => {
-      const pv = l.text ? previewOf(l.text) : null;
+      const o = offerFor(l.c, l.p, l.text);
       return {
-        resource: `${config.publicUrl}/buy/${l.c.slug}/${l.p.id}`, type: "http", x402Version: 2,
-        accepts: [requirement(config.salesChainId, l.c.wallet, l.p.priceUsdc)],
-        description: describe(l.c, l.p, pv), mimeType: "application/json",
+        resource: o.resource.url, type: "http", x402Version: 2,
+        accepts: [o.requirement],
+        description: o.resource.description, mimeType: o.resource.mimeType,
+        serviceName: o.resource.serviceName, tags: o.resource.tags, ...(o.resource.iconUrl ? { iconUrl: o.resource.iconUrl } : {}),
+        extensions: o.extensions,
         lastUpdated: new Date(l.p.createdAt).toISOString(),
-        metadata: { ...card(l), ...bazaar(l.c, l.p) },
+        metadata: card(l),
       };
     }),
   };

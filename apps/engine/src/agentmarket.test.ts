@@ -49,8 +49,9 @@ describe("agent market", () => {
     expect(it0.accepts[0]!.amount ?? (it0.accepts[0] as unknown as { maxAmountRequired: string }).maxAmountRequired).toBe("2500000");
     expect(it0.description.length).toBeLessThanOrEqual(480);
     expect(it0.description).toContain("Free preview");
-    expect(it0.metadata.bazaar.info.output.example.ok).toBe(true);
-    expect(it0.metadata.bazaar.schema.properties.output.required).toContain("deliverable");
+    const bz = (it0.extensions as { bazaar: { info: { output: { example: { ok: boolean } } }; schema: { properties: { output: { properties: { example: { required: string[] } } } } } } }).bazaar;
+    expect(bz.info.output.example.ok).toBe(true);
+    expect(bz.schema.properties.output.properties.example.required).toContain("deliverable");
     const d = M.detail({ c: a, p: prod("cheap", 2.5), text: TEXT });
     expect(d.preview?.outline.length).toBe(2);
     expect(d.howToBuy.steps.length).toBe(4);

@@ -29,12 +29,13 @@ import { HttpImdPlane, type ImdAction, type ImdPlane, SimImdPlane } from "@night
 import { Ledger } from "@nightshift/ledger";
 import { ImdReads } from "imd-mcp/lib";
 import { encodeFunctionData, erc20Abi, parseAbiItem } from "viem";
-import { type PaymentPayload, USDC, USDC_ABI, settlementData } from "@nightshift/x402";
+import { CdpFacilitator, type PaymentPayload, USDC, USDC_ABI, settlementData } from "@nightshift/x402";
 import { Auth } from "./auth.js";
 import { LlmClient } from "@nightshift/llm";
 import { balances, broadcastSales, ensurePermit2, eth, ethWallet, refusedByNode, sales, salesTxState, salesWallet, signSales } from "./chain.js";
 import { FEE_PARTS, Payouts } from "./payout.js";
-import { Checkout, PendingError, type Settlement, saleKey } from "./checkout.js";
+import { Checkout, NoGasError, PendingError, type SettledBy, type Settlement, saleKey } from "./checkout.js";
+import { offerFor } from "./agentmarket.js";
 import { MarketDesk } from "./b2b.js";
 import { V4, findPool } from "./v4.js";
 import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
@@ -109,6 +110,8 @@ export class Engine {
   /** Withdrawals, leg by leg, and x402 settlements: both saved before broadcast and booked once they land. */
   readonly payouts: Payouts;
   readonly checkout: Checkout;
+  /** Coinbase's CDP facilitator, when x402 payments settle through it (a CDP key is set); null otherwise. */
+  readonly facilitator: CdpFacilitator | null = config.x402Facilitator === "cdp" ? new CdpFacilitator({ id: config.cdpApiKeyId, secret: config.cdpApiKeySecret }) : null;
   /** Telegram players (the Mini App and the bot's game commands), their games, and the bot side that talks to them. */
   readonly tgProfiles = new Profiles();
   readonly tgPlay: TgPlay = tgPlay(this.tgProfiles);
@@ -133,7 +136,20 @@ export class Engine {
       broadcast: broadcastSales,
       state: (id, hash, nonce, ms) => salesTxState(from(id), hash, nonce, ms),
       refused: refusedByNode,
-    }, (x) => this.#bookSale(x));
+      // settling itself costs the company gas on Base: without it, nothing is sent
+      gas: async (id) => (await sales.getBalance({ address: from(id) }).catch(() => 0n)) >= 20_000_000_000_000n,
+    }, (x) => this.#bookSale(x), undefined, undefined, this.facilitator && {
+      facilitator: this.facilitator,
+      onFallback: (op, e) => {
+        console.error(`x402: ${e.message}; the company settles itself`);
+        void this.alert(`⚠️ The CDP facilitator did not answer a ${op} (${e.status ? `HTTP ${e.status}` : "no answer"}): companies are settling payments themselves, which costs them gas and lists nothing in the Bazaar.`, "cdp-fallback");
+      },
+      onBazaar: (status, reason, productId) => {
+        if (status !== "rejected") return;
+        console.error(`x402: the CDP Bazaar rejected product ${productId}${reason ? ` (${reason})` : ""}`);
+        void this.alert(`⚠️ The CDP Bazaar did not list product ${productId}${reason ? `: ${reason}` : ""}. The sale itself went through.`, `bazaar-${productId}`);
+      },
+    });
     this.sim = new SimDeliveries(config.publicUrl, this.llm, config.model, (input) => {
       const id = typeof input === "object" && input ? this.#inputOwner.get(input) : undefined;
       return id ? this.store.companies.get(id) : undefined;
@@ -149,13 +165,14 @@ export class Engine {
       chainUsdc: (c) => sales.readContract({ address: usdcAddr(), abi: erc20Abi, functionName: "balanceOf", args: [c.wallet] }),
       settle: async (seller, productId, payment, tag) => {
         const a = payment.payload.authorization;
-        // the seller pays the settlement gas on Base, as for any buyer: without it nothing is sent
-        if ((await this.checkout.fresh(a.from, a.nonce)) && (await sales.getBalance({ address: seller.wallet }).catch(() => 0n)) < 20_000_000_000_000n) {
-          throw new Error(`${seller.name} cannot take payments right now (no ETH on Base for the settlement gas); nothing was charged`);
-        }
+        const product = seller.products.find((x) => x.id === productId);
+        // the same terms, resource and discovery metadata as the product's own 402 challenge
+        const offer = product ? offerFor(seller, product, this.files.read(seller, product)) : undefined;
         try {
-          return await this.settleInTurn(seller.id, () => this.checkout.settle(seller.id, seller.wallet, productId, payment, tag));
+          return await this.settleInTurn(seller.id, () => this.checkout.settle(seller.id, seller.wallet, productId, payment, tag, offer));
         } catch (e) {
+          // the seller would pay the settlement gas on Base, as for any buyer: without it nothing is sent
+          if (e instanceof NoGasError) throw new Error(`${seller.name} cannot take payments right now (no ETH on Base for the settlement gas); nothing was charged`);
           // sent, or maybe sent: follow it instead of paying again
           if (e instanceof PendingError || this.checkout.recordOf(a.from, a.nonce)) throw Object.assign(new Error((e as Error).message), { pending: saleKey(a.from, a.nonce) });
           throw e;
@@ -1258,14 +1275,15 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     this.store.markDirty();
   }
 
-  /** A sale, real (settled on chain) or simulated. Revenue lands in the company's own wallet. */
-  async recordSale(c: Company, productId: string, amount: bigint, payer: string, tx: string | null, sim: boolean): Promise<void> {
+  /** A sale, real (settled on chain) or simulated. Revenue lands in the company's own wallet. `via`: who settled it (in the ledger). */
+  async recordSale(c: Company, productId: string, amount: bigint, payer: string, tx: string | null, sim: boolean, via?: SettledBy): Promise<void> {
+    const meta = via ? { settledBy: via } : undefined;
     // once per settlement: a retry or the background follow-up of the same payment books nothing new
     if (tx && (await this.ledger.store.get(`sale:${tx}`))) return;
     const p = c.products.find((x) => x.id === productId);
     // money that arrived is booked even for a product removed since
     if (!p) {
-      await this.ledger.post({ id: `sale:${tx ?? randomUUID()}`, at: new Date(), kind: sim ? "sale_sim" : "sale", memo: productId, ref: tx ? { chainTx: tx } : undefined, postings: [
+      await this.ledger.post({ id: `sale:${tx ?? randomUUID()}`, at: new Date(), kind: sim ? "sale_sim" : "sale", memo: productId, ref: tx ? { chainTx: tx } : undefined, meta, postings: [
         { account: `co:${c.id}:usdc`, asset: "USDC", amount },
         { account: sim ? "ext:buyers-sim" : "ext:buyers", asset: "USDC", amount: -amount },
       ] });
@@ -1285,7 +1303,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     const m = this.store.metricsOf(c.id);
     m.sales.push({ at: Date.now(), productId, usdc: amount.toString(), payer, tx, sim });
     if (m.sales.length > 5000) m.sales.splice(0, m.sales.length - 5000);
-    await this.ledger.post({ id: `sale:${tx ?? randomUUID()}`, at: new Date(), kind: sim ? "sale_sim" : "sale", memo: p.name, ref: tx ? { chainTx: tx } : undefined, postings: [
+    await this.ledger.post({ id: `sale:${tx ?? randomUUID()}`, at: new Date(), kind: sim ? "sale_sim" : "sale", memo: p.name, ref: tx ? { chainTx: tx } : undefined, meta, postings: [
       { account: `co:${c.id}:usdc`, asset: "USDC", amount },
       { account: sim ? "ext:buyers-sim" : "ext:buyers", asset: "USDC", amount: -amount },
     ] });
@@ -1403,8 +1421,10 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
   async #bookSale(s: Settlement & { hash: `0x${string}` }): Promise<void> {
     const c = this.store.companies.get(s.companyId);
     if (!c) throw new Error(`no company ${s.companyId} for sale ${s.hash}`);
+    // a record from before the facilitator: signed by the company (it has a nonce), or found on chain
+    const via: SettledBy = s.via ?? (s.nonce !== undefined ? "self" : "other");
     if (s.b2b) {
-      const r = await this.b2b.book({ sellerId: c.id, productId: s.productId, buyerId: s.b2b.buyerId, taskId: s.b2b.taskId, value: s.value, tx: s.hash, sim: false });
+      const r = await this.b2b.book({ sellerId: c.id, productId: s.productId, buyerId: s.b2b.buyerId, taskId: s.b2b.taskId, value: s.value, tx: s.hash, sim: false, via });
       const buyer = this.store.companies.get(s.b2b.buyerId);
       const t = buyer?.tasks.find((x) => x.id === s.b2b!.taskId);
       // a payment that landed after its shift was cut off still delivers the file it paid for
@@ -1412,7 +1432,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
       await this.store.save();
       return;
     }
-    await this.recordSale(c, s.productId, s.value, s.payer, s.hash, false);
+    await this.recordSale(c, s.productId, s.value, s.payer, s.hash, false, via);
   }
 
   readonly #settling = new Map<string, Promise<unknown>>();

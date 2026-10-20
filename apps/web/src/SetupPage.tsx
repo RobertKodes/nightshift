@@ -63,6 +63,11 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "PLATFORM_DEV", label: "Fee: 20% to dev wallet (default 0x6C4c…19b5)", hint: "0x…" },
     { k: "MAX_COMPANIES_PER_OWNER", label: "Companies per owner", hint: "5" },
   ] },
+  { title: "Coinbase CDP (Bazaar)", note: "Optional. With a CDP secret API key (portal.cdp.coinbase.com, Ed25519), Coinbase's facilitator settles every payment: it pays the gas, and a product's first paid sale lists it in the CDP Bazaar, the catalogue AI agents search. If it is down, companies settle themselves. Free for 1,000 settlements a month, then $0.001 each.", fields: [
+    { k: "CDP_API_KEY_ID", label: "API key id (id in the key file)", secret: true },
+    { k: "CDP_API_KEY_SECRET", label: "API key secret (privateKey in the key file)", secret: true },
+    { k: "X402_FACILITATOR", label: "Who settles payments", options: [["", "Default (CDP once a key is set)"], ["cdp", "CDP facilitator"], ["self", "Each company itself"]] },
+  ] },
   { title: "IMD", note: "Leave empty: a free public Ethereum RPC is already used. The IMD price follows the market by itself (DexScreener, every 10 minutes).", fields: [
     { k: "ETH_RPC", label: "Ethereum RPC (optional)", hint: "https://ethereum-rpc.publicnode.com" },
   ] },
