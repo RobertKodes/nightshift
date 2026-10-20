@@ -40,6 +40,7 @@ import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
 import { impact } from "./impact.js";
 import { flightFor } from "./flight.js";
 import { b2bBooks, deskLine, isB2b, marketTotals } from "./b2b.js";
+import { walletConfig } from "./wallet-config.js";
 import { usdc } from "@nightshift/core";
 import { erc20Abi, getAddress } from "viem";
 
@@ -251,16 +252,20 @@ const BASE_HEADERS: Record<string, string> = {
   "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
   ...(config.publicUrl.startsWith("https://") ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload" } : {}),
 };
-/** The app's pages: our own scripts only, and only the hosts the browser really talks to (RPCs, WalletConnect, Google Fonts). */
+/**
+ * The app's pages: our own scripts only, and only the hosts the browser really talks to (RPCs, Google
+ * Fonts, and the wallet layer: Reown AppKit's relay, wallet list and Verify frame, Coinbase's SDK).
+ * Caddy sets the same list in production (docs/wallet/RESEARCH.md).
+ */
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https://fonts.gstatic.com",
+  "font-src 'self' data: https://fonts.gstatic.com https://fonts.reown.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob:",
-  "connect-src 'self' https://ethereum-rpc.publicnode.com https://rpc.mevblocker.io https://eth.drpc.org https://mainnet.base.org https://sepolia.base.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org https://*.reown.com wss://*.reown.com",
-  "frame-src https://verify.walletconnect.com https://verify.walletconnect.org",
+  "connect-src 'self' https://ethereum-rpc.publicnode.com https://rpc.mevblocker.io https://eth.drpc.org https://mainnet.base.org https://sepolia.base.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org https://*.reown.com wss://*.reown.com https://api.web3modal.org https://api.web3modal.com https://rpc.wallet.coinbase.com https://www.walletlink.org wss://www.walletlink.org",
+  "frame-src https://verify.walletconnect.com https://verify.walletconnect.org https://secure.walletconnect.com https://secure.walletconnect.org https://secure.reown.com",
   "worker-src 'self'", "manifest-src 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
 ].join("; ");
 /**
@@ -583,7 +588,7 @@ export function serve(engine: Engine) {
         }
         return json(res, 404, { error: "not found" });
       }
-      if (p === "/api/wallet-config") return json(res, 200, { walletConnect: config.walletConnect || null });
+      if (p === "/api/wallet-config") return json(res, 200, walletConfig());
       if (p === "/api/staked") {
         const staked = await stakedNow();
         return json(res, 200, { staked, supply: SUPPLY, pct: staked === null ? null : (staked / SUPPLY) * 100 });
@@ -641,6 +646,8 @@ export function serve(engine: Engine) {
         return json(res, 200, { nonce: n.nonce, message: n.message(getAddress(address)) });
       }
       if (p === "/api/auth/verify" && req.method === "POST") {
+        // a smart wallet's signature is checked on a node: no flood of checks from one address
+        if (limited(req, "verify", 30, 60_000)) return json(res, 429, { error: "slow down" });
         const b = await body(req);
         const token = await engine.auth.verify(String(b.address), String(b.nonce), String(b.signature) as `0x${string}`);
         const secure = config.publicUrl.startsWith("https") ? "; Secure" : "";

@@ -3,7 +3,7 @@ import { lookup } from "node:dns/promises";
 import { mkdirSync, readFileSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { dirname, join } from "node:path";
-import { getAddress, verifyMessage } from "viem";
+import { type PublicClient, getAddress, verifyMessage } from "viem";
 import { writeAtomic } from "./atomic.js";
 import { config } from "./config.js";
 
@@ -25,6 +25,9 @@ export const MAX_KEYS_PER_OWNER = 20;
 export interface ApiKey { hash: string; owner: string; label: string; createdAt: number; lastUsedAt: number | null }
 /** Who is calling, and how: a wallet session can do everything, an API key only what keys may. */
 export interface Caller { addr: string; via: "session" | "key" }
+/** Ethereum mainnet for smart-wallet signatures: the sign-in message says Chain ID 1, where EIP-4361 resolves contract accounts. */
+type Chain = Pick<PublicClient, "verifyMessage" | "getBlockNumber">;
+const mainnet = async (): Promise<Chain> => (await import("./chain.js")).eth;
 
 export class Auth {
   readonly #secret: Buffer;
@@ -36,8 +39,10 @@ export class Auth {
   readonly #file: string;
   /** The same keys by hash: an nsk_ lookup is one map read, not a scan. Rebuilt when the list was loaded from disk. */
   readonly #byHash = new Map<string, ApiKey>();
+  readonly #chain: () => Promise<Chain>;
 
-  constructor(secret: string, private readonly keys: ApiKey[], private readonly onChange: () => void, opts: { file?: string; sessionSecret?: string } = {}) {
+  constructor(secret: string, private readonly keys: ApiKey[], private readonly onChange: () => void, opts: { file?: string; sessionSecret?: string; chain?: Chain } = {}) {
+    this.#chain = opts.chain ? () => Promise.resolve(opts.chain!) : mainnet;
     // SESSION_SECRET keeps sessions apart from the vault; without it, the old derivation (existing sessions stay valid)
     const own = opts.sessionSecret ?? config.sessionSecret;
     this.#secret = createHash("sha256").update(own ? `nightshift-session-key:${own}` : `nightshift-session:${secret}`).digest();
@@ -70,10 +75,26 @@ export class Auth {
     const rec = this.#nonces.get(nonce);
     if (!rec || rec.exp < Date.now()) throw new Error("sign-in expired; try again");
     const addr = getAddress(address);
-    const ok = await verifyMessage({ address: addr, message: Auth.message(addr, nonce, rec.issuedAt), signature });
-    if (!ok) throw new Error("signature does not match this wallet");
+    const message = Auth.message(addr, nonce, rec.issuedAt);
+    const ok = await this.#signedBy(addr, message, signature);
+    // one try per nonce: a wrong signature cannot be retried against the node again and again
     this.#nonces.delete(nonce);
+    if (!ok) throw new Error("signature does not match this wallet");
     return this.session(addr);
+  }
+
+  /**
+   * A wallet's own key signed it (checked here, no network), or the wallet is a smart account
+   * (Coinbase Smart Wallet, Safe, an email wallet) that approves it on Ethereum: ERC-1271 once
+   * deployed, ERC-6492 before its first transaction, both through viem on a mainnet node.
+   */
+  async #signedBy(address: `0x${string}`, message: string, signature: `0x${string}`): Promise<boolean> {
+    if (await verifyMessage({ address, message, signature }).catch(() => false)) return true;
+    const eth = await this.#chain();
+    if (await eth.verifyMessage({ address, message, signature }).catch(() => false)) return true;
+    // viem reads a node that did not answer as a wrong signature: only a node that answers can say no
+    if (!(await eth.getBlockNumber().then(() => true, () => false))) throw new Error("the wallet's signature could not be checked on Ethereum right now; try again in a minute");
+    return false;
   }
 
   session(address: string, now = Date.now()): string {
