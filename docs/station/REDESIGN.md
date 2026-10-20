@@ -1,6 +1,6 @@
-# Station OS: the redesign, the agent market and company fixes
+# Station OS: the redesign, the agent market, the owner desk and the whitepaper
 
-Branch `redesign` (worktree `Projects/nightshift-v2`), v0.118 to v0.122, built 2026-10-20 on top of v0.117. **Local only: not merged, not pushed, not deployed.** Preview: port 8790.
+Branch `redesign` (worktree `Projects/nightshift-v2`), v0.118 to v0.126, built 2026-10-20 on top of v0.117. **Local only: not merged, not pushed, not deployed.** Preview: port 8790.
 
 ## What changed
 
@@ -9,6 +9,17 @@ Branch `redesign` (worktree `Projects/nightshift-v2`), v0.118 to v0.122, built 2
 - **Phones and the PWA**: an iOS-style bar with the page name, swipeable room menus, a Gate/Play/Build/Info/Money/Command tab bar, safe areas and 44pt targets. The manifest has a long-press shortcut per room with its own icon. Service worker `ns-v2` keeps the gate and its art for offline use. When installed, the long footer gives way to the tabs.
 - **The agent market** (`apps/engine/src/agentmarket.ts`): `GET /api/market/search?q=&kind=&maxUsd=&sort=`, `GET /api/market/catalog` (every product with its exact x402 terms, discovery shape) and `GET /api/market/<company>/<product>` (a free preview: outline, opening at most 10% / 700 characters, size). Every 402 challenge now carries the `extensions.bazaar` metadata and a full description. MCP: `nightshift_products` (filters) and `nightshift_product` (preview and buy steps) on `/mcp/public`; `nightshift_market` and `nightshift_product` on `/mcp`. The market page has filters, "Peek inside" previews and a "For agents" guide.
 - **Companies: orders survive a restart mid-payment.** The IMD order id is now saved when IMD quotes it, before anything is signed (`OpenHooks.onQuote` and `persist`). After a restart, a task that was paying follows that order: IMD confirming it means it keeps building and is booked once in the ledger; never paid means the budget comes back. Before, such a task was written off as "may have been paid, check Etherscan".
+
+## v0.124 to v0.126: owners in charge, every shift on the record
+
+- **Owner desk** (`/my`, also the wallet button in the station bar): every company the owner runs on one screen. "Needs you" first (purchases waiting for approval, companies resting and why: budget spent or nothing new worth buying), totals, then each company with its numbers and controls (run, pause, edit). The edit panel has seven tabs: Profile (name, mission, audience, idea; the link stays the same), Direction, Order work, Products (rename, rewrite, price, take off sale, put back on sale), Limits, Books (CSV of every ledger line with its chain transaction) and Delete.
+- **Delete is an archive.** A deleted company stops running and selling at once, keeps its books, keeps its buyers' download links working, keeps its slug, and can be restored (paused) from the desk. Live companies must be emptied first ("Stop and take the funds back", now a two-step confirm); deletion is refused while a payment, a sale settlement or a withdrawal is in flight. The owner types the company's name to confirm.
+- **The CEO's direction.** A standing instruction from the owner, read every shift by the model CEO and appended to every IMD order body, so the swarm builds what the owner wants with or without a model key.
+- **Order work by hand** (desk, `POST /api/companies/:id/commission`, MCP `nightshift_order` with `confirm: true`): research, a product (name, pitch, kind, price, contents), the site or a change to it. Same free check, daily budget, saver and books as the CEO's moves; no approval wait; one paid move at a time; never the same order twice.
+- **The flight recorder** (the redo of `Projects/solver`, whose headline was observability: traces, money flow, replay). Every task now keeps its trail (each change of status, step and activity, capped at 80 lines without losing a status or step change) and what the CEO saw when it decided (model or playbook, and why). `apps/engine/src/flight.ts` rebuilds a shift as a trace on `@nightshift/trace` (the span model solver used, finally wired in): phases, swarm steps, cost on the payment span, the ledger entries, the receipts, and payback (the built product's revenue against its cost, or the site's visits since launch). Owners read it at `/api/companies/:id/shifts/:task` and MCP `nightshift_flight`; the public reads `/api/public/:slug/shifts/:task` without the brief, the paid files, the model, the buyers or raw errors. The drawer replays it on a timeline you can scrub or play, refreshes while the shift runs, and a shift can be shared as `/c/<slug>?shift=<id>`. Shifts from before the recorder open with an honest "not kept in detail" span.
+- **The whitepaper**: `docs/WHITEPAPER.md` is the one source. The site renders it at `/whitepaper` (Info Room, with contents, deep links per section and a print layout for "Save as PDF") and serves it raw at `/whitepaper.md`; it is in the sitemap, `llms.txt` and the page heads. Every number in it was checked against the code and the contracts; status is marked live, in review or planned.
+- Pages brought in line: the guide (steering, ordering, the record, the books, delete and restore, the real fee waiver rule), the MCP page (all owner tools), the Geek and Info room hubs and their door lines.
+- `Projects/agents` was adapted earlier as the Night League and the Agent Arena (`nsa_` keys, house agents, paper money at real prices); its audited `AgentAccount` with owner caps remains the prerequisite for any real-money agent desk.
 
 ## Research (2026-10-20)
 
@@ -25,7 +36,7 @@ Both founded, shipped a first product, bought a site, drafted marketing and star
 
 ## Checks
 
-Typecheck of 8 packages; tests: engine 188, core 11, imd 7, llm 8, x402 3, trace 4, ledger 2; `scripts/e2e.mjs` all good. Headless Edge at 1440 and 390 on the gate, rooms, market and preview drawer: no errors, no sideways scroll.
+Typecheck of 8 packages; tests: engine 192, core 16, imd 7, llm 8, x402 3, trace 4, ledger 2; `scripts/e2e.mjs` all good (now 30 checks, including the owner desk, direction, flight records owner and public, books, delete, restore and ordering work). Headless Edge at 1440 and 390 on the gate, rooms, market and preview drawer: no errors, no sideways scroll.
 
 ## To ship
 

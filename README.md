@@ -7,7 +7,9 @@ Built on the <a href="https://imd.fun">IMD</a> swarm · <a href="https://getnigh
 
 ---
 
-You give NIGHTSHIFT an idea, a daily budget and a limit above which it must ask you. Its CEO agent then runs the company in shifts: it hires the IMD swarm to research, build and ship products, sells them to people and AI agents for USDC, and reports every step live. The money sits in the company's own wallet, and you can withdraw it or stop everything at any time.
+You give NIGHTSHIFT an idea, a daily budget and a limit above which it must ask you. Its CEO agent then runs the company in shifts: it hires the IMD swarm to research, build and ship products, sells them to people and AI agents for USDC, and reports every step live. You can give the CEO a standing direction, order work yourself, and replay any shift in the flight recorder. The money sits in the company's own wallet, and you can withdraw it, stop everything or delete the company at any time.
+
+The [whitepaper](docs/WHITEPAPER.md) explains every part, what is live and the risks.
 
 Around it sits a small onchain economy:
 
@@ -68,7 +70,7 @@ Every setting can also be changed from the `/setup` dashboard (admin token in `d
 
 ```bash
 pnpm test                          # unit tests in every package
-node apps/engine/scripts/e2e.mjs   # runs the real engine: sign-in, ownership, public pages, MCP
+node apps/engine/scripts/e2e.mjs   # runs the real engine: sign-in, ownership, public pages, MCP, owner desk
 ```
 
 ## Contracts (Ethereum mainnet)

@@ -36,6 +36,7 @@ One shift is one move:
 The owner stays in charge without micromanaging:
 
 - **Direction.** The owner can give the CEO a standing direction in plain words ("only sell to Etsy shop owners", "keep prices under $15"). The CEO reads it every shift, and it travels with every order to the swarm, so what gets built follows it too.
+- **Order work.** The owner can skip the CEO and order one piece of work by hand: research on a question, a product with its name, pitch and price, the site, or a change to it. It goes through the same free check, daily budget, saver and books as the CEO's moves, without the approval wait, since the owner is the one asking.
 - **The owner desk** (`/my`) shows every company on one screen: what needs approval, which company is resting and why, revenue, spend and profit. From there the owner runs, pauses, edits the profile, rewrites or retires products, sets prices (the CEO keeps a price the owner set), changes limits, downloads the books as CSV, or deletes a company. A deleted company stops working and selling at once; it is archived rather than erased, so its books stay whole, its buyers' download links keep working, and the owner can restore it.
 - **The flight recorder.** Every shift can be replayed: what the CEO saw, why it chose the move, each phase and swarm step with its timing, the IMD paid and the ledger entries, the receipts, and whether the shift has paid for itself (revenue of the product it built against its cost). Owners see everything; the public sees the same record without the brief, the paid files, the model or the buyers. A shift can be shared by link.
 
@@ -57,7 +58,7 @@ The market is built for agents as much as for people:
 - `GET /api/market/catalog` lists every product with its exact payment terms, in the shape x402 discovery services use.
 - `GET /api/market/<company>/<product>` is a free preview: the outline, the opening (at most a tenth of the text), the size.
 - Every 402 challenge carries the x402 Bazaar discovery metadata and a full description.
-- A keyless MCP server at `/mcp/public` exposes the market and the platform's public data to any agent. Owners can run their companies from Claude, Cursor or any MCP client through `/mcp` with a personal key: list, create, run shifts, approve or decline purchases, change limits, direct the CEO, replay any shift and withdraw.
+- A keyless MCP server at `/mcp/public` exposes the market and the platform's public data to any agent. Owners can run their companies from Claude, Cursor or any MCP client through `/mcp` with a personal key: list, create, run shifts, approve or decline purchases, change limits, direct the CEO, order work, replay any shift and withdraw.
 
 Coinbase's Bazaar lists an endpoint only after a payment settles through Coinbase's facilitator. NIGHTSHIFT settles its own payments, so its products are not listed there today; the metadata is published so any crawler or agent can use it.
 
@@ -148,7 +149,7 @@ What a frog does:
 | NIGHT FROGS mint and shift hours | Live |
 | Space Pinball, NIGHT CHESS | Live |
 | Market, previews, x402 discovery metadata, public MCP | In the release under review (not deployed yet) |
-| The Station redesign, owner desk, flight recorder, CEO direction | In the release under review (not deployed yet) |
+| The Station redesign, owner desk, flight recorder, CEO direction, ordering work by hand | In the release under review (not deployed yet) |
 | Night League, Agent Arena, Command Room missions | In the release under review (not deployed yet) |
 | Game stakes, live betting | Contracts deployed; stakes open when the escrow signer is set |
 | Swap fee, launchpad fees, game pots, IMD bot premium | Planned |
