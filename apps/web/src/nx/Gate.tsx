@@ -11,7 +11,7 @@ import type { RoomId } from "./map";
 import "./nx.css";
 
 type Station = { breakroom: { agentsInArena: number; liveGames: number }; geek: { leagueAgents: number; tradableTokens: number | null }; command: { missions: number }; leader: { name: string; returnPct: number } | null };
-type Overview = { market: { priceUsd: number; mcap: number } | null; stakedPct: number | null; frogs: { minted: number; max: number } | null };
+type Overview = { market: { priceUsd: number; mcap: number; liquidity?: number } | null; staked?: number | null; stakedPct: number | null; burnedShift?: number | null; burnedImd?: number | null; frogs: { minted: number; max: number } | null };
 
 /** A slow starfield with a little parallax, drawn once per frame; still when the visitor prefers less motion. */
 function useStars(ref: React.RefObject<HTMLCanvasElement | null>) {
@@ -66,6 +66,35 @@ function Decode({ text }: { text: string }) {
 
 const get = <T,>(u: string) => fetch(u).then((r) => (r.ok ? (r.json() as Promise<T>) : null)).catch(() => null);
 const money = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toPrecision(3)}`);
+const amount = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : n >= 100 ? n.toFixed(0) : n.toFixed(2));
+
+/** $SHIFT at a glance, read live from Ethereum: the two things holders do (swap, stake), one tap each, and the numbers behind them. */
+function TokenDeck({ ov }: { ov: Overview | null }) {
+  const cells: { k: string; v: string | null; sub?: string; acc: string; to: string }[] = [
+    { k: "Price", v: ov?.market ? money(ov.market.priceUsd) : null, sub: ov?.market ? `mcap ${money(ov.market.mcap)}` : undefined, acc: "#ffc861", to: "/token" },
+    { k: "Staked", v: ov?.staked != null ? amount(ov.staked) : null, sub: ov?.stakedPct != null ? `${ov.stakedPct.toFixed(1)}% of supply` : undefined, acc: "#b8ff4a", to: "/stake" },
+    { k: "$SHIFT burned", v: ov?.burnedShift != null ? amount(ov.burnedShift) : null, sub: "gone for good", acc: "#ff5ca8", to: "/tokenomics" },
+    { k: "IMD burned", v: ov?.burnedImd != null ? amount(ov.burnedImd) : null, sub: "at BurnExecutor", acc: "#4ad8ff", to: "/impact" },
+    { k: "Liquidity", v: ov?.market?.liquidity != null ? money(ov.market.liquidity) : null, sub: "Uniswap v4 pool", acc: "#c9c2ff", to: "/token" },
+  ];
+  return (
+    <section className="nx-deck" aria-label="$SHIFT">
+      <div className="nx-deck-go">
+        <Link to="/swap" className="nx-deck-btn swap"><NxIcon name="swap" size={20} /><span><b>Swap $SHIFT</b><small>ETH ⇄ $SHIFT, in one tap</small></span></Link>
+        <Link to="/stake" className="nx-deck-btn stake"><NxIcon name="stake" size={20} /><span><b>Stake $SHIFT</b><small>No lock · withdraw any time</small></span></Link>
+      </div>
+      <dl className="nx-deck-stats">
+        {cells.map((c) => (
+          <Link key={c.k} to={c.to} className="nx-deck-cell" style={{ "--acc": c.acc } as React.CSSProperties}>
+            <dt>{c.k}</dt>
+            <dd>{c.v ?? "…"}</dd>
+            <span>{c.sub ?? " "}</span>
+          </Link>
+        ))}
+      </dl>
+    </section>
+  );
+}
 
 /** CHOOSE YOUR WAY: the station's front door. Seven ways in, each to the part of the station made for you. */
 export function Gate() {
@@ -75,7 +104,14 @@ export function Gate() {
   const [st, setSt] = useState<Station | null>(null);
   const [ov, setOv] = useState<Overview | null>(null);
   const [back, setBack] = useState<ReturnType<typeof lastRoom>>(null);
-  useEffect(() => { setBack(lastRoom()); void get<Station>("/api/station").then(setSt); void get<Overview>("/api/token/overview").then(setOv); }, []);
+  useEffect(() => {
+    setBack(lastRoom()); void get<Station>("/api/station").then(setSt);
+    // the token numbers move: read again every minute while the page is open
+    const read = () => { if (!document.hidden) void get<Overview>("/api/token/overview").then((o) => { if (o) setOv(o); }); };
+    read();
+    const t = setInterval(read, 60_000);
+    return () => clearInterval(t);
+  }, []);
   document.title = "NIGHTSHIFT · Choose your way";
 
   const [focus, setFocus] = useState<RoomId | null>(null);
@@ -127,6 +163,7 @@ export function Gate() {
         <h1 className="nx-title" aria-label="Choose your way"><Decode text="Choose your way" /></h1>
         <div className="nx-spectrum" aria-hidden="true">{["#ff5ca8", "#4ad8ff", "#c9c2ff", "#ffc861", "#b8ff4a"].map((c) => <i key={c} style={{ background: c, color: c }} />)}</div>
         <p className="nx-gate-lead">An AI company station built on IMD, the swarm of AI agents that builds, audits and ships. Five rooms, one crew of frogs. Pick the door that fits you.</p>
+        <TokenDeck ov={ov} />
         {back && <button className="nx-continue" style={{ "--acc": ROOMS[back].accent } as React.CSSProperties} onClick={() => dock.start(back, () => { go(ROOMS[back].nav[0]!.to); scrollTo(0, 0); })}>Continue to the {ROOMS[back].name} <NxIcon name="arrow" size={16} /></button>}
 
         <div className="nx-ways">
