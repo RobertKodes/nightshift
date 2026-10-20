@@ -1,22 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Color, type PieceSymbol, type Square } from "chess.js";
 import { Icon } from "../Icon";
-import { api as chessApi, clockText, CONTROLS, type MatchView, type PlayerView } from "../chess/types";
+import { Practice } from "../chess/practice";
+import { api as chessApi, clockText, CONTROLS, type MatchView, type PlayerView, type TimeControl } from "../chess/types";
 import { Board2D } from "./Board2D";
 import { confirmAsk, gameMode, haptic } from "./telegram";
 
 /**
  * One NIGHT CHESS game in the Mini App: a seat (play) or none (watch). The same server streams as
  * the website's board: a full frame first, then compact ones; moves and clocks are the server's.
- * Haptics on every move, on check, at the start and on the result.
+ * Haptics on every move, on check, at the start and on the result. `practice`: a game against Frog #7,
+ * the website's practice bot, played in this page alone: nothing goes to the server, Elo never moves.
  */
 const PIECES: Record<PieceSymbol, string> = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
 const VALUES: Record<PieceSymbol, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 const REASONS: Record<string, string> = { checkmate: "Checkmate.", timeout: "On time.", resignation: "By resignation.", stalemate: "Stalemate.", repetition: "Threefold repetition.", agreement: "Draw agreed.", abandonment: "A player left the table.", "insufficient material": "Not enough material to mate.", "50-move rule": "Fifty-move rule." };
 type Frame = MatchView & { viewers?: number; spectating?: boolean };
 
-export function TgChess({ id, player, onMoved, onExit, onShare, onRunning, onDone }: {
+/** Your record against Frog #7 on this device. */
+export type PracticeRecord = { w: number; l: number; d: number };
+const RECORD = "tg-practice";
+export function practiceRecord(): PracticeRecord { try { return { w: 0, l: 0, d: 0, ...(JSON.parse(localStorage.getItem(RECORD) ?? "{}") as Partial<PracticeRecord>) }; } catch { return { w: 0, l: 0, d: 0 }; } }
+function countPractice(f: MatchView) { const r = practiceRecord(); if (f.winner === null) r.d++; else if (f.winnerIsYou) r.w++; else r.l++; try { localStorage.setItem(RECORD, JSON.stringify(r)); } catch { /* private window */ } }
+
+export function TgChess({ id, player, practice, onMoved, onExit, onShare, onRunning, onDone }: {
   id: string; player: string | null;
+  practice?: { name: string; elo: number; tc: TimeControl };
   /** The game continues at another id (a lounge fold, a rematch): the same seat follows. */
   onMoved: (id: string) => void;
   onExit: () => void;
@@ -41,6 +50,7 @@ export function TgChess({ id, player, onMoved, onExit, onShare, onRunning, onDon
   const doneRef = useRef(onDone); doneRef.current = onDone;
   const movedRef = useRef(onMoved); movedRef.current = onMoved;
   const cur = useRef<Frame | null>(null), offset = useRef(0), es = useRef<EventSource | null>(null), pending = useRef(false), mounted = useRef(true);
+  const bot = useRef<Practice | null>(null), drill = useRef(practice); drill.current = practice;
 
   /** A newer state of the game (a stream frame or a move's answer): haptics for what changed since the last one. */
   const apply = useCallback((f: Frame) => {
@@ -53,11 +63,18 @@ export function TgChess({ id, player, onMoved, onExit, onShare, onRunning, onDon
       setSelected(null); setPromotion(null);
     }
     if (old && !old.startedAt && f.startedAt) haptic.start();
-    if (old && !old.done && f.done && f.startedAt) { if (f.winner === null) haptic.select(); else if (watch || f.winnerIsYou) haptic.win(); else haptic.lose(); doneRef.current?.(); }
+    if (old && !old.done && f.done && f.startedAt) { if (f.winner === null) haptic.select(); else if (watch || f.winnerIsYou) haptic.win(); else haptic.lose(); if (bot.current) countPractice(f); doneRef.current?.(); }
     cur.current = f; setM(f);
   }, [watch]);
   const connect = useCallback(() => {
     es.current?.close();
+    if (drill.current) {
+      // a new practice game: Frog #7 sits down in this page
+      const { name, elo, tc } = drill.current, p = new Practice(name, tc);
+      p.state.players[0]!.rating = elo;
+      bot.current = p; setConnected(true); apply(p.state);
+      return;
+    }
     const s = new EventSource(watch ? `/api/chess/match/${id}/watch` : `/api/chess/match/${id}/events?player=${encodeURIComponent(player!)}`);
     es.current = s;
     s.onopen = () => setConnected(true);
@@ -94,13 +111,20 @@ export function TgChess({ id, player, onMoved, onExit, onShare, onRunning, onDon
   useEffect(() => {
     mounted.current = true; cur.current = null; setM(null); setErr(null); setClosed(null);
     connect();
-    const t = setInterval(() => { if (!document.hidden) setNow(Date.now()); }, 200);
+    const t = setInterval(() => { if (document.hidden) return; setNow(Date.now()); const p = bot.current; if (p?.flag()) apply(p.state); }, 200);
     return () => { mounted.current = false; clearInterval(t); es.current?.close(); es.current = null; };
   }, [connect]);
   const running = !!m && !m.done && !!m.startedAt && now + offset.current >= m.startedAt;
   const playing = !watch && !!m && !m.done && !!m.startedAt;
   useEffect(() => { gameMode(playing); onRunning?.(playing); return () => gameMode(false); }, [playing]);
   useEffect(() => { if (m?.rematchId && !watch) movedRef.current(m.rematchId); }, [m?.rematchId]);
+  // Frog #7 answers a moment after your move
+  useEffect(() => {
+    const p = bot.current;
+    if (!p || !m || m.done || m.turn !== "b" || !m.startedAt) return;
+    const t = setTimeout(() => { if (bot.current === p) apply(p.bot()); }, 650 + Math.random() * 350);
+    return () => clearTimeout(t);
+  }, [m?.id, m?.version]);
 
   const game = useMemo(() => new Chess(m?.fen), [m?.fen]);
   const you: Color | null = watch ? null : m?.you ?? null;
@@ -111,7 +135,7 @@ export function TgChess({ id, player, onMoved, onExit, onShare, onRunning, onDon
   const move = async (from: Square, to: Square, promo?: string) => {
     if (!m || pending.current) return;
     pending.current = true; setBusy(true); setErr(null);
-    try { apply(await chessApi<MatchView>(`match/${m.id}/move`, { player, from, to, promotion: promo })); }
+    try { apply(bot.current ? bot.current.move(from, to, promo) : await chessApi<MatchView>(`match/${m.id}/move`, { player, from, to, promotion: promo })); }
     catch (e) { setErr((e as Error).message); haptic.error(); }
     finally { pending.current = false; setBusy(false); setSelected(null); setPromotion(null); }
   };
@@ -126,7 +150,12 @@ export function TgChess({ id, player, onMoved, onExit, onShare, onRunning, onDon
   };
   const act = async (kind: "resign" | "draw" | "rematch" | "leave", choice?: string) => {
     if (!m || pending.current) return;
-    if (kind === "resign" && !(await confirmAsk("Resign this game? It goes to your rival."))) return;
+    if (kind === "resign" && !(await confirmAsk(bot.current ? "Resign this practice game?" : "Resign this game? It goes to your rival."))) return;
+    if (bot.current) {
+      const p = bot.current;
+      if (kind === "resign") apply(p.resign()); else if (kind === "draw") apply(p.draw()); else if (kind === "rematch") connect(); else onExit();
+      return;
+    }
     pending.current = true; setBusy(true); setErr(null);
     try {
       if (kind === "leave") { await chessApi(`match/${m.id}/leave`, { player }); onExit(); return; }
@@ -151,30 +180,30 @@ export function TgChess({ id, player, onMoved, onExit, onShare, onRunning, onDon
     <span className="tgc-clock" aria-label={`${p.name}: ${clockText(clocks[p.color])}`}>{clockText(clocks[p.color])}</span>
   </div>;
   const rival = m.players.find((p) => !p.you);
-  const status = m.done ? "Game over" : !m.startedAt ? (m.players.length === 2 ? `Waiting for ${rival?.name ?? "your rival"} to sit down` : "Waiting for a rival") : countdown ? `Starting in ${countdown}` : watch ? `${m.players.find((p) => p.color === m.turn)?.name ?? ""} to move${m.check ? " · check" : ""}` : m.turn === you ? (m.check ? "Check! Your move" : selected ? "Tap a marked square" : "Your move") : (rival && !rival.connected ? "Your rival is away: 45 s on their turn and you win" : "Your rival is thinking…");
+  const status = m.done ? "Game over" : !m.startedAt ? (m.players.length === 2 ? `Waiting for ${rival?.name ?? "your rival"} to sit down` : "Waiting for a rival") : countdown ? `Starting in ${countdown}` : watch ? `${m.players.find((p) => p.color === m.turn)?.name ?? ""} to move${m.check ? " · check" : ""}` : m.turn === you ? (m.check ? "Check! Your move" : selected ? "Tap a marked square" : "Your move") : (practice ? "Frog #7 is thinking…" : rival && !rival.connected ? "Your rival is away: 45 s on their turn and you win" : "Your rival is thinking…");
   const won = watch ? !!m.winner : m.winnerIsYou;
   const winnerName = m.winner ? m.players.find((p) => p.color === m.winner)?.name : null;
   const last = (m.moves ?? []).slice(-6);
 
   return <div className="tgc">
     <div className="tgc-head">
-      <span className="tgx-kicker">{watch ? <><i className="tgx-live" /> WATCHING{typeof m.viewers === "number" ? ` · ${m.viewers}` : ""}</> : m.startedAt ? <><i className="tgx-live" /> LIVE DUEL</> : "NIGHT CHESS"} · {m.tc} {CONTROLS[m.tc]?.label.toUpperCase()}</span>
+      <span className="tgx-kicker">{practice ? "PRACTICE · FROG #7" : watch ? <><i className="tgx-live" /> WATCHING{typeof m.viewers === "number" ? ` · ${m.viewers}` : ""}</> : m.startedAt ? <><i className="tgx-live" /> LIVE DUEL</> : "NIGHT CHESS"} · {m.tc} {CONTROLS[m.tc]?.label.toUpperCase()}</span>
       {watch && <button type="button" className="tgx-icon" aria-label="Flip the board" onClick={() => setFlip(!flip)}><Icon name="swap" size={18} /></button>}
     </div>
     {seat(top)}
     <div className="tgc-board">
       <Board2D fen={m.fen} orientation={orientation} selectable={myTurn ? you : null} selected={selected} targets={targets} lastMove={m.lastMove} check={m.check} onSquare={watch ? undefined : pick} />
-      {countdown > 0 && <div className="tgc-over"><span className="tgx-kicker">YOUR RIVAL IS HERE</span><strong className="tgc-count" key={countdown}>{countdown}</strong></div>}
+      {countdown > 0 && <div className="tgc-over"><span className="tgx-kicker">{practice ? "FROG #7 IS READY" : "YOUR RIVAL IS HERE"}</span><strong className="tgc-count" key={countdown}>{countdown}</strong></div>}
       {promotion && <div className="tgc-over" role="dialog" aria-label="Choose a piece"><span className="tgx-kicker">PROMOTE TO</span><div className="tgc-promo">{(["q", "r", "b", "n"] as PieceSymbol[]).map((p) => <button type="button" key={p} disabled={busy} onClick={() => void move(promotion.from, promotion.to, p)} aria-label={PIECES[p]}><Icon name={`chess-${PIECES[p]}`} size={30} /></button>)}</div><button type="button" className="tgx-btn ghost" onClick={() => setPromotion(null)}>Cancel</button></div>}
       {!m.startedAt && !m.done && !watch && <div className="tgc-over" role="status"><span className="tgx-radar"><Icon name="radar" size={30} /></span><b>{m.players.length === 2 ? <>Waiting for <em>{rival?.name}</em></> : <>Finding your <em>rival</em></>}</b><p>{m.players.length === 2 ? "The clock starts once you are both at the table." : "Your table is open in the lounge. Keep this screen open: whoever joins starts at once."}</p>
         <div className="tgc-row">{m.players.length === 1 && onShare && <button type="button" className="tgx-btn" onClick={() => onShare(m.id)}><Icon name="external" size={16} />Invite a friend</button>}<button type="button" className="tgx-btn ghost" disabled={busy} onClick={() => void act("leave")}>Cancel</button></div></div>}
     </div>
     {seat(bottom)}
     {m.done && m.startedAt ? <div className={`tgc-result ${won ? "won" : m.winner ? "lost" : ""}`} role="region" aria-label="Result">
-      <span className="tgx-kicker">FINAL · VERIFIED BY THE SERVER</span>
+      <span className="tgx-kicker">{practice ? "PRACTICE · NOT RATED" : "FINAL · VERIFIED BY THE SERVER"}</span>
       <h2>{!m.winner ? "Draw" : watch ? `${winnerName} wins` : m.winnerIsYou ? "Victory" : "Defeat"}</h2>
-      <p>{REASONS[m.reason ?? ""] ?? m.reason}{m.ply < 4 ? " Too short to count toward Elo." : ""}</p>
-      <div className="tgc-row">{!watch && !m.escrow && <button type="button" className="tgx-btn" disabled={busy || m.rematchRequested} onClick={() => void act("rematch")}><Icon name="swap" size={16} />{m.rematchRequested ? "Waiting…" : m.rivalWantsRematch ? "Accept rematch" : "Rematch"}</button>}<button type="button" className="tgx-btn ghost" onClick={onExit}><Icon name={watch ? "radar" : "home"} size={16} />{watch ? "Live games" : "Lounge"}</button></div>
+      <p>{REASONS[m.reason ?? ""] ?? m.reason}{practice ? ` Practice never moves your Elo. Your record vs Frog #7: ${(({ w, l, d }) => `${w} W · ${l} L · ${d} D`)(practiceRecord())}.` : m.ply < 4 ? " Too short to count toward Elo." : ""}</p>
+      <div className="tgc-row">{!watch && !m.escrow && <button type="button" className="tgx-btn" disabled={busy || m.rematchRequested} onClick={() => void act("rematch")}><Icon name="swap" size={16} />{practice ? "Play again" : m.rematchRequested ? "Waiting…" : m.rivalWantsRematch ? "Accept rematch" : "Rematch"}</button>}<button type="button" className="tgx-btn ghost" onClick={onExit}><Icon name={watch ? "radar" : "home"} size={16} />{watch ? "Live games" : "Lounge"}</button></div>
     </div> : <p className={`tgc-status ${m.check ? "check" : ""}`} role="status">{connected ? status : "Reconnecting… the clocks run on the server."}</p>}
     {!!last.length && <ol className="tgc-moves" aria-label="Last moves">{last.map((x, i) => <li key={i} className={x.color}>{x.san}</li>)}</ol>}
     {err && <p className="tgx-err" role="alert"><Icon name="alert" size={15} />{err}</p>}

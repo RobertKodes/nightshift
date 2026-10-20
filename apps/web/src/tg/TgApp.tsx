@@ -1,7 +1,7 @@
 import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
 import { go, useRoute } from "../router";
-import { keepSeat } from "../games/lounge";
+import { keepSeat, TCS } from "../games/lounge";
 import { type Me, type Resolved, type Seated, TgError, tg } from "./api";
 import { TgChess } from "./TgChess";
 import { PlayTab } from "./PlayTab";
@@ -61,6 +61,14 @@ export function TgApp() {
     // the arcade page shows its own name for you: the profile's, as the server seated you
     else { keepSeat("pinball", { id: s.id, player: s.player }); try { if (meRef.current) localStorage.setItem("pb-name", meRef.current.profile.name); } catch { /* private window */ } go("/tg/pinball"); }
   }, []);
+
+  /** A solo pinball run the server verified: booked on the profile, and a new best celebrated. */
+  const booked = useCallback((id: string) => {
+    void tg<Me & { solo: { best: number; record: boolean } }>("solo", { id }).then((r) => {
+      setMe(r);
+      if (r.solo.record) { haptic.win(); toast(`New personal best: ${r.solo.best.toLocaleString()}`); }
+    }).catch(() => {});
+  }, [toast]);
 
   /** A deep link: picked up at once (your own seat, a game to watch), or asked first (a challenge, a table to join). */
   const open = useCallback(async (param: string) => {
@@ -123,7 +131,11 @@ export function TgApp() {
     view = <ChessView key={id} id={id} player={player} />;
   } else if (seg[1] === "watch" && seg[2] === "chess" && seg[3]) view = <WatchChess key={seg[3]} id={seg[3]} />;
   else if (seg[1] === "watch" && seg[2] === "pinball" && seg[3]) view = <Suspense fallback={<div className="tgx-center"><span className="tgx-radar"><Icon name="radar" size={30} /></span></div>}><div className="tgx-pin-watch"><PinballWatch id={seg[3]} plain /></div></Suspense>;
-  else if (seg[1] === "pinball") view = <Suspense fallback={<div className="arc-boot" />}><div className="tgx-pinball"><PinballPage embedded={{ home: "/tg", onLobby: () => { void reload().catch(() => {}); go("/tg"); } }} /></div></Suspense>;
+  else if (seg[1] === "practice") {
+    const tc = TCS.find((t) => t === decodeURIComponent(seg[2] ?? "")) ?? "5+0";
+    view = me && <TgChess key={tc} id="practice" player="practice" practice={{ name: me.profile.name, elo: me.profile.games.chess.elo, tc }} onMoved={() => {}} onExit={() => go("/tg")} />;
+  }
+  else if (seg[1] === "pinball") view = <Suspense fallback={<div className="arc-boot" />}><div className="tgx-pinball"><PinballPage key={seg[2] ?? "duel"} embedded={{ home: "/tg", solo: seg[2] === "solo", onSolo: booked, onLobby: () => { void reload().catch(() => {}); go("/tg"); } }} /></div></Suspense>;
   else if (seg[1] === "live") view = <LiveTab />;
   else if (seg[1] === "me") view = <MeTab />;
   else view = <PlayTab />;

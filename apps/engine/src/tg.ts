@@ -112,6 +112,8 @@ export const appUrl = (param?: string, base = config.publicUrl) => `${base}/tg${
 
 export type GameKind = "chess" | "pinball";
 export type GameStats = { elo: number; played: number; wins: number; losses: number; draws: number; streak: number; best: number };
+/** Verified solo Space Pinball runs: the best replayed score and the latest. */
+export type SoloStats = { best: number; bestAt: number; runs: number; last: number; lastAt: number };
 export type Recent = { game: GameKind; id: string; result: "win" | "loss" | "draw"; vs: string; elo: number; change: number; at: number; tc?: string; reason?: string };
 export type Profile = {
   /** The public id: random, and the only id any view or link carries. */
@@ -132,6 +134,8 @@ export type Profile = {
   /** Wins in a row across both games; a loss or a draw ends it. */
   streak: number; bestStreak: number;
   recent: Recent[];
+  /** Solo Space Pinball, from the first verified run on. */
+  solo?: SoloStats;
 };
 /** What the player sees of their own profile: everything but the Telegram id. */
 export type SelfView = Omit<Profile, "tg">;
@@ -209,6 +213,15 @@ export class Profiles {
     if (wallet) p.walletAt = this.now(); else delete p.walletAt;
     this.save();
     return p;
+  }
+  /** A solo run the server replayed: counted, and the profile's best when it beats it. */
+  solo(p: Profile, score: number): { score: number; best: number; runs: number; record: boolean } {
+    const now = this.now(), s = p.solo ?? (p.solo = { best: 0, bestAt: 0, runs: 0, last: 0, lastAt: 0 });
+    const record = score > s.best;
+    s.runs++; s.last = score; s.lastAt = now;
+    if (record) { s.best = score; s.bestAt = now; }
+    this.save();
+    return { score, best: s.best, runs: s.runs, record };
   }
   /** Pressed Start (true), or blocked the bot (false). */
   setDm(p: Profile, on: boolean): void { if (p.dm !== on) { p.dm = on; this.save(); } }

@@ -5,7 +5,9 @@ import { webApp } from "./telegram";
 /** The Mini App's API (/api/tg/*): every call carries Telegram's signed initData, which the server checks each time. */
 export type GameStats = { elo: number; played: number; wins: number; losses: number; draws: number; streak: number; best: number };
 export type Recent = { game: Game; id: string; result: "win" | "loss" | "draw"; vs: string; elo: number; change: number; at: number; tc?: string; reason?: string };
-export type Profile = { pid: string; name: string; named?: boolean; photo: string | null; joinedAt: number; seenAt: number; wallet: string | null; walletAt?: number; dm: boolean; games: Record<Game, GameStats>; streak: number; bestStreak: number; recent: Recent[] };
+/** Verified solo Space Pinball runs: the best replayed score and the latest. */
+export type SoloStats = { best: number; bestAt: number; runs: number; last: number; lastAt: number };
+export type Profile = { pid: string; name: string; named?: boolean; photo: string | null; joinedAt: number; seenAt: number; wallet: string | null; walletAt?: number; dm: boolean; games: Record<Game, GameStats>; streak: number; bestStreak: number; recent: Recent[]; solo?: SoloStats };
 export type ActiveSeat = { game: Game; id: string; player: string; status: string; tc: TimeControl | null; rival: string | null };
 export type Me = { profile: Profile; seats: ActiveSeat[]; bot: { username: string; app: string | null; start: string; lounge: string }; session?: string };
 export type Seated = { game: Game; match: { id: string; startedAt: number | null; status?: string; players: unknown[] }; player: string };

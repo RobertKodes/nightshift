@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Icon } from "../Icon";
 import { type GameStats, type Me, tg } from "./api";
 import { useTg } from "./TgApp";
+import { practiceRecord } from "./TgChess";
 import { haptic, openLink } from "./telegram";
 
 /** Me: the Telegram profile (name, photo, Elo per game, record, streaks) and the DMs. */
@@ -49,6 +50,16 @@ export function MeTab() {
       <Stat icon="chess-knight" name="NIGHT CHESS" s={p.games.chess} />
       <Stat icon="orbit" name="SPACE PINBALL" s={p.games.pinball} />
     </div>
+
+    <section className="tgx-card">
+      <div className="tgx-label"><span>SOLO</span><Icon name="trophy" size={14} /></div>
+      <dl className="tgx-solo">
+        <div><dt>Pinball best</dt><dd>{p.solo ? p.solo.best.toLocaleString() : "—"}</dd></div>
+        <div><dt>Solo runs</dt><dd>{p.solo?.runs ?? 0}</dd></div>
+        <div><dt>vs Frog #7</dt><dd>{(({ w, l, d }) => `${w}-${l}-${d}`)(practiceRecord())}</dd></div>
+      </dl>
+      <p className="tgx-note">Pinball runs are replayed by the server before they count. Practice chess (W · L · D) is kept on this device and never moves your Elo.</p>
+    </section>
 
     <section className="tgx-card">
       <div className="tgx-label"><span>RECENT GAMES</span><Icon name="clock" size={14} /></div>

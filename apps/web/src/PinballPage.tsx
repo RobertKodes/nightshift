@@ -101,9 +101,10 @@ function Confetti() {
 /**
  * `embedded`: the arcade inside another shell (the Telegram Mini App): its lobby is that shell's,
  * so once a duel is over, closed or left, the page hands back (onLobby) instead of showing its own.
- * There it is free play only: no wallet, no NIGHT FROG avatar, no staked modes.
+ * There it is free play only: no wallet, no NIGHT FROG avatar, no staked modes. `solo` starts a solo run
+ * at once, and `onSolo` gets each run the server verified (the shell books it on the player's profile).
  */
-export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: () => void } } = {}) {
+export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: () => void; solo?: boolean; onSolo?: (id: string, score: number) => void } } = {}) {
   const { address, signIn, busy } = useSession();
   const frog = useFrogAvatar(embedded ? null : address ?? null);
   const avatar = frog?.src ?? null;
@@ -155,7 +156,7 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
   useEffect(() => { if (!waiting) return; const t = setInterval(() => setNow(Date.now()), 1_000); return () => clearInterval(t); }, [!!waiting]);
   // a seat from the lounge, or a duel left waiting while browsing: taken up again here
   useEffect(() => {
-    if (watchId) return;
+    if (watchId || embedded?.solo) return;
     try { const saved = JSON.parse(sessionStorage.getItem("pb-match") ?? "null") as { id: string; player: string } | null; if (saved) follow(saved.id, saved.player); } catch { /* no saved seat */ }
   }, [watchId]);
 
@@ -196,10 +197,10 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
     es.current = s;
   };
 
-  const start = async () => {
+  const start = async (want: Mode = mode) => {
     setErr(null); setOver(null);
     try { localStorage.setItem("pb-name", name); } catch { /* private window */ }
-    if (mode === "PRACTICE") {
+    if (want === "PRACTICE") {
       es.current?.close();
       // the server deals the table and runs its clock so the run can go on the solo board; offline, practice still works
       const r = await api<SoloStart>("solo", { name: me }).catch((e) => { if ((e as { status?: number }).status === 409) setErr((e as Error).message); return null; });
@@ -218,11 +219,15 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
     } catch (e) { setErr((e as Error).message); }
   };
 
+  // the Mini App's Play solo: onto a solo run at once, on the solo board
+  const soloOnce = useRef(false);
+  useEffect(() => { if (!embedded?.solo || soloOnce.current) return; soloOnce.current = true; setMode("PRACTICE"); void start("PRACTICE"); }, []);
   const finished = async (r: { score: number; inputs: Input[]; stats: Record<string, number>; landed: Landed[]; tick: number }) => {
     setOver({ score: r.score, stats: r.stats });
     if (play?.kind === "practice" && play.id) {
-      const v = await api<{ score: number; rank: number | null }>(`solo/${play.id}/finish`, { inputs: r.inputs }).catch((e) => { setErr((e as Error).message); return null; });
-      if (v) { setOver({ score: v.score, stats: r.stats, rank: v.rank }); void api<Leaderboard>("board").then(setLeaderboard).catch(() => {}); }
+      const id = play.id;
+      const v = await api<{ score: number; rank: number | null }>(`solo/${id}/finish`, { inputs: r.inputs }).catch((e) => { setErr((e as Error).message); return null; });
+      if (v) { setOver({ score: v.score, stats: r.stats, rank: v.rank }); void api<Leaderboard>("board").then(setLeaderboard).catch(() => {}); embedded?.onSolo?.(id, v.score); }
     }
     if (play?.kind === "duel") await api(`match/${play.match.id}/finish`, { player: play.player, inputs: r.inputs, landed: r.landed, tick: r.tick }).catch((e) => setErr((e as Error).message));
   };

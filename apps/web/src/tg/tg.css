@@ -246,3 +246,22 @@ html:has(.tgx), body:has(.tgx) { background: var(--bg, #03020a); }
 .tgx-pin-watch { padding-top: 6px; }
 @media (min-width: 640px) { .tgx-main { max-width: 640px; margin: 0 auto; } }
 @media (prefers-reduced-motion: reduce) { .tgx *, .tgx *::before { animation: none !important; transition: none !important; } }
+
+/* solo: the board, your best, the places */
+.tgx-mini { display: inline-flex; gap: 4px; }
+.tgx-mini button { padding: 5px 8px; white-space: nowrap; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--faint); font: 600 9.5px/1 var(--mono); letter-spacing: .12em; cursor: pointer; }
+.tgx-mini button.on { border-color: var(--uv-hi); color: var(--ink); background: rgba(124, 92, 255, .16); }
+.tgx-mini button:focus-visible { outline: 2px solid var(--uv-hi); outline-offset: 2px; }
+.tgx-best { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--dim); font-size: 13.5px; }
+.tgx-best .icon { color: var(--gold); }
+.tgx-best b { color: var(--ink); font-family: var(--mono); }
+.tgx-board { margin: 0; padding: 0; list-style: none; }
+.tgx-place { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--line2); border-radius: 9px; color: var(--dim); font: 600 12px/1 var(--mono); }
+.tgx-place.p1 { border-color: var(--gold); color: var(--gold); }
+.tgx-place.p2 { border-color: var(--moon); color: var(--moon); }
+.tgx-place.p3 { border-color: #d39a6a; color: #d39a6a; }
+.tgx-score { font: 600 15px/1 var(--mono); color: var(--ink); }
+.tgx-solo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; }
+.tgx-solo div { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); }
+.tgx-solo dt { color: var(--faint); font: 600 9.5px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.tgx-solo dd { margin: 0; font: 600 16px/1.1 var(--mono); }

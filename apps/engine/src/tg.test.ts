@@ -396,4 +396,13 @@ describe("the Mini App API", () => {
     expect(r.headers["Set-Cookie"]).toMatch(/^ns_session=.*HttpOnly; SameSite=Lax/);
     expect((await call("/api/tg/wallet", `tma ${init(user(4343, "Jade"))}`, "POST", { address: "nope" })).status).toBe(400);
   });
+  it("books a solo pinball run on the profile once, and keeps the best", async () => {
+    const p = profiles.upsert(user(5151, "Opal"));
+    expect(profiles.solo(p, 41_000)).toEqual({ score: 41_000, best: 41_000, runs: 1, record: true });
+    expect(profiles.solo(p, 12_000)).toEqual({ score: 12_000, best: 41_000, runs: 2, record: false });
+    expect(p.solo).toMatchObject({ best: 41_000, last: 12_000, runs: 2 });
+    // a run id the server has no finished run for books nothing
+    expect((await call("/api/tg/solo", `tma ${init(user(5151, "Opal"))}`, "POST", { id: "abcdef123456" })).status).toBe(404);
+    expect((await call("/api/tg/solo", `tma ${init(user(5151, "Opal"))}`, "POST", { id: "../x" })).status).toBe(404);
+  });
 });

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
+import { go } from "../router";
 import { GAME_NAME, type Game, type LoungeFeed, TCS, type TimeControl, waitText } from "../games/lounge";
 import { type InviteView, type Seated, tg } from "./api";
 import { useTg } from "./TgApp";
+import { practiceRecord } from "./TgChess";
 import { haptic, shareInline } from "./telegram";
 
 /** Play: the two games, the clock, the lounge's open tables and the seats to pick up. Every game here is free: rated, no stakes. */
@@ -19,6 +21,31 @@ function useFeed(): LoungeFeed | null {
     return () => { on = false; clearInterval(t); removeEventListener("visibilitychange", load); };
   }, []);
   return feed;
+}
+
+type Entry = { name: string; score: number; at: number };
+/** Space Pinball's solo board, the website's: tonight's (last 24 hours) and all-time best verified runs. */
+function SoloBoard({ name, best, runs }: { name: string; best: number | null; runs: number }) {
+  const [board, setBoard] = useState<{ solo: Entry[]; soloBest: Entry[] } | null>(null);
+  const [tab, setTab] = useState<"solo" | "soloBest">("solo");
+  useEffect(() => {
+    let on = true;
+    const load = () => { if (!document.hidden) void fetch("/api/pinball/board").then((r) => r.json()).then((b) => { if (on) setBoard(b as { solo: Entry[]; soloBest: Entry[] }); }).catch(() => {}); };
+    load();
+    const t = setInterval(load, 30_000);
+    return () => { on = false; clearInterval(t); };
+  }, []);
+  const rows = (board?.[tab] ?? []).slice(0, 10);
+  return <section className="tgx-card" aria-label="Solo board">
+    <div className="tgx-label"><span>SOLO BOARD</span><span className="tgx-mini" role="tablist" aria-label="Board">{([["solo", "TONIGHT"], ["soloBest", "ALL TIME"]] as const).map(([k, l]) => <button type="button" role="tab" key={k} aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => { haptic.select(); setTab(k); }}>{l}</button>)}</span></div>
+    {best !== null && <p className="tgx-best"><Icon name="trophy" size={15} /><span>Your best <b>{best.toLocaleString()}</b> · {runs} solo {runs === 1 ? "run" : "runs"}</span></p>}
+    {!board ? <p className="tgx-note">Reading the board…</p> : !rows.length ? <p className="tgx-empty">No verified solo runs {tab === "solo" ? "tonight" : "yet"}. Play solo and take the top spot.</p>
+      : <ol className="tgx-list tgx-board">{rows.map((e, i) => <li key={`${e.name}-${e.at}-${i}`} className={`tgx-row ${e.name === name ? "mine" : ""}`}>
+        <span className={`tgx-place ${i < 3 ? `p${i + 1}` : ""}`}>{i + 1}</span>
+        <span className="tgx-who"><b>{e.name}{e.name === name && <i className="tgx-tag">YOU</i>}</b></span>
+        <strong className="tgx-score">{e.score.toLocaleString()}</strong>
+      </li>)}</ol>}
+  </section>;
 }
 
 export function PlayTab() {
@@ -95,10 +122,15 @@ export function PlayTab() {
           <button type="button" className="tgx-btn ghost" disabled={!!busy} onClick={() => void play("any")}><Icon name="bolt" size={16} />Play anyone</button>
           <button type="button" className="tgx-btn ghost" disabled={!!busy} onClick={() => void challenge()}><Icon name="external" size={16} />Invite a friend</button>
         </div>}
-        {game === "pinball" && <p className="tgx-note">Same table, same seed, played at the same time: your score lands meteors on your rival's table. Every score is replayed by the server.</p>}
+        {game === "chess" && <button type="button" className="tgx-btn ghost" disabled={!!busy} onClick={() => { haptic.tap(); go(`/tg/practice/${encodeURIComponent(tc)}`); }}><Icon name="frog" size={16} />Practice vs Frog #7{(({ w, l, d }) => (w + l + d ? ` · ${w}W ${l}L ${d}D` : ""))(practiceRecord())}</button>}
+        {game === "pinball" && <button type="button" className="tgx-btn ghost big" disabled={!!busy} onClick={() => { haptic.tap(); try { localStorage.setItem("pb-name", p.name); } catch { /* private window */ } go("/tg/pinball/solo"); }}><Icon name="play" size={18} />Play solo</button>}
+        {game === "pinball" && <p className="tgx-note">Solo: your run, your best score on the board. Duel: same table, same seed, played at the same time, and your score lands meteors on your rival's table. Every score is replayed by the server.</p>}
+        {game === "chess" && <p className="tgx-note">Practice: you play white against Frog #7, the house bot, on this clock. Not rated.</p>}
       </div>
       {err && <p className="tgx-err" role="alert"><Icon name="alert" size={15} />{err}</p>}
     </section>
+
+    {game === "pinball" && <SoloBoard name={p.name} best={p.solo ? p.solo.best : null} runs={p.solo?.runs ?? 0} />}
 
     <section className="tgx-card" aria-label="The lounge">
       <div className="tgx-label"><span>THE LOUNGE · OPEN TABLES</span><span>{game === "chess" ? Object.values(feed?.waiting.chess ?? {}).reduce((a, b) => a + b, 0) : feed?.waiting.pinball ?? 0} WAITING</span></div>

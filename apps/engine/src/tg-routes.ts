@@ -98,6 +98,14 @@ export async function tgRoutes(req: IncomingMessage, res: ServerResponse, p: str
       if (busy("tg-play", 20, 600_000)) return reply(429, { error: "Too many games in a row. Try again shortly." });
       return reply(200, play.accept(me, accept[1]!));
     }
+    // a solo Space Pinball run this player just finished: its replayed score goes on the profile, once
+    if (p === "/api/tg/solo" && post) {
+      if (busy("tg-solo", 30, 600_000)) return reply(429, { error: "Slow down." });
+      const b = await body(req, 2_000), id = String(b.id ?? "");
+      const run = ID.test(id) ? pinball.soloClaim(id) : null;
+      if (!run) return reply(404, { error: "No finished run to book" });
+      return reply(200, { solo: profiles.solo(me, run.score), ...meView(me, play) });
+    }
     // a wallet, proved by the site's own sign-in message (EIP-4361, the nonce from /api/auth/nonce)
     if (p === "/api/tg/wallet" && post) {
       if (busy("tg-wallet", 10, 600_000)) return reply(429, { error: "Too many tries. Try again later." });
