@@ -1,0 +1,18 @@
+telegram-web-app.js: Telegram's Mini Apps (WebApp) script, unmodified.
+
+Source:     https://telegram.org/js/telegram-web-app.js
+Fetched:    2026-10-20 (server Last-Modified: Tue, 06 Oct 2026 09:27:17 GMT)
+Size:       119731 bytes
+SHA-256:    124bdff7ba3fe86c8ba5143467afec21e020405e74abdb92cfdda6c0ee3b5908
+Docs:       https://core.telegram.org/bots/webapps#initializing-mini-apps
+
+Copyright and ownership: Telegram (Telegram FZ-LLC and its affiliates). The file carries no license
+header and Telegram publishes no separate license for it; it is distributed by Telegram for every
+Mini App to load. Under the Telegram Bot Platform Developer Terms of Service
+(https://telegram.org/tos/bot-developers, section 8, "License and Attribution"), Telegram retains
+ownership of its code and APIs. This copy is served unchanged, only from this site and only to the
+Mini App page (/tg), because the site's Content-Security-Policy allows scripts from its own origin
+only (script-src 'self'). It is not part of NIGHTSHIFT's MIT-licensed code.
+
+To update: download the file again from the source above, check it, replace this copy and update
+the date, size and SHA-256 here.

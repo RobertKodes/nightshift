@@ -98,7 +98,11 @@ function Confetti() {
   return <canvas ref={ref} width={600} height={900} className="arc-confetti" />;
 }
 
-export function PinballPage() {
+/**
+ * `embedded`: the arcade inside another shell (the Telegram Mini App): its lobby is that shell's,
+ * so once a duel is over, closed or left, the page hands back (onLobby) instead of showing its own.
+ */
+export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: () => void } } = {}) {
   const { address, signIn, busy } = useSession();
   const frog = useFrogAvatar(address ?? null);
   const avatar = frog?.src ?? null;
@@ -118,6 +122,8 @@ export function PinballPage() {
   const es = useRef<EventSource | null>(null);
   /** The open duel this page waits in: someone sitting down there is announced once. */
   const openId = useRef<string | null>(null);
+  /** The duel whose verdict was announced (ns:game-over), so it is announced once. */
+  const told = useRef<string | null>(null);
   // server time minus ours; the smallest delivery delay gives the best estimate, so keep the largest sample
   const clock = useRef(0);
   const sync = (m: MatchView) => { if (m.now) clock.current = Math.max(clock.current === 0 ? -Infinity : clock.current, m.now - Date.now()); };
@@ -155,6 +161,7 @@ export function PinballPage() {
     es.current?.close();
     const s = new EventSource(`/api/pinball/match/${id}/events?player=${player}`);
     s.onmessage = (m) => {
+      seen.current = true;
       const match = withFaces(JSON.parse(m.data) as MatchView);
       sync(match);
       take(match.seed, match.luck);
@@ -171,6 +178,8 @@ export function PinballPage() {
         if (openId.current === match.id) { openId.current = null; alertJoined("pinball", "/games/pinball"); }
         setWaiting(null);
         setPlay((p) => (p?.kind === "duel" && p.match.id === match.id ? { ...p, match } : { kind: "duel", match, player }));
+        // the verified verdict, once per duel: the Telegram Mini App plays a haptic on it
+        if (match.done && !match.void && told.current !== match.id) { told.current = match.id; dispatchEvent(new CustomEvent("ns:game-over", { detail: { game: "pinball", id: match.id, result: match.draw ? "draw" : match.winnerIsYou ? "win" : "loss" } })); }
       }
       else {
         setPlay((p) => (p?.kind === "duel" && p.match.id === match.id ? null : p)); setWaiting({ match, player });
@@ -223,6 +232,10 @@ export function PinballPage() {
   /** A seat from the lounge on this page: the same as a seat from the queue. */
   const loungeSeat = (_game: string, id: string, player: string) => { setErr(null); setOver(null); clock.current = 0; try { localStorage.setItem("pb-name", name); } catch { /* private window */ } follow(id, player); };
   const toLobby = () => { es.current?.close(); setPlay(null); setOver(null); setWaiting(null); };
+  // embedded: the seat's first frame has come (or never will); from then on an empty table hands back to the shell
+  const seen = useRef(false);
+  useEffect(() => { if (embedded && seen.current && !play && !waiting && !watchId) embedded.onLobby(); }, [play, waiting, watchId]);
+  useEffect(() => { if (!embedded) return; const t = setTimeout(() => { seen.current = true; if (!play && !waiting && !watchId) embedded.onLobby(); }, 6_000); return () => clearTimeout(t); }, []);
 
   const opp = play?.kind === "duel" ? play.match.players.find((p) => !p.you) : null;
   const rival: Rival | null = opp ? { name: opp.name, avatar: opp.avatar, live: opp.score ?? opp.live, x: opp.x, y: opp.y, attacks: opp.attacks } : null;
@@ -274,7 +287,7 @@ export function PinballPage() {
       </div>
       {waiting.match.escrow ? <p>The duel starts as soon as your rival connects, or within 5 minutes. A player who never plays scores 0. Keep this page open.</p> : <>
         <p>Your duel is open in the lounge, waiting {waitText(now - (waiting.match.waitingSince ?? now))}. The next player to find a rival joins your table. Browse the site meanwhile: you hear it when someone joins.</p>
-        <div className="arc-actions"><button type="button" autoFocus className="arc-btn" onClick={() => go("/games")}><Icon name="radar" size={17} />BROWSE WHILE YOU WAIT</button>
+        <div className="arc-actions"><button type="button" autoFocus className="arc-btn" onClick={() => go(embedded?.home ?? "/games")}><Icon name="radar" size={17} />BROWSE WHILE YOU WAIT</button>
         <button type="button" className="arc-btn ghost" onClick={() => { es.current?.close(); void api(`match/${waiting.match.id}/leave`, { player: waiting.player }).catch(() => {}); doneWaiting("pinball", waiting.match.id); keepSeat("pinball", null); setWaiting(null); }}>CANCEL SEARCH</button></div>
       </>}
     </div>

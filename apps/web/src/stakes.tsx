@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { type Address, type Hex, createPublicClient, createWalletClient, custom, erc20Abi, formatUnits, getAddress, http, parseAbi, parseUnits, stringToHex } from "viem";
 import { mainnet } from "viem/chains";
 import { Icon } from "./Icon";
-import { api as session } from "./api";
+import { api as session, authHeaders } from "./api";
 import { chooseWallet } from "./wallet";
 import { type Step, canBatch, sendSteps } from "./batch";
 import "./stakes.css";
@@ -47,7 +47,7 @@ export type ChallengeView = {
 export type Seat = { game: StakeGame; id: string; player: string; matchId: Hex };
 
 async function games<T>(path: string, body?: unknown): Promise<T> {
-  const r = await fetch(`/api/games/${path}`, { method: body === undefined ? "GET" : "POST", headers: body === undefined ? {} : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await fetch(`/api/games/${path}`, { method: body === undefined ? "GET" : "POST", headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...authHeaders() }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
   return j as T;

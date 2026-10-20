@@ -173,6 +173,8 @@ export class Profiles {
     this.#timer = setTimeout(() => { this.#timer = null; this.flush(); }, 500);
     this.#timer.unref?.();
   }
+  /** A change not written yet (the process is exiting): written now. */
+  flushPending(): void { if (this.#timer) { clearTimeout(this.#timer); this.#timer = null; this.flush(); } }
   flush(): void {
     if (!this.file) return;
     try { mkdirSync(dirname(this.file), { recursive: true }); writeAtomic(this.file, JSON.stringify({ profiles: [...this.#byTg.values()] }), { mode: 0o600 }); } catch (e) { console.error("telegram.json not saved:", (e as Error).message); }

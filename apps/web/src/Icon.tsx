@@ -28,6 +28,7 @@ const PATHS: Record<string, string> = {
   play: "m8 4 12 8-12 8V4Z",
   diamond: "m3 9 4-5h10l4 5-9 12L3 9Zm0 0h18M7 4l5 17 5-17M9.5 9l2.5-5L14.5 9",
   crescent: "M16.5 3a9.2 9.2 0 1 0 4.7 14.7A8 8 0 0 1 16.5 3Z",
+  expand: "M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5",
   trophy: "M7 3h10v7a5 5 0 0 1-10 0V3Zm0 2H3v3a4 4 0 0 0 4 4m10-7h4v3a4 4 0 0 1-4 4m-5 3v5m-4 1h8",
   lock: "M7.5 10V7a4.5 4.5 0 0 1 9 0v3M5 10h14v11H5V10Zm7 4v3",
   sound: "m11 4-6 5H2.5v6H5l6 5V4Zm4 4a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14",

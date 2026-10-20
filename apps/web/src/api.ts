@@ -80,8 +80,16 @@ export interface Desk {
   archived: { id: string; slug: string; name: string; mission: string; archivedAt: number; products: number; sales: number }[];
 }
 
+/**
+ * A session token the page holds itself, only where no cookie can reach: the Telegram Mini App
+ * framed inside Telegram Web. Everywhere else the session stays in the HttpOnly cookie.
+ */
+let bearer: string | null = null;
+export function setBearer(token: string | null): void { bearer = token; }
+export const authHeaders = (): Record<string, string> => (bearer ? { Authorization: `Bearer ${bearer}` } : {});
+
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const r = await fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(path, { method, headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...authHeaders() }, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
   return j as T;

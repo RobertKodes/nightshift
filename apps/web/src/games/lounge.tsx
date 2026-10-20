@@ -248,7 +248,12 @@ type Notice = { kind: "joined" | "closed"; game: Game; text: string };
  * period over, nobody came): said so, plainly.
  */
 export function WaitingBanner() {
-  const w = useWaiting(), path = useRoute(), now = useNow();
+  const path = useRoute();
+  // the Telegram Mini App shows its own seats and banners
+  return path === "/tg" || path.startsWith("/tg/") ? null : <SiteWaitingBanner path={path} />;
+}
+function SiteWaitingBanner({ path }: { path: string }) {
+  const w = useWaiting(), now = useNow();
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
   const onBoard = !!w && path === `/games/${w.game}` && !location.search.includes("watch=");

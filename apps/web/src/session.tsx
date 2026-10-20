@@ -3,15 +3,15 @@ import { chooseWallet } from "./wallet";
 import { createWalletClient, custom, getAddress } from "viem";
 import { api } from "./api";
 
-interface Session { address: string | null; signIn: () => Promise<void>; signOut: () => Promise<void>; signOutEverywhere: () => Promise<void>; busy: boolean; error: string | null }
-const Ctx = createContext<Session>({ address: null, signIn: async () => {}, signOut: async () => {}, signOutEverywhere: async () => {}, busy: false, error: null });
+interface Session { address: string | null; signIn: () => Promise<void>; signOut: () => Promise<void>; signOutEverywhere: () => Promise<void>; busy: boolean; error: string | null; refresh: () => Promise<void> }
+const Ctx = createContext<Session>({ address: null, signIn: async () => {}, signOut: async () => {}, signOutEverywhere: async () => {}, busy: false, error: null, refresh: async () => {} });
 export const useSession = () => useContext(Ctx);
 
 /**
  * The wallet signs only a sign-in message for this site, this wallet and this nonce, still fresh: the lines
  * the engine's EIP-4361 builder writes (auth.ts), checked one by one. Anything else is refused unsigned.
  */
-function checkSignIn(message: string, address: string, nonce: string, site: { host: string; origin: string } | null, now = Date.now()): void {
+export function checkSignIn(message: string, address: string, nonce: string, site: { host: string; origin: string } | null, now = Date.now()): void {
   const lines = message.split("\n");
   const field = (k: string) => lines.find((l) => l.startsWith(`${k}: `))?.slice(k.length + 2);
   const refuse = (why: string): never => { throw new Error(`Not signed: ${why}. Reload the page and try again.`); };
@@ -52,7 +52,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
   const signOut = useCallback(async () => { await api.logout().catch(() => {}); setAddress(null); }, []);
+  /** Reads the session again (a sign-in made elsewhere on the page, e.g. the Telegram Mini App's wallet link). */
+  const refresh = useCallback(async () => { const m = await api.me().catch(() => null); setAddress(m?.address ?? null); }, []);
   /** Every session of this wallet, on every device, stops working (a lost phone, a shared computer). */
   const signOutEverywhere = useCallback(async () => { await api.logoutAll().catch(() => {}); await api.logout().catch(() => {}); setAddress(null); }, []);
-  return <Ctx.Provider value={{ address, signIn, signOut, signOutEverywhere, busy, error }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ address, signIn, signOut, signOutEverywhere, busy, error, refresh }}>{children}</Ctx.Provider>;
 }

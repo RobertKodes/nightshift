@@ -105,6 +105,8 @@ export class Engine {
   readonly gameBot = new GameBot({ profiles: this.tgProfiles, play: this.tgPlay });
 
   constructor() {
+    // a result booked in the last half second is not lost to a restart
+    process.once("exit", () => this.tgProfiles.flushPending());
     this.auth = new Auth(this.vault.material, this.store.apiKeys, () => this.store.markDirty());
     const usdcAddr = () => USDC[config.salesChainId]!.address;
     const from = (id: string) => this.vault.account(id).address;

@@ -20,11 +20,16 @@ export const WALLET_BROWSER = (() => {
   return Boolean(PHONE && eth && (eth.isMetaMask || eth.isTrust || eth.isTrustWallet || eth.isCoinbaseWallet || eth.isCoinbaseBrowser || eth.isOkxWallet || eth.isOKExWallet || eth.isPhantom || eth.isBitKeep || eth.isBitget));
 })();
 const nav = (typeof navigator === "undefined" ? {} : navigator) as Nav;
+/**
+ * Inside Telegram (the Mini App at /tg, or any page it opened): Telegram's in-app webview is a
+ * phone browser inside a messenger, so the games always run lite there.
+ */
+export const TELEGRAM = typeof window !== "undefined" && (location.pathname === "/tg" || location.pathname.startsWith("/tg/") || /tgWebApp(Data|Version)=/.test(location.hash) || "TelegramWebviewProxy" in window || /Telegram-Android/i.test(ua));
 /** Few cores, little memory or data saver on. */
 export const WEAK = (nav.hardwareConcurrency ?? 8) <= (PHONE ? 4 : 2) || (nav.deviceMemory ?? 8) <= (PHONE ? 3 : 2) || Boolean(nav.connection?.saveData);
 
 const forced = (() => { try { const v = new URLSearchParams(location.search).get("lite"); return v === "1" ? true : v === "0" ? false : null; } catch { return null; } })();
-export const LITE = forced ?? (WALLET_BROWSER || WEAK);
+export const LITE = forced ?? (WALLET_BROWSER || WEAK || TELEGRAM);
 
 /** The pixel ratio to render at: 1 in lite, at most 1.5 on a phone, at most `desktop` elsewhere. */
 export const pixelRatio = (desktop = 2) => {
