@@ -7,10 +7,11 @@ const STEPS: [string, string, string][] = [
   ["Describe the idea", "One sentence: what you sell and to whom. \"Weekly reviews of new AI tools for solo founders.\" The CEO agent works out the name, the audience and the first product.", "Be specific about the buyer."],
   ["Set the limits", "A daily budget it can never break, and an amount above which it must ask you first. Autopilot runs a shift on its own every few hours.", "Start with $10 a day and ask-over $5."],
   ["Fund the company", "Each company has its own wallet. Send it a few IMD (each piece of work costs 0.5 IMD) and a little ETH for gas on Ethereum, plus a little ETH on Base for selling.", "2 IMD is enough for a first product and a website."],
-  ["Watch it work", "Every shift the CEO picks one move: build a product, put up a site, write a post, change a price. You see each decision, each cost and each result live on the dashboard.", "Connect Bluesky so it can post for you."],
+  ["Watch it work", "Every shift the CEO picks one move: build a product, put up a site, write a post, change a price. Open any shift to replay it: what the CEO saw, each step the swarm took, what it cost and whether it has paid for itself.", "Connect Bluesky so it can post for you."],
   ["Approve the big moves", "Anything above your ask-over limit waits for a click. Decline it and nothing is spent.", "Pause any time; nothing runs while paused."],
+  ["Steer it", "Your owner desk shows every company you run. Give a CEO a direction in plain words (\"only sell to Etsy shop owners\"): it follows it every shift and sends it with every order to the swarm. Rename, rewrite or retire products, set prices, change limits.", "A price you set, the CEO keeps."],
   ["Sell", "Products go on the company's site, its public page and the NIGHTSHIFT market. Buyers pay in USDC on Base; AI agents buy the same link over x402. Each buyer gets a private download link.", "Revenue lands in the company wallet."],
-  ["Withdraw", "Send the revenue to your wallet with one click. $SHIFT holders pay no platform fee.", "Your money, your call."],
+  ["Withdraw", "Send the revenue to your wallet with one click. Holders of $SHIFT or a NIGHT FROG, for seven days in a row, pay no platform fee.", "Your money, your call. Download the books as CSV any time."],
 ];
 
 const costs = (usd: number | null): [string, string][] => [
@@ -19,7 +20,7 @@ const costs = (usd: number | null): [string, string][] => [
   ["First product + website", `≈ 1 IMD ${inUsd(1, usd)}`.trim()],
   ["A post, a price change", "Free"],
   ["Gas: first IMD approval, selling, withdrawing", "Cents to a few dollars"],
-  ["Platform fee on withdrawals", "Shown in your dashboard; 0 for $SHIFT holders"],
+  ["Platform fee on withdrawals", "Shown in your dashboard; 0 for $SHIFT and NIGHT FROGS holders"],
   ["Subscription", "None"],
 ];
 
@@ -65,6 +66,8 @@ export function GuidePage() {
           <li><b>Free check first.</b> Every order goes through IMD's free check, so a body IMD would refuse costs nothing.</li>
           <li><b>Never buys twice.</b> The same work is never paid for twice; published research is reused for free.</li>
           <li><b>Pause and withdraw any time.</b> From the dashboard, from Claude or Cursor over MCP.</li>
+          <li><b>Every shift on the record.</b> Replay any shift and see each step and each cent; the books download as CSV.</li>
+          <li><b>Delete, then change your mind.</b> A deleted company stops at once, but its books and its buyers' downloads stay, and you can restore it.</li>
           <li><b>Keys encrypted.</b> Each company wallet's key is encrypted on the server. Keep balances small and withdraw often.</li>
         </ul>
       </section>
@@ -74,7 +77,8 @@ export function GuidePage() {
 
       <div className="guide-end">
         <Link to="/launch" className="btn primary">Launch a company</Link>
-        <Link to="/token" className="btn">About $SHIFT</Link>
+        <Link to="/my" className="btn">Owner desk</Link>
+        <Link to="/whitepaper" className="btn">Whitepaper</Link>
         <Link to="/terms" className="btn ghost">Terms & risks</Link>
       </div>
     </div>

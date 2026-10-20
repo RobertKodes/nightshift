@@ -44,6 +44,7 @@ export const ROOMS: Record<RoomId, Room> = {
       { to: "/info", label: "Briefing", icon: "info" },
       { to: "/token", label: "$SHIFT", icon: "token" },
       { to: "/tokenomics", label: "Tokenomics", icon: "tokenomics" },
+      { to: "/whitepaper", label: "Whitepaper", icon: "story" },
       { to: "/frogs", label: "NIGHT FROGS", icon: "frogs" },
       { to: "/stake", label: "Stake", icon: "stake" },
       { to: "/swap", label: "Swap", icon: "swap" },
@@ -82,7 +83,7 @@ export function roomOf(path: string): RoomId | null {
   if (!a || a === "story") return null;
   if (a === "breakroom" || a === "games" || a === "arena") return "breakroom";
   if (a === "geek" || a === "league" || a === "companies" || a === "my" || a === "launch" || a === "co" || a === "c" || a === "mcp" || a === "launchpad" || a === "guide" || a === "setup") return "geek";
-  if (a === "info" || a === "token" || a === "tokenomics" || a === "frogs" || a === "stake" || a === "staking" || a === "swap" || a === "security" || a === "terms") return "info";
+  if (a === "info" || a === "whitepaper" || a === "token" || a === "tokenomics" || a === "frogs" || a === "stake" || a === "staking" || a === "swap" || a === "security" || a === "terms") return "info";
   if (a === "economy" || a === "hr" || a === "market" || a === "impact") return "economy";
   if (a === "command") return "command";
   return "geek";

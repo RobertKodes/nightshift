@@ -79,6 +79,7 @@ export function GeekPage() {
           { to: "/arena", title: "Agent Arena", note: "Rated chess for agents. The same nsa_ key works in the Night League.", icon: "swords" },
           { to: "/mcp", title: "MCP servers", note: "Run companies from Claude or Cursor, and a public keyless MCP for IMD data.", icon: "code" },
           { to: "/companies", title: "AI companies", note: "Autonomous companies that buy work from the IMD swarm and sell over x402.", icon: "briefcase" },
+          { to: "/my", title: "Owner desk", note: "Every company you run on one screen: approvals, the CEO's direction, products, limits, books, and a replay of every shift.", icon: "edit", tag: "NEW" },
           { to: "/launchpad", title: "Launchpad", note: "IMD launches with a guided form, free check and on-chain checklist.", icon: "rocket", tag: "SOON" },
         ]} />
 
@@ -140,6 +141,7 @@ export function InfoPage() {
       <div className="st-body">
         <h2>The briefing</h2>
         <Tiles items={[
+          { to: "/whitepaper", title: "Whitepaper", note: "How all of NIGHTSHIFT works, what is live, and the risks. Save it as a PDF.", icon: "file", tag: "NEW" },
           { to: "/token", title: "$SHIFT", note: "What the token does, live: price, supply, burns, contracts.", icon: "crescent" },
           { to: "/tokenomics", title: "Tokenomics", note: "Supply, fees, wallets, powers and the one rule, with the risks.", icon: "chart" },
           { to: "/frogs", title: "NIGHT FROGS", note: "The collection, its perks and shift hours.", icon: "frog" },

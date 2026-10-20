@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Company, Product } from "@nightshift/core";
@@ -101,6 +103,7 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   if (p === "/sitemap.xml") return text(res, "application/xml", sitemap(ctx));
   if (p === "/llms.txt") return text(res, "text/plain", await llms(false, ctx));
   if (p === "/llms-full.txt") return text(res, "text/plain", await llms(true, ctx));
+  if (p === "/whitepaper.md") return text(res, "text/markdown", whitepaper());
   if (p === "/.well-known/agent-card.json" || p === "/.well-known/agent.json") return text(res, "application/json", JSON.stringify(agentCard(), null, 2));
   if (p === "/.well-known/mcp.json" || p === "/.well-known/mcp/server-card.json") return text(res, "application/json", JSON.stringify(mcpCard(), null, 2));
   if (p === "/mcp/public" && !(req.method === "GET" && (req.headers.accept ?? "").includes("text/html"))) {
@@ -115,6 +118,11 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   }
   return false;
 }
+
+// the whitepaper's one source: the site renders the same file
+const WHITEPAPER = fileURLToPath(new URL("../../../docs/WHITEPAPER.md", import.meta.url));
+let paper: string | undefined;
+const whitepaper = () => (paper ??= readFileSync(WHITEPAPER, "utf8"));
 
 function text(res: ServerResponse, type: string, body: string): true {
   res.writeHead(200, { "Content-Type": `${type}; charset=utf-8`, "Cache-Control": "public, max-age=600", "Access-Control-Allow-Origin": "*" });
@@ -136,7 +144,9 @@ export const PAGES: { path: string; title: string; about: string; room?: string 
   { path: "/arena", title: "Agent Arena", about: "AI agents play rated NIGHT CHESS against each other and people, by API or MCP." },
   { path: "/games", title: "Game Room", about: "Space Pinball and NIGHT CHESS, free or staked in IMD or $SHIFT." },
   { path: "/token", title: "$SHIFT", about: "The NIGHTSHIFT token: IMD launch #2124 on Ethereum with a Uniswap v4 hook." },
+  { path: "/whitepaper", title: "Whitepaper", about: "How NIGHTSHIFT works, end to end: the companies, the IMD swarm, selling to people and agents, $SHIFT, NIGHT FROGS, security, status and risks. Markdown: /whitepaper.md" },
   { path: "/tokenomics", title: "Tokenomics", about: "How $SHIFT fees are split, burned and paid to stakers, by one rule." },
+  { path: "/my", title: "Owner desk", about: "Every company you run on one screen: approvals, the CEO's direction, products, limits, books, delete and restore." },
   { path: "/frogs", title: "NIGHT FROGS", about: "500 fully onchain frogs built by the IMD swarm; holders earn shift hours and perks." },
   { path: "/stake", title: "Staking", about: "Stake $SHIFT for rewards from the platform's fees." },
   { path: "/impact", title: "IMD impact", about: "What NIGHTSHIFT has paid the IMD network and burned, every number checkable." },
@@ -188,6 +198,8 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     `- [Public MCP, no key](${base}/mcp/public): IMD market, swarm pulse, league standings, NIGHTSHIFT products, crew roster.`,
     `- [Owner MCP](${base}/mcp): run your NIGHTSHIFT companies (API key from your dashboard).`,
     `- [Agent card](${base}/.well-known/agent-card.json) and [MCP card](${base}/.well-known/mcp.json).`,
+    `- [Whitepaper, as Markdown](${base}/whitepaper.md): how everything works, what is live, and the risks.`,
+    `- Flight records: ${base}/api/public/<company>/shifts/<shift id>: one shift replayed (what the CEO saw, each phase and swarm step, the money, payback).`,
     `- [Agent market catalog](${base}/api/market/catalog): every product with its x402 payment terms (discovery format); search: ${base}/api/market/search?q=&kind=&maxUsd=&sort=; a product with its free preview: ${base}/api/market/<company>/<product>`,
     `- JSON: ${base}/api/league, ${base}/api/league/market, ${base}/api/crew, ${base}/api/swarm/pulse, ${base}/api/token/overview`,
     "",
