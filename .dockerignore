@@ -14,5 +14,7 @@ data-*
 *.log
 **/*.log
 **/*.test.ts
-docs
+# docs stay out of the image, except the whitepaper the web build imports
+docs/*
+!docs/WHITEPAPER.md
 deploy
