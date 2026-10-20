@@ -5,5 +5,5 @@
   "type": "module",
   "exports": "./src/index.ts",
   "scripts": { "typecheck": "tsc -p .", "test": "vitest run" },
-  "dependencies": { "viem": "^2.21.54" }
+  "dependencies": { "@coinbase/cdp-sdk": "1.57.1", "viem": "^2.21.54" }
 }

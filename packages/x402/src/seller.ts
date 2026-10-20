@@ -10,9 +10,10 @@ import {
 } from "viem";
 
 /**
- * x402 "exact" scheme over EIP-3009 (USDC transferWithAuthorization), settled by the seller itself:
- * the company verifies the buyer's signed authorization and submits it from its own wallet. No
- * facilitator sits between a company and its money.
+ * x402 "exact" scheme over EIP-3009 (USDC transferWithAuthorization). The seller can settle it itself:
+ * the company verifies the buyer's signed authorization and submits it from its own wallet. A
+ * facilitator (facilitator.ts) can submit it instead; either way the authorization names the
+ * company's wallet, so the money only ever moves from the buyer to the company.
  */
 
 export const USDC: Record<number, { address: Address; name: string; version: string }> = {
@@ -31,11 +32,30 @@ export interface Requirement {
   extra: { name: string; version: string };
 }
 
+/** What is being sold. serviceName, tags and iconUrl are what the CDP Bazaar shows next to a listing. */
+export interface Resource {
+  url: string;
+  description: string;
+  mimeType: string;
+  serviceName?: string;
+  tags?: string[];
+  iconUrl?: string;
+}
+
 export interface Challenge {
   x402Version: 2;
   error?: string;
-  resource: { url: string; description: string; mimeType: string };
+  resource: Resource;
   accepts: Requirement[];
+  /** x402 v2 extensions, such as "bazaar" (the discovery metadata the CDP facilitator indexes). */
+  extensions?: Record<string, unknown>;
+}
+
+/** One sellable resource as its 402 challenge advertises it: the terms, what it is, and its extensions. */
+export interface Offer {
+  requirement: Requirement;
+  resource: Resource;
+  extensions?: Record<string, unknown>;
 }
 
 export interface Authorization {
@@ -51,6 +71,9 @@ export interface PaymentPayload {
   x402Version: 2;
   accepted: Requirement;
   payload: { signature: Hex; authorization: Authorization };
+  /** Echoed from the challenge by x402 v2 clients; the seller sets its own before a facilitator sees it. */
+  resource?: Resource;
+  extensions?: Record<string, unknown>;
 }
 
 export function requirement(chainId: number, payTo: Address, amountUsdc: bigint, maxTimeoutSeconds = 300): Requirement {
@@ -69,8 +92,8 @@ export function requirement(chainId: number, payTo: Address, amountUsdc: bigint,
   };
 }
 
-export function challenge(req: Requirement, resource: Challenge["resource"], error?: string): Challenge {
-  return { x402Version: 2, ...(error ? { error } : {}), resource, accepts: [req] };
+export function challenge(req: Requirement, resource: Resource, error?: string, extensions?: Record<string, unknown>): Challenge {
+  return { x402Version: 2, ...(error ? { error } : {}), resource, accepts: [req], ...(extensions ? { extensions } : {}) };
 }
 
 export const encodeHeader = (v: unknown): string => Buffer.from(JSON.stringify(v)).toString("base64");
