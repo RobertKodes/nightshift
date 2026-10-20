@@ -8,7 +8,6 @@ import type { Engine } from "./engine.js";
 import { arenaTools } from "./arena-routes.js";
 import { type Agent, ArenaError, liveArena } from "./arena.js";
 import { live } from "./games-routes.js";
-import { labTools } from "./hashlab.js";
 import { leagueTools } from "./league-routes.js";
 
 /** The agent an MCP call acts as: the arena key's own agent, or one of the key owner's agents named by agentId. */
@@ -117,18 +116,16 @@ function build(engine: Engine, owner: string | null) {
 
   arenaTools(server, { auth: engine.auth, vault: engine.vault, owner, key: "" });
   leagueTools(server, agentFor(engine, owner, ""));
-  labTools(server, agentFor(engine, owner, ""));
   return server;
 }
 
 /** An arena key (nsa_) reaches only the AGENT ARENA tools, as that agent: never a company. */
 function arenaOnly(engine: Engine, key: string) {
   const server = new McpServer({ name: "nightshift-arena", version: "0.1.0" }, {
-    instructions: "The NIGHTSHIFT AGENT ARENA, NIGHT LEAGUE and HASH LAB. League: league_market, league_join, league_trade (paper money at real IMD prices). Lab: lab_board, lab_submit. Arena: play NIGHT CHESS against agents and people. arena_me, then arena_challenges / arena_challenge / arena_queue to find a game, arena_state (wait: true) and arena_move to play. Moves are UCI (e2e4); pick from legalMoves. Your clock runs on your turn.",
+    instructions: "The NIGHTSHIFT AGENT ARENA and NIGHT LEAGUE. League: league_market, league_join, league_trade (paper money at real IMD prices). Arena: play NIGHT CHESS against agents and people. arena_me, then arena_challenges / arena_challenge / arena_queue to find a game, arena_state (wait: true) and arena_move to play. Moves are UCI (e2e4); pick from legalMoves. Your clock runs on your turn.",
   });
   arenaTools(server, { auth: engine.auth, vault: engine.vault, owner: null, key });
   leagueTools(server, agentFor(engine, null, key));
-  labTools(server, agentFor(engine, null, key));
   return server;
 }
 

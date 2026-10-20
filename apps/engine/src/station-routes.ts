@@ -7,11 +7,10 @@ import { config } from "./config.js";
 import { crew, swarmPulse } from "./crew.js";
 import { creditHours, frogsOn, stakingOf } from "./frogs.js";
 import { live } from "./games-routes.js";
-import { liveLab } from "./hashlab.js";
 import { imdMarket } from "./imdmarket.js";
 import { liveLeague } from "./league.js";
 import { leagueSummary, marketView } from "./league-routes.js";
-import { type Facts, MissionError, liveMissions } from "./missions.js";
+import { type Facts, MISSIONS, MissionError, liveMissions } from "./missions.js";
 import type { Vault } from "./vault.js";
 
 type Context = {
@@ -23,11 +22,11 @@ type Context = {
   market(q: string): unknown[];
 };
 
-/** What the Command Room checks a wallet's missions against: its own agents, league entries and lab scores. */
+/** What the Command Room checks a wallet's missions against: its own agents, their league entries and games. */
 export function factsFor(wallet: string, vault: Vault): Facts {
   const w = wallet.toLowerCase();
   const agents = liveArena(() => live(vault)).mine(w).filter((a) => a.active);
-  const league = liveLeague(), lab = liveLab();
+  const league = liveLeague();
   let trades = 0, best: number | null = null;
   // marked at the market the league last read (the routes refresh it before asking)
   const standings = league.standings(lastMarket);
@@ -39,24 +38,23 @@ export function factsFor(wallet: string, vault: Vault): Facts {
     if (s && (best === null || s.returnPct > best)) best = s.returnPct;
   }
   const bench = standings.find((s) => s.id === "house-imd")?.returnPct ?? null;
-  const labBest = (t: "r24" | "r64") => Math.max(lab.best(t, w), ...agents.map((a) => lab.best(t, a.id)));
-  return { leagueTrades: trades, leagueBestPct: best, benchmarkPct: bench, labR24: labBest("r24"), labR64: labBest("r64"), arenaGames: agents.reduce((n, a) => n + a.games, 0) };
+  return { leagueTrades: trades, leagueBestPct: best, benchmarkPct: bench, arenaGames: agents.reduce((n, a) => n + a.games, 0) };
 }
 let lastMarket: Awaited<ReturnType<typeof imdMarket>> = null;
 
 /** The rooms' live numbers in one read, for the station door. Every count is real; nothing is padded. */
 async function rooms(ctx: Context) {
   const m = (lastMarket = await imdMarket());
-  const league = liveLeague(), lab = liveLab();
+  const league = liveLeague();
   const st = league.standings(m);
   const arena = liveArena(() => live(ctx.vault));
   const pulse = (await swarmPulse()) as { agentsOnline?: number } | null;
   return {
     breakroom: { agentsInArena: arena.agents().length, liveGames: arena.live().games.length },
-    geek: { leagueAgents: st.filter((s) => !s.house).length, tradableTokens: m?.tokens.length ?? null, labPlayers: Object.values(lab.summary().tracks).reduce((n, t) => n + t.board.length, 0) },
+    geek: { leagueAgents: st.filter((s) => !s.house).length, tradableTokens: m?.tokens.length ?? null },
     info: { frogs: frogsOn() },
     economy: { swarmAgentsOnline: pulse?.agentsOnline ?? null },
-    command: { missions: 5 },
+    command: { missions: MISSIONS.length },
     leader: st[0] ? { name: st[0].name, returnPct: st[0].returnPct, house: st[0].house } : null,
   };
 }
@@ -123,13 +121,12 @@ function text(res: ServerResponse, type: string, body: string): true {
 /** The pages worth indexing, and what each one is: used by the sitemap, llms.txt and the server-rendered page heads. */
 export const PAGES: { path: string; title: string; about: string; room?: string }[] = [
   { path: "/", title: "NIGHTSHIFT, the station", about: "A space station of AI companies, agents and games built on IMD, the AI agent swarm. Pick a room: Breakroom, Geek Room, Info, HR & Economy, Command." },
-  { path: "/breakroom", room: "breakroom", title: "Breakroom", about: "Games for people and AI agents: Space Pinball, NIGHT CHESS, the Agent Arena, live matches and the Hash Lab." },
-  { path: "/geek", room: "geek", title: "Geek Room", about: "The technical projects: the Night League for trading agents, the Hash Lab, MCP servers, the agent APIs, swarm orders and the open source." },
+  { path: "/breakroom", room: "breakroom", title: "Breakroom", about: "Games for people and AI agents: Space Pinball, NIGHT CHESS, live matches and the Agent Arena, free or for stakes." },
+  { path: "/geek", room: "geek", title: "Geek Room", about: "The technical projects: the Night League for trading agents, MCP servers, the agent APIs, the IMD market as agents see it, and the open source." },
   { path: "/info", room: "info", title: "Info Room", about: "Everything about $SHIFT and NIGHT FROGS: contracts, tokenomics, staking, swap, security and how each part works." },
   { path: "/economy", room: "economy", title: "HR & Economy", about: "Who works for NIGHTSHIFT (every IMD agent hired, by role and model) and how money moves: fees, burns, staking, company revenue." },
   { path: "/command", room: "command", title: "Command Room", about: "NIGHT FROGS at work: send your frogs on weekly missions checked against real activity; finished missions pay bonus shift hours." },
   { path: "/league", title: "The Night League", about: "A weekly paper-trading league for AI agents on the IMD ecosystem, at real DexScreener prices, with real pool fees and price impact, marked at the exit." },
-  { path: "/lab", title: "Hash Lab", about: "Find two messages whose SHA-256 digests share the most leading bits. 24-round and full 64-round tracks, in your browser or by API; every result re-checked by the server." },
   { path: "/companies", title: "Companies", about: "Autonomous AI companies that build with the IMD swarm and sell for USDC over x402." },
   { path: "/market", title: "Market", about: "Everything NIGHTSHIFT companies sell, for people and for AI agents (x402, USDC on Base)." },
   { path: "/arena", title: "Agent Arena", about: "AI agents play rated NIGHT CHESS against each other and people, by API or MCP." },
@@ -154,7 +151,6 @@ function robots(): string {
     "Disallow: /setup",
     "Disallow: /co/",
     "Allow: /api/league",
-    "Allow: /api/lab",
     "",
     ...["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-User", "Claude-SearchBot", "PerplexityBot", "Perplexity-User", "Google-Extended", "Applebot-Extended", "CCBot", "DeepseekBot"].flatMap((b) => [`User-agent: ${b}`, "Allow: /", "Disallow: /setup", "Disallow: /co/", ""]),
     `Sitemap: ${base}/sitemap.xml`,
@@ -184,11 +180,11 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     "",
     "## For AI agents",
     `- [Night League guide](${base}/league/agents.md): join a weekly paper-trading league on IMD ecosystem tokens; REST + MCP.`,
-    `- [Agent Arena guide](${base}/arena/agents.md): register an agent (one key for the arena, league and lab) and play rated NIGHT CHESS.`,
-    `- [Public MCP, no key](${base}/mcp/public): IMD market, swarm pulse, league standings, Hash Lab board, NIGHTSHIFT products, crew roster.`,
+    `- [Agent Arena guide](${base}/arena/agents.md): register an agent (one key for the arena and the league) and play rated NIGHT CHESS.`,
+    `- [Public MCP, no key](${base}/mcp/public): IMD market, swarm pulse, league standings, NIGHTSHIFT products, crew roster.`,
     `- [Owner MCP](${base}/mcp): run your NIGHTSHIFT companies (API key from your dashboard).`,
     `- [Agent card](${base}/.well-known/agent-card.json) and [MCP card](${base}/.well-known/mcp.json).`,
-    `- JSON: ${base}/api/league, ${base}/api/league/market, ${base}/api/lab, ${base}/api/crew, ${base}/api/swarm/pulse, ${base}/api/market?q=, ${base}/api/token/overview`,
+    `- JSON: ${base}/api/league, ${base}/api/league/market, ${base}/api/crew, ${base}/api/swarm/pulse, ${base}/api/market?q=, ${base}/api/token/overview`,
     "",
     "## Pages",
     ...PAGES.filter((x) => !x.room && x.path !== "/").map((x) => `- [${x.title}](${base}${x.path}): ${x.about}`),
@@ -215,17 +211,16 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
 function agentCard() {
   const base = config.publicUrl;
   return {
-    name: "NIGHTSHIFT", description: "AI companies, agent games and IMD ecosystem data on one station. Agents can trade in the Night League (paper), play rated chess in the Agent Arena, submit Hash Lab results, read the IMD market and swarm, and buy products over x402.",
+    name: "NIGHTSHIFT", description: "AI companies, agent games and IMD ecosystem data on one station. Agents can trade in the Night League (paper), play rated chess in the Agent Arena, read the IMD market and swarm, and buy products over x402.",
     url: base, version: "1.0.0", provider: { organization: "NIGHTSHIFT", url: base },
     documentationUrl: `${base}/llms.txt`, iconUrl: `${base}/brand/nightshift-mark.svg`,
     capabilities: { streaming: false, pushNotifications: false },
     defaultInputModes: ["application/json"], defaultOutputModes: ["application/json"],
     supportedInterfaces: [{ url: `${base}/mcp/public`, protocolBinding: "MCP streamable HTTP", protocolVersion: "2025-06-18" }],
-    securitySchemes: { arenaKey: { type: "http", scheme: "bearer", description: "nsa_ key from POST /api/arena/register (league, lab and arena actions)" } },
+    securitySchemes: { arenaKey: { type: "http", scheme: "bearer", description: "nsa_ key from POST /api/arena/register (league and arena actions)" } },
     skills: [
       { id: "night-league", name: "Night League", description: "Weekly paper-trading league on IMD ecosystem tokens at real prices and real pool costs.", tags: ["trading", "imd", "agents", "paper"], examples: [`${base}/league/agents.md`] },
       { id: "agent-arena", name: "Agent Arena", description: "Rated NIGHT CHESS for AI agents and people.", tags: ["chess", "agents", "games"], examples: [`${base}/arena/agents.md`] },
-      { id: "hash-lab", name: "Hash Lab", description: "Submit SHA-256 (24 or 64 rounds) prefix-collision pairs; scored and re-verified by the server.", tags: ["sha256", "compute", "game"] },
       { id: "imd-data", name: "IMD market and swarm", description: "Tradable IMD ecosystem tokens with liquidity and freshness, and the swarm's live health.", tags: ["imd", "market-data", "swarm"] },
       { id: "nightshift-market", name: "Buy from AI companies", description: "Products made by NIGHTSHIFT's AI companies, sold over x402 in USDC on Base.", tags: ["x402", "commerce", "usdc"] },
     ],
@@ -235,8 +230,8 @@ function mcpCard() {
   const base = config.publicUrl;
   return {
     servers: [
-      { name: "nightshift-public", description: "Keyless, read-only: IMD market, swarm pulse, Night League standings, Hash Lab board, NIGHTSHIFT products and crew.", url: `${base}/mcp/public`, transport: "streamable-http", auth: "none" },
-      { name: "nightshift", description: "Run your NIGHTSHIFT companies; with an arena key (nsa_) also play the arena, trade in the league and submit to the lab.", url: `${base}/mcp`, transport: "streamable-http", auth: "bearer (nsk_ or nsa_)" },
+      { name: "nightshift-public", description: "Keyless, read-only: IMD market, swarm pulse, Night League standings, NIGHTSHIFT products and crew.", url: `${base}/mcp/public`, transport: "streamable-http", auth: "none" },
+      { name: "nightshift", description: "Run your NIGHTSHIFT companies; with an arena key (nsa_) also play the arena and trade in the league.", url: `${base}/mcp`, transport: "streamable-http", auth: "bearer (nsk_ or nsa_)" },
     ],
   };
 }
@@ -245,13 +240,12 @@ const json2 = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.s
 /** A read-only MCP server anyone can add without a key. */
 function publicMcp(ctx: Context): McpServer {
   const server = new McpServer({ name: "nightshift-public", version: "1.0.0" }, {
-    instructions: "Read-only NIGHTSHIFT and IMD data, no key needed. imd_market: tradable IMD ecosystem tokens with price, liquidity and data age. imd_swarm: the IMD agent swarm's live health. league_standings: the Night League (AI agents paper-trading IMD tokens). lab_board: Hash Lab records. nightshift_products: what NIGHTSHIFT's AI companies sell over x402. nightshift_crew: the IMD agents NIGHTSHIFT has hired. To act (trade, play, submit), register an agent: " + `${config.publicUrl}/arena/agents.md`,
+    instructions: "Read-only NIGHTSHIFT and IMD data, no key needed. imd_market: tradable IMD ecosystem tokens with price, liquidity and data age. imd_swarm: the IMD agent swarm's live health. league_standings: the Night League (AI agents paper-trading IMD tokens). nightshift_products: what NIGHTSHIFT's AI companies sell over x402. nightshift_crew: the IMD agents NIGHTSHIFT has hired. To act (trade, play), register an agent: " + `${config.publicUrl}/arena/agents.md`,
   });
   const safe = <A,>(fn: (a: A) => Promise<unknown> | unknown) => async (a: A) => { try { return json2(await fn(a)); } catch (e) { return { ...json2({ error: (e as Error).message }), isError: true }; } };
   server.registerTool("imd_market", { title: "IMD market", description: "IMD and every IMD launch on Ethereum with real liquidity (>= $2,000): price, liquidity, 24h volume, 1h/24h change, pool fee and chart link, from DexScreener, with the data's age.", inputSchema: {} }, safe(async () => marketView(await imdMarket())));
   server.registerTool("imd_swarm", { title: "IMD swarm pulse", description: "Agents online, seats enrolled, accepted steps and jobs done in the last day, all-time jobs, live launches and sites, from api.imd.fun/swarm.", inputSchema: {} }, safe(() => swarmPulse()));
   server.registerTool("league_standings", { title: "Night League standings", description: "This week's AI-agent paper-trading standings on IMD tokens, results by model and past seasons.", inputSchema: {} }, safe(async () => leagueSummary(liveLeague(), await imdMarket())));
-  server.registerTool("lab_board", { title: "Hash Lab board", description: "This week's SHA-256 prefix-collision records (24-round and 64-round tracks).", inputSchema: {} }, safe(() => { liveLab().roll(); return liveLab().summary(); }));
   server.registerTool("nightshift_products", { title: "NIGHTSHIFT products", description: "Products on sale from NIGHTSHIFT's AI companies; each has an x402 buy URL (USDC on Base).", inputSchema: { query: z.string().max(200).default("") } }, safe(({ query }: { query: string }) => ({ mode: config.mode, products: ctx.market(query).slice(0, 25) })));
   server.registerTool("nightshift_crew", { title: "NIGHTSHIFT crew", description: "Every IMD swarm agent (seat) that worked on orders NIGHTSHIFT paid for: role, model, runtime, accepted steps, jobs.", inputSchema: {} }, safe(() => crew()));
   return server;

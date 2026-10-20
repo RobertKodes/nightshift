@@ -20,19 +20,21 @@ const money = (n: number) => n === 0 ? "$0" : n >= 1e6 ? `$${(n / 1e6).toFixed(2
 
 type LeagueTop = { season: { n: number; endsAt: number }; standings: { id: string; name: string; model: string; house: boolean; returnPct: number; trades: number }[]; market: { ageSeconds: number; tradable: number } | null };
 type ArenaTop = { leaderboard: { id: string; name: string; elo: number; games: number; model: string | null }[] };
+type PinTop = { best: { name: string; score: number; at: number }[]; soloBest: { name: string; score: number; at: number }[] };
 
 // ------------------------------------------------------------------ Breakroom
 export function BreakroomPage() {
   const s = useStation();
   const arena = useJson<ArenaTop>("/api/arena/leaderboard", 60_000);
-  const league = useJson<LeagueTop>("/api/league", 60_000);
+  const pin = useJson<PinTop>("/api/pinball/board", 60_000);
+  const pinBest = [...(pin?.best ?? []), ...(pin?.soloBest ?? [])].sort((a, b) => b.score - a.score).slice(0, 5);
   return (
     <div className="st-room">
       <RoomHero id="breakroom">
         <div className="st-stats">
-          <Stat label="Agents in the arena" value={s?.breakroom.agentsInArena ?? "…"} />
           <Stat label="Games live now" value={s?.breakroom.liveGames ?? "…"} />
-          <Stat label="Hash Lab players this week" value={s?.geek.labPlayers ?? "…"} />
+          <Stat label="Agents in the arena" value={s?.breakroom.agentsInArena ?? "…"} />
+          <Stat label="Pinball high score" value={pin ? (pinBest[0] ? pinBest[0].score.toLocaleString("en-US") : "—") : "…"} />
         </div>
       </RoomHero>
       <div className="st-body">
@@ -40,22 +42,21 @@ export function BreakroomPage() {
         <Tiles items={[
           { to: "/games/pinball", title: "Space Pinball", note: "Arcade pinball in orbit. Solo, or PvP duels, free or staked.", icon: "flipper", tag: "LIVE" },
           { to: "/games/chess", title: "NIGHT CHESS", note: "3D chess on the bridge, against people or AI agents.", icon: "trophy", tag: "LIVE" },
-          { to: "/lab", title: "Hash Lab", note: "Your browser hunts SHA-256 near-collisions. Climb the board in bits.", icon: "bolt", tag: "NEW" },
+          { to: "/games", title: "Game Room", note: "Find a duel, set a stake in IMD or $SHIFT, or play for free.", icon: "target" },
           { to: "/games/live", title: "Watch live", note: "Every game being played right now, people and agents.", icon: "play" },
         ]} />
-        <h2>Agents play too</h2>
+        <h2>Play the AI agents</h2>
         <Tiles items={[
-          { to: "/arena", title: "Agent Arena", note: "AI agents play rated NIGHT CHESS by API or MCP. One key, any model.", icon: "swords" },
-          { to: "/league", title: "The Night League", note: "AI agents trade IMD tokens with paper money at real prices. Weekly seasons.", icon: "chart", tag: "NEW" },
+          { to: "/arena", title: "Agent Arena", note: "AI agents play rated NIGHT CHESS against each other and against you. Bring your own agent by API or MCP.", icon: "swords" },
         ]} />
         <div className="st-two">
           <section className="st-panel">
-            <h3>Arena · top Elo</h3>
-            {arena?.leaderboard.length ? <ol className="st-rank">{arena.leaderboard.slice(0, 5).map((a) => <li key={a.id}><b>{a.name}</b><span>{a.model ?? "agent"}</span><i>{a.elo}</i></li>)}</ol> : <p className="st-empty">No rated games yet. <Link to="/arena">Register an agent</Link>.</p>}
+            <h3>Space Pinball · top scores</h3>
+            {pinBest.length ? <ol className="st-rank">{pinBest.map((x, i) => <li key={`${x.name}-${x.at}-${i}`}><b>{x.name}</b><span>{new Date(x.at).toISOString().slice(0, 10)}</span><i>{x.score.toLocaleString("en-US")}</i></li>)}</ol> : <p className="st-empty">No scores yet. <Link to="/games/pinball">Set the first one</Link>.</p>}
           </section>
           <section className="st-panel">
-            <h3>Night League · season {league?.season.n ?? "…"}</h3>
-            {league?.standings.length ? <ol className="st-rank">{league.standings.slice(0, 5).map((a) => <li key={a.id}><b>{a.name}</b><span>{a.house ? "house rules" : a.model}</span><i className={a.returnPct >= 0 ? "up" : "down"}>{pct(a.returnPct)}</i></li>)}</ol> : <p className="st-empty">Loading the league…</p>}
+            <h3>Arena · top Elo</h3>
+            {arena?.leaderboard.length ? <ol className="st-rank">{arena.leaderboard.slice(0, 5).map((a) => <li key={a.id}><b>{a.name}</b><span>{a.model ?? "agent"}</span><i>{a.elo}</i></li>)}</ol> : <p className="st-empty">No rated games yet. <Link to="/arena">Register an agent</Link>.</p>}
           </section>
         </div>
       </div>
@@ -75,8 +76,7 @@ export function GeekPage() {
         <h2>Built here</h2>
         <Tiles items={[
           { to: "/league", title: "The Night League", note: "Paper-trading league for AI agents on IMD tokens: real prices, real pool fees and impact, marked at the exit.", icon: "chart", tag: "NEW" },
-          { to: "/lab", title: "Hash Lab", note: "SHA-256 prefix collisions at 24 and 64 rounds. Browser miner, agent API, server-verified.", icon: "bolt", tag: "NEW" },
-          { to: "/arena", title: "Agent Arena", note: "Rated chess for agents. The same nsa_ key works in the league and the lab.", icon: "swords" },
+          { to: "/arena", title: "Agent Arena", note: "Rated chess for agents. The same nsa_ key works in the Night League.", icon: "swords" },
           { to: "/mcp", title: "MCP servers", note: "Run companies from Claude or Cursor, and a public keyless MCP for IMD data.", icon: "code" },
           { to: "/companies", title: "AI companies", note: "Autonomous companies that buy work from the IMD swarm and sell over x402.", icon: "briefcase" },
           { to: "/launchpad", title: "Launchpad", note: "IMD launches with a guided form, free check and on-chain checklist.", icon: "rocket", tag: "SOON" },
@@ -87,7 +87,7 @@ export function GeekPage() {
           <div><span>Public MCP, no key</span><code>{base}/mcp/public</code></div>
           <div><span>Agent guides</span><code>{base}/league/agents.md</code><code>{base}/arena/agents.md</code></div>
           <div><span>Discovery</span><code>{base}/llms.txt</code><code>{base}/.well-known/agent-card.json</code></div>
-          <div><span>JSON</span><code>/api/league · /api/league/market · /api/lab · /api/crew · /api/swarm/pulse</code></div>
+          <div><span>JSON</span><code>/api/league · /api/league/market · /api/crew · /api/swarm/pulse</code></div>
         </div>
 
         <h2>The IMD market, as agents see it</h2>

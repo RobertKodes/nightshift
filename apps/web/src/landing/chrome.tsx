@@ -87,18 +87,18 @@ export const UTILITIES: { to: string; label: string; note: string; soon?: boolea
   { to: "/impact", label: "IMD Impact", note: "What NIGHTSHIFT gives the IMD network" },
   { to: "/mcp", label: "MCP for agents", note: "Let AI agents use NIGHTSHIFT" },
 ];
-export type Active = "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide" | "tokenomics" | "games" | "impact" | "launchpad" | "stake" | "arena" | "breakroom" | "geek" | "info" | "economy" | "command" | "league" | "lab";
+export type Active = "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide" | "tokenomics" | "games" | "impact" | "launchpad" | "stake" | "arena" | "breakroom" | "geek" | "info" | "economy" | "command" | "league";
 const UTIL_KEYS: Active[] = ["token", "tokenomics", "frogs", "swap", "stake", "launchpad", "games", "arena", "impact", "mcp"];
 
 /** The station's five rooms, a menu of their own. */
 export const ROOM_LINKS: { to: string; label: string; note: string; dot: string; key: Active }[] = [
   { to: "/breakroom", label: "Breakroom", note: "Games for people and agents", dot: "#ff5ca8", key: "breakroom" },
-  { to: "/geek", label: "Geek Room", note: "Night League, Hash Lab, MCP, APIs", dot: "#4ad8ff", key: "geek" },
+  { to: "/geek", label: "Geek Room", note: "Night League, MCP, agent APIs", dot: "#4ad8ff", key: "geek" },
   { to: "/info", label: "Info Room", note: "$SHIFT, NIGHT FROGS, contracts", dot: "#c9c2ff", key: "info" },
   { to: "/economy", label: "HR & Economy", note: "The crew we hired, where fees go", dot: "#ffc861", key: "economy" },
   { to: "/command", label: "Command Room", note: "Send your frogs on missions", dot: "#b8ff4a", key: "command" },
 ];
-const ROOM_KEYS: Active[] = ["breakroom", "geek", "info", "economy", "command", "league", "lab"];
+const ROOM_KEYS: Active[] = ["breakroom", "geek", "info", "economy", "command", "league"];
 function RoomsMenu({ active }: { active: Active }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -184,7 +184,7 @@ function MobileMenu({ home }: { home: boolean }) {
 const APP_TITLES: Partial<Record<Active, string>> = {
   home: "NIGHTSHIFT", companies: "Companies", company: "Your company", market: "Market", token: "$SHIFT", tokenomics: "Tokenomics", frogs: "NIGHT FROGS",
   swap: "Trade", stake: "Earn", guide: "Guide", games: "Game Room", arena: "Agent Arena", impact: "IMD Impact", launchpad: "Launchpad", mcp: "MCP", terms: "Terms",
-  breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "Night League", lab: "Hash Lab",
+  breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "Night League",
 };
 
 export function SiteHeader({ active, home = false }: { active: Active; home?: boolean }) {
@@ -238,7 +238,6 @@ export function SiteFooter() {
         <Link to="/economy">HR &amp; ECONOMY</Link>
         <Link to="/command">COMMAND ROOM</Link>
         <Link to="/league">NIGHT LEAGUE</Link>
-        <Link to="/lab">HASH LAB</Link>
         <Link to="/security">SECURITY</Link>
         <a href="/imd-status/">IMD STATUS</a>
         <Link to="/market">MARKET</Link>

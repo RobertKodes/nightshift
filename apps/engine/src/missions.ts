@@ -7,7 +7,7 @@ import { seasonStartOf } from "./league.js";
 /**
  * COMMAND ROOM missions: each week a NIGHT FROGS holder sends their frogs out on missions. A
  * mission is a real thing done on NIGHTSHIFT that the server can check (an agent trading in the
- * Night League, a Hash Lab score, a rated chess game). When it is done, the frog that crewed it
+ * Night League, beating the league's benchmark, a rated chess game). When it is done, the frog that crewed it
  * brings back bonus shift hours: the mission's base hours times that frog's multiplier (6 for #1,
  * 3 for #2–25, 2 for Genesis, 1 for the rest). One frog per mission, one mission per frog, each
  * mission once a week. Shift hours are the same points soft staking already pays.
@@ -17,11 +17,10 @@ export type Facts = {
   leagueTrades: number;
   /** Best league return of the wallet's agents, and the IMD Holder benchmark's. */
   leagueBestPct: number | null; benchmarkPct: number | null;
-  labR24: number; labR64: number;
   /** Rated arena games, all time, of the wallet's agents. */
   arenaGames: number;
 };
-export type MissionDef = { id: string; title: string; brief: string; hours: number; station: "league" | "lab" | "arena"; done: (f: Facts, baseline: Facts) => boolean; progress: (f: Facts, baseline: Facts) => string; link: string };
+export type MissionDef = { id: string; title: string; brief: string; hours: number; station: "league" | "arena"; done: (f: Facts, baseline: Facts) => boolean; progress: (f: Facts, baseline: Facts) => string; link: string };
 
 export const MISSIONS: MissionDef[] = [
   { id: "desk-duty", title: "Desk duty", station: "league", hours: 24, link: "/league", brief: "Your agent makes 3 trades in this week's Night League.",
@@ -29,10 +28,6 @@ export const MISSIONS: MissionDef[] = [
   { id: "beat-the-holder", title: "Beat the holder", station: "league", hours: 48, link: "/league", brief: "Your best agent is ahead of the IMD Holder benchmark when you report back.",
     done: (f) => f.leagueBestPct !== null && f.benchmarkPct !== null && f.leagueTrades > 0 && f.leagueBestPct > f.benchmarkPct,
     progress: (f) => f.leagueBestPct === null ? "no agent in the league" : `${f.leagueBestPct.toFixed(2)}% vs ${f.benchmarkPct?.toFixed(2) ?? "?"}%` },
-  { id: "warm-up-hash", title: "Warm-up hash", station: "lab", hours: 12, link: "/lab", brief: "Score 44 bits or more on the Hash Lab's 24-round track this week.",
-    done: (f) => f.labR24 >= 44, progress: (f) => `best ${f.labR24}/44 bits` },
-  { id: "deep-hash", title: "Deep hash", station: "lab", hours: 48, link: "/lab", brief: "Score 52 bits or more on full 64-round SHA-256 this week.",
-    done: (f) => f.labR64 >= 52, progress: (f) => `best ${f.labR64}/52 bits` },
   { id: "board-watch", title: "Board watch", station: "arena", hours: 24, link: "/arena", brief: "One of your agents plays a rated NIGHT CHESS game after the frog sets out.",
     done: (f, b) => f.arenaGames > b.arenaGames, progress: (f, b) => `${Math.max(0, f.arenaGames - b.arenaGames)}/1 game` },
 ];

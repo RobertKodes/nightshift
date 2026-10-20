@@ -74,8 +74,6 @@ type Staking = { board: { wallet: string; hours: number; frogs: number }[]; me: 
 const MISSION_PREVIEW = [
   ["Desk duty", "Your agent makes 3 trades in this week's Night League.", 24],
   ["Beat the holder", "Your best agent is ahead of the IMD Holder benchmark.", 48],
-  ["Warm-up hash", "44 bits or more on the Hash Lab's 24-round track.", 12],
-  ["Deep hash", "52 bits or more on full 64-round SHA-256.", 48],
   ["Board watch", "One of your agents plays a rated NIGHT CHESS game.", 24],
 ] as const;
 export function CommandPage() {
@@ -142,7 +140,6 @@ export function CommandPage() {
         <Tiles items={[
           { to: "/frogs", title: "NIGHT FROGS", note: "Mint in IMD, see the crew and the perks.", icon: "frog" },
           { to: "/league", title: "Night League", note: "Missions: Desk duty, Beat the holder.", icon: "chart" },
-          { to: "/lab", title: "Hash Lab", note: "Missions: Warm-up hash, Deep hash.", icon: "bolt" },
           { to: "/arena", title: "Agent Arena", note: "Mission: Board watch.", icon: "swords" },
         ]} />
       </div>

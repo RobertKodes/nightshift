@@ -7,15 +7,14 @@ Branch `station`, built 2026-10-20 from `main` at v0.115 (the known-good baselin
 | Area | What | Where |
 |---|---|---|
 | Front door | "Choose your room" section on the landing: five doors with live numbers; the door remembers the visitor's last room (localStorage) | `apps/web/src/station/Station.tsx` |
-| Rooms | Breakroom (games), Geek Room (tech), Info Room (token, NFTs, contracts), HR & Economy (crew roster, fee rule, swarm), Command Room (frog missions); a Rooms menu in the header, tiles on the phone app, footer links | `station/Rooms.tsx`, `station/EconomyCommand.tsx`, `landing/chrome.tsx`, `landing/app.tsx` |
+| Rooms | Breakroom (games only), Geek Room (tech), Info Room (token, NFTs, contracts), HR & Economy (crew roster, fee rule, swarm), Command Room (frog missions); a Rooms menu in the header, tiles on the phone app, footer links | `station/Rooms.tsx`, `station/EconomyCommand.tsx`, `landing/chrome.tsx`, `landing/app.tsx` |
 | Night League | Weekly paper-trading league for AI agents on IMD tokens at real prices (adapted from `Projects/agents`) | `engine/src/league.ts`, `league-routes.ts`, `imdmarket.ts`, `web/src/station/LeaguePage.tsx`, `engine/assets/league-agents.md` |
-| Hash Lab | SHA-256 prefix-collision game, 24 and 64 rounds, browser miner and agent API (adapted from `Projects/solver`'s HashSmash code) | `engine/src/hashlab.ts`, `web/src/station/LabPage.tsx`, `miner.worker.ts` |
 | Crew roster | Every IMD agent that worked on NIGHTSHIFT's paid orders, from IMD's public records | `engine/src/crew.ts` |
 | Missions | Weekly frog missions, verified by the server, paying bonus shift hours | `engine/src/missions.ts`, `frogs.ts` (`creditHours`) |
-| Agents and GEO | `/mcp/public` (keyless, read-only), League and Lab tools on `/mcp` for `nsa_` keys, `/llms.txt`, `/llms-full.txt`, `/robots.txt`, `/sitemap.xml`, `/.well-known/agent-card.json`, `/.well-known/mcp.json`, server-written page heads (title, description, canonical, JSON-LD, readable summary) | `engine/src/station-routes.ts`, `server.ts` |
+| Agents and GEO | `/mcp/public` (keyless, read-only), League tools on `/mcp` for `nsa_` keys, `/llms.txt`, `/llms-full.txt`, `/robots.txt`, `/sitemap.xml`, `/.well-known/agent-card.json`, `/.well-known/mcp.json`, server-written page heads (title, description, canonical, JSON-LD, readable summary) | `engine/src/station-routes.ts`, `server.ts` |
 | Art | 12 room illustrations made with Codex's image tool in the NIGHT FROGS style (no text, no crescents) | `web/public/art/station/`, masters in `Desktop/NIGHTSHIFT brand pack/rooms/` |
 
-New API: `GET /api/station`, `/api/league`, `/api/league/market`, `/api/league/agents/:id`, `POST /api/league/join|trade`, `GET /api/league/me`, `GET /api/lab`, `POST /api/lab/submit`, `GET /api/crew`, `/api/swarm/pulse`, `GET|POST /api/missions[/start|/report]`.
+New API: `GET /api/station`, `/api/league`, `/api/league/market`, `/api/league/agents/:id`, `POST /api/league/join|trade`, `GET /api/league/me`, `GET /api/crew`, `/api/swarm/pulse`, `GET|POST /api/missions[/start|/report]`.
 
 ## Research (sources read 2026-10-20)
 
@@ -31,11 +30,11 @@ New API: `GET /api/station`, `/api/league`, `/api/league/market`, `/api/league/a
 
 **Payroll data.** `GET /requests/paid-by/<dev wallet>` lists 9 admitted orders. Each job's `/submissions` names the seat, role, model, runtime, outcome and tokens. Live result: 79 IMD agents worked for NIGHTSHIFT (claude-fable-5-1 61 steps, claude-opus-5-5 14, gpt-6-astra 9, gpt-6.1-sol 1).
 
-**Hash Lab difficulty, measured.** The browser miner runs at 3.4 M hashes/s (24 rounds) and 2.4 M/s (64 rounds) per core. In 6 seconds it found 46 and 50-bit pairs that the server reproduced bit for bit. The mission targets were raised from the first guess (40/48) to 44/52 so that "Deep hash" takes minutes of real work.
-
 **Noted, not acted on.** A second token with the ticker SHIFT exists: IMD launch #2106 (`0x72146197e33147812379bf053e41e9cfd3ccffe4`, SHIFT/IMD, repo `identity-md-launches/launch-2106-nightshiftimd`, 2026-10-17). It is not $SHIFT (#2124). The site does not call it a copycat until the owner confirms whose it is.
 
 ## Rejected or changed during the build
+
+- Hash Lab (a SHA-256 prefix-collision game adapted from Projects/solver's HashSmash code, with a browser miner): built, then removed at the owner's review on 2026-10-20 (v0.117). It did not make sense as a product here. Its two frog missions went with it.
 
 - An IMD token screener: duplicates IMD Radar (above).
 - Real-money agent trading on IMD tokens: liquidity is too thin (above). A real-money tier needs an agent-account contract with owner caps (Projects/agents has one) and an audit first.
@@ -43,20 +42,19 @@ New API: `GET /api/station`, `/api/league`, `/api/league/market`, `/api/league/a
 
 ## Checks run
 
-- Typecheck: every package. Tests: engine 188 (178 before + 10 new: fills, rules, cooldown, stale prices, house agents, seasons, churn, SHA-256 against node:crypto, pair binding, missions), plus core 9, imd 7, llm 8, ledger 2, trace 4, x402 3.
+- Typecheck: every package. Tests: engine 185 (178 before + 7 new: fills, rules, cooldown, stale prices, house agents, seasons, churn, missions), plus core 9, imd 7, llm 8, ledger 2, trace 4, x402 3.
 - `apps/engine/scripts/e2e.mjs` (existing regression: auth, owner isolation, MCP keys): all good; MCP lists 26 tools.
-- Local server (sim mode, fresh data dir) on :8789: 20 routes return 200. Agent journey: wallet-signed registration → join → trade (16 bps impact on IMD) → cooldown 429 → impact refusal with the size that fits → Lab submission (25 bits) → public MCP tools → League tools over the agent's MCP. Missions: anonymous 401, signed-in board, a frog not owned is refused (403).
+- Local server (sim mode, fresh data dir) on :8789: 20 routes return 200. Agent journey: wallet-signed registration → join → trade (16 bps impact on IMD) → cooldown 429 → impact refusal with the size that fits → public MCP tools → League tools over the agent's MCP. Missions: anonymous 401, signed-in board, a frog not owned is refused (403).
 - Headless Edge, 1440×900 and 390×844, eight pages: no JS errors and no horizontal overflow.
 
 ## Release (needs the owner's OK; the pages must be seen first)
 
-1. Review locally: `cd apps/web && npx vite build`, then `cd apps/engine && PORT=8789 PUBLIC_URL=http://localhost:8789 DATA_DIR=<scratch dir> node --import tsx src/main.ts`, then open <http://localhost:8789/#station>, `/breakroom`, `/geek`, `/info`, `/economy`, `/command`, `/league`, `/lab`, `/mcp`.
+1. Review locally: `cd apps/web && npx vite build`, then `cd apps/engine && PORT=8789 PUBLIC_URL=http://localhost:8789 DATA_DIR=<scratch dir> node --import tsx src/main.ts`, then open <http://localhost:8789/#station>, `/breakroom`, `/geek`, `/info`, `/economy`, `/command`, `/league`, `/mcp`.
 2. Merge `station` into `main` as the next version commit, then push. CI builds the image.
-3. On the box, before pulling: confirm the Caddy CSP (`/opt/nightshift/Caddyfile`) allows `worker-src 'self'`, or sets no worker-src so `script-src 'self'` applies. The Hash Lab miner is a same-origin Web Worker.
-4. Deploy with `scratchpad/safe-deploy.sh` (auto-rollback if unhealthy), as usual.
-5. Health checks after deploy: `/api/health`, `/api/league` (`market.tradable` > 0, `ageSeconds` < 900), `/api/lab`, `/api/crew` (`crew.length` > 0), `/robots.txt`, `/llms.txt`, `/.well-known/agent-card.json`, a `tools/list` on `/mcp/public`, then the eight pages on a phone.
-6. **Rollback triggers:** any 5xx on the new routes, the engine restarting, existing pages broken. Rollback means redeploying the previous image tag (safe-deploy does this automatically when health fails). New state lives only in `league.json`, `hashlab.json` and `missions.json` in the data dir, and deleting them resets the features without touching anything else. `staking.json` gains mission hours through `creditHours` only.
-7. After it is verified live: the Telegram announcements (drafts in `Desktop/NIGHTSHIFT-marketing-kit/05-text/station-telegram-drafts.md`), then the registry listings below.
+3. Deploy with `scratchpad/safe-deploy.sh` (auto-rollback if unhealthy), as usual.
+4. Health checks after deploy: `/api/health`, `/api/league` (`market.tradable` > 0, `ageSeconds` < 900), `/api/crew` (`crew.length` > 0), `/robots.txt`, `/llms.txt`, `/.well-known/agent-card.json`, a `tools/list` on `/mcp/public`, then the eight pages on a phone.
+5. **Rollback triggers:** any 5xx on the new routes, the engine restarting, existing pages broken. Rollback means redeploying the previous image tag (safe-deploy does this automatically when health fails). New state lives only in `league.json` and `missions.json` in the data dir, and deleting them resets the features without touching anything else. `staking.json` gains mission hours through `creditHours` only.
+6. After it is verified live: the Telegram announcements (drafts in `Desktop/NIGHTSHIFT-marketing-kit/05-text/station-telegram-drafts.md`), then the registry listings below.
 
 ## Distribution, ready once live
 
@@ -66,7 +64,7 @@ New API: `GET /api/station`, `/api/league`, `/api/league/market`, `/api/league/a
 
 ## Measurement (baselines start at deploy)
 
-League agents joined, agents trading in week 2 (retention), trades/agent/week. Lab: distinct players and agents, best bits per track. Missions: wallets crewing, missions reported. Agents: `/mcp/public` sessions per day, `/llms.txt` and agent-card fetches by user agent. House agents, E2E test agents and our own wallets are excluded from every count.
+League agents joined, agents trading in week 2 (retention), trades/agent/week. Missions: wallets crewing, missions reported. Agents: `/mcp/public` sessions per day, `/llms.txt` and agent-card fetches by user agent. House agents, E2E test agents and our own wallets are excluded from every count.
 
 ## Backlog (next, in order)
 

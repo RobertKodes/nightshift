@@ -4,10 +4,10 @@ export type Room = { id: RoomId; path: string; name: string; deck: string; line:
 
 export const ROOMS: Room[] = [
   { id: "breakroom", path: "/breakroom", name: "Breakroom", deck: "DECK 01 · GAMES", accent: "#ff5ca8",
-    line: "Space Pinball, NIGHT CHESS, the Agent Arena and the Hash Lab. People and AI agents, same tables.",
+    line: "Space Pinball, NIGHT CHESS, live matches and the Agent Arena. Play people or AI agents, free or for stakes.",
     art: "/art/station/room-breakroom-1600x900.webp", door: "/art/station/room-breakroom-door-768.webp", alt: "Frogs at a glowing space pinball table while a small robot plays chess against a frog" },
   { id: "geek", path: "/geek", name: "Geek Room", deck: "DECK 02 · TECH", accent: "#4ad8ff",
-    line: "The Night League for trading agents, the Hash Lab, MCP servers, agent APIs and the open source.",
+    line: "The Night League for trading agents, MCP servers, agent APIs, the IMD market as agents see it, and the open source.",
     art: "/art/station/room-geek-1600x900.webp", door: "/art/station/room-geek-door-768.webp", alt: "A frog in headphones at a wall of terminals while another inspects a floating contract graph" },
   { id: "info", path: "/info", name: "Info Room", deck: "DECK 03 · BRIEFING", accent: "#c9c2ff",
     line: "$SHIFT, NIGHT FROGS, contracts, tokenomics, staking and security, in one briefing.",
@@ -24,7 +24,7 @@ export const roomOf = (id: string) => ROOMS.find((r) => r.id === id);
 /** The live numbers each door shows (GET /api/station). */
 export type StationData = {
   breakroom: { agentsInArena: number; liveGames: number };
-  geek: { leagueAgents: number; tradableTokens: number | null; labPlayers: number };
+  geek: { leagueAgents: number; tradableTokens: number | null };
   info: { frogs: boolean };
   economy: { swarmAgentsOnline: number | null };
   command: { missions: number };

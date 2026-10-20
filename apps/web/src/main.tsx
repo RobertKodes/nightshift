@@ -33,7 +33,6 @@ import "./landing/landing.css";
 const ArenaPage = lazy(() => import("./ArenaPage").then((x) => ({ default: x.ArenaPage })));
 const ChessPage = lazy(() => import("./ChessPage").then((x) => ({ default: x.ChessPage })));
 const LeaguePage = lazy(() => import("./station/LeaguePage").then((x) => ({ default: x.LeaguePage })));
-const LabPage = lazy(() => import("./station/LabPage").then((x) => ({ default: x.LabPage })));
 const BreakroomPage = lazy(() => import("./station/Rooms").then((x) => ({ default: x.BreakroomPage })));
 const GeekPage = lazy(() => import("./station/Rooms").then((x) => ({ default: x.GeekPage })));
 const InfoPage = lazy(() => import("./station/Rooms").then((x) => ({ default: x.InfoPage })));
@@ -75,9 +74,8 @@ function App() {
   if (seg[0] === "economy" || seg[0] === "hr") page = <Suspense fallback={<div className="st-room" />}><EconomyPage /></Suspense>;
   if (seg[0] === "command") page = <Suspense fallback={<div className="st-room" />}><CommandPage /></Suspense>;
   if (seg[0] === "league") page = <Suspense fallback={<div className="st-room" />}><LeaguePage id={seg[1]} /></Suspense>;
-  if (seg[0] === "lab") page = <Suspense fallback={<div className="st-room" />}><LabPage /></Suspense>;
   if (seg[0] === "arena") page = <Suspense fallback={<div className="docs"><p className="dim">Loading the arena…</p></div>}><ArenaPage /></Suspense>;
-  const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "stake", "guide", "tokenomics", "games", "impact", "launchpad", "arena", "breakroom", "geek", "info", "economy", "command", "league", "lab"];
+  const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "stake", "guide", "tokenomics", "games", "impact", "launchpad", "arena", "breakroom", "geek", "info", "economy", "command", "league"];
   const key = seg[0] === "staking" ? "stake" : seg[0] === "hr" ? "economy" : seg[0];
   const active: Active = seg[0] === "co" ? "company" : named.includes(key as Active) ? (key as Active) : "companies";
   // Each page names itself in the tab; pages that know more (a company, a product) set their own.
@@ -97,7 +95,7 @@ const TITLES: Record<string, string> = {
   companies: "Companies", launch: "Launch a company", co: "Your company", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
   market: "Market", token: "$SHIFT", frogs: "NIGHT FROGS", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
   tokenomics: "Tokenomics", games: "Game Room", launchpad: "Launchpad", arena: "Agent Arena",
-  breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League", lab: "Hash Lab",
+  breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League",
 };
 
 // The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.

@@ -1,18 +1,15 @@
-import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import type * as LabModule from "./hashlab.js";
 import type * as LeagueModule from "./league.js";
 import type * as MissionsModule from "./missions.js";
 import type { Market, Quote } from "./imdmarket.js";
 
-let L: typeof LeagueModule, H: typeof LabModule, M: typeof MissionsModule;
+let L: typeof LeagueModule, M: typeof MissionsModule;
 beforeAll(async () => {
   process.env.DATA_DIR = mkdtempSync(join(tmpdir(), "station-test-"));
   L = await import("./league.js");
-  H = await import("./hashlab.js");
   M = await import("./missions.js");
 });
 
@@ -108,58 +105,22 @@ describe("night league", () => {
   });
 });
 
-describe("hash lab", () => {
-  it("matches real SHA-256 at 64 rounds", () => {
-    const m = new TextEncoder().encode("NS|0xabc|hello night shift");
-    expect(Buffer.from(H.sha256Rounds(m, 64)).toString("hex")).toBe(createHash("sha256").update(m).digest("hex"));
-  });
-
-  it("counts shared leading bits", () => {
-    expect(H.commonBits(new Uint8Array([0xff, 0x00]), new Uint8Array([0xff, 0x80]))).toBe(8);
-    expect(H.commonBits(new Uint8Array([0x0f]), new Uint8Array([0x0e]))).toBe(7);
-    expect(H.commonBits(new Uint8Array([1, 2]), new Uint8Array([1, 2]))).toBe(16);
-  });
-
-  it("scores a real pair, binds it to the player and keeps the best", () => {
-    const lab = new H.HashLab(null, () => Date.UTC(2026, 9, 20));
-    const who = { player: "0xab12", name: "me", kind: "wallet" as const };
-    const enc = (s: string) => Buffer.from(s).toString("hex");
-    // find a 12-bit pair quickly by brute force
-    const seen = new Map<number, string>();
-    let pair: [string, string] | null = null;
-    for (let i = 0; !pair; i++) {
-      const m = enc(`NS|0xab12|${i.toString().padStart(8, "0")}`);
-      const d = H.sha256Rounds(Buffer.from(m, "hex"), 24);
-      const k = (d[0]! << 4) | (d[1]! >> 4);
-      const prev = seen.get(k);
-      if (prev) pair = [prev, m]; else seen.set(k, m);
-    }
-    const r = lab.submit("r24", who, pair[0], pair[1]);
-    expect(r.bits).toBeGreaterThanOrEqual(12);
-    expect(r.record && r.labRecord).toBe(true);
-    expect(lab.best("r24", "0xab12")).toBe(r.bits);
-    expect(() => lab.submit("r24", { ...who, player: "0xother" }, pair![0], pair![1])).toThrow(/must start/);
-    expect(() => lab.submit("r24", who, pair![0], pair![0])).toThrow(/differ/);
-    expect(lab.submit("r24", who, pair[0], pair[1]).record).toBe(false);
-  });
-});
-
 describe("command room missions", () => {
-  const facts = (o: Partial<MissionsModule.Facts> = {}): MissionsModule.Facts => ({ leagueTrades: 0, leagueBestPct: null, benchmarkPct: null, labR24: 0, labR64: 0, arenaGames: 0, ...o });
+  const facts = (o: Partial<MissionsModule.Facts> = {}): MissionsModule.Facts => ({ leagueTrades: 0, leagueBestPct: null, benchmarkPct: null, arenaGames: 0, ...o });
   it("crews a mission with one frog, checks it against real facts and pays hours times the frog's multiplier", () => {
     const now = Date.UTC(2026, 9, 20);
     const ms = new M.Missions(null, () => now);
     const frogs = [{ id: 7, multiplier: 3 }, { id: 300, multiplier: 1 }];
     ms.start("0xW", frogs, "desk-duty", 7, facts());
-    expect(() => ms.start("0xW", frogs, "warm-up-hash", 7, facts())).toThrow(/already out/);
+    expect(() => ms.start("0xW", frogs, "beat-the-holder", 7, facts())).toThrow(/already out/);
     expect(() => ms.start("0xW", frogs, "desk-duty", 300, facts())).toThrow(/already crewed/);
-    expect(() => ms.start("0xW", frogs, "warm-up-hash", 99, facts())).toThrow(/not in your wallet/);
+    expect(() => ms.start("0xW", frogs, "beat-the-holder", 99, facts())).toThrow(/not in your wallet/);
     expect(() => ms.report("0xW", frogs, "desk-duty", facts({ leagueTrades: 2 }))).toThrow(/Not done/);
     expect(ms.report("0xW", frogs, "desk-duty", facts({ leagueTrades: 3 }))).toBe(24 * 3);
     expect(() => ms.report("0xW", frogs, "desk-duty", facts({ leagueTrades: 3 }))).toThrow(/Already/);
     ms.start("0xW", frogs, "board-watch", 300, facts({ arenaGames: 10 }));
     expect(() => ms.report("0xW", frogs, "board-watch", facts({ arenaGames: 10 }))).toThrow(/Not done/);
     expect(ms.report("0xW", frogs, "board-watch", facts({ arenaGames: 11 }))).toBe(24);
-    expect(() => ms.report("0xW", [], "warm-up-hash", facts())).toThrow(/No frog/);
+    expect(() => ms.report("0xW", [], "beat-the-holder", facts())).toThrow(/No frog/);
   });
 });
