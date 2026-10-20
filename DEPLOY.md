@@ -42,9 +42,14 @@ The image is built by GitHub Actions (`.github/workflows/image.yml`) and publish
 
 The service is capped at 384 MB and half a CPU so it cannot starve the other apps on the box.
 
+**Telegram Mini App (`/tg`)**: if Caddy sets the site's security headers itself, `/tg` needs its own
+`frame-ancestors` (Telegram Web shows Mini Apps in an iframe) and no `X-Frame-Options`; every other
+path keeps `frame-ancestors 'none'`. The exact Caddy block, the BotFather steps and why are in
+[docs/telegram/RESEARCH.md](docs/telegram/RESEARCH.md#the-caddy-change-needed-not-applied-the-server-is-not-edited-from-here).
+
 ## Operations
 
-- **Data**: `/data` (volume `nightshift-data`): `state.json` (companies, ledger), `vault.json` (encrypted keys), `settings.json` (API keys in plain text), `admin-token`, `sessions.json`, `sim-files/`. Back it up daily, encrypted (`BACKUP_AGE_RECIPIENT`), and keep `NIGHTSHIFT_SECRET` somewhere else: the backup and the secret together open every wallet.
+- **Data**: `/data` (volume `nightshift-data`): `state.json` (companies, ledger), `vault.json` (encrypted keys), `settings.json` (API keys in plain text), `admin-token`, `sessions.json`, `telegram.json` (Telegram players: it maps Telegram ids to profiles, keep it private), `sim-files/`. Back it up daily, encrypted (`BACKUP_AGE_RECIPIENT`), and keep `NIGHTSHIFT_SECRET` somewhere else: the backup and the secret together open every wallet.
 - **Health**: `GET /api/health`.
 - **Stop a company**: the owner presses Pause (or `nightshift_pause` over MCP). Paused companies spend nothing.
 - **Scale**: one engine per data folder. The JSON store is fine for hundreds of companies; move to Postgres before thousands.

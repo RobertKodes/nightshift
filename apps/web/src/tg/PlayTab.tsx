@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
 import { useSession } from "../session";
 import { type Seat, StakeLobby, tokenLabel, useEscrow } from "../stakes";
@@ -25,8 +25,16 @@ function useFeed(): LoungeFeed | null {
 }
 
 export function PlayTab() {
-  const { me, seated, toast, link, share, setMe } = useTg();
+  const { me, seated, toast, share, setMe, reload } = useTg();
   const session = useSession();
+  // a challenge accepted while you look at Play: your seats are read again, and a new one is announced
+  const known = useRef<Set<string> | null>(null);
+  useEffect(() => { const t = setInterval(() => { if (!document.hidden) void reload().catch(() => {}); }, 6_000); return () => clearInterval(t); }, [reload]);
+  useEffect(() => {
+    const ids = new Set((me?.seats ?? []).map((s) => `${s.game}:${s.id}`));
+    if (known.current) for (const s of me?.seats ?? []) if (!known.current.has(`${s.game}:${s.id}`) && s.rival) { haptic.start(); toast(`${s.rival} is at your ${s.game === "chess" ? "NIGHT CHESS" : "Space Pinball"} table. Tap Resume to sit down.`); }
+    known.current = ids;
+  }, [me?.seats]);
   const escrow = useEscrow();
   const feed = useFeed();
   const [game, setGame] = useState<Game>(() => (sessionStorage.getItem("tg-game") === "pinball" ? "pinball" : "chess"));

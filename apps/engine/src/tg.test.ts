@@ -189,6 +189,24 @@ describe("games played from the Mini App are booked on the profile", () => {
     t.games.listen(g.match.id, (own as { player: string }).player, () => {});
     expect(t.games.get(g.match.id, g.player).status).toBe("countdown");
   });
+  it("resolves a deep link to your own seat, an open table to join, a game to watch, or nothing", async () => {
+    const t = table();
+    const host = await t.play.play(t.a, { game: "chess", action: "queue", tc: "3+2" });
+    if (host.game !== "chess") throw new Error("chess");
+    t.games.listen(host.match.id, host.player, () => {});
+    expect(t.play.resolve(t.a, { kind: "chess", id: host.match.id })).toEqual({ kind: "seat", game: "chess", id: host.match.id, player: host.player });
+    expect(t.play.resolve(t.b, { kind: "chess", id: host.match.id })).toEqual({ kind: "join", game: "chess", id: host.match.id, host: "Pearl", tc: "3+2" });
+    // nobody's seat token ever reaches another player through a link
+    expect(JSON.stringify(t.play.resolve(t.b, { kind: "chess", id: host.match.id }))).not.toContain(host.player);
+    await t.play.play(t.b, { game: "chess", action: "join", id: host.match.id });
+    const c = t.profiles.upsert(user(1003, "Jade"));
+    expect(t.play.resolve(c, { kind: "chess", id: host.match.id })).toEqual({ kind: "watch", game: "chess", id: host.match.id });
+    expect(t.play.resolve(c, { kind: "watch", game: null, id: host.match.id })).toEqual({ kind: "watch", game: "chess", id: host.match.id });
+    expect(t.play.resolve(c, { kind: "chess", id: "ffffffffffffffffffff" })).toEqual({ kind: "gone", game: "chess" });
+    expect(t.play.resolve(c, { kind: "chess", id: "0123456789abcdef" })).toEqual({ kind: "gone", game: "chess" });
+    expect(t.play.resolve(c, null)).toEqual({ kind: "lounge" });
+    expect(t.play.resolve(c, { kind: "live" })).toEqual({ kind: "live" });
+  });
   it("closes an accepted challenge unplayed when the host never sits down", () => {
     const t = table();
     const inv = t.play.invite(t.a, "3+2"), g = t.play.accept(t.b, inv.id);
