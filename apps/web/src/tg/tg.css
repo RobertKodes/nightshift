@@ -98,17 +98,13 @@ html:has(.tgx), body:has(.tgx) { background: var(--bg, #03020a); }
 .tgx-seg button .icon { color: var(--faint); }
 .tgx-seg button.on { border-color: var(--uv-hi); background: linear-gradient(160deg, rgba(124, 92, 255, .28), rgba(124, 92, 255, .06)); box-shadow: inset 0 -2px var(--uv-hi); }
 .tgx-seg button.on .icon, .tgx-seg button.on small { color: var(--uv-hi); }
-.tgx-tcs, .tgx-money { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.tgx-tcs button, .tgx-money button { display: grid; justify-items: center; gap: 4px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); cursor: pointer; }
+.tgx-tcs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tgx-tcs button { display: grid; justify-items: center; gap: 4px; padding: 10px 4px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); cursor: pointer; }
 .tgx-tcs b { font: 500 21px/1 var(--mono); letter-spacing: -.04em; }
-.tgx-money b { font: 600 14px/1.1 var(--ui); }
-.tgx-tcs small, .tgx-money small { color: var(--faint); font: 600 8.5px/1 var(--mono); letter-spacing: .1em; }
+.tgx-tcs small { color: var(--faint); font: 600 8.5px/1 var(--mono); letter-spacing: .1em; }
 .tgx-tcs small.wait.on { color: var(--acid); }
-.tgx-tcs button.on, .tgx-money button.on { border-color: var(--uv-hi); background: rgba(124, 92, 255, .16); box-shadow: inset 0 -2px var(--uv-hi); }
-.tgx-stake { display: grid; gap: 10px; }
-.tgx-own, .tgx-wallet { display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 12px; border: 1px solid rgba(255, 196, 107, .35); border-radius: 12px; background: rgba(255, 196, 107, .06); font-size: 12.5px; line-height: 1.5; color: var(--dim); }
-.tgx-own .icon { flex: none; margin-top: 1px; color: var(--gold); }
-.tgx-own b { color: var(--ink); }
+.tgx-tcs button.on { border-color: var(--uv-hi); background: rgba(124, 92, 255, .16); box-shadow: inset 0 -2px var(--uv-hi); }
+.tgx-wallet { display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 12px; border: 1px solid rgba(255, 196, 107, .35); border-radius: 12px; background: rgba(255, 196, 107, .06); font-size: 12.5px; line-height: 1.5; color: var(--dim); }
 .tgx-wallet { border-color: color-mix(in srgb, var(--acid) 35%, transparent); background: color-mix(in srgb, var(--acid) 6%, transparent); }
 .tgx-wallet .icon { flex: none; margin-top: 1px; color: var(--acid); }
 .tgx-wallet b { color: var(--ink); font-family: var(--mono); }

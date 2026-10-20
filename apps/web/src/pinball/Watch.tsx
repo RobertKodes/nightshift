@@ -54,7 +54,8 @@ function MiniTable({ seat, rival }: { seat: Seat; rival: boolean }) {
   return <canvas ref={ref} width={360} height={540} className="arc-mini pw-table" aria-label={`Live view of ${seat.name}'s table`} />;
 }
 
-export function PinballWatch({ id }: { id: string }) {
+/** `plain`: no stake badge (the Telegram Mini App, which shows free games only). */
+export function PinballWatch({ id, plain = false }: { id: string; plain?: boolean }) {
   const [m, setM] = useState<Frame | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -88,7 +89,7 @@ export function PinballWatch({ id }: { id: string }) {
   return <main className="pw">
     <div className="pw-head">
       <span className="arc-kicker"><span className="arc-live-dot" /> SPECTATING · {m?.viewers ?? 0} WATCHING</span>
-      <span className="pw-badges">{m && <span className={`lv-stake ${m.currency === "FREE" ? "" : "on"}`}>{stakeText({ currency: m.currency, amount: m.stake })}</span>}<span className={`pw-status ${m && !m.done && !countdown ? "live" : ""}`} role="status">{status}</span></span>
+      <span className="pw-badges">{m && !plain && <span className={`lv-stake ${m.currency === "FREE" ? "" : "on"}`}>{stakeText({ currency: m.currency, amount: m.stake })}</span>}<span className={`pw-status ${m && !m.done && !countdown ? "live" : ""}`} role="status">{status}</span></span>
     </div>
     {m && a && b ? <>
       <div className="pw-tables">

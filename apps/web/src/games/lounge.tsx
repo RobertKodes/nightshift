@@ -179,9 +179,10 @@ function OpenRow({ g, now, skew, mine, busy, onJoin, onCancel }: { g: OpenGame; 
 /**
  * The lounge. `game` keeps it to one game (on its page); `create` adds the Create game controls
  * (the Game Room page; the game pages have their own). `onSeat` takes a seat on the page itself
- * instead of navigating to it.
+ * instead of navigating to it. `free`: open free tables only, no staked challenges and no live list
+ * (the Telegram Mini App, which has its own Live tab).
  */
-export function Lounge({ game, create = false, onSeat }: { game?: Game; create?: boolean; onSeat?: (game: Game, id: string, player: string) => void }) {
+export function Lounge({ game, create = false, onSeat, free = false }: { game?: Game; create?: boolean; onSeat?: (game: Game, id: string, player: string) => void; free?: boolean }) {
   const l = useLounge(), now = useNow(), mine = useWaiting(), { address } = useSession();
   const [pick, setPick] = useState<Game>(game ?? "chess");
   const [tc, setTc] = useState<TimeControl>("3+2");
@@ -197,12 +198,12 @@ export function Lounge({ game, create = false, onSeat }: { game?: Game; create?:
     onSeat(g.game, r.match.id, r.player);
   });
   const open = (l?.open ?? []).filter((g) => !game || g.game === game);
-  const challenges = (l?.challenges ?? []).filter((c) => !game || c.game === game);
-  const live = (l?.live ?? []).filter((g) => !game || g.game === game);
+  const challenges = free ? [] : (l?.challenges ?? []).filter((c) => !game || c.game === game);
+  const live = free ? [] : (l?.live ?? []).filter((g) => !game || g.game === game);
   const waiting = l ? (game === "pinball" ? l.waiting.pinball : game === "chess" ? Object.values(l.waiting.chess).reduce((a, b) => a + b, 0) : open.length) : 0;
   const createFor = create ? pick : game;
   return <section className="lg" aria-labelledby={`lg-title-${game ?? "all"}`}>
-    <div className="lg-head"><div><b id={`lg-title-${game ?? "all"}`}>THE LOUNGE</b><span>{l === null ? "Connecting…" : `${waiting} waiting for a rival · ${live.length} live`}</span></div><span className={`lg-state ${open.length ? "on" : ""}`}><i />{open.length ? "OPEN TABLES" : "QUIET"}</span></div>
+    <div className="lg-head"><div><b id={`lg-title-${game ?? "all"}`}>THE LOUNGE</b><span>{l === null ? "Connecting…" : `${waiting} waiting for a rival${free ? "" : ` · ${live.length} live`}`}</span></div><span className={`lg-state ${open.length ? "on" : ""}`}><i />{open.length ? "OPEN TABLES" : "QUIET"}</span></div>
 
     {create && <div className="lg-create">
       {!game && <div className="lg-tabs" role="group" aria-label="Game">{(["chess", "pinball"] as const).map((k) => <button type="button" key={k} aria-pressed={pick === k} className={pick === k ? "on" : ""} onClick={() => setPick(k)}><Icon name={k === "chess" ? "chess-knight" : "orbit"} size={15} />{k === "chess" ? "Night Chess" : "Space Pinball"}</button>)}</div>}
@@ -233,9 +234,11 @@ export function Lounge({ game, create = false, onSeat }: { game?: Game; create?:
         {address && c.creator === address.toLowerCase() ? <span className="lg-mine"><em>YOURS</em></span> : <Link to={`/games/${c.game}?accept=${c.matchId}&token=${c.token}`} className="lg-btn"><Icon name="diamond" size={15} /><span>ACCEPT</span></Link>}
       </li>)}</ul></>}
 
-    <div className="lg-label"><span>LIVE NOW</span><span>{live.length}</span></div>
-    {l === null ? null : live.length ? <ul className="lv-list">{live.slice(0, 4).map((g) => <LiveRow key={`${g.game}-${g.id}`} g={g} now={now} />)}</ul> : <p className="lv-empty">No games being played right now.</p>}
-    {live.length > 4 && <Link to="/games/live" className="lv-all">All live games<Icon name="arrow" size={15} /></Link>}
+    {!free && <>
+      <div className="lg-label"><span>LIVE NOW</span><span>{live.length}</span></div>
+      {l === null ? null : live.length ? <ul className="lv-list">{live.slice(0, 4).map((g) => <LiveRow key={`${g.game}-${g.id}`} g={g} now={now} />)}</ul> : <p className="lv-empty">No games being played right now.</p>}
+      {live.length > 4 && <Link to="/games/live" className="lv-all">All live games<Icon name="arrow" size={15} /></Link>}
+    </>}
   </section>;
 }
 

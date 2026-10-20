@@ -1,7 +1,6 @@
 import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
 import { go, useRoute } from "../router";
-import { useSession } from "../session";
 import { keepSeat } from "../games/lounge";
 import { type Me, type Resolved, type Seated, TgError, tg } from "./api";
 import { TgChess } from "./TgChess";
@@ -45,7 +44,6 @@ const TABS = [{ path: "/tg", label: "Play", icon: "swords" }, { path: "/tg/live"
 
 export function TgApp() {
   const path = useRoute();
-  const session = useSession();
   const [ready, setReady] = useState<"boot" | "ok" | "outside" | "error">("boot");
   const [bootErr, setBootErr] = useState<string | null>(null);
   const [me, setMe] = useState<Me | null>(null);
@@ -85,7 +83,6 @@ export function TgApp() {
       try {
         const m = await tg<Me>("me");
         setMe(m); setReady("ok");
-        void session.refresh();
         const p = startParam();
         if (p) void open(p);
       } catch (e) { setBootErr((e as Error).message); setReady(e instanceof TgError && e.status === 401 ? "outside" : "error"); }
@@ -125,7 +122,7 @@ export function TgApp() {
     const id = seg[2], player = seatOf("chess", id) ?? me?.seats.find((s) => s.game === "chess" && s.id === id)?.player ?? null;
     view = <ChessView key={id} id={id} player={player} />;
   } else if (seg[1] === "watch" && seg[2] === "chess" && seg[3]) view = <WatchChess key={seg[3]} id={seg[3]} />;
-  else if (seg[1] === "watch" && seg[2] === "pinball" && seg[3]) view = <Suspense fallback={<div className="tgx-center"><span className="tgx-radar"><Icon name="radar" size={30} /></span></div>}><div className="tgx-pin-watch"><PinballWatch id={seg[3]} /></div></Suspense>;
+  else if (seg[1] === "watch" && seg[2] === "pinball" && seg[3]) view = <Suspense fallback={<div className="tgx-center"><span className="tgx-radar"><Icon name="radar" size={30} /></span></div>}><div className="tgx-pin-watch"><PinballWatch id={seg[3]} plain /></div></Suspense>;
   else if (seg[1] === "pinball") view = <Suspense fallback={<div className="arc-boot" />}><div className="tgx-pinball"><PinballPage embedded={{ home: "/tg", onLobby: () => { void reload().catch(() => {}); go("/tg"); } }} /></div></Suspense>;
   else if (seg[1] === "live") view = <LiveTab />;
   else if (seg[1] === "me") view = <MeTab />;

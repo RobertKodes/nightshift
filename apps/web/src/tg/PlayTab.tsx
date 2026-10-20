@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
-import { useSession } from "../session";
-import { type Seat, StakeLobby, tokenLabel, useEscrow } from "../stakes";
 import { GAME_NAME, type Game, type LoungeFeed, TCS, type TimeControl, waitText } from "../games/lounge";
 import { type InviteView, type Seated, tg } from "./api";
 import { useTg } from "./TgApp";
 import { haptic, shareInline } from "./telegram";
-import { linkWallet } from "./wallet";
 
-/** Play: the two games, the clock, free or for a stake, the lounge's open tables, and the seats to pick up. */
+/** Play: the two games, the clock, the lounge's open tables and the seats to pick up. Every game here is free: rated, no stakes. */
 const TC_INFO: Record<TimeControl, string> = { "3+2": "BLITZ +2s", "5+0": "BLITZ", "10+0": "RAPID" };
 
 function useFeed(): LoungeFeed | null {
@@ -25,8 +22,7 @@ function useFeed(): LoungeFeed | null {
 }
 
 export function PlayTab() {
-  const { me, seated, toast, share, setMe, reload } = useTg();
-  const session = useSession();
+  const { me, seated, toast, share, reload } = useTg();
   // a challenge accepted while you look at Play: your seats are read again, and a new one is announced
   const known = useRef<Set<string> | null>(null);
   useEffect(() => { const t = setInterval(() => { if (!document.hidden) void reload().catch(() => {}); }, 6_000); return () => clearInterval(t); }, [reload]);
@@ -35,11 +31,9 @@ export function PlayTab() {
     if (known.current) for (const s of me?.seats ?? []) if (!known.current.has(`${s.game}:${s.id}`) && s.rival) { haptic.start(); toast(`${s.rival} is at your ${s.game === "chess" ? "NIGHT CHESS" : "Space Pinball"} table. Tap Resume to sit down.`); }
     known.current = ids;
   }, [me?.seats]);
-  const escrow = useEscrow();
   const feed = useFeed();
   const [game, setGame] = useState<Game>(() => (sessionStorage.getItem("tg-game") === "pinball" ? "pinball" : "chess"));
   const [tc, setTc] = useState<TimeControl>("3+2");
-  const [money, setMoney] = useState<"FREE" | "IMD" | "SHIFT">("FREE");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -64,15 +58,6 @@ export function PlayTab() {
       if (!shareInline(r.share)) share(r.link, `♟ ${p.name} challenges you to NIGHT CHESS (${tc})`);
       toast("Pick a chat: the first to accept plays you. You get a DM to take your seat.");
     } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
-  };
-  const signIn = async () => {
-    try { const m = await linkWallet(); setMe(m); await session.refresh(); toast("Wallet linked. Real-money games use this wallet."); }
-    catch (e) { setErr((e as Error).message.split("\n")[0] ?? "The wallet did not sign."); }
-  };
-  const onStakeSeat = async (s: Seat) => {
-    // a staked seat comes from the escrow lobby: followed on this profile once the server checks it is real
-    await tg("attach", { game: s.game, id: s.id, player: s.player }).catch(() => {});
-    seated({ game: s.game, id: s.id, player: s.player });
   };
   const open = (feed?.open ?? []).filter((g) => g.game === game);
   const mine = new Set((feed?.mine ?? []).map((m) => `${m.game}:${m.id}`));
@@ -104,24 +89,18 @@ export function PlayTab() {
         <div className="tgx-label"><span>01 · THE CLOCK</span><Icon name="clock" size={14} /></div>
         <div className="tgx-tcs" role="group" aria-label="Time control">{TCS.map((t) => <button type="button" key={t} className={tc === t ? "on" : ""} aria-pressed={tc === t} onClick={() => { haptic.select(); setTc(t); }}><b>{t}</b><small>{TC_INFO[t]}</small><small className={waiting(t) ? "wait on" : "wait"}>{waiting(t) ? `${waiting(t)} WAITING` : "—"}</small></button>)}</div>
       </>}
-      <div className="tgx-label"><span>{game === "chess" ? "02" : "01"} · PLAY FOR</span><Icon name="diamond" size={14} /></div>
-      <div className="tgx-money" role="group" aria-label="Stake">{(["FREE", "IMD", "SHIFT"] as const).map((k) => <button type="button" key={k} className={money === k ? "on" : ""} aria-pressed={money === k} onClick={() => { haptic.select(); setMoney(k); }}><b>{k === "FREE" ? "Free" : tokenLabel(k)}</b><small>{k === "FREE" ? "RATED" : escrow?.live ? "WINNER 95%" : "OPENING SOON"}</small></button>)}</div>
-      {money === "FREE" ? <div className="tgx-actions">
+      <div className="tgx-actions">
         <button type="button" className="tgx-btn big" disabled={!!busy} onClick={() => void play(game === "chess" ? "queue" : "any")}><Icon name="swords" size={18} />{busy?.startsWith("queue") || busy?.startsWith("any:") ? "Opening your table…" : "Find a rival"}</button>
         {game === "chess" && <div className="tgx-actions two">
           <button type="button" className="tgx-btn ghost" disabled={!!busy} onClick={() => void play("any")}><Icon name="bolt" size={16} />Play anyone</button>
           <button type="button" className="tgx-btn ghost" disabled={!!busy} onClick={() => void challenge()}><Icon name="external" size={16} />Invite a friend</button>
         </div>}
         {game === "pinball" && <p className="tgx-note">Same table, same seed, played at the same time: your score lands meteors on your rival's table. Every score is replayed by the server.</p>}
-      </div> : <div className="tgx-stake">
-        <p className="tgx-own"><Icon name="shield" size={16} /><span><b>Real-money games use your own wallet.</b> Your stake goes from your wallet into the GameEscrow contract and the winner is paid from it on chain. NIGHTSHIFT never holds your funds or your keys. Adults 18+ only, where allowed.</span></p>
-        {p.wallet && !session.address && <p className="tgx-note">Wallet {p.wallet.slice(0, 6)}…{p.wallet.slice(-4)} is linked. Sign once on this device to play for a stake.</p>}
-        <StakeLobby game={game} token={money} name={p.name} tc={tc} address={session.address} signIn={signIn} onSeat={(s) => void onStakeSeat(s)} theme={game === "chess" ? "nc" : "arc"} />
-      </div>}
+      </div>
       {err && <p className="tgx-err" role="alert"><Icon name="alert" size={15} />{err}</p>}
     </section>
 
-    {money === "FREE" && <section className="tgx-card" aria-label="The lounge">
+    <section className="tgx-card" aria-label="The lounge">
       <div className="tgx-label"><span>THE LOUNGE · OPEN TABLES</span><span>{game === "chess" ? Object.values(feed?.waiting.chess ?? {}).reduce((a, b) => a + b, 0) : feed?.waiting.pinball ?? 0} WAITING</span></div>
       {!feed ? <p className="tgx-note">Looking for open tables…</p> : !open.length ? <p className="tgx-empty">No open {game === "chess" ? "chess" : "pinball"} tables right now. Open one: the next player sits down with you.</p>
         : <ul className="tgx-list">{open.slice(0, 20).map((g) => {
@@ -132,7 +111,7 @@ export function PlayTab() {
             {own ? <em className="tgx-own-tag">YOURS</em> : <button type="button" className="tgx-btn small" disabled={!!busy || g.away} onClick={() => void play("join", g.id, g.game)}>{busy === `join:${g.id}` ? "…" : "Join"}</button>}
           </li>;
         })}</ul>}
-    </section>}
-    <p className="tgx-legal">Free games need no wallet. Real-money duels in IMD and $SHIFT are for adults 18+ only, where playing for stakes is legal; never stake what you cannot afford to lose.</p>
+    </section>
+    <p className="tgx-legal">Every game in the Game Room is free and rated by Elo.</p>
   </div>;
 }

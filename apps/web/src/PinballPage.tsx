@@ -101,17 +101,19 @@ function Confetti() {
 /**
  * `embedded`: the arcade inside another shell (the Telegram Mini App): its lobby is that shell's,
  * so once a duel is over, closed or left, the page hands back (onLobby) instead of showing its own.
+ * There it is free play only: no wallet, no NIGHT FROG avatar, no staked modes.
  */
 export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: () => void } } = {}) {
   const { address, signIn, busy } = useSession();
-  const frog = useFrogAvatar(address ?? null);
+  const frog = useFrogAvatar(embedded ? null : address ?? null);
   const avatar = frog?.src ?? null;
+  const modes = embedded ? MODES.filter((x) => x.k === "PRACTICE" || x.k === "FREE").map((x) => (x.k === "FREE" ? { ...x, sub: "1 vs 1 · rated" } : x)) : MODES;
   const [play, setPlay] = useState<Play | null>(null);
   const [waiting, setWaiting] = useState<{ match: MatchView; player: string } | null>(null);
   const [over, setOver] = useState<Over | null>(null);
   const [name, setName] = useState(() => { try { return localStorage.getItem("pb-name") ?? ""; } catch { return ""; } });
   // ?accept=<match>&token=IMD (from the lounge): the stake lobby, where that challenge is accepted
-  const [mode, setMode] = useState<Mode>(() => { const t = new URLSearchParams(location.search).get("token"); return t === "IMD" || t === "SHIFT" ? t : "FREE"; });
+  const [mode, setMode] = useState<Mode>(() => { const t = new URLSearchParams(location.search).get("token"); return !embedded && (t === "IMD" || t === "SHIFT") ? t : "FREE"; });
   const [now, setNow] = useState(Date.now());
   const escrow = useEscrow();
   const [err, setErr] = useState<string | null>(null);
@@ -283,7 +285,7 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
       </div>
       <div className="arc-stats">
         <div><b>1 / 2</b><span>players</span></div><div><b>{waiting.match.currency === "FREE" ? "Free" : waiting.match.currency === "SHIFT" ? "$SHIFT" : "IMD"}</b><span>duel</span></div>
-        <div><b>{waiting.match.stake.toLocaleString()}</b><span>stake</span></div><div><b>3 s</b><span>attack delay</span></div>
+        {embedded ? <div><b>Elo</b><span>rated</span></div> : <div><b>{waiting.match.stake.toLocaleString()}</b><span>stake</span></div>}<div><b>3 s</b><span>attack delay</span></div>
       </div>
       {waiting.match.escrow ? <p>The duel starts as soon as your rival connects, or within 5 minutes. A player who never plays scores 0. Keep this page open.</p> : <>
         <p>Your duel is open in the lounge, waiting {waitText(now - (waiting.match.waitingSince ?? now))}. The next player to find a rival joins your table. Browse the site meanwhile: you hear it when someone joins.</p>
@@ -315,7 +317,7 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
       <header className="arc-top">
         <Link to="/games" className="arc-back"><Icon name="arrow" size={17} /><span>GAME ROOM</span></Link>
         <Link to="/games/pinball" className="arc-logo" aria-label="Space Pinball by NIGHTSHIFT"><img src="/brand/space-pinball-logo.svg" alt="Space Pinball by NIGHTSHIFT" width={410} height={156} /></Link>
-        <div className="arc-who"><InstallButton />{address ? <span className="arc-addr" title={address}>{avatar ? <img src={avatar} alt="" /> : <Icon name="user" size={16} />}{address.slice(0, 6)}…{address.slice(-4)}</span> : <button type="button" className="arc-btn sm ghost" disabled={busy} onClick={() => void signIn()}><Icon name="user" size={15} /><span>{busy ? "SIGNING IN" : "SIGN IN"}</span></button>}</div>
+        {!embedded && <div className="arc-who"><InstallButton />{address ? <span className="arc-addr" title={address}>{avatar ? <img src={avatar} alt="" /> : <Icon name="user" size={16} />}{address.slice(0, 6)}…{address.slice(-4)}</span> : <button type="button" className="arc-btn sm ghost" disabled={busy} onClick={() => void signIn()}><Icon name="user" size={15} /><span>{busy ? "SIGNING IN" : "SIGN IN"}</span></button>}</div>}
       </header>
 
       {!play && <main className="arc-lobby">
@@ -342,13 +344,13 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
                 <input id="arc-name" className="arc-name" maxLength={18} autoComplete="nickname" placeholder="Type your name" value={name} onChange={(e) => setName(e.target.value)} />
                 <Icon name="edit" size={16} />
               </label>
-              <span className="arc-player-note">{avatar ? "Your NIGHT FROG. Your seat at the table." : address ? "No NIGHT FROG in this wallet" : "Sign in to bring your NIGHT FROG"}</span>
+              <span className="arc-player-note">{embedded ? "Your seat at the table." : avatar ? "Your NIGHT FROG. Your seat at the table." : address ? "No NIGHT FROG in this wallet" : "Sign in to bring your NIGHT FROG"}</span>
             </div>
           </div>
 
           <div className="arc-section-head"><span className="arc-kicker">01 / CHOOSE YOUR MODE</span><span>Solo or head-to-head</span></div>
           <div className="arc-modes" aria-label="Game mode">
-            {MODES.map((x) => {
+            {modes.map((x) => {
               const lk = (x.k === "IMD" || x.k === "SHIFT") && !escrow?.live;
               return <button type="button" key={x.k} aria-pressed={mode === x.k} className={`arc-mode ${mode === x.k ? "on" : ""} ${lk ? "locked" : ""}`} onClick={() => setMode(x.k)}>
                 <i className="arc-mode-icon"><Icon name={x.icon} size={23} /></i><b>{x.title}</b><span>{lk ? "Opens with the signer" : x.sub}</span>
@@ -360,7 +362,7 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
           {staked ? <StakeLobby game="pinball" token={mode} name={me} address={address ?? null} signIn={signIn} onSeat={seat} theme="arc" />
             : <button type="button" className="arc-btn play" disabled={!!waiting} onClick={() => void start()}><Icon name={waiting ? "radar" : mode === "PRACTICE" ? "play" : "swords"} size={20} /><span>{waiting ? "FINDING YOUR RIVAL" : mode === "PRACTICE" ? "PLAY PRACTICE" : "FIND A RIVAL"}</span>{!waiting && <Icon name="arrow" size={18} />}</button>}
           {err && <p className="arc-err" role="alert">{err}</p>}
-          {mode === "FREE" && <Lounge game="pinball" onSeat={loungeSeat} />}
+          {mode === "FREE" && <Lounge game="pinball" onSeat={loungeSeat} free={!!embedded} />}
 
           <div className="arc-section-head"><span className="arc-kicker">02 / HOW IT PLAYS</span><span>Same table. Same seed.</span></div>
           <div className="arc-how">
@@ -393,7 +395,7 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
               {board.length > 0 ? <ol>{board.map((b, i) => <li className={i<3 ? `ns-place-${i+1}` : undefined} key={`${b.name}-${b.at}-${i}`}><span className={`ns-rank ${i<3 ? "ns-medal" : ""}`} aria-label={`Place ${i+1}`}>{i<3 && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="m8 14-2 8 6-3 6 3-2-8"/><circle cx="12" cy="9" r="7"/></svg>}<span aria-hidden="true">{i<3 ? i+1 : String(i+1).padStart(2,"0")}</span></span><span>{b.name}</span><b>{b.score.toLocaleString()}</b></li>)}</ol> : <p className="arc-board-empty">{`No verified ${boardKind === "duel" ? "duels" : "solo runs"} yet${boardTab === "board" ? " tonight" : ""}. Be the first on the board.`}</p>}
             </div>
           </div>
-          <p className="arc-legal">18+ for staked play. Money games may be gambling, including in Romania. Staked duels open only where allowed.</p>
+          {!embedded && <p className="arc-legal">18+ for staked play. Money games may be gambling, including in Romania. Staked duels open only where allowed.</p>}
         </section>
       </main>}
 
