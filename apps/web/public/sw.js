@@ -1,7 +1,9 @@
 // NIGHTSHIFT app shell. Pages: fresh when online, the last copy when offline. Hashed bundles and art: cached.
 // Never cached: /api (prices, sessions, payments), downloads, anything not GET or from another origin.
-const CACHE = "ns-v1";
-self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.add("/")).then(() => self.skipWaiting())); });
+// v2: the station redesign. The gate and its art are kept for the first screen offline.
+const CACHE = "ns-v2";
+const SHELL = ["/", "/art/station/gate-station-mobile-1080x1920.webp", "/art/station/gate-station-2400x1350.webp"];
+self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k.startsWith("ns-") && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", (e) => {
   const u = new URL(e.request.url);

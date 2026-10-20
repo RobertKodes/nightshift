@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { short } from "../api";
+import { InstallButton } from "../landing/app";
 import { BLUESKY_URL, Crescent, DEV_X_URL, NightFrog, OPENSEA_URL, TELEGRAM_URL, X_URL, useSwarm } from "../landing/chrome";
 import { Link, go } from "../router";
 import { useSession } from "../session";
@@ -14,12 +15,13 @@ export function lastRoom(): RoomId | null { try { const v = localStorage.getItem
 const isOn = (path: string, to: string) => path === to || (to !== "/" && path.startsWith(`${to}/`));
 
 /** The station bar: the mark, the five rooms, the swarm's pulse and the wallet. Same on every room. */
-export function StationBar({ room }: { room: RoomId | null }) {
+export function StationBar({ room, title }: { room: RoomId | null; title?: string }) {
   const swarm = useSwarm();
   const { address, signIn, signOut, busy, error } = useSession();
   return (
     <div className="nx-station">
       <Link to="/" className="nx-mark" aria-label="NIGHTSHIFT: choose your way"><Crescent size={22} /><span>NIGHTSHIFT</span></Link>
+      <b className="nx-apptitle" aria-hidden="true">{title ?? "NIGHTSHIFT"}</b>
       <nav className="nx-rooms" aria-label="Rooms">
         <Link to="/" className={room === null ? "on" : ""} style={{ "--acc": "#a48bff" } as React.CSSProperties}><NxIcon name="way" size={15} /><span>Gate</span></Link>
         {ROOM_ORDER.map((id) => (
@@ -30,6 +32,7 @@ export function StationBar({ room }: { room: RoomId | null }) {
       </nav>
       <span className="nx-pulse" title="IMD agents online, live from api.imd.fun"><i />{swarm?.n ? swarm.n.toLocaleString("en-US") : "…"}<small>AGENTS ONLINE</small></span>
       {swarm?.mode === "sim" && <span className="nx-sim" title="Simulated swarm and buyers. No IMD or USDC moves.">SIM</span>}
+      <InstallButton compact />
       {address ? (
         <button className="nx-acct" onClick={() => void signOut()} title="Sign out"><NxIcon name="wallet" size={15} />{short(address)}</button>
       ) : swarm?.mode === "live" ? (
@@ -117,11 +120,13 @@ export function NxTabs({ room }: { room: RoomId | null }) {
 export function RoomShell({ room, path, children }: { room: RoomId; path: string; children: React.ReactNode }) {
   const r = ROOMS[room];
   useEffect(() => rememberRoom(room), [room]);
+  // the phone bar names the page, like an app: the menu entry it belongs to, else the room
+  const here = [...r.nav].sort((a, b) => b.to.length - a.to.length).find((n) => isOn(path, n.to));
   return (
     <div className="ns ns-app nx-shell" data-room={room} style={{ "--acc": r.accent, "--acc2": r.accent2 } as React.CSSProperties}>
       <div className="nx-backdrop" aria-hidden="true" />
       <header className="nx-head">
-        <StationBar room={room} />
+        <StationBar room={room} title={here?.label === r.nav[0]!.label ? r.name : here?.label ?? r.name} />
         <RoomBar room={room} path={path} />
       </header>
       <main>{children}</main>

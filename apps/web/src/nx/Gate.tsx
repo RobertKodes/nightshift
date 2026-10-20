@@ -3,6 +3,8 @@ import { BLUESKY_URL, Crescent, TELEGRAM_URL, X_URL, useSwarm } from "../landing
 import { Link, go } from "../router";
 import { NxIcon } from "./icons";
 import { ROOMS, WAYS, type Way } from "./map";
+import { InstallButton } from "../landing/app";
+import { ImdVisitor } from "../landing/visitor";
 import { NxTabs, lastRoom, rememberRoom } from "./Shell";
 import "./nx.css";
 
@@ -38,6 +40,26 @@ function useStars(ref: React.RefObject<HTMLCanvasElement | null>) {
     document.addEventListener("visibilitychange", vis);
     return () => { cancelAnimationFrame(raf); removeEventListener("resize", size); removeEventListener("pointermove", move); document.removeEventListener("visibilitychange", vis); };
   }, [ref]);
+}
+
+/** Text that decodes into place, letter by letter, once; plain text for anyone who prefers less motion. */
+function Decode({ text }: { text: string }) {
+  const [out, setOut] = useState(text);
+  useEffect(() => {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const glyphs = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789<>/#";
+    const start = performance.now(), dur = 900;
+    let raf = 0;
+    const tick = (t: number) => {
+      const done = Math.min(1, (t - start) / dur);
+      const fixed = Math.floor(done * text.length);
+      setOut(text.split("").map((ch, i) => (ch === " " || i < fixed ? ch : glyphs[Math.floor(Math.random() * glyphs.length)]!)).join(""));
+      if (done < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [text]);
+  return <span aria-hidden="true">{out}</span>;
 }
 
 const get = <T,>(u: string) => fetch(u).then((r) => (r.ok ? (r.json() as Promise<T>) : null)).catch(() => null);
@@ -85,6 +107,8 @@ export function Gate() {
         <source media="(max-width: 820px)" srcSet="/art/station/gate-station-mobile-1080x1920.webp" />
         <img src="/art/station/gate-station-2400x1350.webp" alt="" />
       </picture>
+      {/* IMD's frog comes over from imd.fun through his portal, as on the story page */}
+      <div className="nx-visit"><ImdVisitor /></div>
       <header className="nx-gate-top">
         <Link to="/" className="nx-mark"><Crescent size={24} /><span>NIGHTSHIFT</span></Link>
         <span className="nx-pulse"><i />{swarm?.n ? swarm.n.toLocaleString("en-US") : "…"}<small>IMD AGENTS ONLINE</small></span>
@@ -93,11 +117,13 @@ export function Gate() {
           <a href={X_URL} target="_blank" rel="noreferrer" aria-label="X">X</a>
           <a href={TELEGRAM_URL} target="_blank" rel="noreferrer" aria-label="Telegram">TG</a>
         </nav>
+        <InstallButton compact />
       </header>
 
       <section className="nx-gate-in">
-        <span className="nx-eyebrow">ORBITAL STATION NIGHTSHIFT · DECK 00 · THE GATE</span>
-        <h1>Choose <em>your way.</em></h1>
+        <span className="nx-eyebrow"><i />DECK 00 · THE GATE</span>
+        <h1 className="nx-title" aria-label="Choose your way"><Decode text="Choose your way" /></h1>
+        <div className="nx-spectrum" aria-hidden="true">{["#ff5ca8", "#4ad8ff", "#c9c2ff", "#ffc861", "#b8ff4a"].map((c) => <i key={c} style={{ background: c, color: c }} />)}</div>
         <p className="nx-gate-lead">An AI company station built on IMD, the swarm of AI agents that builds, audits and ships. Five rooms, one crew of frogs. Pick the door that fits you.</p>
         {back && <button className="nx-continue" style={{ "--acc": ROOMS[back].accent } as React.CSSProperties} onClick={() => { go(ROOMS[back].nav[0]!.to); scrollTo(0, 0); }}>Continue to the {ROOMS[back].name} <NxIcon name="arrow" size={16} /></button>}
 
