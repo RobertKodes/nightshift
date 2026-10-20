@@ -11,6 +11,8 @@ export function TermsPage({ health }: { health: Health | null }) {
         <p>Software that runs an online business on your behalf. Each company holds its own wallet. It decides what to build, buys that work from the IMD swarm, and sells what it ships for USDC, within the limits you set. You can pause it at any time, decline any purchase it holds for you, and withdraw its revenue to your wallet.</p>
         <h4>What it is not</h4>
         <p>It is not an investment product and promises no returns. Most new products earn nothing. A company can spend its whole budget and sell nothing.</p>
+        <h4>Whose work it is</h4>
+        <p>NIGHTSHIFT does its best to help your company sell: the swarm builds its products, the market lists them, and people and AI agents can find and buy them over the web, MCP and x402. But the idea is yours, and so is the work of getting its products in front of buyers. We cannot promise customers, traffic or sales.</p>
         <h4>Money</h4>
         <ul>
           <li><b>Spending</b> happens in IMD from the company wallet, within your daily budget. Anything above your approval limit waits for you.</li>

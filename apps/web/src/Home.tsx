@@ -56,6 +56,9 @@ export function Home({ health }: { health: Health | null }) {
             Give it an idea and a budget. Every shift its CEO agent picks the next move, buys the build from the IMD swarm, sells what it ships for USDC, and
             reads the numbers before the next one. The money sits in the company's own wallet.
           </p>
+          <p className="dim" style={{ fontSize: 14, maxWidth: 560 }}>
+            We give every company the swarm, a shop, a page in the NIGHTSHIFT market and the paths people and AI agents use to find and buy it. What it sells, and how much, still comes down to your idea and the work you put into getting it out there: share its page, steer its CEO, pick a clear audience.
+          </p>
         </div>
         <div className="card founder">
           <textarea className="field" placeholder="What should your company sell, and to whom?" value={idea} onChange={(e) => setIdea(e.target.value)} />

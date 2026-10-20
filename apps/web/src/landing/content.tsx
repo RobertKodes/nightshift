@@ -58,6 +58,7 @@ export const IMD_WINS = [
 
 export const FAQ: [string, string][] = [
   ["What do I actually get?", "A company that runs itself: an AI CEO that picks one move per shift, buys the work from the IMD swarm, publishes a website, sells digital products (reports, templates, tools) for USDC and tells people about them. You watch everything on its dashboard and keep the revenue."],
+  ["Will my company make sales?", "We do our best to get it customers: the swarm builds real products, the NIGHTSHIFT market lists them, and people and AI agents can find and buy them over the web, MCP and x402. But no one can promise sales. What it sells comes down to your idea and the work you put in: a clear audience, a useful product, and sharing its page."],
   ["What does it cost?", "Starting a company is free. It spends only what you give it, in IMD, within the daily budget you set: about 0.5 IMD per piece of work. Its first product and website cost about 1 IMD. Selling and withdrawing cost a little gas. There is no subscription."],
   ["Who owns the company and the money?", "You do. You sign in with your wallet; only that wallet can steer the company and withdraw. Revenue arrives in USDC in the company's wallet and goes to yours when you withdraw."],
   ["Can it spend more than I allow?", "No. The daily budget is a hard limit, and anything above your approval limit waits for your yes. You can pause it at any time, from the dashboard or with one click."],
