@@ -492,6 +492,17 @@ describe("posting on the owner's channels", () => {
     expect(F.flight(g.c, g.c.tasks[0]!, input(false)).connections).toEqual([]);
   });
 
+  it("lists on the public page only the channels the owner chose, and never an unchecked (simulated) one on a live engine", async () => {
+    const w = world();
+    await w.k.connectBluesky(w.c, "owner.bsky.social", "abcd-efgh-ijkl-mnop");
+    await w.k.connectDiscord(w.c, HOOK);
+    w.c.connections!.channels.mastodon = { kind: "mastodon", label: "@made-up@mastodon.example", url: "https://mastodon.example/@made-up", connectedAt: NOW, approveEach: false, dailyMax: 1, trusted: false, listed: true, sim: true };
+    // Discord has no public page; the simulated Mastodon was never checked
+    expect(w.k.publicChannels(w.c)).toEqual([{ kind: "bluesky", name: "Bluesky", label: "@owner.bsky.social", url: "https://bsky.app/profile/owner.bsky.social", sim: false }]);
+    w.k.channelSettings(w.c, "bluesky", { listed: false });
+    expect(w.k.publicChannels(w.c)).toEqual([]);
+  });
+
   it("turns a Bluesky account from before Connections into a channel, its first post waiting for the owner", () => {
     const w = world();
     w.c.social = { bluesky: { handle: "old.bsky.social", auto: true } };

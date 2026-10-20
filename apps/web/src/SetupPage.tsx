@@ -89,6 +89,10 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "BLUESKY_DAILY_MAX", label: "Most posts a day", hint: "10" },
     { k: "BLUESKY_GAP_MINUTES", label: "Minutes between posts", hint: "45" },
   ] },
+  { title: "Gumroad (owners sell on their own accounts)", note: "Optional. Register one OAuth app at gumroad.com → Settings → Advanced → Applications: a name, an icon, the site's address, and the redirect URI <PUBLIC_URL>/api/connect/gumroad/callback exactly. Paste its application id and secret here, then restart. Owners then connect their own Gumroad accounts from the owner desk (scopes: edit_products view_sales view_payouts). Gumroad has no app review.", fields: [
+    { k: "GUMROAD_CLIENT_ID", label: "Application ID", hint: "from the Gumroad application page" },
+    { k: "GUMROAD_CLIENT_SECRET", label: "Application secret", secret: true },
+  ] },
   { title: "Platform token", note: "Optional. Holders pay no platform fee and are featured in the market. Fees buy the token back.", fields: [
     { k: "TOKEN_ADDRESS", label: "Token address (Ethereum)", hint: "0x…" },
     { k: "TOKEN_SYMBOL", label: "Symbol", hint: "OCTO" },

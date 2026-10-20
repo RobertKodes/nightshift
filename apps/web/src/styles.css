@@ -216,6 +216,17 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 @media (max-width: 600px) { .setup-grid { grid-template-columns: 1fr; } .setup-live { flex-direction: column; align-items: stretch; } }
 .b2b-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px; padding: 12px 18px; margin: 0 0 16px; font-size: 14px; color: var(--dim); }
 .b2b-row b { color: var(--text); font-family: var(--mono); }
+/* a platform's mark: its colour, its initial (Bluesky, Telegram, Mastodon, Discord, Gumroad) */
+.cx-mark { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; font: 700 10.5px/1 var(--mono); color: #fff; clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
+.cx-mark.bluesky { background: #1083fe; }
+.cx-mark.telegram { background: #229ed9; }
+.cx-mark.mastodon { background: #6364ff; }
+.cx-mark.discord { background: #5865f2; }
+.cx-mark.gumroad { background: #ff90e8; color: #1a0614; }
+.pub-channels { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: -8px 0 22px; font-size: 13.5px; }
+.pub-ch { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); text-decoration: none; }
+.pub-ch:hover { border-color: var(--line-2); }
+.pub-ch .dim { font-family: var(--mono); font-size: 12px; }
 .got { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 16px 0; border-color: rgba(94, 230, 168, .4); }
 .market .products { margin: 0; }
 .social-form { display: grid; gap: 10px; }

@@ -9,7 +9,7 @@ import { FlightDrawer } from "./FlightRecorder";
 
 const ACTIVE = ["checking", "ordering", "building"];
 const KIND_LABEL: Record<string, string> = {
-  research: "Research", build_product: "New product", build_site: "Website", improve_site: "Site change", marketing: "Marketing", reprice: "Pricing", retire_product: "Retire",
+  research: "Research", build_product: "New product", build_site: "Website", improve_site: "Site change", marketing: "Marketing", reprice: "Pricing", retire_product: "Retire", post: "Post",
 };
 
 /** The owner's price for a product: click, type, Enter. The CEO keeps it from then on. */
@@ -254,7 +254,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
               <div className="dim" style={{ fontSize: 13 }}>Revenue lands here in USDC. IMD for the swarm is paid from here. {health?.mode === "sim" ? "In simulation it starts with 20 simulated IMD." : "It is funded from your wallet with the Fund button: IMD and a little ETH."}</div>
             </div>
           </div>
-          <PostsCard c={c} busy={busy} act={act} />
+          <PostsCard c={c} />
         </div>
       </div>
       {rec && <FlightDrawer key={rec} load={() => api.flight(c.id, rec)} onClose={() => setRec(null)} />}
@@ -262,38 +262,34 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
   );
 }
 
-/** Where the company talks to people: drafts, and the owner's Bluesky account that posts them. */
-function PostsCard({ c, busy, act }: { c: CompanyFull; busy: boolean; act: (f: () => Promise<unknown>) => Promise<void> }) {
-  const [handle, setHandle] = useState("");
-  const [pw, setPw] = useState("");
-  const [auto, setAuto] = useState(true);
-  const b = c.social?.bluesky;
-  const posts = c.marketing.map((m, i) => ({ m, i })).reverse();
+/**
+ * Where the company talks to people: the posts it wrote for the owner's connected channels (each about
+ * a real event, with the AI disclosure), and drafts from before any channel was connected. Accounts are
+ * connected, and posts approved, on the owner desk's Connections tab.
+ */
+function PostsCard({ c }: { c: CompanyFull }) {
+  const x = c.connections;
+  const on = Object.values(x?.channels ?? {}).filter(Boolean);
+  const posts = [...(x?.posts ?? [])].reverse().slice(0, 8);
+  const drafts = c.marketing.slice(-5).reverse();
   return (
     <div className="card">
-      <div className="card-h"><h3>Posts</h3>{b ? <span className="pill live">@{b.handle}</span> : <span className="faint" style={{ fontSize: 12 }}>not connected</span>}</div>
-      {b ? (
-        <div className="card-b dim" style={{ fontSize: 13, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-          <span>{b.auto ? "New posts go out on their own in live mode." : "Each post waits for you to send it."}</span>
-          <button className="btn ghost" disabled={busy} onClick={() => void act(() => api.disconnectBluesky(c.id))}>Disconnect</button>
-        </div>
-      ) : (
-        <form className="card-b social-form" onSubmit={(e) => { e.preventDefault(); void act(() => api.connectBluesky(c.id, handle, pw, auto).then(() => { setPw(""); })); }}>
-          <span className="dim" style={{ fontSize: 13 }}>Connect a Bluesky account so the company can tell people it exists. Use an <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noreferrer">app password</a>, not your real one.</span>
-          <input className="field" placeholder="you.bsky.social" value={handle} onChange={(e) => setHandle(e.target.value)} />
-          <input className="field" type="password" placeholder="xxxx-xxxx-xxxx-xxxx" value={pw} onChange={(e) => setPw(e.target.value)} />
-          <label className="dim" style={{ fontSize: 13 }}><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Post on its own (live mode only)</label>
-          <button className="btn" disabled={busy || !handle || !pw}>Connect Bluesky</button>
-        </form>
-      )}
-      {posts.length > 0 && (
-        <ul className="journal">{posts.map(({ m, i }) => (
-          <li key={i}><span className="when">{ago(m.at)}</span><span>{m.text}{" "}
-            <span className={`pill ${m.status === "posted" ? "done" : m.status === "failed" ? "failed" : ""}`}>{m.status}</span>
-            {m.url && <> <a className="mono faint" style={{ fontSize: 11 }} href={safeHref(m.url)} target="_blank" rel="noreferrer">view ↗</a></>}
-            {m.status !== "posted" && b && <> <button className="btn ghost sm-btn" disabled={busy} onClick={() => void act(() => api.publishPost(c.id, i))}>Post now</button></>}
-            {m.error && <div className="bad" style={{ fontSize: 12 }}>{m.error}</div>}
+      <div className="card-h"><h3>Posts</h3>{on.length ? <span className="pill live">{on.map((ch) => ch!.label).join(" · ")}</span> : <span className="faint" style={{ fontSize: 12 }}>no channel connected</span>}</div>
+      <div className="card-b dim" style={{ fontSize: 13, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+        <span>{on.length ? "Posts about real events, each saying an AI agent wrote it. The first one on each channel waits for you." : "Connect your own Bluesky, Telegram channel, Mastodon or Discord to post, and Gumroad to sell, from the owner desk."}</span>
+        <Link to={`/my?edit=${c.id}&tab=connections`} className="btn ghost">Connections</Link>
+      </div>
+      {posts.length > 0 ? (
+        <ul className="journal">{posts.map((p) => (
+          <li key={p.id}><span className="when">{ago(p.sentAt ?? p.at)}</span><span>{p.text}{" "}
+            <span className={`pill ${p.status === "posted" ? "done" : p.status === "failed" || p.status === "rejected" ? "failed" : ""}`}>{p.sim ? "simulated" : p.status === "approval" ? "waiting for you" : p.status}</span>
+            {p.url && <> <a className="mono faint" style={{ fontSize: 11 }} href={safeHref(p.url)} target="_blank" rel="noreferrer">view ↗</a></>}
+            {p.error && <div className="bad" style={{ fontSize: 12 }}>{p.error}</div>}
           </span></li>
+        ))}</ul>
+      ) : drafts.length > 0 && (
+        <ul className="journal">{drafts.map((m, i) => (
+          <li key={i}><span className="when">{ago(m.at)}</span><span>{m.text} <span className="pill">draft</span></span></li>
         ))}</ul>
       )}
     </div>

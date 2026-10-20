@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { type Flight, type FlightMarket, type FlightSpan, type MarketVerdict, short, usd } from "./api";
 import { NxIcon } from "./nx/icons";
+import { CHANNEL, Mark, RESULT } from "./Connections";
+import { safeHref } from "./safe";
 
 /** How long something took, in the shortest honest words. */
 export function took(ms: number): string {
@@ -141,6 +143,22 @@ export function FlightDrawer({ load, onClose, accent = "#4ad8ff", share }: { loa
             <blockquote>{f.why}</blockquote>
 
             {f.market && <MarketFirst m={f.market} />}
+
+            {(f.connections?.length ?? 0) > 0 && (
+              <>
+                <h4>Posts and Gumroad</h4>
+                <ol className="fr-cx">
+                  {f.connections!.map((e, i) => (
+                    <li key={`${e.at}-${i}`} className={e.result}>
+                      <Mark kind={e.channel} />
+                      <span className="fr-cand"><b>{e.what}</b><span className="dim"> · {CHANNEL[e.channel]} · {took(Math.max(0, e.at - f.createdAt))} in</span>{e.detail && <small>{e.detail}</small>}</span>
+                      <span className={`fr-verdict ${e.result}`}>{RESULT[e.result]}</span>
+                      {e.url && <a className="fr-cx-open" href={safeHref(e.url)} target="_blank" rel="noreferrer" aria-label="Open it"><NxIcon name="external" size={13} /></a>}
+                    </li>
+                  ))}
+                </ol>
+              </>
+            )}
 
             <h4>Replay</h4>
             <div className="fr-replay">

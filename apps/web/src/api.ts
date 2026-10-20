@@ -20,7 +20,8 @@ export interface CompanyFull {
   wallet: string; policy: Policy; status: "active" | "paused"; cycle: number; nextShiftAt: number | null;
   site: { url: string; jobId: string } | null; products: ProductView[]; tasks: TaskView[]; journal: JournalView[];
   marketing: { at: number; channel: string; text: string; status: string; url?: string; error?: string }[];
-  social?: { bluesky?: { handle: string; auto: boolean } };
+  /** The owner's connected accounts and the posts written for them (no secret is ever here). */
+  connections?: { channels: Partial<Record<ChannelKind, { label: string; url: string | null }>>; posts: { id: string; at: number; channel: ChannelKind; text: string; status: string; url?: string; error?: string; sentAt?: number; sim?: boolean }[] };
   direction?: string;
   holder: { symbol: string; holds: boolean; balance: number; min: number } | null;
   platformFeeBps: number;
@@ -46,7 +47,40 @@ export interface PublicCompany extends Omit<CompanyCard, "id" | "nextShiftAt" | 
   audience: string; shifts: { id: string; cycle: number; kind: string; title: string; status: string; costUsd: number; market?: boolean }[]; mode: "sim" | "live";
   /** Sales to and purchases from other NIGHTSHIFT companies, never added to the sales above. */
   b2b: { sales: number; revenueUsd: number; bought: number; spentUsd: number };
+  /** The accounts its owner connected and chose to show. */
+  channels?: { kind: string; name: string; label: string; url: string; sim: boolean }[];
 }
+
+/** Where a company posts, on accounts its owner made. */
+export type ChannelKind = "bluesky" | "telegram" | "mastodon" | "discord";
+/** One thing done through a connected account, and how it went. */
+export interface ConnEntry { at: number; channel: ChannelKind | "gumroad"; what: string; result: "ok" | "failed" | "waiting" | "blocked" | "sim"; detail?: string; url?: string; taskId?: string }
+export interface DeskPost { id: string; channel: ChannelKind; about: string; text: string; status: string; wait: string | null; at: number; sentAt: number | null; url: string | null; error: string | null; sim: boolean; taskId: string | null }
+export interface DeskChannel {
+  kind: ChannelKind; name: string; max: number; limit: number; available: boolean; bot: string | null;
+  account: { label: string; url: string | null; connectedAt: number; approveEach: boolean; dailyMax: number; trusted: boolean; listed: boolean; botFlag: boolean; paused: { at: number; why: string } | null; sim: boolean; today: number } | null;
+  last: ConnEntry | null;
+}
+/** The owner desk's Connections tab: the owner's own accounts and what the CEO did with them. */
+export interface DeskConnections {
+  sim: boolean;
+  gumroad: {
+    available: boolean;
+    account: { name: string; url: string | null; connectedAt: number; scopes: string; webhooks: boolean; polledAt: number | null; sim: boolean } | null;
+    listings: { productId: string; product: string; priceUsd: number; onSale: boolean; taskId: string; state: "draft" | "published" | "unpublished" | null; url: string | null; approved: boolean; declined: boolean; file: boolean; cover: boolean; sales: number; revenueUsd: number; blocked: string | null; error: string | null; sim: boolean }[];
+    next: number;
+    approvals: { productId: string; product: string; priceUsd: number; url: string | null; file: boolean }[];
+    redirect: string;
+  };
+  channels: DeskChannel[];
+  quiet: { from: number; to: number; tz: string };
+  approvals: DeskPost[]; queued: DeskPost[]; recent: DeskPost[];
+  log: ConnEntry[];
+  mastodonRedirect: string;
+  alertsLinked: boolean;
+}
+/** A test post: what the channel would get now, and the request, with nothing sent. */
+export interface PostPreview { channel: ChannelKind; about: string; sample: boolean; text: string; chars: number; limit: number; request: { method: string; url: string; body: unknown }; wait: string | null; sent: false }
 
 /** Why a product on the market was or was not bought, in the flight recorder. */
 export type MarketVerdict = "picked" | "relevant" | "irrelevant" | "pricier" | "over_max" | "same_owner" | "own" | "owned" | "demo" | "cap" | "funds";
@@ -73,6 +107,8 @@ export interface Flight {
   /** Research: the market search before paying the swarm (candidates, scores, decision). */
   market?: FlightMarket | null;
   payback: { kind: "product"; name: string; status: string; sales: number; revenueUsd: number; costUsd: number; ratio: number | null; recent: { at: number; usd: number; payer?: string; tx?: string | null }[] } | { kind: "site"; visits: number; costUsd: number } | null;
+  /** Each post and Gumroad action of this shift through the owner's connected accounts, with its result. */
+  connections?: { at: number; channel: ChannelKind | "gumroad"; what: string; result: ConnEntry["result"]; url?: string; detail?: string }[];
   receipts: { orderId: string | null; jobId: string | null; jobUrl: string | null; txHash: string | null; txUrl: string | null; siteUrl: string | null; files: Record<string, string> | null };
   brief?: string;
   company: { name: string; slug: string };
@@ -93,6 +129,9 @@ export interface DeskCompany {
   working: { id: string; title: string; status: string; activity: string | null } | null;
   waiting: { id: string; cycle: number; title: string; why: string; costUsd: number; market?: { product: string; company: string; swarmUsd: number } }[];
   last: { id: string; cycle: number; title: string; status: string; at: number } | null;
+  connections: DeskConnections;
+  /** Gumroad sales: the owner's money on Gumroad, in USD, apart from USDC revenue. */
+  gumroad: { sales: number; usd: number };
 }
 export interface Desk {
   mode: "sim" | "live"; requireAuth: boolean; signedIn: boolean; imdUsd: number; bot: boolean;
@@ -130,12 +169,9 @@ export const api = {
   withdraw: (id: string, amountUsd?: number) => req<{ ok: boolean; sentUsd: number; feeUsd: number; txs: string[] }>("POST", `/api/companies/${id}/withdraw`, amountUsd ? { amountUsd } : {}),
   companies: (mine = false) => req<CompanyCard[]>("GET", `/api/companies${mine ? "?mine=1" : ""}`),
   company: (id: string) => req<CompanyFull>("GET", `/api/companies/${id}`),
-  publicCompany: (slug: string) => req<PublicCompany>("GET", `/api/public/${slug}`),
+  publicCompany: (slug: string, via?: string | null) => req<PublicCompany>("GET", `/api/public/${slug}${via ? `?via=${encodeURIComponent(via)}` : ""}`),
   create: (idea: string, policy: Partial<Policy>) => req<{ id: string; slug: string }>("POST", "/api/companies", { idea, policy }),
   shift: (id: string) => req("POST", `/api/companies/${id}/shift`),
-  connectBluesky: (id: string, handle: string, appPassword: string, auto: boolean) => req<{ handle: string }>("POST", `/api/companies/${id}/social`, { handle, appPassword, auto }),
-  disconnectBluesky: (id: string) => req("POST", `/api/companies/${id}/social/disconnect`),
-  publishPost: (id: string, i: number) => req<{ url: string }>("POST", `/api/companies/${id}/posts/${i}/publish`),
   closeOut: (id: string) => req<{ ok: boolean; txs: string[]; returned: string[] }>("POST", `/api/companies/${id}/close`, {}),
   pause: (id: string) => req("POST", `/api/companies/${id}/pause`),
   resume: (id: string) => req("POST", `/api/companies/${id}/resume`),
@@ -153,6 +189,18 @@ export const api = {
   alertsOff: (id: string) => req("POST", `/api/companies/${id}/alerts/off`),
   remove: (id: string, confirm: string) => req("POST", `/api/companies/${id}/delete`, { confirm }),
   restore: (id: string) => req<{ ok: boolean; id: string }>("POST", `/api/my/archived/${id}/restore`),
+  // ---- Connections: the owner's own accounts
+  gumroadConnect: (id: string) => req<{ url: string }>("POST", `/api/companies/${id}/connect/gumroad`),
+  gumroadDisconnect: (id: string) => req("POST", `/api/companies/${id}/connect/gumroad/disconnect`),
+  gumroadApprove: (id: string, product: string) => req("POST", `/api/companies/${id}/connect/gumroad/approve/${product}`),
+  gumroadDecline: (id: string, product: string) => req("POST", `/api/companies/${id}/connect/gumroad/decline/${product}`),
+  connectChannel: (id: string, kind: ChannelKind, body: Record<string, string>) => req<{ ok?: boolean; label?: string; url?: string }>("POST", `/api/companies/${id}/connect/${kind}`, body),
+  disconnectChannel: (id: string, kind: ChannelKind) => req("POST", `/api/companies/${id}/connect/${kind}/disconnect`),
+  channelSettings: (id: string, kind: ChannelKind, p: { approveEach?: boolean; dailyMax?: number; listed?: boolean; resume?: boolean }) => req("POST", `/api/companies/${id}/connect/${kind}/settings`, p),
+  testPost: (id: string, kind: ChannelKind) => req<PostPreview>("POST", `/api/companies/${id}/connect/${kind}/test`),
+  quiet: (id: string, q: { from: number; to: number; tz: string }) => req("POST", `/api/companies/${id}/connect/quiet`, q),
+  approvePost: (id: string, post: string) => req("POST", `/api/companies/${id}/connect/posts/${post}/approve`),
+  rejectPost: (id: string, post: string) => req("POST", `/api/companies/${id}/connect/posts/${post}/reject`),
 };
 
 /** Subscribes to the engine's live events, optionally for one company. */

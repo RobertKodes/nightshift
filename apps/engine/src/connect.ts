@@ -824,7 +824,8 @@ export class Connect {
   publicChannels(c: Company): { kind: string; name: string; label: string; url: string; sim: boolean }[] {
     const x = c.connections;
     if (!x) return [];
-    const out = CHANNELS.map((k) => x.channels[k]).filter((ch): ch is Channel => Boolean(ch?.listed && ch.url)).map((ch) => ({ kind: ch.kind as string, name: CHANNEL_NAME[ch.kind], label: ch.label, url: ch.url!, sim: Boolean(ch.sim) }));
+    // a simulated channel was never checked with its platform: only a simulation engine lists it
+    const out = CHANNELS.map((k) => x.channels[k]).filter((ch): ch is Channel => Boolean(ch?.listed && ch.url && (!ch.sim || this.d.sim()))).map((ch) => ({ kind: ch.kind as string, name: CHANNEL_NAME[ch.kind], label: ch.label, url: ch.url!, sim: Boolean(ch.sim) }));
     if (x.gumroad?.url && c.products.some((p) => p.gumroad?.state === "published")) out.push({ kind: "gumroad", name: "Gumroad", label: x.gumroad.name, url: x.gumroad.url, sim: Boolean(x.gumroad.sim) });
     return out;
   }

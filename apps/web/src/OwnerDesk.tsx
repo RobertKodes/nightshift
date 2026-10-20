@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { type Desk, type DeskCompany, type Health, type Policy, ago, api, events, short, until, usd } from "./api";
+import { CHANNEL, Connections, Mark, PostAsk } from "./Connections";
 import { FlightDrawer } from "./FlightRecorder";
 import { NxIcon } from "./nx/icons";
 import { Link } from "./router";
@@ -18,7 +19,8 @@ export function OwnerDesk({ health }: { health: Health | null }) {
   const [d, setD] = useState<Desk | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(() => new URLSearchParams(location.search).get("edit"));
-  const [tab, setTab] = useState<Tab>("profile");
+  // back from Gumroad or Mastodon: /my?edit=<id>&tab=connections&connected=… or &error=…
+  const [tab, setTab] = useState<Tab>(() => { const t = new URLSearchParams(location.search).get("tab"); return TABS.some(([k]) => k === t) ? (t as Tab) : "profile"; });
   const open = (id: string, t: Tab = "profile") => { setTab(t); setEditing(id); };
   const [rec, setRec] = useState<{ co: string; task: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -35,6 +37,13 @@ export function OwnerDesk({ health }: { health: Health | null }) {
   }, [load, address]);
 
   const say = (m: string) => { setToast(m); setTimeout(() => setToast(null), 4200); };
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const ok = q.get("connected"), bad = q.get("error");
+    if (!ok && !bad) return;
+    say(bad ?? `${CHANNEL[ok!] ?? ok} connected.`);
+    history.replaceState(null, "", q.get("edit") ? `/my?edit=${q.get("edit")}` : "/my");
+  }, []);
   const act = async (key: string, fn: () => Promise<unknown>, done?: string) => {
     setBusy(key);
     try { await fn(); await load(); if (done) say(done); } catch (e) { say((e as Error).message); } finally { setBusy(null); }
@@ -59,6 +68,11 @@ export function OwnerDesk({ health }: { health: Health | null }) {
   const sum = (f: (c: DeskCompany) => number) => cos.reduce((a, c) => a + f(c), 0);
   const waiting = cos.flatMap((c) => c.waiting.map((w) => ({ c, w })));
   const resting = cos.filter((c) => c.status === "active" && c.rest);
+  // the owner's accounts: posts and Gumroad products that wait for a yes, and channels that paused themselves
+  const posts = cos.flatMap((c) => c.connections.approvals.map((p) => ({ c, p })));
+  const listings = cos.flatMap((c) => c.connections.gumroad.approvals.map((g) => ({ c, g })));
+  const paused = cos.flatMap((c) => c.connections.channels.filter((ch) => ch.account?.paused).map((ch) => ({ c, ch })));
+  const needs = waiting.length + resting.length + posts.length + listings.length + paused.length;
   const hhmm = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const edit = cos.find((c) => c.id === editing) ?? null;
 
@@ -80,7 +94,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
         <span><b>{usd(sum((c) => c.b2b.sold.usd))}</b>sold to other companies · {sum((c) => c.b2b.sold.count)}</span>
       </div>
 
-      {(waiting.length > 0 || resting.length > 0) && (
+      {needs > 0 && (
         <section className="dk-needs">
           <h2><NxIcon name="pulse" size={18} /> Needs you</h2>
           {waiting.map(({ c, w }) => (
@@ -92,6 +106,22 @@ export function OwnerDesk({ health }: { health: Health | null }) {
                 <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`no:${w.id}`, () => api.reject(c.id, w.id), "Declined. Nothing was spent.")}>Decline</button>
                 <button className="nx-btn nx-btn-acc" disabled={busy !== null} onClick={() => void act(`yes:${w.id}`, () => api.approve(c.id, w.id), "Approved: the swarm is on it.")}>Approve and buy</button>
               </div>
+            </div>
+          ))}
+          {posts.map(({ c, p }) => <PostAsk key={p.id} c={c} p={p} busy={busy} act={act} compact />)}
+          {listings.map(({ c, g }) => (
+            <div key={`${c.id}:${g.productId}`} className="dk-need">
+              <div><Mark kind="gumroad" /> <b>{c.name}</b> made "{g.product}" on your Gumroad as a draft<span className="dim"> · {usd(g.priceUsd)} · publishing it waits for you, once per product</span></div>
+              <div className="dk-row">
+                <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`gn:${g.productId}`, () => api.gumroadDecline(c.id, g.productId), "It stays a draft on Gumroad.")}>Not now</button>
+                <button className="nx-btn nx-btn-acc" disabled={busy !== null || !g.file} onClick={() => void act(`gy:${g.productId}`, () => api.gumroadApprove(c.id, g.productId), "Approved: it goes on sale on Gumroad in a moment.")}>Publish on Gumroad</button>
+              </div>
+            </div>
+          ))}
+          {paused.map(({ c, ch }) => (
+            <div key={`${c.id}:${ch.kind}`} className="dk-need">
+              <div><Mark kind={ch.kind} /> <b>{c.name}</b>: {ch.name} pushed back, so posting there is paused<span className="dim"> · {ch.account!.paused!.why}</span></div>
+              <div className="dk-row"><button className="nx-btn" onClick={() => open(c.id, "connections")}>Open Connections</button></div>
             </div>
           ))}
           {resting.map((c) => c.rest!.why === "budget" ? (
@@ -147,6 +177,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
                   <div><dt>On sale</dt><dd>{live}</dd></div>
                 </dl>
                 <B2bLines c={c} onReplay={(task) => setRec({ co: c.id, task })} />
+                <CxLine c={c} onOpen={() => open(c.id, "connections")} />
                 {c.last && <button className="dk-last" onClick={() => setRec({ co: c.id, task: c.last!.id })}>Last: shift {c.last.cycle}, {c.last.title} <span className={`dk-st ${c.last.status}`}>{c.last.status.replace(/_/g, " ")}</span> <span className="faint">{ago(c.last.at)}</span></button>}
                 <footer className="dk-row">
                   <Link to={`/co/${c.id}`} className="nx-btn">Open</Link>
@@ -184,7 +215,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
   );
 }
 
-const TABS = [["profile", "Profile"], ["direction", "Direction"], ["order", "Order work"], ["products", "Products"], ["limits", "Limits"], ["alerts", "Alerts"], ["books", "Books"], ["delete", "Delete"]] as const;
+const TABS = [["profile", "Profile"], ["direction", "Direction"], ["order", "Order work"], ["products", "Products"], ["limits", "Limits"], ["alerts", "Alerts"], ["connections", "Connections"], ["books", "Books"], ["delete", "Delete"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 const PRESETS = [
@@ -278,6 +309,8 @@ function EditDrawer({ c, first, bot, live, imdUsd, onClose, onSaved, onDeleted, 
         )}
 
         {tab === "alerts" && <Alerts c={c} bot={bot} onSaved={onSaved} say={say} />}
+
+        {tab === "connections" && <Connections c={c} say={say} onSaved={onSaved} onReplay={onReplay} />}
 
         {tab === "books" && (
           <div className="dk-form">
@@ -401,6 +434,21 @@ function Alerts({ c, bot, onSaved, say }: { c: DeskCompany; bot: boolean; onSave
       )}
       {link && !c.alerts && <p className="dk-hint">Telegram opens the NIGHTSHIFT bot: press <b>Start</b>. Nothing opened? <a href={link} target="_blank" rel="noreferrer">Open the link</a>. It works once, for ten minutes.</p>}
     </div>
+  );
+}
+
+/** On each card: the owner's accounts it posts and sells on, and Gumroad's sales (the owner's money there, apart from USDC). */
+function CxLine({ c, onOpen }: { c: DeskCompany; onOpen: () => void }) {
+  const on = c.connections.channels.filter((ch) => ch.account);
+  const g = c.connections.gumroad.account;
+  const asks = c.connections.approvals.length + c.connections.gumroad.approvals.length;
+  return (
+    <button className="dk-cx" onClick={onOpen}>
+      <span className="dk-b2b-h"><NxIcon name="external" size={13} /> Connections</span>
+      {on.length || g ? <span className="dk-cx-marks">{g && <Mark kind="gumroad" />}{on.map((ch) => <Mark key={ch.kind} kind={ch.kind} />)}</span> : <span className="faint">none yet: sell on Gumroad, post on Bluesky, Telegram, Mastodon, Discord</span>}
+      {c.gumroad.sales > 0 && <span>{c.gumroad.sales} on Gumroad · {usd(c.gumroad.usd)} <span className="dim">to you there</span></span>}
+      {asks > 0 && <span className="dk-st awaiting_approval">{asks} waiting</span>}
+    </button>
   );
 }
 

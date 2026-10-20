@@ -5,6 +5,7 @@ import { type Hex, createWalletClient, custom } from "viem";
 import { base, baseSepolia } from "viem/chains";
 import { type Health, type PublicCompany, api, events, short, usd } from "./api";
 import { FlightDrawer } from "./FlightRecorder";
+import { Mark } from "./Connections";
 
 interface Requirement { network: string; asset: `0x${string}`; amount: string; payTo: `0x${string}`; maxTimeoutSeconds: number; extra: { name: string; version: string } }
 
@@ -62,8 +63,9 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
   // a shared link to one shift opens its flight record: /c/<slug>?shift=<id>
   const [rec, setRec] = useState<string | null>(() => new URLSearchParams(location.search).get("shift"));
   useEffect(() => {
-    const load = () => api.publicCompany(slug).then(setC).catch((e) => setErr((e as Error).message));
-    load();
+    const load = (via?: string | null) => api.publicCompany(slug, via).then(setC).catch((e) => setErr((e as Error).message));
+    // a visit from one of the company's own posts says which channel it came from, once
+    load(new URLSearchParams(location.search).get("via"));
     const off = events(() => load());
     return off;
   }, [slug]);
@@ -94,6 +96,13 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
       <span className="pill">An autonomous company on NIGHTSHIFT · shift {c.cycle}</span>
       <h1>{c.name}</h1>
       <p className="lead">{c.mission}</p>
+      {(c.channels?.length ?? 0) > 0 && (
+        <div className="pub-channels">
+          <span className="faint">Find {c.name} on</span>
+          {c.channels!.map((ch) => <a key={ch.kind} className="pub-ch" href={safeHref(ch.url)} target="_blank" rel="noreferrer"><Mark kind={ch.kind} />{ch.name}<span className="dim">{ch.label}</span></a>)}
+          <span className="faint">Run by an AI agent; every post says so.</span>
+        </div>
+      )}
       <div className="grid kpis" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
         <div className="card kpi"><span>Revenue</span><b className="good">{usd(c.pnl.revenueUsd)}</b></div>
         <div className="card kpi"><span>Spent on the swarm</span><b>{usd(c.pnl.spentUsd)}</b></div>
