@@ -1,3 +1,4 @@
+import { validateDiscoveryExtension } from "@x402/extensions/bazaar";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -184,13 +185,14 @@ describe("x402 on the services", () => {
     const s = R.services(ctx, payer);
     const out = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, { depth: "quick" })))!;
     expect(out.status).toBe(402);
-    const b = out.body as X402.Challenge & { extensions: ReturnType<typeof K.bazaarOf> };
+    type Bz = { info: { input: unknown }; schema: { properties: { output: { properties: { example: { required: string[] } } } } } };
+    const b = out.body as X402.Challenge & { extensions: { bazaar: Bz } };
     expect(b.x402Version).toBe(2);
     expect(b.accepts[0]).toMatchObject({ scheme: "exact", network: "eip155:8453", amount: "20000", payTo, asset: P.USDC[8453]!.address });
     expect(b.resource.url).toBe(`https://getnightshift.tech/api/v1/verdict/ethereum/${SHIFT}?depth=quick`);
     expect(b.resource.description.length).toBeLessThan(500);
     expect(b.extensions.bazaar.info.input).toMatchObject({ type: "http", method: "GET" });
-    expect(b.extensions.bazaar.schema.properties.output.required).toEqual(expect.arrayContaining(["verdict", "reasons", "evidence"]));
+    expect(b.extensions.bazaar.schema.properties.output.properties.example.required).toEqual(expect.arrayContaining(["verdict", "reasons", "evidence"]));
     expect(P.decodeHeader(out.headers!["PAYMENT-REQUIRED"]!)).toEqual(JSON.parse(JSON.stringify(b)));
     const deep = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, { depth: "deep" })))!;
     expect((deep.body as X402.Challenge).accepts[0]!.amount).toBe("250000");
@@ -311,7 +313,9 @@ describe("MCP and discovery", () => {
     const items = K.catalogItems("https://getnightshift.tech", 8453, "0x1111111111111111111111111111111111111111");
     expect(items).toHaveLength(K.OFFERS.length);
     expect(items[0]).toMatchObject({ type: "http", x402Version: 2, accepts: [{ amount: "20000", network: "eip155:8453" }] });
-    expect(items[0]!.metadata.bazaar.info.output.example).toMatchObject({ verdict: "safe" });
+    expect((items[0]!.metadata.bazaar as { info: { output: { example: unknown } } }).info.output.example).toMatchObject({ verdict: "safe" });
+    // every service's block passes x402's own validation, the check the CDP facilitator runs before listing
+    for (const o of K.OFFERS) expect(validateDiscoveryExtension(K.bazaarOf(o).bazaar as never), o.id).toEqual({ valid: true });
     const api = K.openapi("https://getnightshift.tech", 8453, null) as { openapi: string; paths: Record<string, unknown> };
     expect(api.openapi).toBe("3.1.0");
     expect(Object.keys(api.paths)).toEqual(expect.arrayContaining(["/api/v1/verdict/{chain}/{token}", "/api/v1/hook/{address}", "/api/v1/imd/launches", "/api/v1/imd/swarm", "/api/v1/imd/agents/{seat}"]));

@@ -94,7 +94,7 @@ export function services(ctx: Ctx, payer: Payer) {
   function challengeOf(o: Offer, io: Io, error?: string) {
     const req = terms(o);
     if (!req) return null;
-    return { ...challenge402(req, { url: `${io.base}${io.path}${io.query.toString() ? `?${io.query}` : ""}`, description: o.description, mimeType: "application/json" }, error), extensions: bazaarOf(o), runBy: RUN_BY, priceUsd: usdOf(o) };
+    return { ...challenge402(req, { url: `${io.base}${io.path}${io.query.toString() ? `?${io.query}` : ""}`, description: o.description, mimeType: "application/json" }, error), extensions: bazaarOf(o, io.path), runBy: RUN_BY, priceUsd: usdOf(o) };
   }
   const p402 = (o: Offer, io: Io, error: string): Out => {
     const ch = challengeOf(o, io, error);

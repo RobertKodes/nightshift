@@ -1,3 +1,4 @@
+import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import type { ProductKind } from "@nightshift/core";
 import { requirement } from "@nightshift/x402";
 import type { Address } from "viem";
@@ -66,7 +67,9 @@ const hookExample = {
   summary: "NightshiftHook. The PoolManager calls beforeInitialize, beforeSwap, afterSwap (with beforeSwapReturnsDelta, afterSwapReturnsDelta). Takes its own fee … to feeSplitter 0x1119…2d44. Owner: wallet 0x6c4c…19b5. Not a proxy and no DELEGATECALL: the code cannot change.",
   flags: { hex: "0x20cc", valid: true }, template: { name: "NightshiftHook", match: "exact address" },
   fees: { swapFee: "125 bps static", hookFee: "takes its own fee: beforeSwapReturnsDelta and afterSwapReturnsDelta set and it moves pool currency out with PoolManager.take/mint (settings: MAX_FEE_BPS = 250, ethFeeBps = 250, shiftFeeBps = 250), to feeSplitter 0x1119…2d44" },
+  callbacks: [{ name: "beforeSwap", implemented: true }, { name: "afterSwap", implemented: true }, { name: "beforeInitialize", implemented: true }],
   powers: [{ text: "the owner can change fees (setFees), capped by MAX_FEE_BPS = 250", level: "low" }],
+  evidence: [{ kind: "source", url: "https://sourcify.dev/server/repo-ui/1/0x42ebcf86e3ab0445ba0362f911a7e8fad6ace0cc" }],
 };
 const feedOut = {
   required: ["service", "endpoint", "items"],
@@ -124,23 +127,22 @@ export const OFFERS: Offer[] = [
 export const offer = (id: OfferId) => OFFERS.find((o) => o.id === id)!;
 export const usdOf = (o: Offer) => Number(o.priceUsdc) / 1e6;
 
-/** The x402 v2 "bazaar" extension a 402 challenge and the catalogue carry: how to call it and what comes back. */
-export function bazaarOf(o: Offer) {
-  return {
-    bazaar: {
-      info: {
-        input: { type: "http", method: o.method, pathParams: Object.fromEntries(Object.entries(o.path).map(([k, v]) => [k, v.description])), queryParams: Object.fromEntries(Object.entries(o.query).map(([k, v]) => [k, v.description])) },
-        output: { type: "json", example: o.outputExample },
-      },
-      schema: {
-        $schema: "https://json-schema.org/draft/2020-12/schema", type: "object",
-        properties: {
-          input: { type: "object", properties: { method: { const: o.method }, pathParams: { type: "object", properties: o.path }, queryParams: { type: "object", properties: o.query } }, description: "No body. Call the route; pay the 402 with an x402 client (EIP-3009 USDC on Base) and repeat the request with the PAYMENT-SIGNATURE header." },
-          output: { type: "object", required: o.output.required, properties: o.output.properties },
-        },
-      },
-    },
-  };
+/** The route as the Bazaar's template (`/api/v1/hook/:address`), when it is one plain path. */
+const patternOf = (o: Offer) => { const r = o.route.split("?")[0]!; return r.includes("|") ? undefined : r.replace(/\{(\w+)\}/g, ":$1"); };
+/**
+ * The x402 v2 "bazaar" extension a 402 challenge and the catalogue carry: how to call it and what
+ * comes back. Built by the x402 project's own declareDiscoveryExtension and enriched for GET on this
+ * path, the shape the CDP facilitator validates and lists (as the companies' products are).
+ */
+export function bazaarOf(o: Offer, path = o.example.split("?")[0]!) {
+  // the example's query, typed as the schema says (limit=20 is a number)
+  const input = Object.fromEntries([...new URLSearchParams(o.example.split("?")[1] ?? "")].map(([k, v]) => [k, o.query[k]?.type === "integer" ? Number(v) : v]));
+  const { bazaar: declared } = declareDiscoveryExtension({
+    input,
+    inputSchema: { type: "object", properties: o.query },
+    output: { example: o.outputExample, schema: { type: "object", required: o.output.required, properties: o.output.properties } },
+  });
+  return { bazaar: bazaarResourceServerExtension.enrichDeclaration!(declared, { method: "GET", routePattern: patternOf(o), adapter: { getPath: () => path } }) as Record<string, unknown> };
 }
 
 /** The services' entries for /api/market/catalog, in the same discovery shape as the companies' products. */
