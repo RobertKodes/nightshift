@@ -36,7 +36,7 @@ function summary(c: Company, s: CompanyStats): string {
   return `Company: ${c.name}
 Idea: ${c.idea}
 Mission: ${c.mission}
-Audience: ${c.audience}
+Audience: ${c.audience}${c.direction ? `\nThe owner's direction (follow it): ${c.direction}` : ""}
 Shift: ${c.cycle}
 Site: ${c.site ? c.site.url : "none yet"}
 Products:
@@ -134,7 +134,7 @@ Moves:
 - marketing: write one post for the audience (free)
 - reprice: change a product's price (free; needs productId and priceUsd)
 - retire_product: stop selling a product (free; needs productId)
-Rules: never build a site before there is a product; never start paid work while paid work is still building unless it clearly pays back; be specific about who buys and why.
+Rules: never build a site before there is a product; never start paid work while paid work is still building unless it clearly pays back; be specific about who buys and why; when the owner gives a direction, follow it unless it breaks these rules.
 Answer with JSON only: {"kind": ..., "title": ..., "why": ..., "brief": ..., "product"?: {"name","kind","pitch","priceUsd"}, "productId"?, "priceUsd"?, "post"?}`;
 
 export async function llmDecision(llm: LlmClient, model: string, c: Company, s: CompanyStats): Promise<{ decision: Decision; costUsd: number; servedModel: string } | null> {

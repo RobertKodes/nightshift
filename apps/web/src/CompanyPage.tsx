@@ -5,6 +5,7 @@ import { type CompanyFull, type Health, type Policy, type TaskView, ago, api, ev
 import { Link } from "./router";
 import { useSession } from "./session";
 import { FundCard } from "./FundCard";
+import { FlightDrawer } from "./FlightRecorder";
 
 const ACTIVE = ["checking", "ordering", "building"];
 const KIND_LABEL: Record<string, string> = {
@@ -103,6 +104,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [, tick] = useState(0);
+  const [rec, setRec] = useState<string | null>(null);
   const load = useCallback(() => api.company(id).then(setC).catch((e) => setErr((e as Error).message)), [id]);
 
   useEffect(() => {
@@ -136,6 +138,8 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
           </div>
         </div>
         <div className="co-actions">
+          <Link to="/my" className="btn ghost">All my companies</Link>
+          <Link to={`/my?edit=${c.id}`} className="btn ghost">Edit</Link>
           <Link to={`/c/${c.slug}`} className="btn ghost">Public page</Link>
           {c.site && <a className="btn ghost" href={safeHref(c.site.url)} target="_blank" rel="noreferrer">Site ↗</a>}
           {c.status === "active"
@@ -168,7 +172,8 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
 
       <div className="grid layout">
         <div className="grid">
-          {current ? <Now t={current} /> : (
+          {c.direction && <div className="card fr-direction"><span className="eyebrow">Your direction to the CEO</span><p>{c.direction}</p><Link to={`/my?edit=${c.id}`}>Change it</Link></div>}
+          {current ? <><Now t={current} /><button className="btn ghost fr-watch" onClick={() => setRec(current.id)}>Open this shift's flight record</button></> : (
             <div className="card now">
               <div className="now-title">Between shifts</div>
               <div className="now-why">{c.status === "active" ? `The CEO decides its next move ${until(c.nextShiftAt)}.` : "Paused. Nothing runs and nothing is spent."}</div>
@@ -203,14 +208,14 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
           </div>
 
           <div className="card">
-            <div className="card-h"><h3>Every shift</h3></div>
+            <div className="card-h"><h3>Every shift</h3><span className="faint" style={{ fontSize: 12 }}>open one to replay it</span></div>
             <table className="t-shifts">
               <thead><tr><th>#</th><th>Move</th><th>Status</th><th className="r">Cost</th></tr></thead>
               <tbody>
                 {[...c.tasks].reverse().slice(0, 20).map((t) => (
                   <tr key={t.id}>
                     <td className="mono faint">{t.cycle}</td>
-                    <td><b>{t.title}</b><div className="dim" style={{ fontSize: 12.5 }}>{t.error ?? t.result?.note ?? t.why}</div></td>
+                    <td><button className="fr-open" onClick={() => setRec(t.id)}><b>{t.title}</b></button><div className="dim" style={{ fontSize: 12.5 }}>{t.error ?? t.result?.note ?? t.why}</div></td>
                     <td><span className={`pill ${t.status}`}>{t.status.replace(/_/g, " ")}</span></td>
                     <td className="r">{Number(t.costImd) > 0 ? `${Number(t.costImd) / 1e18} IMD` : "free"}</td>
                   </tr>
@@ -252,6 +257,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
           <PostsCard c={c} busy={busy} act={act} />
         </div>
       </div>
+      {rec && <FlightDrawer key={rec} load={() => api.flight(c.id, rec)} onClose={() => setRec(null)} />}
     </>
   );
 }

@@ -52,6 +52,42 @@ const made = JSON.parse((await client.callTool({ name: "nightshift_create", argu
 ok(made.ok && made.id, "MCP founds a second company");
 await client.close();
 
+// The owner desk: edit, direct, inspect, delete and restore.
+const desk = await (await fetch(`${base}/api/my/companies`, { headers: H(tOwner) })).json();
+ok(desk.companies.length === 2 && desk.archived.length === 0, "the owner desk lists both companies");
+const madeSlug = desk.companies.find((x) => x.id === made.id)?.slug;
+ok((await fetch(`${base}/api/my/companies`)).status === 401, "the desk needs the owner's sign-in");
+const post = (path, body, t = tOwner) => fetch(`${base}${path}`, { method: "POST", headers: H(t), body: JSON.stringify(body) });
+ok((await post(`/api/companies/${created.id}/profile`, { name: "Hacked" }, tStranger)).status === 403, "a stranger cannot edit the company");
+ok((await post(`/api/companies/${created.id}/profile`, { name: "<b>x</b>" })).status === 400, "markup is refused in a name");
+ok((await post(`/api/companies/${created.id}/profile`, { name: "Pitch Club", direction: "Only write for freelance brand designers in Europe." })).status === 200, "the owner renames it and gives the CEO a direction");
+const pub0 = await (await fetch(`${base}/api/public/${created.slug}`)).json();
+ok(pub0.name === "Pitch Club", "the public page shows the new name under the same link");
+// the autopilot may already be on its first shift: either way one is recorded
+await post(`/api/companies/${created.id}/shift`, {});
+let full = { tasks: [] };
+for (let i = 0; i < 40 && !full.tasks.length; i++) { full = await (await fetch(`${base}/api/companies/${created.id}`, { headers: H(tOwner) })).json(); if (!full.tasks.length) await new Promise((r) => setTimeout(r, 300)); }
+const task = full.tasks.at(-1);
+const rec = await (await fetch(`${base}/api/companies/${created.id}/shifts/${task.id}`, { headers: H(tOwner) })).json();
+ok(rec.trace?.[0]?.children?.length >= 2 && rec.mind?.saw && rec.brief?.includes("brand designers in Europe"), "the flight record shows the phases, what the CEO saw, and the direction in the brief");
+const pubRec = await (await fetch(`${base}/api/public/${created.slug}/shifts/${task.id}`)).json();
+ok(pubRec.trace?.length === 1 && pubRec.brief === undefined && pubRec.receipts.files === null, "the public flight record leaves out the brief and the files");
+ok((await fetch(`${base}/api/companies/${created.id}/shifts/${task.id}`, { headers: H(tStranger) })).status === 403, "a stranger cannot read the owner's record");
+const csv = await (await fetch(`${base}/api/companies/${created.id}/books.csv`, { headers: H(tOwner) })).text();
+ok(csv.startsWith('"date","kind"') && csv.includes('"funding"'), "the books download as CSV");
+for (let i = 0; i < 30 && ["checking", "ordering"].includes((await (await fetch(`${base}/api/companies/${made.id}`, { headers: H(tOwner) })).json()).tasks.at(-1)?.status); i++) await new Promise((r) => setTimeout(r, 300));
+ok((await post(`/api/companies/${made.id}/delete`, { confirm: "wrong" })).status === 400, "delete needs the company's name typed");
+ok((await post(`/api/companies/${made.id}/delete`, { confirm: made.name ?? "" }, tStranger)).status === 403, "a stranger cannot delete it");
+const name2 = (await (await fetch(`${base}/api/companies/${made.id}`, { headers: H(tOwner) })).json()).name;
+ok((await post(`/api/companies/${made.id}/delete`, { confirm: name2 })).status === 200, "the owner deletes a company");
+const desk2 = await (await fetch(`${base}/api/my/companies`, { headers: H(tOwner) })).json();
+ok(desk2.companies.length === 1 && desk2.archived[0]?.id === made.id, "it leaves the desk and waits under deleted");
+ok(Boolean(madeSlug) && (await fetch(`${base}/api/public/${madeSlug}`)).status === 404, "a deleted company no longer sells");
+ok((await post(`/api/my/archived/${made.id}/restore`, {}, tStranger)).status === 400, "a stranger cannot restore it");
+ok((await post(`/api/my/archived/${made.id}/restore`, {})).status === 200, "the owner restores it");
+const desk3 = await (await fetch(`${base}/api/my/companies`, { headers: H(tOwner) })).json();
+ok(desk3.companies.length === 2 && desk3.companies.find((x) => x.id === made.id)?.status === "paused", "it comes back paused");
+
 engine.kill();
 console.log("\nall good");
 process.exit(0);

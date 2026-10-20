@@ -17,6 +17,7 @@ export interface CompanyFull {
   site: { url: string; jobId: string } | null; products: ProductView[]; tasks: TaskView[]; journal: JournalView[];
   marketing: { at: number; channel: string; text: string; status: string; url?: string; error?: string }[];
   social?: { bluesky?: { handle: string; auto: boolean } };
+  direction?: string;
   holder: { symbol: string; holds: boolean; balance: number; min: number } | null;
   platformFeeBps: number;
   stats: { visits7d: number; sales7d: number; revenue7dUsd: number };
@@ -38,7 +39,45 @@ export interface CompanyCard {
 }
 
 export interface PublicCompany extends Omit<CompanyCard, "id" | "nextShiftAt" | "working"> {
-  audience: string; shifts: { cycle: number; kind: string; title: string; status: string }[]; mode: "sim" | "live";
+  audience: string; shifts: { id: string; cycle: number; kind: string; title: string; status: string; costUsd: number }[]; mode: "sim" | "live";
+}
+
+/** One span of a shift's flight record (the @nightshift/trace shape). */
+export interface FlightSpan {
+  id: string; parentId: string | null; kind: string; name: string; startedAt: number; endedAt: number | null; status: "running" | "ok" | "error";
+  attrs: { log?: { at: number; text: string }[]; error?: string; by?: string; model?: string; fallback?: string; why?: string; [k: string]: unknown };
+  costUsd: number; totalCostUsd: number; children: FlightSpan[];
+}
+export interface Flight {
+  id: string; cycle: number; kind: string; title: string; why: string; status: string; error: string | null;
+  createdAt: number; endedAt: number | null; durationMs: number; activity: string | null; recorded: boolean;
+  mind: { by: "model" | "playbook"; costUsd: number; model?: string; fallback?: string; saw: { visits7d: number; sales7d: number; revenue7dUsd: number; imdUsd: number; liveProducts: number; direction: boolean } } | null;
+  plan: string[]; steps: { done: number; total: number }; trace: FlightSpan[];
+  money: { costImd: number; costUsd: number; imdUsd: number; ledger: { id: string; kind: string; memo?: string; at: number; legs: { account: string; asset: string; amount: number }[] }[] };
+  payback: { kind: "product"; name: string; status: string; sales: number; revenueUsd: number; costUsd: number; ratio: number | null; recent: { at: number; usd: number; payer?: string; tx?: string | null }[] } | { kind: "site"; visits: number; costUsd: number } | null;
+  receipts: { orderId: string | null; jobId: string | null; jobUrl: string | null; txHash: string | null; txUrl: string | null; siteUrl: string | null; files: Record<string, string> | null };
+  brief?: string;
+  company: { name: string; slug: string };
+}
+
+/** The owner desk: the caller's companies, with what needs them, and the ones they deleted. */
+export interface DeskCompany {
+  id: string; slug: string; name: string; idea: string; mission: string; audience: string; direction: string;
+  status: "active" | "paused"; cycle: number; createdAt: number; nextShiftAt: number | null; wallet: string; sim: boolean;
+  /** Resting: the saver found nothing new worth paying for, or the day's budget is spent. A shift the owner runs ends it. */
+  rest: { until: number; why: "saver" | "budget" } | null;
+  policy: Policy; site: string | null;
+  products: { id: string; name: string; pitch: string; kind: string; status: string; priceUsd: number; priceByOwner: boolean; sales: number; revenueUsd: number; packaged: boolean }[];
+  pnl: { revenueUsd: number; spentUsd: number; profitUsd: number };
+  stats: { visits7d: number; sales7d: number; revenue7dUsd: number };
+  working: { id: string; title: string; status: string; activity: string | null } | null;
+  waiting: { id: string; cycle: number; title: string; why: string; costUsd: number }[];
+  last: { id: string; cycle: number; title: string; status: string; at: number } | null;
+}
+export interface Desk {
+  mode: "sim" | "live"; requireAuth: boolean; signedIn: boolean; imdUsd: number;
+  companies: DeskCompany[];
+  archived: { id: string; slug: string; name: string; mission: string; archivedAt: number; products: number; sales: number }[];
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -76,6 +115,13 @@ export const api = {
   policy: (id: string, p: Partial<Policy>) => req<Policy>("POST", `/api/companies/${id}/policy`, p),
   approve: (id: string, task: string) => req("POST", `/api/companies/${id}/tasks/${task}/approve`),
   reject: (id: string, task: string) => req("POST", `/api/companies/${id}/tasks/${task}/reject`),
+  flight: (id: string, task: string) => req<Flight>("GET", `/api/companies/${id}/shifts/${task}`),
+  publicFlight: (slug: string, task: string) => req<Flight>("GET", `/api/public/${slug}/shifts/${task}`),
+  desk: () => req<Desk>("GET", "/api/my/companies"),
+  profile: (id: string, p: Partial<Pick<DeskCompany, "name" | "mission" | "audience" | "idea" | "direction">>) => req("POST", `/api/companies/${id}/profile`, p),
+  product: (id: string, product: string, p: { name?: string; pitch?: string; status?: "live" | "retired" }) => req("POST", `/api/companies/${id}/products/${product}`, p),
+  remove: (id: string, confirm: string) => req("POST", `/api/companies/${id}/delete`, { confirm }),
+  restore: (id: string) => req<{ ok: boolean; id: string }>("POST", `/api/my/archived/${id}/restore`),
 };
 
 /** Subscribes to the engine's live events, optionally for one company. */

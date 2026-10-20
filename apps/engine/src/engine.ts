@@ -13,6 +13,7 @@ import {
   budgetPrice,
   found,
   fromUsdc,
+  mark,
   note,
   reject,
   runShift,
@@ -69,6 +70,9 @@ async function frogPost(id: number, caption: string, buttons: Button[][], kind: 
 
 export type EngineEvent = { type: "task" | "journal" | "company" | "sale"; companyId: string; payload: unknown; at: number };
 const DAY = 24 * 3600_000;
+
+/** Owner text as plain words: no markup (it reaches the page head, the shop and Telegram), one line. */
+const plain = (v: unknown) => String(v).replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
 
 export class Engine {
   readonly store = new Store(config.dataDir);
@@ -817,7 +821,8 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     const f = await found(clean, this.llm, config.model);
     const id = randomUUID();
     let slug = f.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "co";
-    while ([...this.store.companies.values()].some((x) => x.slug === slug)) slug = `${slug}-${Math.floor(Math.random() * 900 + 100)}`;
+    // deleted companies keep their slug: their buyers' download links still use it
+    while ([...this.store.companies.values(), ...this.store.archived.values()].some((x) => x.slug === slug)) slug = `${slug}-${Math.floor(Math.random() * 900 + 100)}`;
     const p = validatePolicy({ ...DEFAULT_POLICY, ...(config.mode === "sim" ? { shiftMinutes: config.simShiftMinutes } : {}), ...policy });
     const c: Company = {
       id, slug, name: f.name, idea: clean, mission: f.mission, audience: f.audience,
@@ -901,6 +906,111 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     this.#emit(c.id, "company", null);
   }
 
+  /** The owner edits who the company is and gives the CEO a standing direction. The slug stays, so links keep working. */
+  updateProfile(c: Company, p: Record<string, unknown>): void {
+    const changed: string[] = [];
+    const field = (k: "name" | "mission" | "audience" | "idea", label: string, min: number, max: number): void => {
+      if (p[k] === undefined) return;
+      const v = plain(p[k]);
+      if (v.length < min || v.length > max) throw new Error(`${label}: between ${min} and ${max} characters.`);
+      if (k === "name" && !/^[\p{L}\p{N} .,'&!?+-]+$/u.test(v)) throw new Error("Name: letters, numbers, spaces and . , ' & ! ? + - only.");
+      if (c[k] !== v) { c[k] = v; changed.push(label.toLowerCase()); }
+    };
+    field("name", "Name", 2, 40);
+    field("mission", "Mission", 12, 300);
+    field("audience", "Audience", 3, 120);
+    field("idea", "Idea", 12, 1000);
+    if (p.direction !== undefined) {
+      const v = plain(p.direction);
+      if (v.length > 500) throw new Error("Direction: at most 500 characters.");
+      if ((c.direction ?? "") !== v) {
+        if (v) c.direction = v; else delete c.direction;
+        changed.push("direction");
+        delete c.restUntil; // a new direction is worth a fresh shift
+      }
+    }
+    if (!changed.length) return;
+    const list = changed.length === 1 ? changed[0] : `${changed.slice(0, -1).join(", ")} and ${changed.at(-1)}`;
+    note(c, this.#deps(c), "note", `The owner updated the ${list}.${changed.includes("direction") ? (c.direction ? ` The CEO now follows: "${c.direction}"` : " The CEO decides on its own again.") : ""}`);
+    this.store.markDirty();
+    this.#emit(c.id, "company", null);
+  }
+
+  /** The owner renames, rewrites, takes off sale or puts back on sale one product. */
+  editProduct(c: Company, productId: string, p: Record<string, unknown>): void {
+    const x = c.products.find((y) => y.id === productId);
+    if (!x) throw new Error("no such product");
+    const done: string[] = [];
+    if (p.name !== undefined) {
+      const v = plain(p.name);
+      if (v.length < 3 || v.length > 80) throw new Error("Product name: between 3 and 80 characters.");
+      if (v !== x.name) { done.push(`renamed "${x.name}" to "${v}"`); x.name = v; }
+    }
+    if (p.pitch !== undefined) {
+      const v = plain(p.pitch);
+      if (v.length < 8 || v.length > 240) throw new Error("Pitch: between 8 and 240 characters.");
+      if (v !== x.pitch) { x.pitch = v; done.push(`rewrote the pitch of "${x.name}"`); }
+    }
+    if (p.status === "retired" && x.status === "live") { x.status = "retired"; done.push(`took "${x.name}" off sale`); }
+    if (p.status === "live" && x.status === "retired") {
+      if (!x.deliverableUrl || !this.files.has(c, x)) throw new Error("This product has no packaged file, so it cannot go back on sale.");
+      x.status = "live";
+      done.push(`put "${x.name}" back on sale`);
+    }
+    if (!done.length) return;
+    note(c, this.#deps(c), "note", `The owner ${done.join("; ")}.`);
+    this.store.markDirty();
+    this.#emit(c.id, "company", null);
+  }
+
+  /**
+   * Deletes a company for its owner: it stops working and selling at once. It is archived, not erased:
+   * the books stay whole, buyers' download links keep working, and the owner can restore it. In live
+   * mode the wallet must be emptied first ("Stop and take the funds back"), so nothing is left behind.
+   */
+  async archive(c: Company): Promise<void> {
+    if (this.#busy.has(c.id) || c.tasks.some((t) => t.status === "checking" || t.status === "ordering")) throw new Error("A payment is in progress. Try again in a minute.");
+    if ([...this.store.settlements.values()].some((s) => s.companyId === c.id)) throw new Error("A sale is still settling on chain. Try again in a few minutes.");
+    if (config.mode === "live" && !c.sim) {
+      if (this.payouts.pendingOf(c.id).length) throw new Error("A withdrawal is still settling. Try again in a few minutes.");
+      if ((await this.withdrawable(c)) > 0n) throw new Error('The company still has revenue to take out. Use "Stop and take the funds back" first, then delete it.');
+      const b = await balances(c.wallet);
+      if (b.imd > 0n || b.usdc >= 10_000n) throw new Error('The company wallet still holds IMD or USDC. Use "Stop and take the funds back" first, then delete it.');
+    }
+    c.status = "paused";
+    c.nextShiftAt = null;
+    const building = c.tasks.filter((t) => t.status === "building").length;
+    note(c, this.#deps(c), "note", `Deleted by the owner. It no longer runs or sells; buyers' download links keep working.${building ? ` ${building} paid order${building === 1 ? " was" : "s were"} still with the swarm and will not be applied.` : ""}`);
+    this.store.companies.delete(c.id);
+    this.store.archived.set(c.id, Object.assign(c, { archivedAt: Date.now() }));
+    this.store.markDirty();
+    this.#emit(c.id, "company", null);
+  }
+
+  /** Brings a deleted company back, paused, for its owner. */
+  async restore(id: string, owner: string | null): Promise<Company> {
+    const c = this.store.archived.get(id);
+    if (!c) throw new Error("no such deleted company");
+    if (config.requireAuth && (!owner || c.owner !== owner)) throw new Error("Only its owner can restore it.");
+    if (c.owner) {
+      const mine = [...this.store.companies.values()].filter((x) => x.owner === c.owner).length;
+      const cap = config.maxCompaniesPerOwner + ((await frogCount(c.owner)) > 0 ? config.nft.extraSlots : 0);
+      if (mine >= cap) throw new Error(`One wallet can run ${cap} companies at once. Delete another one first.`);
+    }
+    this.store.archived.delete(id);
+    delete (c as Partial<typeof c>).archivedAt;
+    this.store.companies.set(id, c);
+    note(c, this.#deps(c), "note", "Restored by the owner. It is paused: resume it when you are ready.");
+    this.store.markDirty();
+    this.#emit(c.id, "company", null);
+    return c;
+  }
+
+  /** A deleted company, by id or slug: for its buyers' downloads and its owner's list. */
+  archived(idOrSlug: string): Company | undefined {
+    return this.store.archived.get(idOrSlug) ?? [...this.store.archived.values()].find((c) => c.slug === idOrSlug);
+  }
+
   /** After a restart: work cut off mid-step is closed honestly, and old logs lose the model's name. */
   #recover(): void {
     for (const c of this.store.companies.values()) {
@@ -910,6 +1020,7 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
         // Cut off mid-payment with an order id: follow that order with IMD (paid → it builds; never paid → the budget comes back).
         if (t.status === "ordering" && t.imd?.orderId) {
           Object.assign(t, { status: "building", activity: "confirming with IMD after a restart" });
+          mark(t, Date.now());
           note(c, this.#deps(c), "note", `"${t.title}" was being paid when the engine restarted. Following its order with IMD instead of buying it again.`);
           continue;
         }
@@ -917,6 +1028,7 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
         const paid = false;
         if (t.status !== "checking" && t.status !== "ordering") continue;
         Object.assign(t, { status: "failed", activity: null, error: paid ? "interrupted while paying; it may have been paid, check the wallet on Etherscan" : "interrupted before payment; nothing was paid" });
+        mark(t, Date.now());
         if (!paid) t.costImd = 0n;
         const i = c.products.findIndex((p) => p.id === t.productId && p.status === "building");
         if (i >= 0) c.products.splice(i, 1);

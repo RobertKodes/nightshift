@@ -20,6 +20,7 @@ interface Snapshot {
   apiKeys?: ApiKey[];
   payouts?: Leg[];
   settlements?: Settlement[];
+  archived?: Company[];
 }
 
 // bigint and Date survive the round trip as tagged strings.
@@ -34,6 +35,8 @@ const reviver = (k: string, v: unknown) => {
 export class Store {
   readonly #file: string;
   companies = new Map<string, Company>();
+  /** Deleted by their owner: no shifts, no sales; kept so buyers' download links and the books still resolve, and so it can be restored. */
+  archived = new Map<string, Company & { archivedAt: number }>();
   metrics = new Map<string, Metrics>();
   requestTokens = new Map<string, string>();
   apiKeys: ApiKey[] = [];
@@ -53,6 +56,7 @@ export class Store {
     if (!existsSync(this.#file)) return;
     const s = JSON.parse(readFileSync(this.#file, "utf8"), reviver) as Snapshot;
     for (const c of s.companies) this.companies.set(c.id, c);
+    for (const c of s.archived ?? []) this.archived.set(c.id, c as Company & { archivedAt: number });
     for (const [k, m] of Object.entries(s.metrics ?? {})) this.metrics.set(k, m);
     for (const [k, t] of Object.entries(s.requestTokens ?? {})) this.requestTokens.set(k, t);
     this.apiKeys.push(...(s.apiKeys ?? []));
@@ -91,6 +95,7 @@ export class Store {
         apiKeys: this.apiKeys,
         payouts: [...this.payouts.values()],
         settlements: [...this.settlements.values()],
+        archived: [...this.archived.values()],
       };
       writeAtomic(this.#file, JSON.stringify(snap, replacer));
     } catch (e) {

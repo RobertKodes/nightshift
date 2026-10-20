@@ -4,6 +4,7 @@ import { chooseWallet } from "./wallet";
 import { type Hex, createWalletClient, custom } from "viem";
 import { base, baseSepolia } from "viem/chains";
 import { type Health, type PublicCompany, api, events, short, usd } from "./api";
+import { FlightDrawer } from "./FlightRecorder";
 
 interface Requirement { network: string; asset: `0x${string}`; amount: string; payTo: `0x${string}`; maxTimeoutSeconds: number; extra: { name: string; version: string } }
 
@@ -58,6 +59,8 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [got, setGot] = useState<{ name: string; url: string } | null>(null);
+  // a shared link to one shift opens its flight record: /c/<slug>?shift=<id>
+  const [rec, setRec] = useState<string | null>(() => new URLSearchParams(location.search).get("shift"));
   useEffect(() => {
     const load = () => api.publicCompany(slug).then(setC).catch((e) => setErr((e as Error).message));
     load();
@@ -112,10 +115,11 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
       </div>
       {got && <div className="card card-b got"><b>Your download: {got.name}</b><a className="btn primary" href={safeHref(got.url)}>Download</a><span className="faint">The link works for 7 days. Save the file.</span></div>}
       <div className="card">
-        <div className="card-h"><h3>What it did, shift by shift</h3><span className="faint mono" style={{ fontSize: 11 }}>wallet {short(c.wallet)}</span></div>
-        <table><tbody>{c.shifts.filter((s) => s.status !== "failed" && s.status !== "rejected").map((s, i) => <tr key={i}><td className="mono faint">{s.cycle}</td><td>{s.title}</td><td><span className={`pill ${s.status}`}>{s.status.replace(/_/g, " ")}</span></td></tr>)}</tbody></table>
+        <div className="card-h"><h3>What it did, shift by shift</h3><span className="faint mono" style={{ fontSize: 11 }}>open a shift to replay it · wallet {short(c.wallet)}</span></div>
+        <table><tbody>{c.shifts.filter((s) => s.status !== "failed" && s.status !== "rejected").map((s) => <tr key={s.id}><td className="mono faint">{s.cycle}</td><td><button className="fr-open" onClick={() => setRec(s.id)}>{s.title}</button></td><td className="mono faint">{s.costUsd > 0 ? usd(s.costUsd) : "free"}</td><td><span className={`pill ${s.status}`}>{s.status.replace(/_/g, " ")}</span></td></tr>)}</tbody></table>
       </div>
       {toast && <div className="toast">{toast}</div>}
+      {rec && <FlightDrawer key={rec} load={() => api.publicFlight(slug, rec)} share={`${location.origin}/c/${slug}?shift=${rec}`} onClose={() => { setRec(null); if (location.search.includes("shift=")) history.replaceState(null, "", location.pathname); }} />}
     </div>
   );
 }

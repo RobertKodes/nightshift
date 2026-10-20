@@ -39,7 +39,24 @@ export function note(c: Company, d: ShiftDeps, kind: JournalEntry["kind"], text:
 
 function touch(c: Company, t: Task, d: ShiftDeps, patch: Partial<Task>): void {
   Object.assign(t, patch, { updatedAt: now(d) });
+  mark(t, now(d));
   d.emit(c, "task", t);
+}
+
+const TRAIL_MAX = 80;
+
+/**
+ * Writes the task's current state to its flight record when it changed. Past the limit, activity-only
+ * lines go first, so every change of status and step is kept.
+ */
+export function mark(t: Task, at: number): void {
+  const trail = (t.trail ??= []);
+  const last = trail.at(-1);
+  if (last && last.status === t.status && last.step === t.stepsDone && last.activity === t.activity) return;
+  trail.push({ at, status: t.status, activity: t.activity, step: t.stepsDone });
+  if (trail.length <= TRAIL_MAX) return;
+  const i = trail.findIndex((e, k) => k > 0 && k < trail.length - 1 && e.status === trail[k - 1]!.status && e.step === trail[k - 1]!.step);
+  trail.splice(i > 0 ? i : 1, 1);
 }
 
 /**
@@ -58,11 +75,15 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
   c.cycle += 1;
   const stats = d.stats(c);
   let decision: Decision | null = null;
+  const saw = { ...stats, liveProducts: c.products.filter((p) => p.status === "live").length, direction: Boolean(c.direction) };
+  let mind: Task["mind"] = { by: "playbook", saw };
   if (d.llm) {
     try {
       const r = await llmDecision(d.llm, d.model, c, stats);
-      if (r) decision = r.decision;
+      if (r) { decision = r.decision; mind = { by: "model", model: r.servedModel, costUsd: r.costUsd, saw }; }
+      else mind.fallback = "the model's answer was not a usable move";
     } catch (err) {
+      mind.fallback = "the model could not be reached";
       note(c, d, "warning", "The CEO could not think this shift; using the playbook.");
     }
   }
@@ -97,7 +118,9 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
     error: null,
     createdAt: now(d),
     updatedAt: now(d),
+    mind,
   };
+  mark(t, now(d));
   c.tasks.push(t);
   trimTasks(c, d);
 

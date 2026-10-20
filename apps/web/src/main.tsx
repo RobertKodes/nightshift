@@ -15,6 +15,7 @@ import { useRoute } from "./router";
 import { SessionProvider } from "./session";
 import { SetupPage } from "./SetupPage";
 import { MarketPage } from "./MarketPage";
+import { OwnerDesk } from "./OwnerDesk";
 import { TokenPage } from "./TokenPage";
 import { FrogsPage } from "./FrogsPage";
 import { SwapPage } from "./SwapPage";
@@ -62,6 +63,7 @@ function App() {
   if (seg[0] === "security") page = <SecurityPage />;
   if (seg[0] === "setup") page = <SetupPage />;
   if (seg[0] === "market") page = <MarketPage />;
+  if (seg[0] === "my") page = <OwnerDesk health={health} />;
   if (seg[0] === "token") page = <TokenPage />;
   if (seg[0] === "frogs") page = <FrogsPage />;
   if (seg[0] === "swap") page = <SwapPage />;
@@ -88,7 +90,7 @@ function App() {
 }
 
 const TITLES: Record<string, string> = {
-  companies: "Companies", launch: "Launch a company", co: "Your company", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
+  companies: "Companies", launch: "Launch a company", co: "Your company", my: "Owner desk", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
   market: "Market", token: "$SHIFT", frogs: "NIGHT FROGS", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
   tokenomics: "Tokenomics", games: "Game Room", launchpad: "Launchpad", arena: "Agent Arena",
   breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League",

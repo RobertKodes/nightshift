@@ -52,6 +52,27 @@ export interface Task {
   productId?: string;
   createdAt: number;
   updatedAt: number;
+  /** The flight record: every change of status, step or activity, oldest first. */
+  trail?: TrailEntry[];
+  /** How the CEO chose this move and the numbers it was looking at. */
+  mind?: Mind;
+}
+
+export interface TrailEntry {
+  at: number;
+  status: TaskStatus;
+  activity: string | null;
+  step: number;
+}
+
+export interface Mind {
+  by: "model" | "playbook";
+  /** The model that answered (owner view only). */
+  model?: string;
+  costUsd?: number;
+  /** Why the playbook decided instead of the model, when a model is set. */
+  fallback?: string;
+  saw: { visits7d: number; sales7d: number; revenue7dUsd: number; imdUsd: number; liveProducts: number; direction: boolean };
 }
 
 export interface Policy {
@@ -98,6 +119,8 @@ export interface Company {
   sim?: boolean;
   /** Where the company posts. The password lives in the vault, never here. */
   social?: { bluesky?: { handle: string; auto: boolean } };
+  /** The owner's standing direction to the CEO: read every shift and passed to the swarm with each order. */
+  direction?: string;
 }
 
 export const USDC_DECIMALS = 6;

@@ -34,7 +34,10 @@ export function StationBar({ room, title }: { room: RoomId | null; title?: strin
       {swarm?.mode === "sim" && <span className="nx-sim" title="Simulated swarm and buyers. No IMD or USDC moves.">SIM</span>}
       <InstallButton compact />
       {address ? (
-        <button className="nx-acct" onClick={() => void signOut()} title="Sign out"><NxIcon name="wallet" size={15} />{short(address)}</button>
+        <span className="nx-acctwrap">
+          <Link to="/my" className="nx-acct" aria-label="Your companies"><NxIcon name="wallet" size={15} />{short(address)}</Link>
+          <button className="nx-acct nx-acct-out" onClick={() => void signOut()} title="Sign out" aria-label="Sign out"><NxIcon name="close" size={12} /></button>
+        </span>
       ) : swarm?.mode === "live" ? (
         <button className="nx-acct" onClick={() => void signIn()} disabled={busy} title={error ?? "Sign in with your wallet"}><NxIcon name="key" size={15} />{busy ? "Check wallet…" : "Sign in"}</button>
       ) : null}

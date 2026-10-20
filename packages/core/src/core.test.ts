@@ -213,6 +213,42 @@ describe("money edge cases", () => {
   });
 });
 
+import { imdOrder } from "./catalog.js";
+import { mark } from "./shift.js";
+describe("the flight recorder and the owner's direction", () => {
+  it("records what the CEO saw and every phase of the shift, in order", async () => {
+    const now = { t: 1_000_000 };
+    const d = deps(now);
+    const c = company();
+    const t = (await runShift(c, d))!;
+    expect(t.mind).toMatchObject({ by: "playbook", saw: { visits7d: 0, liveProducts: 0, direction: false } });
+    now.t += 20_000;
+    await advance(c, d);
+    await advance(c, d);
+    const phases = t.trail!.map((e) => e.status).filter((s, i, a) => s !== a[i - 1]);
+    expect(phases).toEqual(["planned", "checking", "ordering", "building", "done"]);
+    expect(t.trail!.every((e, i, a) => i === 0 || e.at >= a[i - 1]!.at)).toBe(true);
+  });
+
+  it("keeps every change of status and step when the record is trimmed", () => {
+    const t = { status: "building", stepsDone: 0, activity: null, trail: [] } as never as Parameters<typeof mark>[0];
+    mark(t, 0);
+    for (let i = 1; i < 200; i++) { t.activity = `poll ${i}`; if (i % 50 === 0) t.stepsDone += 1; mark(t, i); }
+    t.status = "done"; mark(t, 300);
+    expect(t.trail!.length).toBeLessThanOrEqual(80);
+    expect(t.trail!.map((e) => e.step).filter((s, i, a) => s !== a[i - 1])).toEqual([0, 1, 2, 3]);
+    expect(t.trail!.at(-1)?.status).toBe("done");
+    expect(t.trail![0]?.at).toBe(0);
+  });
+
+  it("passes the owner's direction to the CEO's swarm orders", () => {
+    const c = { ...company(), direction: "Only write for Shopify sellers." };
+    const o = imdOrder(c, heuristicDecision(c, { visits7d: 0, sales7d: 0, revenue7dUsd: 0, imdUsd: 6 }), "http://buy/acme");
+    expect(String(o?.input.objective)).toContain("The owner's direction: Only write for Shopify sellers.");
+    expect(String(imdOrder(company(), heuristicDecision(company(), { visits7d: 0, sales7d: 0, revenue7dUsd: 0, imdUsd: 6 }), "x")?.input.objective)).not.toContain("direction");
+  });
+});
+
 import { budgetPrice } from "./policy.js";
 describe("the IMD price budgets are valued at", () => {
   it("moves with two agreeing sources, but not on one wrong feed", () => {

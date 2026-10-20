@@ -10,6 +10,7 @@ import { type Agent, ArenaError, liveArena } from "./arena.js";
 import { live } from "./games-routes.js";
 import { leagueTools } from "./league-routes.js";
 import { card, detail, search } from "./agentmarket.js";
+import { flightFor } from "./flight.js";
 
 /** The agent an MCP call acts as: the arena key's own agent, or one of the key owner's agents named by agentId. */
 function agentFor(engine: Engine, owner: string | null, key: string) {
@@ -32,7 +33,7 @@ const err = (message: string) => ({ ...text({ ok: false, message }), isError: tr
  */
 function build(engine: Engine, owner: string | null) {
   const server = new McpServer({ name: "nightshift", version: "0.2.0" }, {
-    instructions: "Run autonomous companies that build with the IMD swarm and sell via x402. List, create, run shifts, approve or decline spending, change limits, pause, and withdraw revenue. Spending decisions stay with the human: show them pending approvals and withdrawals before acting.",
+    instructions: "Run autonomous companies that build with the IMD swarm and sell via x402. List, create, run shifts, approve or decline spending, change limits, pause, direct the CEO, replay any shift's flight record, and withdraw revenue. Spending decisions stay with the human: show them pending approvals and withdrawals before acting.",
   });
   const mine = () => [...engine.store.companies.values()].filter((c) => !config.requireAuth || c.owner === owner);
   const pick = (id: string) => {
@@ -126,6 +127,26 @@ function build(engine: Engine, owner: string | null) {
     if (!a.confirm) return { ok: false, needsConfirm: true, availableUsd: fromUsdc(available), to, note: "Call again with confirm: true." };
     const r = await engine.withdraw(c, to, a.amountUsd ? usdc(a.amountUsd) : undefined);
     return { ok: true, sentUsd: fromUsdc(r.sent), feeUsd: fromUsdc(r.fee), txs: r.txs, to };
+  }));
+
+  server.registerTool("nightshift_direct", {
+    title: "Edit a company or direct its CEO",
+    description: "Changes the name, mission, audience or idea, and sets the owner's standing direction the CEO follows every shift and passes to the swarm with each order (empty string clears it). The link stays the same.",
+    inputSchema: { id: z.string(), name: z.string().optional(), mission: z.string().optional(), audience: z.string().optional(), idea: z.string().optional(), direction: z.string().max(500).optional() },
+  }, run(async ({ id, ...p }: { id: string } & Record<string, string | undefined>) => {
+    const c = pick(id);
+    engine.updateProfile(c, Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined)));
+    return { ok: true, name: c.name, mission: c.mission, audience: c.audience, direction: c.direction ?? "" };
+  }));
+
+  server.registerTool("nightshift_flight", {
+    title: "A shift's flight record",
+    description: "Replays one shift: what the CEO saw and why it chose the move, each phase and swarm step with timings, the IMD paid and the ledger entries, the receipts, and whether it has paid for itself. shift: the task id or the shift number.",
+    inputSchema: { id: z.string(), shift: z.string() },
+  }, run(async ({ id, shift }: { id: string; shift: string }) => {
+    const f = await flightFor(engine, pick(id), shift, true);
+    if (!f) throw new Error("no such shift");
+    return f;
   }));
 
   arenaTools(server, { auth: engine.auth, vault: engine.vault, owner, key: "" });

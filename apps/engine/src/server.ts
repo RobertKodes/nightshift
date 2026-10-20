@@ -37,6 +37,7 @@ import { prices } from "./prices.js";
 import { checkOrder as checkSwarmOrder, orders as swarmOrders, placeOrder as placeSwarmOrder } from "./swarm.js";
 import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
 import { impact } from "./impact.js";
+import { flightFor } from "./flight.js";
 import { usdc } from "@nightshift/core";
 import { erc20Abi, getAddress } from "viem";
 
@@ -106,6 +107,56 @@ async function full(engine: Engine, c: Company) {
   };
 }
 
+/** The owner desk: every company the caller runs, with what needs them, plus the ones they deleted. */
+async function desk(engine: Engine, owner: string | null) {
+  // without sign-in (a local or demo engine) every unowned company is the caller's to run
+  const mineOf = (c: Company) => (owner !== null && c.owner === owner) || (!config.requireAuth && c.owner === null);
+  const list = [...engine.store.companies.values()].filter(mineOf).sort((a, b) => b.createdAt - a.createdAt);
+  const companies = await Promise.all(list.map(async (c) => {
+    let spent = 0n;
+    for (const t of c.tasks) spent += t.costImd;
+    const revenueUsd = fromUsdc(await engine.ledger.balance(`co:${c.id}:usdc`, "USDC"));
+    const spentUsd = fromImd(spent) * config.imdUsd;
+    const working = c.tasks.find((t) => ["checking", "ordering", "building"].includes(t.status));
+    const last = c.tasks.at(-1);
+    const resting = c.restUntil && c.restUntil > Date.now() ? [...c.journal].reverse().find((j) => j.text.startsWith("Saver:") || j.text.startsWith("Skipped ")) : undefined;
+    return {
+      id: c.id, slug: c.slug, name: c.name, idea: c.idea, mission: c.mission, audience: c.audience, direction: c.direction ?? "",
+      status: c.status, cycle: c.cycle, createdAt: c.createdAt, nextShiftAt: c.nextShiftAt, wallet: c.wallet, sim: Boolean(c.sim),
+      rest: c.restUntil && c.restUntil > Date.now() ? { until: c.restUntil, why: resting?.text.startsWith("Saver:") ? "saver" as const : "budget" as const } : null,
+      policy: c.policy, site: c.site?.url ?? null,
+      products: c.products.map((x) => ({ id: x.id, name: x.name, pitch: x.pitch, kind: x.kind, status: x.status, priceUsd: fromUsdc(x.priceUsdc), priceByOwner: Boolean(x.priceByOwner), sales: x.sales, revenueUsd: fromUsdc(x.revenueUsdc), packaged: engine.files.has(c, x) })),
+      pnl: { revenueUsd, spentUsd, profitUsd: revenueUsd - spentUsd },
+      stats: engine.stats(c),
+      working: working ? { id: working.id, title: working.title, status: working.status, activity: working.activity } : null,
+      waiting: c.tasks.filter((t) => t.status === "awaiting_approval").map((t) => ({ id: t.id, cycle: t.cycle, title: t.title, why: t.why, costUsd: fromImd(t.costImd) * config.imdUsd })),
+      last: last ? { id: last.id, cycle: last.cycle, title: last.title, status: last.status, at: last.updatedAt } : null,
+    };
+  }));
+  const archived = [...engine.store.archived.values()].filter(mineOf).sort((a, b) => b.archivedAt - a.archivedAt)
+    .map((c) => ({ id: c.id, slug: c.slug, name: c.name, mission: c.mission, archivedAt: c.archivedAt, products: c.products.length, sales: c.products.reduce((a, x) => a + x.sales, 0) }));
+  return { mode: config.mode, requireAuth: config.requireAuth, signedIn: owner !== null, imdUsd: config.imdUsd, companies, archived };
+}
+
+/** The books as CSV: every ledger line that touched the company's accounts, oldest first. */
+async function books(engine: Engine, c: Company): Promise<string> {
+  const mine = `co:${c.id}:`;
+  const rows = [["date", "kind", "memo", "account", "asset", "amount", "chain_tx"]];
+  const all = await engine.ledger.store.list(mine);
+  for (const x of all) for (const y of x.postings) {
+    if (!y.account.startsWith(mine)) continue;
+    const dec = y.asset === "IMD" ? 18 : 6;
+    const neg = y.amount < 0n;
+    const abs = neg ? -y.amount : y.amount;
+    const whole = abs / 10n ** BigInt(dec);
+    const frac = (abs % 10n ** BigInt(dec)).toString().padStart(dec, "0").replace(/0+$/, "");
+    rows.push([new Date(x.at).toISOString(), x.kind, x.memo ?? "", y.account.slice(mine.length), y.asset, `${neg ? "-" : ""}${whole}${frac ? `.${frac}` : ""}`, String((x.ref as { chainTx?: string } | undefined)?.chainTx ?? "")]);
+  }
+  // quoted, and never read as a formula by a spreadsheet
+  const cell = (v: string) => `"${(/^[=+\-@\t\r]/.test(v) && !/^-?\d/.test(v) ? `'${v}` : v).replace(/"/g, '""')}"`;
+  return rows.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
+}
+
 /** The public view: what a visitor or investor may see. No wallet keys, no drafts. */
 function publicView(engine: Engine, c: Company) {
   const m = engine.store.metricsOf(c.id);
@@ -117,7 +168,7 @@ function publicView(engine: Engine, c: Company) {
     site: c.site?.url ?? null,
     products: c.products.filter((p) => p.status === "live").map((p) => ({ id: p.id, name: p.name, kind: p.kind, pitch: p.pitch, priceUsd: fromUsdc(p.priceUsdc), sales: p.sales, buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}` })),
     pnl: { revenueUsd: revenue, spentUsd: fromImd(spent) * config.imdUsd, sales: m.sales.length },
-    shifts: c.tasks.slice(-12).reverse().map((t) => ({ cycle: t.cycle, kind: t.kind, title: t.title, status: t.status })),
+    shifts: c.tasks.slice(-12).reverse().map((t) => ({ id: t.id, cycle: t.cycle, kind: t.kind, title: t.title, status: t.status, costUsd: fromImd(t.costImd) * config.imdUsd })),
     mode: config.mode,
   };
 }
@@ -626,6 +677,15 @@ export function serve(engine: Engine) {
         }));
         return json(res, 200, list);
       }
+      if (p === "/api/my/companies" && req.method === "GET") {
+        if (config.requireAuth && !owner) return json(res, 401, { error: "Sign in with your wallet to see your companies." });
+        return json(res, 200, await desk(engine, owner));
+      }
+      if (seg[0] === "api" && seg[1] === "my" && seg[2] === "archived" && seg[3] && seg[4] === "restore" && req.method === "POST") {
+        if (config.requireAuth && !owner) return json(res, 401, { error: "Sign in as the owner." });
+        if (limited(req, `restore:${owner ?? "anon"}`, 5, 60_000)) return json(res, 429, { error: "slow down" });
+        try { const c = await engine.restore(seg[3], owner); return json(res, 200, { ok: true, id: c.id }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+      }
       if (p === "/api/companies" && req.method === "POST") {
         if (config.requireAuth && !owner) return json(res, 401, { error: "Sign in with your wallet to start a company." });
         if (limited(req, "create", 10, 3600_000)) return json(res, 429, { error: "Too many new companies from here; try again later." });
@@ -645,6 +705,14 @@ export function serve(engine: Engine) {
           const b = await balances(c.wallet);
           return json(res, 200, { address: c.wallet, mode: "live", eth: b.eth, imd: b.imd, usdc: b.usdc, saleGas: b.saleGas });
         }
+        if (action === "shifts" && seg[4] && req.method === "GET") {
+          const f = await flightFor(engine, c, seg[4], true);
+          return f ? json(res, 200, f) : json(res, 404, { error: "no such shift" });
+        }
+        if (action === "books.csv" && req.method === "GET") {
+          res.writeHead(200, { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${c.slug}-books.csv"`, "Cache-Control": "private, no-store" });
+          return res.end(await books(engine, c));
+        }
         if (action === "products" && seg[4] && seg[5] === "download") {
           const product = c.products.find((x) => x.id === seg[4]);
           if (!product || !engine.files.has(c, product)) return json(res, 409, { error: "Not packaged yet." });
@@ -661,6 +729,23 @@ export function serve(engine: Engine) {
           return json(res, 200, { ok: true });
         }
         if (action === "policy") { engine.setPolicy(c, (await body(req)) as never); return json(res, 200, c.policy); }
+        if (action === "profile") {
+          try { engine.updateProfile(c, await body(req)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          return json(res, 200, { ok: true });
+        }
+        if (action === "products" && seg[4] && !seg[5]) {
+          try { engine.editProduct(c, seg[4], await body(req)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          return json(res, 200, { ok: true });
+        }
+        if (action === "delete") {
+          if (limited(req, `delete:${c.id}`, 2, 60_000)) return json(res, 429, { error: "slow down" });
+          // a signed-in owner deletes their own; a local engine without sign-in deletes unowned demos only
+          if (config.requireAuth ? !owner || c.owner !== owner : c.owner !== null && c.owner !== owner) return json(res, 403, { error: "Only the company's owner can delete it." });
+          const b = await body(req);
+          if (String(b.confirm ?? "").trim().toLowerCase() !== c.name.trim().toLowerCase()) return json(res, 400, { error: "Type the company's name to confirm." });
+          try { await engine.archive(c); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          return json(res, 200, { ok: true });
+        }
         if (action === "withdraw") {
           const b = await body(req);
           if (limited(req, `withdraw:${c.id}`, 3, 60_000)) return json(res, 429, { error: "slow down" });
@@ -689,6 +774,11 @@ export function serve(engine: Engine) {
         if (action === "tasks" && seg[4] && seg[5] === "approve") { await engine.approve(c, seg[4]); return json(res, 200, { ok: true }); }
         if (action === "tasks" && seg[4] && seg[5] === "reject") { engine.reject(c, seg[4]); return json(res, 200, { ok: true }); }
         return json(res, 404, { error: "unknown action" });
+      }
+      if (seg[0] === "api" && seg[1] === "public" && seg[2] && seg[3] === "shifts" && seg[4]) {
+        const c = engine.get(seg[2]);
+        const f = c && !(config.mode === "live" && c.sim) ? await flightFor(engine, c, seg[4], false) : null;
+        return f ? json(res, 200, f) : json(res, 404, { error: "no such shift" });
       }
       if (seg[0] === "api" && seg[1] === "public" && seg[2]) {
         const c = engine.get(seg[2]);
@@ -751,7 +841,7 @@ export function serve(engine: Engine) {
 
       // A bought product: signed per sale, valid for a week.
       if (seg[0] === "download" && seg[1] && seg[2] && seg[3] && seg[4]) {
-        const c = engine.get(seg[1]);
+        const c = engine.get(seg[1]) ?? engine.archived(seg[1]);
         const product = c?.products.find((x) => x.id === seg[2]);
         const ref = url.searchParams.get("ref") ?? "";
         if (!c || !product || !engine.files.check(c, product.id, seg[3], seg[4], ref)) return json(res, 403, { error: "This download link is invalid or has expired." });

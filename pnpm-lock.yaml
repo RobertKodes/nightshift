@@ -47,6 +47,9 @@ importers:
       '@nightshift/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@nightshift/trace':
+        specifier: workspace:*
+        version: link:../../packages/trace
       '@nightshift/x402':
         specifier: workspace:*
         version: link:../../packages/x402

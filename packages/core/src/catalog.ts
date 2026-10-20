@@ -12,6 +12,13 @@ export function siteLabel(c: Company): string {
  * body; marketing, repricing and retiring are done in-house for free.
  */
 export function imdOrder(c: Company, d: Decision, buyBase: string): { action: ImdAction; input: Record<string, unknown> } | null {
+  const o = order(c, d, buyBase);
+  // the owner's standing direction travels with every order, so the swarm builds what the owner wants
+  if (o && c.direction) o.input.objective = `${String(o.input.objective)} The owner's direction: ${c.direction}`;
+  return o;
+}
+
+function order(c: Company, d: Decision, buyBase: string): { action: ImdAction; input: Record<string, unknown> } | null {
   switch (d.kind) {
     case "research":
       return {
