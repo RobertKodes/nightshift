@@ -34,7 +34,7 @@ export async function impact(engine: Engine): Promise<Impact> {
     const i = await jobInfo(o.jobId);
     jobs.push({ title: o.title, jobId: o.jobId, state: i.state, imd: 0.5, seats: i.seats, at: o.at, by: "NIGHTSHIFT" });
   }
-  const all = [...engine.store.companies.values()];
+  const all = [...engine.store.companies.values()].filter((c) => !c.house);
   if (config.mode === "live") {
     for (const c of all) for (const t of c.tasks) {
       if (!t.imd?.jobId || t.costImd <= 0n) continue;

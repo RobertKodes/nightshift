@@ -1,0 +1,101 @@
+import { type Company, DEFAULT_POLICY, type Product } from "@nightshift/core";
+import { type PaymentPayload, USDC, decodeHeader, requirement, verifyPayment } from "@nightshift/x402";
+import { erc20Abi } from "viem";
+import { eth, sales } from "../chain.js";
+import { PendingError } from "../checkout.js";
+import { config } from "../config.js";
+import type { Engine } from "../engine.js";
+import { OFFERS, type Offer } from "./catalog.js";
+import { context } from "./context.js";
+import { liveNet, liveRpc } from "./net.js";
+import { type Payer, services } from "./routes.js";
+
+/**
+ * NIGHTSHIFT Services, the house company: the platform's own seller for the house services.
+ * There was no platform-owned seller before (platform money was only the withdrawal fee), so the
+ * services get a company of their own in the store, flagged `house`: its wallet settles the x402
+ * payments on Base and receives them, its owner is the treasury wallet (which withdraws the revenue
+ * like any owner), it never runs CEO shifts, and it is left off the company boards.
+ */
+export const HOUSE_ID = "nightshift-services";
+
+export function ensureHouse(engine: Engine): Company {
+  const now = Date.now();
+  let c = engine.store.companies.get(HOUSE_ID);
+  if (!c) {
+    let wallet: `0x${string}`;
+    try { wallet = engine.vault.account(HOUSE_ID).address; } catch { wallet = engine.vault.create(HOUSE_ID); }
+    c = {
+      id: HOUSE_ID, slug: HOUSE_ID, name: "NIGHTSHIFT Services",
+      idea: "House services run by NIGHTSHIFT: Token Verdict, Hook Inspector and the IMD Data Feed, sold per call over x402 and MCP.",
+      mission: "Answer the questions agents and traders ask about the IMD ecosystem before they buy, with evidence.",
+      audience: "AI agents, trading bots and IMD launch teams",
+      createdAt: now, owner: config.platformTreasury ? config.platformTreasury.toLowerCase() : null, wallet,
+      policy: { ...DEFAULT_POLICY, autopilot: false, marketBuy: false, dailyBudgetUsd: 0, marketDailyUsd: 0 }, status: "paused",
+      cycle: 0, nextShiftAt: null, site: null, products: [], tasks: [], journal: [], marketing: [], house: true,
+    };
+    engine.store.companies.set(HOUSE_ID, c);
+  }
+  // the offers are the products: names and prices follow the catalogue, sales stay
+  for (const o of OFFERS) {
+    const p = c.products.find((x) => x.id === o.id);
+    if (p) Object.assign(p, { name: o.name, kind: o.kind, pitch: o.pitch, priceUsdc: o.priceUsdc, status: "live" });
+    else c.products.push({ id: o.id, name: o.name, kind: o.kind, pitch: o.pitch, priceUsdc: o.priceUsdc, priceByOwner: true, status: "live", deliverableUrl: null, taskId: "house", sales: 0, revenueUsdc: 0n, createdAt: now } satisfies Product);
+  }
+  c.house = true;
+  c.status = "paused";
+  c.policy.autopilot = false;
+  c.nextShiftAt = null;
+  engine.store.markDirty();
+  return c;
+}
+
+/** The engine's side of a paid call: the same checks, settlement and booking as every product sold on NIGHTSHIFT. */
+export function enginePayer(engine: Engine): Payer {
+  const house = () => engine.store.companies.get(HOUSE_ID) ?? ensureHouse(engine);
+  const hits = new Map<string, { n: number; reset: number }>();
+  const limited = (k: string, n: number, ms: number) => { const now = Date.now(); const h = hits.get(k); if (!h || h.reset < now) { hits.set(k, { n: 1, reset: now + ms }); return false; } h.n++; return h.n > n; };
+  return {
+    mode: config.mode,
+    chainId: config.salesChainId,
+    payTo: () => house().wallet,
+    async check(o: Offer, header: string, ip: string) {
+      const c = house();
+      const req = requirement(config.salesChainId, c.wallet, o.priceUsdc);
+      let payment: PaymentPayload;
+      try { payment = decodeHeader<PaymentPayload>(header); } catch { return { ok: false, status: 402, reason: "invalid_payload", challenge: true }; }
+      const auth = payment?.payload?.authorization;
+      // a retry of a payment already settled is checked as of its first try, at the price paid then
+      const prior = auth?.from && auth.nonce ? engine.checkout.recordOf(auth.from, auth.nonce) : undefined;
+      const v = await verifyPayment(payment, prior ? requirement(config.salesChainId, c.wallet, prior.value) : req, prior ? Math.floor(prior.at / 1000) : undefined);
+      if (!v.ok) return { ok: false, status: 402, reason: v.reason, challenge: true };
+      if (prior && prior.productId !== o.id) return { ok: false, status: 409, reason: "This payment was made for another service." };
+      if (config.mode === "sim") return { ok: true, payment, payer: v.payer };
+      // settling costs the house gas on Base: per caller and per payer (the feed is cheap and polled, so it gets more room)
+      const feed = o.id === "imd-feed";
+      if (limited(`ip:${ip}`, feed ? 120 : 20, 60_000) || limited(`payer:${v.payer.toLowerCase()}`, feed ? 60 : 10, 60_000)) return { ok: false, status: 429, reason: "Too many payments at once; try again in a minute." };
+      if (await engine.checkout.fresh(auth.from, auth.nonce)) {
+        const bal = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [v.payer] }).catch(() => 0n);
+        if (bal < BigInt(auth.value)) return { ok: false, status: 402, reason: "insufficient USDC balance", challenge: true };
+        if ((await sales.getBalance({ address: c.wallet }).catch(() => 0n)) < 20_000_000_000_000n) {
+          void engine.alert("NIGHTSHIFT Services cannot take payments: its wallet has no ETH on Base for the settlement gas.", "nogas-house");
+          return { ok: false, status: 503, reason: "The service cannot take payments right now. Nothing was charged; try again later." };
+        }
+      }
+      return { ok: true, payment, payer: v.payer };
+    },
+    settle(o: Offer, payment: PaymentPayload) {
+      const c = house();
+      return engine.settleInTurn(c.id, () => engine.checkout.settle(c.id, c.wallet, o.id, payment));
+    },
+    async sim(o: Offer) { await engine.recordSale(house(), o.id, o.priceUsdc, "0xdemo000000000000000000000000000000buyer", null, true); },
+    isPending: (e) => e instanceof PendingError,
+  };
+}
+
+/** The live services: chain.ts's Ethereum client, the public APIs, the house payer. */
+export function liveHouseServices(engine: Engine) {
+  ensureHouse(engine);
+  const ctx = context({ net: liveNet, rpc: liveRpc(eth as never), now: Date.now, etherscanKey: config.etherscanKey, watchtowerUrl: config.watchtowerUrl });
+  return services(ctx, enginePayer(engine));
+}

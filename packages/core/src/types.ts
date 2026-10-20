@@ -200,6 +200,8 @@ export interface Company {
   marketing: { at: number; channel: string; text: string; status: "drafted" | "posted" | "failed"; url?: string; error?: string }[];
   /** Created in simulation: never sells, spends or withdraws in live mode. */
   sim?: boolean;
+  /** Run by NIGHTSHIFT itself (the house services): no CEO shifts, kept off the company boards. */
+  house?: boolean;
   /** Where the company posts. The password lives in the vault, never here. */
   social?: { bluesky?: { handle: string; auto: boolean } };
   /** The owner's standing direction to the CEO: read every shift and passed to the swarm with each order. */

@@ -45,6 +45,9 @@ import { CHANNELS } from "@nightshift/core";
 import { walletConfig } from "./wallet-config.js";
 import { usdc } from "@nightshift/core";
 import { erc20Abi, getAddress } from "viem";
+import { serviceRoutes, useServices } from "./services/routes.js";
+import { HOUSE_ID, liveHouseServices } from "./services/house.js";
+import { catalogItems } from "./services/catalog.js";
 
 /** Open live-event streams, per IP and in all. */
 const streams = new Map<string, number>();
@@ -213,7 +216,7 @@ async function landing(engine: Engine) {
     swarmCache = { at: Date.now(), agents: h?.connectedDaemons ?? null, working: h?.workingNow ?? null };
   }
   // Live: demo companies retired from simulation are not shown; their revenue was never real.
-  const companies = [...engine.store.companies.values()].filter((c) => config.mode !== "live" || !c.sim);
+  const companies = [...engine.store.companies.values()].filter((c) => (config.mode !== "live" || !c.sim) && !c.house);
   const live = companies.flatMap((c) => c.products.filter((p) => p.status === "live").map((p) => ({ c, p })));
   const since = Date.now() - 24 * 3600_000;
   const featured = [...companies].sort((a, b) => b.products.reduce((x, p) => x + Number(p.revenueUsdc), 0) - a.products.reduce((x, p) => x + Number(p.revenueUsdc), 0))[0];
@@ -358,6 +361,8 @@ function liveProducts(engine: Engine) {
 }
 
 export function serve(engine: Engine) {
+  // the house services (Token Verdict, Hook Inspector, IMD Data Feed), sold by the NIGHTSHIFT Services house company
+  useServices(() => liveHouseServices(engine));
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", config.publicUrl);
     const p = url.pathname;
@@ -492,6 +497,7 @@ export function serve(engine: Engine) {
       if (["/api/staked", "/api/token/overview", "/api/token", "/api/frogs", "/api/frogs/claims", "/api/frogs/staking", "/api/impact", "/api/landing"].includes(p) && limited(req, "reads", 240, 60_000)) return json(res, 429, { error: "slow down" });
 
       // ---- the landing page's live numbers: real where they can be, labelled where simulated
+      if (await serviceRoutes(req, res, p, { url, base: config.publicUrl, ip: clientIp(req), limited })) return;
       if (p === "/api/landing") return json(res, 200, await landing(engine));
       if (p === "/api/impact") return json(res, 200, await impact(engine));
       if (p === "/api/frogs/staking") {
@@ -635,10 +641,10 @@ export function serve(engine: Engine) {
           const max = url.searchParams.get("maxUsd");
           const sort = url.searchParams.get("sort");
           const rows = search(live, { q: url.searchParams.get("q") ?? "", kind: url.searchParams.get("kind") ?? undefined, maxUsd: max ? Number(max) : undefined, sort: sort === "price" || sort === "new" ? sort : "best" });
-          const shown = [...engine.store.companies.values()].filter((c) => config.mode !== "live" || !c.sim);
+          const shown = [...engine.store.companies.values()].filter((c) => (config.mode !== "live" || !c.sim) && !c.house);
           return json(res, 200, { mode: config.mode, chainId: config.salesChainId, count: rows.length, kinds: [...new Set(live.map((l) => l.p.kind))], items: rows.slice(0, 100).map(card), totals: marketTotals(shown) });
         }
-        if (p === "/api/market/catalog") return json(res, 200, catalog(live));
+        if (p === "/api/market/catalog") { const c = catalog(live), svc = catalogItems(config.publicUrl, config.salesChainId, engine.store.companies.get(HOUSE_ID)?.wallet ?? null); return json(res, 200, { ...c, count: c.count + svc.length, items: [...svc, ...c.items] }); }
         if (seg[2] && seg[3]) {
           const hit = live.find((l) => l.c.slug === seg[2] && l.p.id === seg[3]);
           return hit ? json(res, 200, { mode: config.mode, ...detail(hit) }) : json(res, 404, { error: "no such product on sale" });
@@ -726,7 +732,7 @@ export function serve(engine: Engine) {
       if (p === "/api/companies" && req.method === "GET") {
         const onlyMine = url.searchParams.get("mine") === "1";
         // Live: retired demo companies stay in their owner's own list only.
-        const list = await Promise.all([...engine.store.companies.values()].filter((c) => onlyMine ? owner !== null && c.owner === owner : config.mode !== "live" || !c.sim).sort((a, b) => b.createdAt - a.createdAt).map(async (c) => {
+        const list = await Promise.all([...engine.store.companies.values()].filter((c) => onlyMine ? owner !== null && c.owner === owner : (config.mode !== "live" || !c.sim) && !c.house).sort((a, b) => b.createdAt - a.createdAt).map(async (c) => {
           const v = publicView(engine, c);
           const working = c.tasks.find((t) => ["checking", "ordering", "building", "awaiting_approval"].includes(t.status));
           return { id: c.id, ...v, nextShiftAt: c.nextShiftAt, working: working ? { title: working.title, status: working.status, activity: working.activity } : null, mine: owner !== null && c.owner === owner };
@@ -753,6 +759,7 @@ export function serve(engine: Engine) {
         const c = engine.get(seg[2]);
         if (!c) return json(res, 404, { error: "no such company" });
         const action = seg[3];
+        if (c.house && action && !["wallet", "books.csv", "withdraw", "shifts"].includes(action)) return json(res, 403, { error: "NIGHTSHIFT Services is run by NIGHTSHIFT: no CEO shifts or settings to change." });
         // The owner's view and every control are the owner's alone once sign-in is on.
         if (config.requireAuth && (!owner || c.owner !== owner)) return json(res, owner ? 403 : 401, { error: owner ? "This company belongs to another wallet." : "Sign in as the owner." });
         if (!action && req.method === "GET") return json(res, 200, { ...(await full(engine, c)), withdrawableUsd: fromUsdc(await engine.withdrawable(c)), isOwner: owner !== null && c.owner === owner });

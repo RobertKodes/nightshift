@@ -16,6 +16,10 @@ import { liveLeague } from "./league.js";
 import { leagueSummary, marketView } from "./league-routes.js";
 import { type Facts, MISSIONS, MissionError, liveMissions } from "./missions.js";
 import type { Vault } from "./vault.js";
+import { clientIp } from "./auth.js";
+import { SERVICE_PAGES, agentSkills, llmsLines } from "./services/catalog.js";
+import { registerServiceTools } from "./services/mcp.js";
+import { liveServices } from "./services/routes.js";
 
 type Context = {
   json(res: ServerResponse, status: number, body: unknown): void;
@@ -109,7 +113,7 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   if (p === "/mcp/public" && !(req.method === "GET" && (req.headers.accept ?? "").includes("text/html"))) {
     if (limited(req, "mcp-public", 60, 60_000)) return reply(429, { error: "slow down" });
     const b = req.method === "POST" ? await ctx.body(req) : undefined;
-    const server = publicMcp(ctx);
+    const server = publicMcp(ctx, req);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => { void transport.close(); void server.close(); });
     await server.connect(transport);
@@ -153,6 +157,7 @@ export const PAGES: { path: string; title: string; about: string; room?: string 
   { path: "/mcp", title: "MCP", about: "Run NIGHTSHIFT from Claude, Cursor or any MCP client; plus a public keyless MCP for IMD market and swarm data." },
   { path: "/guide", title: "Guide", about: "How NIGHTSHIFT works, step by step." },
   { path: "/security", title: "Security", about: "Audits, contracts and how to report a vulnerability." },
+  ...SERVICE_PAGES,
 ];
 
 function robots(): string {
@@ -195,7 +200,7 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     "## For AI agents",
     `- [Night League guide](${base}/league/agents.md): join a weekly paper-trading league on IMD ecosystem tokens; REST + MCP.`,
     `- [Agent Arena guide](${base}/arena/agents.md): register an agent (one key for the arena and the league) and play rated NIGHT CHESS.`,
-    `- [Public MCP, no key](${base}/mcp/public): IMD market, swarm pulse, league standings, NIGHTSHIFT products, crew roster.`,
+    `- [Public MCP, no key](${base}/mcp/public): IMD market, swarm pulse, league standings, NIGHTSHIFT products, crew roster, and the house services' free previews and paid tools.`,
     `- [Owner MCP](${base}/mcp): run your NIGHTSHIFT companies (API key from your dashboard).`,
     "- [IMD Kit](https://github.com/RobertKodes/imd-kit): hire the IMD swarm yourself: TypeScript SDK, CLI and MCP server for every IMD action (free check, x402 + Permit2 or onchain Intake, order following, results). MIT, by NIGHTSHIFT.",
     `- [Agent card](${base}/.well-known/agent-card.json) and [MCP card](${base}/.well-known/mcp.json).`,
@@ -203,6 +208,8 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     `- Flight records: ${base}/api/public/<company>/shifts/<shift id>: one shift replayed (what the CEO saw, each phase and swarm step, the money, payback).`,
     `- [Agent market catalog](${base}/api/market/catalog): every product with its x402 payment terms (discovery format); search: ${base}/api/market/search?q=&kind=&maxUsd=&sort=; a product with its free preview: ${base}/api/market/<company>/<product>`,
     `- JSON: ${base}/api/league, ${base}/api/league/market, ${base}/api/crew, ${base}/api/swarm/pulse, ${base}/api/token/overview`,
+    "",
+    ...llmsLines(base),
     "",
     "## Pages",
     ...PAGES.filter((x) => !x.room && x.path !== "/").map((x) => `- [${x.title}](${base}${x.path}): ${x.about}`),
@@ -242,6 +249,7 @@ function agentCard() {
       { id: "agent-arena", name: "Agent Arena", description: "Rated NIGHT CHESS for AI agents and people.", tags: ["chess", "agents", "games"], examples: [`${base}/arena/agents.md`] },
       { id: "imd-data", name: "IMD market and swarm", description: "Tradable IMD ecosystem tokens with liquidity and freshness, and the swarm's live health.", tags: ["imd", "market-data", "swarm"] },
       { id: "nightshift-market", name: "Buy from AI companies", description: "Products made by NIGHTSHIFT's AI companies, sold over x402 in USDC on Base.", tags: ["x402", "commerce", "usdc"] },
+      ...agentSkills(base),
     ],
   };
 }
@@ -249,7 +257,7 @@ function mcpCard() {
   const base = config.publicUrl;
   return {
     servers: [
-      { name: "nightshift-public", description: "Keyless, read-only: IMD market, swarm pulse, Night League standings, NIGHTSHIFT products and crew.", url: `${base}/mcp/public`, transport: "streamable-http", auth: "none" },
+      { name: "nightshift-public", description: "Keyless: IMD market, swarm pulse, Night League standings, NIGHTSHIFT products and crew, plus the house services (Token Verdict, Hook Inspector, IMD Data Feed) with free previews and x402-paid tools.", url: `${base}/mcp/public`, transport: "streamable-http", auth: "none (paid tools take an x402 payment argument)" },
       { name: "nightshift", description: "Run your NIGHTSHIFT companies; with an arena key (nsa_) also play the arena and trade in the league.", url: `${base}/mcp`, transport: "streamable-http", auth: "bearer (nsk_ or nsa_)" },
     ],
   };
@@ -257,9 +265,9 @@ function mcpCard() {
 
 const json2 = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] });
 /** A read-only MCP server anyone can add without a key. */
-function publicMcp(ctx: Context): McpServer {
+function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
   const server = new McpServer({ name: "nightshift-public", version: "1.0.0" }, {
-    instructions: "Read-only NIGHTSHIFT and IMD data, no key needed. imd_market: tradable IMD ecosystem tokens with price, liquidity and data age. imd_swarm: the IMD agent swarm's live health. league_standings: the Night League (AI agents paper-trading IMD tokens). nightshift_products and nightshift_product: what NIGHTSHIFT's AI companies sell over x402, searchable, with free previews. nightshift_crew: the IMD agents NIGHTSHIFT has hired. To act (trade, play), register an agent: " + `${config.publicUrl}/arena/agents.md`,
+    instructions: "Read-only NIGHTSHIFT and IMD data, no key needed. imd_market: tradable IMD ecosystem tokens with price, liquidity and data age. imd_swarm: the IMD agent swarm's live health. league_standings: the Night League (AI agents paper-trading IMD tokens). nightshift_products and nightshift_product: what NIGHTSHIFT's AI companies sell over x402, searchable, with free previews. nightshift_crew: the IMD agents NIGHTSHIFT has hired. House services run by NIGHTSHIFT, paid per call with an x402 payment (free previews first): verdict_preview, verdict_demo and token_verdict (pre-buy token verdict), hook_flags and hook_inspect (Uniswap v4 hooks), imd_feed_sample and imd_feed (IMD data), services_pricing. To act (trade, play), register an agent: " + `${config.publicUrl}/arena/agents.md`,
   });
   const safe = <A,>(fn: (a: A) => Promise<unknown> | unknown) => async (a: A) => { try { return json2(await fn(a)); } catch (e) { return { ...json2({ error: (e as Error).message }), isError: true }; } };
   server.registerTool("imd_market", { title: "IMD market", description: "IMD and every IMD launch on Ethereum with real liquidity (>= $2,000): price, liquidity, 24h volume, 1h/24h change, pool fee and chart link, from DexScreener, with the data's age.", inputSchema: {} }, safe(async () => marketView(await imdMarket())));
@@ -283,6 +291,8 @@ function publicMcp(ctx: Context): McpServer {
     return { mode: config.mode, ...detail(hit) };
   }));
   server.registerTool("nightshift_crew", { title: "NIGHTSHIFT crew", description: "Every IMD swarm agent (seat) that worked on orders NIGHTSHIFT paid for: role, model, runtime, accepted steps, jobs.", inputSchema: {} }, safe(() => crew()));
+  const svc = liveServices();
+  if (svc) registerServiceTools(server, svc, { ip: clientIp(req), base: config.publicUrl, limited: (k, n, ms) => ctx.limited(req, k, n, ms) });
   return server;
 }
 

@@ -1278,7 +1278,8 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
 ${esc(c.name)} sold <b>${esc(p.name)}</b> for $${fromUsdc(amount).toFixed(2)}.
 Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See the market", url: `${config.publicUrl}/market` }]], "sale");
     if (pub) housePost(`💰 ${c.name} just made a sale: ${p.name}, $${fromUsdc(amount).toFixed(2)}. Built by the IMD swarm, sold while its owner slept. ${config.publicUrl}/market`, `sale-${tx ?? Date.now()}`);
-    if (!sim) void this.alert(`💰 ${c.name} sold ${p.name} for $${fromUsdc(amount).toFixed(2)}${tx ? ` · tx ${tx}` : ""}`, `sale-${tx ?? Date.now()}`);
+    // the house services sell cents at a time: only a dollar or more is worth an operator alert
+    if (!sim && !(c.house && fromUsdc(amount) < 1)) void this.alert(`💰 ${c.name} sold ${p.name} for $${fromUsdc(amount).toFixed(2)}${tx ? ` · tx ${tx}` : ""}`, `sale-${tx ?? Date.now()}`);
     p.sales += 1;
     p.revenueUsdc += amount;
     const m = this.store.metricsOf(c.id);

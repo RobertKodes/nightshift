@@ -100,6 +100,10 @@ export const config = {
   walletConnect: env.WALLETCONNECT_PROJECT_ID || "adbab93f28eb7aa847cbe829b7a530d3",
   /** OpenSea API key (free): posts new NIGHT FROGS listings. Sales are read on chain without it. */
   openseaKey: env.OPENSEA_API_KEY ?? "",
+  /** Etherscan API key (v2, free tier): verified source for the house services. Without it they read Sourcify only. */
+  etherscanKey: env.ETHERSCAN_API_KEY ?? "",
+  /** The IMD Watchtower's JSON status (its container on the same Docker network); api.imd.fun/swarm when it does not answer. */
+  watchtowerUrl: env.WATCHTOWER_URL || "http://imd-watchtower:8787/status",
   blueskyHandle: (env.BLUESKY_HANDLE ?? "nightshifttech.bsky.social").replace(/^@/, ""),
   /** The project account's app password (Bluesky → Settings → Privacy and security → App passwords). */
   blueskyAppPassword: env.BLUESKY_APP_PASSWORD ?? "",
