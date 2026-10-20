@@ -99,6 +99,20 @@ export function heuristicDecision(c: Company, s: CompanyStats): Decision {
       product: { name: `${best.name} — Advanced`, kind: "template", pitch: "The next step, with templates you can copy.", priceUsd: Math.min(499, Math.max(15, fromUsdc(best.priceUsdc) * 2)) },
     };
   }
+  // Research the company paid for is acted on: its strongest finding becomes the next product,
+  // instead of the same research being asked for again (which the saver refuses, and the company rests).
+  const research = [...c.tasks].reverse().find((t) => t.kind === "research" && t.status === "done");
+  const newest = Math.max(0, ...c.products.map((p) => p.createdAt));
+  if (research && research.updatedAt > newest && live.length < 4 && !building) {
+    const source = Object.values(research.result?.files ?? {})[0] ?? research.result?.note ?? null;
+    return {
+      kind: "build_product",
+      title: `Build what the research found for ${c.audience}`,
+      why: "The market research is in. Its strongest finding becomes the next product, priced where the research found buyers paying.",
+      brief: `Using the market research the company commissioned ("${research.title}"${source ? `, delivered at ${source}` : ""}), build the product it shows the clearest paid demand for among ${c.audience}, around: ${c.idea}. Make it complementary to "${live[0]?.name ?? c.name}", not a repeat. Concrete, sourced, usable the same day.`,
+      product: { name: `${c.name} — Field Kit`, kind: "template", pitch: `The tools ${c.audience} asked for, ready to copy and use.`, priceUsd: Math.min(49, Math.max(12, fromUsdc(live[0]?.priceUsdc ?? 9_000_000n) + 6)) },
+    };
+  }
   const stale = live.find((p) => !p.priceByOwner && p.sales === 0 && Date.now() - p.createdAt > 5 * 24 * 60 * 60 * 1000);
   if (stale) {
     return { kind: "reprice", title: `Cut the price of ${stale.name}`, why: "Five days without a sale.", brief: "", productId: stale.id, priceUsd: Math.max(3, Math.round(fromUsdc(stale.priceUsdc) * 0.6)) };

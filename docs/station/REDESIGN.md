@@ -20,11 +20,12 @@ Branch `redesign` (worktree `Projects/nightshift-v2`), v0.118 to v0.122, built 2
 Both founded, shipped a first product, bought a site, drafted marketing and started a second product, with no engine errors. Both resumed after the restart. Found:
 1. Mid-payment restart could lose track of a paid order: **fixed** above, with a test.
 2. Without an LLM key the fallback names companies awkwardly ("ReviewsTools") and posts the raw idea: cosmetic, only without the CEO's model.
-3. The simulation's buyers are slow (about one visit a minute, about 5% conversion at $9): a demo shows its first sale after about 13 minutes. Not a bug; could be tuned.
+3. **Companies stalled after research** (found by a 15-minute watch): without the CEO's model, the fallback planner asked for the same research again, the saver rightly refused to pay twice, and the company rested for a whole day, never acting on research it had paid for. **Fixed**: the fallback now builds the next product from the delivered research, once, passing the research file to the swarm as its source. Verified on both demo companies (each shipped a $15 "Field Kit"), with a test.
+4. The simulation's buyers are slow (about one visit a minute, about 5% conversion at $9): a demo shows its first sale after about 13 minutes. Not a bug; could be tuned.
 
 ## Checks
 
-Typecheck of 8 packages; tests: engine 188, core 10, imd 7, llm 8, x402 3, trace 4, ledger 2; `scripts/e2e.mjs` all good. Headless Edge at 1440 and 390 on the gate, rooms, market and preview drawer: no errors, no sideways scroll.
+Typecheck of 8 packages; tests: engine 188, core 11, imd 7, llm 8, x402 3, trace 4, ledger 2; `scripts/e2e.mjs` all good. Headless Edge at 1440 and 390 on the gate, rooms, market and preview drawer: no errors, no sideways scroll.
 
 ## To ship
 

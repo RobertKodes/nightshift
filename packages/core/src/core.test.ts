@@ -3,6 +3,7 @@ import { SimImdPlane } from "@nightshift/imd";
 import { Ledger } from "@nightshift/ledger";
 import { DEFAULT_POLICY } from "./policy.js";
 import { advance, approve, runShift } from "./shift.js";
+import { heuristicDecision } from "./planner.js";
 import type { Company } from "./types.js";
 
 function company(policy = {}): Company {
@@ -79,6 +80,27 @@ describe("the autonomous company", () => {
 });
 
 import { found } from "./planner.js";
+describe("the fallback CEO acts on its research", () => {
+  it("turns delivered research into the next product, once, instead of asking for the same research again", () => {
+    const c = company();
+    const t0 = Date.now() - 60 * 60_000;
+    c.site = { url: "http://site", jobId: "j" } as never;
+    c.marketing = [{ at: Date.now(), channel: "x", text: "hi" }] as never;
+    c.products = [{ id: "p1", name: "Acme — The Playbook", kind: "report", pitch: "x", priceUsdc: 9_000_000n, status: "live", deliverableUrl: "f", taskId: "t1", sales: 0, revenueUsdc: 0n, createdAt: t0 }] as never;
+    const stats = { visits7d: 5, sales7d: 0, revenue7dUsd: 0, imdUsd: 6 };
+    expect(heuristicDecision(c, stats).kind).toBe("research");
+    c.tasks = [{ id: "r1", cycle: 4, kind: "research", title: "Find the next thing to sell", why: "", status: "done", stepsDone: 3, stepsTotal: 3, activity: null, costImd: 0n,
+      result: { files: { report: "http://files/r1/report" } }, error: null, createdAt: t0 + 1000, updatedAt: t0 + 2000 }] as never;
+    const next = heuristicDecision(c, stats);
+    expect(next.kind).toBe("build_product");
+    expect(next.brief).toContain("http://files/r1/report");
+    expect(next.product?.priceUsd).toBeGreaterThan(9);
+    // once that product exists, the same research does not trigger another build
+    c.products.push({ ...c.products[0]!, id: "p2", createdAt: t0 + 5000 } as never);
+    expect(heuristicDecision(c, stats).title).not.toMatch(/research found/);
+  });
+});
+
 describe("founding without a model", () => {
   it("finds the audience and a usable name in the idea", async () => {
     const f = await found("Weekly reviews of new AI tools for solo founders who have no time to test them", null, "x");
