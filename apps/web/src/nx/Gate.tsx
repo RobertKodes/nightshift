@@ -6,6 +6,8 @@ import { ROOMS, WAYS, type Way } from "./map";
 import { InstallButton } from "../landing/app";
 import { ImdVisitor } from "../landing/visitor";
 import { NxTabs, lastRoom, rememberRoom } from "./Shell";
+import { StationMap, useDock } from "./StationMap";
+import type { RoomId } from "./map";
 import "./nx.css";
 
 type Station = { breakroom: { agentsInArena: number; liveGames: number }; geek: { leagueAgents: number; tradableTokens: number | null }; command: { missions: number }; leader: { name: string; returnPct: number } | null };
@@ -76,7 +78,9 @@ export function Gate() {
   useEffect(() => { setBack(lastRoom()); void get<Station>("/api/station").then(setSt); void get<Overview>("/api/token/overview").then(setOv); }, []);
   document.title = "NIGHTSHIFT · Choose your way";
 
-  const enter = (w: Way) => { if (w.room) rememberRoom(w.room); go(w.to); scrollTo(0, 0); };
+  const [focus, setFocus] = useState<RoomId | null>(null);
+  const dock = useDock();
+  const enter = (w: Way) => { if (w.room) rememberRoom(w.room); dock.start(w.room, () => { go(w.to); scrollTo(0, 0); }); };
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || (e.target as HTMLElement)?.closest?.("input,textarea,select")) return;
@@ -103,10 +107,8 @@ export function Gate() {
   return (
     <div className="ns nx-gate">
       <canvas ref={sky} className="nx-sky" aria-hidden="true" />
-      <picture className="nx-gate-art" aria-hidden="true">
-        <source media="(max-width: 820px)" srcSet="/art/station/gate-station-mobile-1080x1920.webp" />
-        <img src="/art/station/gate-station-2400x1350.webp" alt="" />
-      </picture>
+      <StationMap focus={focus} />
+      {dock.overlay}
       {/* IMD's frog comes over from imd.fun through his portal, as on the story page */}
       <div className="nx-visit"><ImdVisitor /></div>
       <header className="nx-gate-top">
@@ -125,11 +127,12 @@ export function Gate() {
         <h1 className="nx-title" aria-label="Choose your way"><Decode text="Choose your way" /></h1>
         <div className="nx-spectrum" aria-hidden="true">{["#ff5ca8", "#4ad8ff", "#c9c2ff", "#ffc861", "#b8ff4a"].map((c) => <i key={c} style={{ background: c, color: c }} />)}</div>
         <p className="nx-gate-lead">An AI company station built on IMD, the swarm of AI agents that builds, audits and ships. Five rooms, one crew of frogs. Pick the door that fits you.</p>
-        {back && <button className="nx-continue" style={{ "--acc": ROOMS[back].accent } as React.CSSProperties} onClick={() => { go(ROOMS[back].nav[0]!.to); scrollTo(0, 0); }}>Continue to the {ROOMS[back].name} <NxIcon name="arrow" size={16} /></button>}
+        {back && <button className="nx-continue" style={{ "--acc": ROOMS[back].accent } as React.CSSProperties} onClick={() => dock.start(back, () => { go(ROOMS[back].nav[0]!.to); scrollTo(0, 0); })}>Continue to the {ROOMS[back].name} <NxIcon name="arrow" size={16} /></button>}
 
         <div className="nx-ways">
           {WAYS.map((w) => (
-            <a key={w.key} href={w.to} className="nx-way" style={{ "--acc": w.accent } as React.CSSProperties} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); enter(w); }}>
+            <a key={w.key} href={w.to} className="nx-way" style={{ "--acc": w.accent } as React.CSSProperties}
+              onMouseEnter={() => setFocus(w.room)} onMouseLeave={() => setFocus(null)} onFocus={() => setFocus(w.room)} onBlur={() => setFocus(null)} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); enter(w); }}>
               <span className="nx-way-art"><img src={w.emblem} alt="" loading={Number(w.key) > 3 ? "lazy" : "eager"} /></span>
               <span className="nx-way-tx">
                 <span className="nx-way-who"><kbd>{w.key}</kbd>{w.iam}</span>
