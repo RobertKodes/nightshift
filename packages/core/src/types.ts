@@ -22,9 +22,13 @@ export interface Product {
   b2bSales?: number;
   b2bRevenueUsdc?: bigint;
   createdAt: number;
+  /** The same product on the owner's own Gumroad account, made from this one as a draft. */
+  gumroad?: GumroadListing;
+  /** Why it is never listed on Gumroad: one of Gumroad's prohibited categories. */
+  gumroadBlocked?: string;
 }
 
-export type TaskKind = "research" | "build_product" | "build_site" | "improve_site" | "marketing" | "reprice" | "retire_product";
+export type TaskKind = "research" | "build_product" | "build_site" | "improve_site" | "marketing" | "reprice" | "retire_product" | "post";
 
 export type TaskStatus =
   | "planned"
@@ -204,6 +208,130 @@ export interface Company {
   notify?: { telegram: string; at: number };
   /** Products bought from and sold to other NIGHTSHIFT companies, newest last (the ledger holds every one). */
   b2b?: { bought: B2bLine[]; sold: B2bLine[] };
+  /** Accounts the owner created and connected, the posts written for them and what was done through them. */
+  connections?: Connections;
+}
+
+/** Where the company may post, on accounts its owner made and connected. */
+export type ChannelKind = "bluesky" | "telegram" | "mastodon" | "discord";
+
+/**
+ * One connected account. Its app password, token or webhook lives in the vault, never here: this is
+ * only what the owner and the public may see, and the rules the CEO posts by.
+ */
+export interface Channel {
+  kind: ChannelKind;
+  /** @handle, the channel's name, @user@instance, the webhook's name. */
+  label: string;
+  /** The account's public page (null: a Discord webhook has none). */
+  url: string | null;
+  connectedAt: number;
+  /** Every post waits for the owner. Off: only the first post on this channel waits. */
+  approveEach: boolean;
+  /** Posts on this channel in 24 hours, at most. */
+  dailyMax: number;
+  /** The owner approved a post here: from then on posts go out on their own, within the caps. */
+  trusted: boolean;
+  /** Shown on the public company page. */
+  listed: boolean;
+  /** The platform's own bot marker is on: Bluesky's `bot` self-label, Mastodon's bot flag. */
+  botFlag?: boolean;
+  /** Not secret: the Bluesky DID, the Telegram chat id, the Mastodon instance, the Discord server. */
+  ref?: string;
+  /** Stopped after the platform pushed back (a rate limit, a spam flag): the owner resumes it. */
+  paused?: { at: number; why: string };
+  /** Made in simulation: never checked with the platform, nothing is ever sent. */
+  sim?: boolean;
+}
+
+/** A real event the company may post about, read from its own records and books. */
+export interface PostFact {
+  /** One per event (product:<id>, sales:<n>, site:<job>, price:<id>:<cents>, shift:<task>): posted at most once per channel. */
+  key: string;
+  kind: "new_product" | "sales_milestone" | "update" | "replay";
+  /** In a few words, for the CEO's list and the owner. */
+  title: string;
+  /** The post's words, built from the records only. */
+  text: string;
+  /** Every number the post may contain: the ones in `text`, nothing else. */
+  numbers: number[];
+  /** The company's own page for it: the product, the company or the shift's replay. */
+  link: string;
+  productId?: string;
+  taskId?: string;
+}
+
+export type PostStatus = "approval" | "queued" | "posted" | "failed" | "rejected" | "dropped";
+
+export interface Post {
+  id: string;
+  at: number;
+  channel: ChannelKind;
+  factKey: string;
+  factKind: PostFact["kind"];
+  /** What the post is about, in a few words. */
+  about: string;
+  /** The post as it goes out, the disclosure line included. */
+  text: string;
+  status: PostStatus;
+  /** Why it is not out yet, in words. */
+  wait?: string;
+  /** The shift that wrote it. */
+  taskId?: string;
+  url?: string;
+  error?: string;
+  sentAt?: number;
+  /** Simulation: nothing was sent. */
+  sim?: boolean;
+}
+
+/** A product on the owner's own Gumroad account, made from the NIGHTSHIFT product. */
+export interface GumroadListing {
+  /** Gumroad's product id. */
+  id: string;
+  /** The Gumroad account it was made on. */
+  user: string;
+  url: string | null;
+  state: "draft" | "published" | "unpublished";
+  /** The owner said yes to publishing it once: the CEO may publish it again after taking it down. */
+  approved: boolean;
+  /** The owner said no: it stays a draft until they publish it themselves from the desk. */
+  declined?: boolean;
+  file: boolean;
+  cover: boolean;
+  /** What Gumroad has now (name, price, description, on sale), to send only changes. */
+  synced: string;
+  createdAt: number;
+  /** Sales on Gumroad, booked apart from USDC: the money is the owner's on Gumroad. */
+  sales: number;
+  revenueCents: number;
+  error?: string;
+  sim?: boolean;
+}
+
+/** One thing done through a connected account and how it went: the owner's log and the flight recorder read it. */
+export interface ConnEntry {
+  at: number;
+  channel: ChannelKind | "gumroad";
+  what: string;
+  result: "ok" | "failed" | "waiting" | "blocked" | "sim";
+  detail?: string;
+  url?: string;
+  /** The shift it belongs to: a post move, or the shift that built the product. */
+  taskId?: string;
+  /** Visitors may see it (a post that went out, a product published). */
+  public?: boolean;
+}
+
+/** No post goes out between these hours (0 to 23, from ≠ to), in the owner's time zone. */
+export interface QuietHours { from: number; to: number; tz: string }
+
+export interface Connections {
+  gumroad?: { user: string; name: string; url: string | null; connectedAt: number; scopes: string; hooks: string[]; polledAt?: number; sim?: boolean };
+  channels: Partial<Record<ChannelKind, Channel>>;
+  quiet: QuietHours;
+  posts: Post[];
+  log: ConnEntry[];
 }
 
 export const USDC_DECIMALS = 6;

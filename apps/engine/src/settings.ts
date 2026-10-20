@@ -17,10 +17,11 @@ export const EDITABLE = [
   "BLUESKY_APP_PASSWORD", "BLUESKY_PROMO", "BLUESKY_DAILY_MAX", "BLUESKY_GAP_MINUTES", "BLUESKY_COMPANY_POSTS",
   "TOKEN_ADDRESS", "TOKEN_SYMBOL", "TOKEN_HOLDER_MIN", "TOKEN_BUY_URL", "LAUNCH_NOTIFY", "MODERATION", "ASSISTANT",
   "WALLETCONNECT_PROJECT_ID", "OPENSEA_API_KEY", "BETPOOL_ADDRESS", "BETPOOL_BLOCK",
+  "GUMROAD_CLIENT_ID", "GUMROAD_CLIENT_SECRET",
 ] as const;
 export type SettingKey = (typeof EDITABLE)[number];
 /** Shown as set / not set, never sent back to the browser. */
-export const SECRET_KEYS = new Set<SettingKey>(["OPENROUTER_API_KEY", "TELEGRAM_BOT_TOKEN", "BLUESKY_APP_PASSWORD", "LAUNCH_NOTIFY", "OPENSEA_API_KEY"]);
+export const SECRET_KEYS = new Set<SettingKey>(["OPENROUTER_API_KEY", "TELEGRAM_BOT_TOKEN", "BLUESKY_APP_PASSWORD", "LAUNCH_NOTIFY", "OPENSEA_API_KEY", "GUMROAD_CLIENT_SECRET"]);
 
 const dataDir = resolve(process.env.DATA_DIR ?? "data");
 const file = join(dataDir, "settings.json");

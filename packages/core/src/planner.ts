@@ -1,5 +1,6 @@
 import type { ChatMessage, LlmClient } from "@nightshift/llm";
-import type { Company, ProductKind, TaskKind } from "./types.js";
+import { type Sells, sellsLines } from "./sells.js";
+import type { Company, PostFact, ProductKind, TaskKind } from "./types.js";
 import { fromUsdc } from "./types.js";
 
 /** One move the CEO makes in a shift. */
@@ -13,6 +14,8 @@ export interface Decision {
   productId?: string;
   priceUsd?: number;
   post?: string;
+  /** A post move: the key of the real event it is about, from the list the CEO was shown. */
+  fact?: string;
 }
 
 export interface Founding {
@@ -26,9 +29,15 @@ export interface CompanyStats {
   sales7d: number;
   revenue7dUsd: number;
   imdUsd: number;
+  /** The channels the owner connected that may carry a post now. */
+  channels?: string[];
+  /** Real events not posted yet on some connected channel, from the company's records and books. */
+  postable?: PostFact[];
+  /** What sold, at what price, through which channel: the company's own data and the NIGHTSHIFT market's only. */
+  sells?: Sells;
 }
 
-const KINDS: TaskKind[] = ["research", "build_product", "build_site", "improve_site", "marketing", "reprice", "retire_product"];
+const KINDS: TaskKind[] = ["research", "build_product", "build_site", "improve_site", "marketing", "reprice", "retire_product", "post"];
 
 function summary(c: Company, s: CompanyStats): string {
   const products = c.products.map((p) => `- [${p.id}] ${p.name} (${p.kind}, $${fromUsdc(p.priceUsdc).toFixed(2)}${p.priceByOwner ? " set by the owner, never reprice it" : ""}, ${p.status}, ${p.sales} sales, $${fromUsdc(p.revenueUsdc).toFixed(2)})`).join("\n") || "- none yet";
@@ -43,7 +52,12 @@ Products:
 ${products}
 Last 7 days: ${s.visits7d} visits, ${s.sales7d} sales, $${s.revenue7dUsd.toFixed(2)} revenue
 Recent work:
-${recent}`;
+${recent}${s.sells ? `
+What sells (only the company's own sales and visits, and the NIGHTSHIFT market's own listings):
+${sellsLines(s.sells).join("\n")}` : ""}${s.channels?.length ? `
+Connected channels (the owner's own accounts): ${s.channels.join(", ")}
+Real events you may post about (a post move names one by its key; nothing else may be posted):
+${(s.postable ?? []).map((f) => `- [${f.key}] ${f.title}`).join("\n") || "- none right now"}` : ""}`;
 }
 
 /**
@@ -71,8 +85,20 @@ export function heuristicDecision(c: Company, s: CompanyStats): Decision {
       brief: `A one-page site for ${c.name}: the promise (${c.mission}), who it is for (${c.audience}), the products with prices, a buy button per product, and a short FAQ.`,
     };
   }
+  // With the owner's accounts connected, the company tells people about real events instead of drafting.
+  const lastPost = [...c.tasks].reverse().find((t) => t.kind === "post")?.createdAt ?? 0;
+  const fact = s.postable?.[0];
+  if (s.channels?.length && fact && Date.now() - lastPost > 20 * 60 * 60 * 1000) {
+    return {
+      kind: "post",
+      title: `Post: ${fact.title}`,
+      why: `${fact.title} is a real event the connected channels have not carried yet.`,
+      brief: "",
+      fact: fact.key,
+    };
+  }
   const lastMarketing = c.marketing.at(-1)?.at ?? 0;
-  if (c.site && Date.now() - lastMarketing > 20 * 60 * 60 * 1000) {
+  if (!s.channels?.length && c.site && Date.now() - lastMarketing > 20 * 60 * 60 * 1000) {
     return {
       kind: "marketing",
       title: "Tell people it exists",
@@ -134,8 +160,9 @@ Moves:
 - marketing: write one post for the audience (free)
 - reprice: change a product's price (free; needs productId and priceUsd)
 - retire_product: stop selling a product (free; needs productId)
+- post: tell people about one real event on the owner's connected channels (free; only when channels are listed; needs fact, one key from the list; post is an optional short line of your own with no number, link, @mention or hashtag that the event does not carry)
 Rules: never build a site before there is a product; never start paid work while paid work is still building unless it clearly pays back; be specific about who buys and why; when the owner gives a direction, follow it unless it breaks these rules.
-Answer with JSON only: {"kind": ..., "title": ..., "why": ..., "brief": ..., "product"?: {"name","kind","pitch","priceUsd"}, "productId"?, "priceUsd"?, "post"?}`;
+Answer with JSON only: {"kind": ..., "title": ..., "why": ..., "brief": ..., "product"?: {"name","kind","pitch","priceUsd"}, "productId"?, "priceUsd"?, "post"?, "fact"?}`;
 
 export async function llmDecision(llm: LlmClient, model: string, c: Company, s: CompanyStats): Promise<{ decision: Decision; costUsd: number; servedModel: string } | null> {
   const messages: ChatMessage[] = [
@@ -151,6 +178,8 @@ export async function llmDecision(llm: LlmClient, model: string, c: Company, s: 
     if (d.kind === "build_product" && !d.product) return null;
     if ((d.kind === "reprice" || d.kind === "retire_product") && !c.products.some((p) => p.id === d.productId)) return null;
     if (d.kind === "build_site" && c.site) return null;
+    // a post is about one of the real events listed, on a channel that is connected: anything else is no decision
+    if (d.kind === "post" && (!s.channels?.length || !s.postable?.some((f) => f.key === d.fact))) return null;
     if ((d.kind === "build_site" || d.kind === "improve_site") && c.products.length === 0) return null;
     // a reprice is held to the same bounds as a new product's price; a number that is not one is no decision
     if (d.kind === "reprice") {

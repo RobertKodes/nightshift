@@ -27,6 +27,15 @@ export interface ShiftDeps {
   persist?: () => Promise<void>;
   /** The NIGHTSHIFT market: research is bought from another company first when a relevant, cheaper product is on sale. */
   market?: MarketDeps;
+  /** What the CEO reads beyond the numbers: the connected channels, the real events to post about, what sells. */
+  context?: (c: Company) => Promise<Partial<CompanyStats>>;
+  /** The owner's connected channels: a post move hands its event here, to be posted by the rules. */
+  posts?: PostDeps;
+}
+
+export interface PostDeps {
+  /** Queues a post about one real event (by its key) on every connected channel; says what happened, in words. */
+  queue: (c: Company, t: Task, factKey: string, angle?: string) => Promise<{ ok: boolean; note: string }>;
 }
 
 const ACTIVE = new Set(["checking", "ordering", "building"]);
@@ -76,9 +85,10 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
   if (c.restUntil && now(d) < c.restUntil) return null;
   delete c.restUntil;
   c.cycle += 1;
-  const stats = d.stats(c);
+  const context = d.context ? await d.context(c).catch(() => ({})) : {};
+  const stats: CompanyStats = { ...d.stats(c), ...context };
   let decision: Decision | null = null;
-  const saw = { ...stats, liveProducts: c.products.filter((p) => p.status === "live").length, direction: Boolean(c.direction) };
+  const saw = seen(c, stats);
   let mind: Task["mind"] = { by: "playbook", saw };
   if (d.llm) {
     try {
@@ -118,9 +128,14 @@ export async function commission(c: Company, d: ShiftDeps, decision: Decision): 
   if (twin) throw new Error(`The same order was already bought in shift ${twin.cycle}.`);
   delete c.restUntil;
   c.cycle += 1;
-  const saw = { ...d.stats(c), liveProducts: c.products.filter((p) => p.status === "live").length, direction: Boolean(c.direction) };
+  const saw = seen(c, d.stats(c));
   note(c, d, "decision", `Shift ${c.cycle}, ordered by the owner: ${decision.title}.`);
   return start(c, d, decision, { by: "owner", saw }, order, true);
+}
+
+/** The numbers the CEO looked at, kept on the task: only these, not the whole context. */
+function seen(c: Company, s: CompanyStats): NonNullable<Task["mind"]>["saw"] {
+  return { visits7d: s.visits7d, sales7d: s.sales7d, revenue7dUsd: s.revenue7dUsd, imdUsd: s.imdUsd, liveProducts: c.products.filter((p) => p.status === "live").length, direction: Boolean(c.direction) };
 }
 
 /** An order already bought with the same body, unless it failed or was turned down. */
@@ -152,6 +167,10 @@ async function start(c: Company, d: ShiftDeps, decision: Decision, mind: Task["m
   c.tasks.push(t);
   trimTasks(c, d);
 
+  if (decision.kind === "post") {
+    await postMove(c, t, decision, d);
+    return t;
+  }
   if (!order) {
     doInHouse(c, t, decision, d);
     return t;
@@ -521,6 +540,22 @@ function deliver(c: Company, t: Task, r: { siteUrl: string | null; files: Record
   d.emit(c, "company", null);
 }
 
+/** A post about one real event, handed to the owner's channels: they post it by their own rules (approval, caps, quiet hours). */
+async function postMove(c: Company, t: Task, decision: Decision, d: ShiftDeps): Promise<void> {
+  if (!d.posts) {
+    touch(c, t, d, { status: "failed", error: "no channel is connected" });
+  } else {
+    try {
+      const r = await d.posts.queue(c, t, decision.fact ?? "", decision.post);
+      touch(c, t, d, r.ok ? { status: "done", result: { note: r.note } } : { status: "failed", error: r.note });
+      note(c, d, r.ok ? "result" : "note", r.note);
+    } catch (err) {
+      touch(c, t, d, { status: "failed", error: (err as Error).message.slice(0, 200) });
+    }
+  }
+  d.emit(c, "company", null);
+}
+
 function doInHouse(c: Company, t: Task, decision: Decision, d: ShiftDeps): void {
   if (decision.kind === "marketing") {
     const text = (decision.post || decision.brief || `${c.name}: ${c.mission}`).slice(0, 280);
@@ -537,6 +572,7 @@ function doInHouse(c: Company, t: Task, decision: Decision, d: ShiftDeps): void 
       touch(c, t, d, { status: "failed", error: `price ${String(decision.priceUsd)} is outside $0.50 to $500` });
       note(c, d, "warning", `${p.name}: refused to reprice to $${String(decision.priceUsd)}; prices stay between $0.50 and $500.`);
     } else if (p && decision.priceUsd) {
+      t.productId = p.id;
       const before = Number(p.priceUsdc) / 1e6;
       p.priceUsdc = usdc(decision.priceUsd);
       touch(c, t, d, { status: "done", result: { note: `$${before.toFixed(2)} → $${decision.priceUsd.toFixed(2)}` } });

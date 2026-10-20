@@ -61,18 +61,24 @@ export function pinned(url: URL, address: string, family: 4 | 6, init: RequestIn
       });
     });
     req.on("error", reject);
-    req.end();
+    // a body (a post to an owner's Mastodon instance, a file part) goes as given: strings and bytes only
+    const b = init.body;
+    req.end(typeof b === "string" || b instanceof Uint8Array ? b : undefined);
   });
 }
 
-/** fetch() for untrusted URLs: public hosts only, at most 3 redirects, each one checked and pinned. */
+/**
+ * fetch() for untrusted URLs: public hosts only, at most 3 redirects, each one checked and pinned.
+ * A request that sends something (not GET or HEAD) follows no redirect: it is answered where it went.
+ */
 export async function safeFetch(u: string, init: RequestInit = {}): Promise<Response | null> {
   let next = u;
+  const reads = !init.method || init.method === "GET" || init.method === "HEAD";
   for (let hop = 0; hop < 4; hop++) {
     const vetted = await publicUrl(next);
     if (!vetted) return null;
     const r = await pinned(vetted.url, vetted.address, vetted.family, init);
-    if (r.status >= 300 && r.status < 400 && r.headers.get("location")) { next = new URL(r.headers.get("location")!, vetted.url).toString(); continue; }
+    if (reads && r.status >= 300 && r.status < 400 && r.headers.get("location")) { next = new URL(r.headers.get("location")!, vetted.url).toString(); continue; }
     return r;
   }
   return null;

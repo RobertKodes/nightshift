@@ -127,6 +127,12 @@ export const config = {
   },
   /** Companies one wallet may run at once. */
   maxCompaniesPerOwner: num(env.MAX_COMPANIES_PER_OWNER, 5),
+  /**
+   * NIGHTSHIFT's Gumroad OAuth app (gumroad.com → Settings → Advanced → Applications), so owners can
+   * connect their own Gumroad accounts. Its redirect URI is PUBLIC_URL/api/connect/gumroad/callback.
+   * Off while either is empty.
+   */
+  gumroad: { clientId: env.GUMROAD_CLIENT_ID ?? "", clientSecret: env.GUMROAD_CLIENT_SECRET ?? "" },
 };
 
 export type Config = typeof config;

@@ -40,6 +40,8 @@ import { frogStats, frogsOn, stakingBoard, stakingOf } from "./frogs.js";
 import { impact } from "./impact.js";
 import { flightFor } from "./flight.js";
 import { b2bBooks, deskLine, isB2b, marketTotals } from "./b2b.js";
+import { connectRoutes, ownerConnectRoutes } from "./connect-routes.js";
+import { CHANNELS } from "@nightshift/core";
 import { walletConfig } from "./wallet-config.js";
 import { usdc } from "@nightshift/core";
 import { erc20Abi, getAddress } from "viem";
@@ -148,6 +150,9 @@ async function desk(engine: Engine, owner: string | null) {
         return { id: t.id, cycle: t.cycle, title: t.title, why: t.why, costUsd: pick ? fromUsdc(pick.priceUsdc) : fromImd(t.costImd) * config.imdUsd, ...(pick ? { market: { product: pick.name, company: pick.company, swarmUsd: t.market!.swarmUsd } } : {}) };
       }),
       last: last ? { id: last.id, cycle: last.cycle, title: last.title, status: last.status, at: last.updatedAt } : null,
+      connections: engine.connect.desk(c),
+      // Gumroad sales are the owner's on Gumroad, in USD: shown apart, never in the USDC revenue above
+      gumroad: { sales: c.products.reduce((a, x) => a + (x.gumroad?.sales ?? 0), 0), usd: c.products.reduce((a, x) => a + (x.gumroad?.revenueCents ?? 0), 0) / 100 },
     };
   }));
   const archived = [...engine.store.archived.values()].filter(mineOf).sort((a, b) => b.archivedAt - a.archivedAt)
@@ -196,6 +201,8 @@ function publicView(engine: Engine, c: Company) {
     },
     shifts: c.tasks.slice(-12).reverse().map((t) => ({ id: t.id, cycle: t.cycle, kind: t.kind, title: t.title, status: t.status, costUsd: fromImd(t.costImd) * config.imdUsd + fromUsdc(t.costUsdc ?? 0n), ...(t.market?.paid ? { market: true } : {}) })),
     mode: config.mode,
+    /** The accounts the owner chose to show: where else to find the company. */
+    channels: engine.connect.publicChannels(c),
   };
 }
 
@@ -499,6 +506,8 @@ export function serve(engine: Engine) {
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
       if ((p.startsWith("/api/league") || p === "/league/agents.md") && await leagueRoutes(req, res, p, { json, body, limited, url, vault: engine.vault })) return;
       if (await stationRoutes(req, res, p, { json, body, limited, owner, vault: engine.vault, market: (q) => engine.market(q), live: () => liveProducts(engine) })) return;
+      // the owners' connected accounts: OAuth callbacks, Gumroad's sale pings, product covers
+      if (p.startsWith("/api/connect/") && await connectRoutes(req, res, p, { json, body, limited, url, connect: engine.connect, owner, find: (x) => engine.get(x) })) return;
       if (p.startsWith("/api/pinball/")) {
         const parts = p.split("/").filter(Boolean); // api pinball …
         if (p === "/api/pinball/stakes") return json(res, 200, pinStakes());
@@ -766,6 +775,10 @@ export function serve(engine: Engine) {
           res.writeHead(302, { Location: engine.files.link(c, product, `owner-${Date.now()}`, 1) });
           return res.end();
         }
+        if (action === "connect") {
+          if (await ownerConnectRoutes(req, res, c, seg.slice(4), { json, body, limited, url, connect: engine.connect, owner, find: (x) => engine.get(x) })) return;
+          return json(res, 404, { error: "unknown action" });
+        }
         if (req.method !== "POST") return json(res, 405, { error: "method" });
         if (action === "shift") {
           if (limited(req, `shift:${c.id}`, 1, 60_000) || limited(req, `shift-owner:${owner ?? "anon"}`, 10, 3600_000)) return json(res, 429, { error: "One shift a minute per company, ten an hour per wallet." });
@@ -821,10 +834,9 @@ export function serve(engine: Engine) {
           const handle = await engine.connectBluesky(c, String(b.handle ?? ""), String(b.appPassword ?? ""), Boolean(b.auto));
           return json(res, 200, { ok: true, handle });
         }
-        if (action === "social" && seg[4] === "disconnect") { engine.disconnectBluesky(c); return json(res, 200, { ok: true }); }
-        if (action === "posts" && seg[4] && seg[5] === "publish") {
-          return json(res, 200, { ok: true, url: await engine.publishPost(c, Number(seg[4])) });
-        }
+        if (action === "social" && seg[4] === "disconnect") { await engine.disconnectBluesky(c); return json(res, 200, { ok: true }); }
+        // drafts are not posted by hand any more: posts about real events go out from Connections, by its rules
+        if (action === "posts" && seg[4] && seg[5] === "publish") return json(res, 410, { error: "Posts go out from the owner desk's Connections tab now." });
         if (action === "pause") { engine.setStatus(c, "paused"); return json(res, 200, { ok: true }); }
         if (action === "resume") { engine.setStatus(c, "active"); return json(res, 200, { ok: true }); }
         if (action === "tasks" && seg[4] && seg[5] === "approve") { await engine.approve(c, seg[4]); return json(res, 200, { ok: true }); }
@@ -838,6 +850,14 @@ export function serve(engine: Engine) {
       }
       if (seg[0] === "api" && seg[1] === "public" && seg[2]) {
         const c = engine.get(seg[2]);
+        // a visit that came from one of the company's own posts (its link carries ?via=<channel>), once per visitor per 10 minutes
+        const via = url.searchParams.get("via") ?? "";
+        if (c && (CHANNELS as string[]).includes(via) && !limited(req, `via:${c.id}`, 1, 600_000)) {
+          const m = engine.store.metricsOf(c.id);
+          (m.via ??= []).push({ at: Date.now(), ch: via });
+          if (m.via.length > 5000) m.via.splice(0, m.via.length - 5000);
+          engine.store.markDirty();
+        }
         return c ? json(res, 200, publicView(engine, c)) : json(res, 404, { error: "no such company" });
       }
 

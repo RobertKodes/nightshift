@@ -63,7 +63,10 @@ import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnn
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { type Anim, burnTotals, buyCard, chats, marketSnapshot, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
-import { type Button, type CommandContext, type GroupMessage, type Reply, blueskyPost, blueskySession, esc, telegram, telegramCommands, tgCall } from "./social.js";
+import { type Button, type CommandContext, type GroupMessage, type Reply, esc, telegram, telegramCommands, tgCall } from "./social.js";
+import { Connect } from "./connect.js";
+import type { Http } from "./channels.js";
+import { safeFetch } from "./net.js";
 import { IMD_TOKEN, completeContracts, followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { writeSettings } from "./settings.js";
@@ -94,6 +97,8 @@ export class Engine {
   readonly files: ProductFiles;
   /** Companies buying from each other on the NIGHTSHIFT market (B2B), booked on both sides. */
   readonly b2b: MarketDesk;
+  /** The accounts owners connected (Gumroad to sell; Bluesky, Telegram, Mastodon, Discord to post) and what the CEOs do with them. */
+  readonly connect: Connect;
   readonly #simPlane: SimImdPlane;
   readonly #livePlanes = new Map<string, ImdPlane>();
   readonly #inputOwner = new WeakMap<object, string>();
@@ -164,6 +169,26 @@ export class Engine {
       sourcesDir: join(config.dataDir, "sources"),
     });
     this.#simPlane = new SimImdPlane({ jobMs: config.simJobSeconds * 1000, deliver: (j, a, i) => this.sim.deliver(j, a, i) });
+    // the platforms' own hosts are fetched as they are; hosts an owner or an API names go through safeFetch (public addresses only)
+    const http: Http = (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(20_000) } as RequestInit);
+    const open: Http = async (url, init) => {
+      const r = await safeFetch(url, { ...init, signal: AbortSignal.timeout(60_000) } as RequestInit);
+      if (!r) throw new Error("That address cannot be reached from here (only public https servers).");
+      return r;
+    };
+    this.connect = new Connect({
+      vault: this.vault, ledger: this.ledger, http, open,
+      sim: () => config.mode === "sim",
+      publicUrl: () => config.publicUrl,
+      gumroadApp: () => (config.gumroad.clientId && config.gumroad.clientSecret ? { id: config.gumroad.clientId, secret: config.gumroad.clientSecret } : null),
+      telegram: () => (config.telegramToken ? { token: config.telegramToken, bot: config.telegramBotName } : null),
+      platformChats: () => [config.telegramCommunity, ...config.telegramChat.split(","), ...config.launchNotify.split(","), config.telegramUrl.replace(/^https?:\/\/t\.me\//, "@")],
+      files: this.files,
+      metrics: (c) => this.store.metricsOf(c.id),
+      market: () => this.market(),
+      note: (c, kind, text) => note(c, this.#deps(c), kind, text),
+      changed: (c) => this.#emit(c.id, "company", null),
+    });
   }
 
   async start(): Promise<void> {
@@ -859,6 +884,9 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       emit: (x, type, payload) => this.#emit(x.id, type, payload),
       persist: () => this.store.save(),
       market: this.b2b,
+      // each shift: what sells, the owner's channels and the real events to post about; a post move hands its event to them
+      context: (x) => this.connect.context(x),
+      posts: { queue: (x, t, fact, angle) => this.connect.queue(x, t, fact, angle) },
       findExisting: async (q) => {
         if (!q.trim()) return null;
         const r = await this.reads.publications(q, "research", 3);
@@ -1077,6 +1105,8 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     }
     c.status = "paused";
     c.nextShiftAt = null;
+    // what it published on the owner's Gumroad comes down too
+    await this.connect.closeDown(c).catch((e) => console.error("gumroad close", c.slug, (e as Error).message));
     const building = c.tasks.filter((t) => t.status === "building").length;
     note(c, this.#deps(c), "note", `Deleted by the owner. It no longer runs or sells; buyers' download links keep working.${building ? ` ${building} paid order${building === 1 ? " was" : "s were"} still with the swarm and will not be applied.` : ""}`);
     this.store.companies.delete(c.id);
@@ -1171,7 +1201,7 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
 
   /** After a restart: work cut off mid-step is closed honestly, and old logs lose the model's name. */
   #recover(): void {
-    for (const c of [...this.store.companies.values(), ...this.store.archived.values()]) c.policy = { ...DEFAULT_POLICY, ...c.policy };
+    for (const c of [...this.store.companies.values(), ...this.store.archived.values()]) { c.policy = { ...DEFAULT_POLICY, ...c.policy }; this.connect.migrate(c); }
     for (const c of this.store.companies.values()) {
       for (const j of c.journal) if (j.kind === "decision") j.text = j.text.replace(/ \([\w.-]+\/[\w.:-]+\)$/, "");
       for (const t of c.tasks) {
@@ -1460,40 +1490,16 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     return `🧪 <b>Test run</b>\nCommunity: ${esc(config.telegramCommunity)}\n\n${shown.join("\n")}`;
   }
 
-  /** Checks the app password with Bluesky before keeping it. */
+  /**
+   * The Bluesky form from before Connections: the same connection (app password in the vault, the
+   * account's bot label set), with "post on its own" off meaning every post waits for the owner.
+   */
   async connectBluesky(c: Company, handle: string, appPassword: string, auto: boolean): Promise<string> {
-    const s = await blueskySession(handle, appPassword);
-    this.vault.putSecret(`bsky:${c.id}`, appPassword);
-    c.social = { ...c.social, bluesky: { handle: s.handle, auto } };
-    note(c, this.#deps(c), "note", `Connected Bluesky @${s.handle}${auto ? "; posts go out on their own in live mode" : "; posts wait for you"}.`);
-    this.#emit(c.id, "company", null);
-    return s.handle;
+    const ch = await this.connect.connectBluesky(c, handle, appPassword);
+    this.connect.channelSettings(c, "bluesky", { approveEach: !auto });
+    return ch.label.replace(/^@/, "");
   }
-  disconnectBluesky(c: Company): void {
-    this.vault.putSecret(`bsky:${c.id}`, null);
-    if (c.social) delete c.social.bluesky;
-    this.#emit(c.id, "company", null);
-  }
-  async publishPost(c: Company, index: number): Promise<string> {
-    const m = c.marketing[index];
-    const b = c.social?.bluesky;
-    const pw = this.vault.getSecret(`bsky:${c.id}`);
-    if (!m) throw new Error("no such post");
-    if (m.status === "posted") return m.url ?? "";
-    if (!b || !pw) throw new Error("Connect a Bluesky account first.");
-    try {
-      const url = await blueskyPost(b.handle, pw, m.text);
-      Object.assign(m, { status: "posted", url, channel: "bluesky", error: undefined });
-      note(c, this.#deps(c), "result", `Posted on Bluesky: ${url}`);
-      return url;
-    } catch (e) {
-      Object.assign(m, { status: "failed", error: (e as Error).message });
-      note(c, this.#deps(c), "warning", `Bluesky post failed: ${(e as Error).message}`);
-      throw e;
-    } finally {
-      this.#emit(c.id, "company", null);
-    }
-  }
+  async disconnectBluesky(c: Company): Promise<void> { await this.connect.disconnect(c, "bluesky"); }
 
   /** Every product on sale across all companies: the public catalog for people and agents. */
   market(q = ""): { company: string; slug: string; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; featured: boolean; buyUrl: string; page: string }[] {
@@ -1531,10 +1537,9 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       if (c.status === "active" && c.policy.autopilot && c.nextShiftAt && now >= c.nextShiftAt && !this.#busy.has(c.id)) {
         await this.shiftNow(c).catch((e) => console.error("shift", c.slug, e));
       }
-      if (config.mode === "live" && c.social?.bluesky?.auto) {
-        const i = c.marketing.findIndex((m) => m.status === "drafted");
-        if (i >= 0) await this.publishPost(c, i).catch(() => {});
-      } else if (config.mode === "live" && config.blueskyCompanyPosts && houseOn() && !c.social?.bluesky && c.status === "active") {
+      // the owner's own accounts: posts out by their rules, Gumroad in step, Gumroad sales read (also while paused)
+      if (!(config.mode === "live" && c.sim)) await this.connect.tick(c, c.status === "active").catch((e) => console.error("connect", c.slug, (e as Error).message));
+      if (config.mode === "live" && config.blueskyCompanyPosts && houseOn() && !c.connections?.channels.bluesky && c.status === "active") {
         // No account of its own: the draft goes out on the project account, paced with the rest.
         const m = c.marketing.find((x) => x.status === "drafted");
         if (m) { housePost(`${m.text}\n\n— ${c.name}, a NIGHTSHIFT company`, `mkt-${c.id}-${m.at}`); Object.assign(m, { status: "posted", channel: "bluesky:project" }); this.#emit(c.id, "company", null); }

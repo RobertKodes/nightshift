@@ -121,6 +121,13 @@ export function flight(c: Company, t: Task, o: FlightInput) {
   if (!recorded && trail.length > 1) {
     span(`${t.id}:legacy`, root.id, "custom", "Not kept in detail (before the recorder)", t.createdAt, trail.at(-1)!.at, "ok", {}, costUsd);
   }
+  // what went through the owner's connected accounts for this shift: each post and Gumroad action, with how it went.
+  // The public sees only what went out in public (a post, a product published), without the details.
+  const acts = (c.connections?.log ?? []).filter((e) => e.taskId === t.id && (o.owner || e.public));
+  acts.forEach((e, i) => span(`${t.id}:conn:${i}`, root.id, "tool_call", e.what, e.at, e.at, e.result === "failed" ? "error" : "ok", {
+    channel: e.channel, result: e.result, log: [{ at: e.at, text: o.owner && e.detail ? `${e.result}: ${e.detail}` : e.result }],
+    ...(e.result === "failed" && o.owner && e.detail ? { error: e.detail } : {}),
+  }));
 
   root.totalCostUsd = spans.reduce((a, s) => a + (s.id === root.id ? 0 : s.costUsd), 0);
 
@@ -166,6 +173,7 @@ export function flight(c: Company, t: Task, o: FlightInput) {
       pending: Boolean(mk.pending),
     } : null,
     payback,
+    connections: acts.map((e) => ({ at: e.at, channel: e.channel, what: e.what, result: e.result, ...(e.url ? { url: e.url } : {}), ...(o.owner && e.detail ? { detail: e.detail } : {}) })),
     receipts: {
       orderId: t.imd?.orderId ?? null,
       jobId: t.imd?.jobId ?? null,

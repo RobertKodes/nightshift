@@ -34,11 +34,13 @@ export async function setupState(engine: Engine) {
     SIM_SHIFT_MINUTES: String(config.simShiftMinutes), SIM_JOB_SECONDS: String(config.simJobSeconds),
     TELEGRAM_BOT_TOKEN: config.telegramToken ? "set" : "", TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","),
     TOKEN_ADDRESS: config.token.address, TOKEN_SYMBOL: config.token.symbol, TOKEN_HOLDER_MIN: String(config.token.holderMin), TOKEN_BUY_URL: config.token.buyUrl,
+    GUMROAD_CLIENT_ID: config.gumroad.clientId,
   };
   const shown: Record<string, string> = {};
   for (const k of EDITABLE) shown[k] = SECRET_KEYS.has(k) ? (saved[k] ? "set" : "") : (saved[k] ?? "");
   const pending = EDITABLE.some((k) => (saved[k] ?? "") !== "" && !SECRET_KEYS.has(k) && saved[k] !== running[k])
-    || Boolean(saved.OPENROUTER_API_KEY) !== Boolean(config.openrouterKey) || Boolean(saved.TELEGRAM_BOT_TOKEN) !== Boolean(config.telegramToken);
+    || Boolean(saved.OPENROUTER_API_KEY) !== Boolean(config.openrouterKey) || Boolean(saved.TELEGRAM_BOT_TOKEN) !== Boolean(config.telegramToken)
+    || Boolean(saved.GUMROAD_CLIENT_SECRET) !== Boolean(config.gumroad.clientSecret);
 
   const [eth, base, swarm, or] = await Promise.all([
     rpcChain(config.ethRpc),
@@ -67,6 +69,8 @@ export async function setupState(engine: Engine) {
     { id: "price", label: "IMD price for budgets", state: config.imdUsdPinned || Date.now() - config.imdUsdAt < 30 * 60_000 ? "ok" : "warn",
       detail: config.imdUsdPinned ? `Pinned at $${config.imdUsd} by IMD_USD` : config.imdUsdAt ? `$${config.imdUsd.toFixed(2)} live from the market, ${Math.round((Date.now() - config.imdUsdAt) / 60_000)} min ago. Nothing to set` : "Market price not read yet; it reads itself every 10 minutes. Nothing to set" },
     { id: "alerts", label: "Alerts", state: config.telegramToken && config.telegramChat ? "ok" : "warn", detail: config.telegramToken && config.telegramChat ? "Telegram: warnings in live mode reach you" : "No Telegram bot: nobody hears when something breaks" },
+    { id: "gumroad", label: "Gumroad (owners sell on their own accounts)", state: "ok",
+      detail: config.gumroad.clientId && config.gumroad.clientSecret ? `App ${config.gumroad.clientId.slice(0, 8)}…, redirect URI ${config.publicUrl}/api/connect/gumroad/callback` : `Optional, not set. Register an app in Gumroad → Settings → Advanced → Applications with the redirect URI ${config.publicUrl}/api/connect/gumroad/callback` },
     { id: "token", label: "Platform token", state: "ok", detail: config.token.address ? `${config.token.symbol} at ${config.token.address}; holders of ${config.token.holderMin}+ pay no fee` : "Not set. Optional; see /token" },
     { id: "mode", label: "Mode", state: live ? "ok" : "warn", detail: live ? "LIVE: real IMD orders and real sales" : "Simulation: nothing leaves the server" },
   ];
@@ -81,7 +85,7 @@ export async function setupState(engine: Engine) {
 
 /** Settings that move money or trust: every change is announced, so a leaked admin token cannot act quietly. */
 export const ANNOUNCED = ["NIGHTSHIFT_MODE", "PLATFORM_TREASURY", "PLATFORM_DEV", "PLATFORM_FEE_BPS", "ETH_RPC", "SALES_RPC", "SALES_CHAIN_ID", "TOKEN_ADDRESS", "NFT_ADDRESS", "REQUIRE_AUTH",
-  "BETPOOL_ADDRESS", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS", "LAUNCH_NOTIFY", "PUBLIC_URL"];
+  "BETPOOL_ADDRESS", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS", "LAUNCH_NOTIFY", "PUBLIC_URL", "GUMROAD_CLIENT_ID", "GUMROAD_CLIENT_SECRET"];
 
 /** Saved settings that differ from what runs now, by name: what a restart would apply. */
 export function pendingChanges(): string[] {
@@ -91,6 +95,7 @@ export function pendingChanges(): string[] {
     ETH_RPC: config.ethRpc, SALES_RPC: config.salesRpc, SALES_CHAIN_ID: String(config.salesChainId), TOKEN_ADDRESS: config.token.address, NFT_ADDRESS: config.nft.address,
     BETPOOL_ADDRESS: config.betPool.address, BETPOOL_BLOCK: String(config.betPool.block),
     TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","), PUBLIC_URL: config.publicUrl, REQUIRE_AUTH: config.requireAuth ? "1" : "0",
+    GUMROAD_CLIENT_ID: config.gumroad.clientId,
   };
   return EDITABLE.filter((k) => saved[k] !== undefined && (SECRET_KEYS.has(k) || running[k] === undefined || saved[k] !== running[k]));
 }
