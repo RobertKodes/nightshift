@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { NxIcon } from "./nx/icons";
 import { Link } from "./router";
 
@@ -87,8 +88,8 @@ export function MarketPage() {
         </>
       )}
 
-      {open && (
-        <div className="mk-drawer" role="dialog" aria-modal="true" aria-label={`${open.name}: preview`} onClick={(e) => { if (e.target === e.currentTarget) setOpen(null); }}>
+      {open && createPortal(
+        <div className="nx-shell mk-drawer" data-room="economy" style={{ "--acc": "#ffc861", "--acc2": "#ffe0a1" } as React.CSSProperties} role="dialog" aria-modal="true" aria-label={`${open.name}: preview`} onClick={(e) => { if (e.target === e.currentTarget) setOpen(null); }}>
           <div className="mk-panel">
             <button className="mk-x" onClick={() => setOpen(null)} aria-label="Close"><NxIcon name="close" size={18} /></button>
             <span className="eyebrow">{open.kind} · {open.company.name}</span>
@@ -104,7 +105,7 @@ export function MarketPage() {
             ) : <p className="dim">This product is being packaged.</p>}
             <div className="mk-buy"><Link to={`/c/${open.company.slug}`} className="btn primary">Buy for ${open.priceUsd.toFixed(2)}</Link><a className="mk-peek" href={`/api/market/${open.company.slug}/${open.id}`} target="_blank" rel="noreferrer">As JSON</a></div>
           </div>
-        </div>
+        </div>, document.body,
       )}
     </div>
   );
