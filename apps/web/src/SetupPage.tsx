@@ -117,6 +117,8 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "BUYBOT_MIN_USD", label: "Smallest buy to post (USD)", hint: "0" },
     { k: "BUYBOT_EMOJI_USD", label: "Dollars per 🌙 in a buy", hint: "10" },
     { k: "BUYBOT_MEDIA", label: "Custom buy GIF/MP4 URL (optional)", hint: "https://…/buy.mp4" },
+    { k: "DIGEST", label: "Daily company digest (live companies, real records only)", options: [["", "Default (on)"], ["1", "On"], ["0", "Off"]] },
+    { k: "DIGEST_HOUR", label: "Digest hour (UTC)", hint: "18" },
     { k: "X_URL", label: "X profile", hint: "https://x.com/…" },
     { k: "TELEGRAM_URL", label: "Telegram link", hint: "https://t.me/…" },
   ] },

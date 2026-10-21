@@ -82,6 +82,9 @@ export const config = {
    * Bluesky posts, milestones and welcomes. The bot must be a member (an admin in a channel).
    */
   telegramCommunity: env.TELEGRAM_COMMUNITY ?? "@getnightshift",
+  /** The daily company digest in the community chat (digest.ts): on unless DIGEST=0, at DIGEST_HOUR UTC. */
+  digest: (env.DIGEST ?? "1") !== "0",
+  digestHour: Math.min(23, Math.max(0, Math.floor(num(env.DIGEST_HOUR, 18)))),
   /** Buys below this many dollars are not posted; one 🌙 per BUYBOT_EMOJI_USD dollars. */
   buyMinUsd: num(env.BUYBOT_MIN_USD, 0),
   /** The community guard: removes scams, spam and FUD in the public group and mutes repeat offenders. */

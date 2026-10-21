@@ -61,6 +61,7 @@ import { live as gameLobby } from "./games-routes.js";
 import { betCard, duelCard, freeDuelCard } from "./duelcards.js";
 import { liveBets } from "./bets-routes.js";
 import { liveGames } from "./spectate.js";
+import { startDigest } from "./digest.js";
 import { type ChessEvent, onChess } from "./chess.js";
 import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { followOrders } from "./orders.js";
@@ -245,6 +246,8 @@ export class Engine {
       });
       startCommunity();
     }
+    // The daily digest of what the live companies did, from their records and the ledger (sim mode: a dry-run log only).
+    startDigest(() => this.store.companies.values(), () => this.ledger.store.list(""));
     setInterval(() => void this.#followTokenLaunch(), 60_000);
     // After launch: the keeper splits fees and burns IMD every 2 hours (01:00, 03:00 … UTC); the frog list is built on Mondays.
     let kept = "", built = "";
