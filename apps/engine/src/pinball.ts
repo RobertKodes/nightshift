@@ -679,7 +679,9 @@ setInterval(() => {
 /** The boards: tonight's (last 24 hours) and all-time best verified scores, duels and solo runs. */
 export function board(): { board: Score[]; best: Score[]; solo: Score[]; soloBest: Score[] } {
   const night = Date.now() - 86_400_000;
-  const top = (l: Score[]) => [l.filter((s) => s.at > night).slice(0, 10), l.slice(0, 10)] as const;
+  // the old shared default name is nobody's: no row for it (players without a name play under their own handle)
+  const named = (l: Score[]) => l.filter((s) => !/^\s*(night crew)?\s*$/i.test(s.name));
+  const top = (l: Score[]) => [named(l).filter((s) => s.at > night).slice(0, 10), named(l).slice(0, 10)] as const;
   const [board, best] = top(boards.duel), [solo, soloBest] = top(boards.solo);
   return { board, best, solo, soloBest };
 }

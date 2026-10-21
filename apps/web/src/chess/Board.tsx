@@ -3,7 +3,6 @@ import * as THREE from "three";
 import { Chess, type Color, type Move, type PieceSymbol, type Square } from "chess.js";
 import { Icon } from "../Icon";
 import { Pieces, type PieceState, type PieceVisual } from "./Pieces";
-import { ControlRoom } from "./ControlRoom";
 import { BoardBranding } from "./BoardBranding";
 import { LITE, pixelRatio } from "../lite";
 
@@ -25,7 +24,6 @@ class NightBoard {
   private pieces = new Map<Square, Piece>();
   private dying: Piece[] = [];
   private models = new Pieces();
-  private controlRoom: ControlRoom;
   private branding: BoardBranding;
   private disposed = false;
   private bursts: { sprite: THREE.Sprite; ring: THREE.Mesh; start: number }[] = [];
@@ -76,7 +74,6 @@ class NightBoard {
       const a=this.mesh(new THREE.BoxGeometry(9.24,.02,.02),this.edge);a.position.set(0,-.18,side*4.62);
       const b=this.mesh(new THREE.BoxGeometry(.02,.02,9.24),this.edge);b.position.set(side*4.62,-.18,0);this.board.add(a,b);
     }
-    this.controlRoom = new ControlRoom(); this.scene.add(this.controlRoom.group);
     this.check = this.mesh(new THREE.RingGeometry(.28, .49, 40), new THREE.MeshBasicMaterial({ color: 0xff478a, transparent: true, opacity: .65, side: THREE.DoubleSide, depthWrite: false }));
     this.check.rotation.x = -Math.PI / 2; this.check.visible = false; this.scene.add(this.check);
     this.observer = new ResizeObserver(this.resize); this.observer.observe(host);
@@ -214,8 +211,7 @@ class NightBoard {
       this.edgePulse.position.set(side===0 ? v : side===1 ? 4.67 : side===2 ? -v : -4.67,.02,side===0 ? -4.67 : side===1 ? v : side===2 ? 4.67 : -v);
     }
     if(moving)this.renderer.shadowMap.needsUpdate=true;
-    this.branding.update(now,this.reduced);
-    // Fit the entire branded set, including both standing cards, before the user's zoom.
+    // Fit the whole set before the user's zoom.
     const sa=Math.sin(this.azimuth),ca=Math.cos(this.azimuth),se=Math.sin(this.elevation),ce=Math.cos(this.elevation),tan=Math.tan(THREE.MathUtils.degToRad(19));
     let fit=0;
     for(const {x,y,z} of this.branding.fitPoints) {
@@ -224,7 +220,6 @@ class NightBoard {
     }
     const radius=fit*this.distance/15.8;
     this.camera.position.set(Math.sin(this.azimuth)*Math.cos(this.elevation)*radius,Math.sin(this.elevation)*radius,Math.cos(this.azimuth)*Math.cos(this.elevation)*radius); this.camera.lookAt(0,0,0);
-    this.controlRoom.update(now,this.azimuth,this.reduced);
     this.renderer.render(this.scene,this.camera);
     // Useful for visual/performance review without retaining renderer or scene globals.
     if(now-this.statsAt>1000){this.statsAt=now;this.host.dataset.triangles=String(this.renderer.info.render.triangles);this.host.dataset.drawCalls=String(this.renderer.info.render.calls);this.host.dataset.pieceCount=String(this.pieces.size);}
@@ -258,7 +253,7 @@ class NightBoard {
     this.disposed = true;
     cancelAnimationFrame(this.raf);this.observer.disconnect();this.intersection.disconnect();this.motion.removeEventListener("change",this.motionChange);document.removeEventListener("visibilitychange",this.visibility);
     const c=this.renderer.domElement;c.removeEventListener("pointerdown",this.pointerDown);c.removeEventListener("pointermove",this.pointerMove);c.removeEventListener("pointerup",this.pointerUp);c.removeEventListener("pointercancel",this.pointerCancel);c.removeEventListener("wheel",this.wheel);c.removeEventListener("contextmenu",this.contextMenu);c.removeEventListener("webglcontextlost",this.contextLost);
-    this.models.dispose();this.branding.dispose();this.controlRoom.dispose();for(const resource of this.resources)resource.dispose();this.renderer.dispose();c.remove();
+    this.models.dispose();this.branding.dispose();for(const resource of this.resources)resource.dispose();this.renderer.dispose();c.remove();
   }
 }
 

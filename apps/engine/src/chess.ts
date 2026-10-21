@@ -90,7 +90,20 @@ const opposite = (c: Color): Color => c === "w" ? "b" : "w";
 export function cleanName(name: string): string {
   return publicName(name, { max: 18 }) ?? "Night crew";
 }
-const keyOf = (p: Pick<Player, "name" | "wallet">) => JSON.stringify([p.name.toLowerCase(), p.wallet?.toLowerCase() ?? ""]);
+/** A player's rating key: their wallet when they have one (one row whatever name they use), else their name. */
+const keyOf = (p: Pick<Player, "name" | "wallet">) => (p.wallet ? `w:${p.wallet.toLowerCase()}` : `n:${p.name.toLowerCase()}`);
+/** Boards kept before keys were by wallet (["name","wallet"]): one row per wallet now, the latest rating, the games added up. */
+function migrateBoards(b: Boards): Boards {
+  const rekey = (k: string) => { if (k.startsWith("w:") || k.startsWith("n:")) return k; try { const [n, w] = JSON.parse(k) as [string, string]; return w ? `w:${w}` : `n:${n}`; } catch { return k; } };
+  const rows = new Map<string, Rating>();
+  for (const r of [...b.ratings].sort((x, y) => x.at - y.at)) {
+    const key = rekey(r.key), old = rows.get(key);
+    rows.set(key, old ? { ...r, key, games: old.games + r.games, wins: old.wins + r.wins } : { ...r, key });
+  }
+  return { ratings: [...rows.values()], results: b.results.map((r) => ({ ...r, key: rekey(r.key) })) };
+}
+/** The name a board shows: the player's own, the wallet's handle for the old shared default, or nothing (a guest with no name is nobody's row). */
+export const boardName = (key: string, name: string) => (/^\s*(night crew)?\s*$/i.test(name) ? key.startsWith("w:0x") ? `Frog-${key.slice(4, 8).toUpperCase()}` : null : name);
 
 /** Separate stores also let tests run complete games without touching the live board. */
 export class ChessGames {
@@ -103,7 +116,7 @@ export class ChessGames {
     try {
       if (file && existsSync(file)) {
         const data = JSON.parse(readFileSync(file, "utf8"));
-        if (Array.isArray(data.ratings) && Array.isArray(data.results)) this.boards = data;
+        if (Array.isArray(data.ratings) && Array.isArray(data.results)) this.boards = migrateBoards(data);
       }
     } catch { /* an unreadable board must not keep the arcade offline */ }
   }
@@ -423,7 +436,7 @@ export class ChessGames {
       const key = keyOf(p), old = this.boards.ratings.find((r) => r.key === key);
       const r = old ?? { key, name: p.name, rating: 1200, games: 0, wins: 0, at: 0 };
       // Apply the match's expected-score change to the latest rating if another game settled first.
-      r.rating += d; r.games++; r.wins += Number(m.winner === p.id); r.at = this.now(); p.rating = r.rating;
+      r.rating += d; r.games++; r.wins += Number(m.winner === p.id); r.at = this.now(); p.rating = r.rating; r.name = p.name;
       if (!old) this.boards.ratings.push(r);
       this.boards.results.push({ key, at: this.now(), win: m.winner === p.id });
     }
@@ -431,7 +444,8 @@ export class ChessGames {
     if (this.file) try { mkdirSync(dirname(this.file), { recursive: true }); writeFileSync(`${this.file}.tmp`, JSON.stringify(this.boards)); renameSync(`${this.file}.tmp`, this.file); } catch (err) { console.error("chess board", err); }
   }
   board() {
-    const rows = [...this.boards.ratings].sort((a, b) => b.rating - a.rating || b.wins - a.wins);
+    // one row per player (by wallet, else name), never the old shared default as a name
+    const rows = this.boards.ratings.flatMap((r) => { const name = boardName(r.key, r.name); return name ? [{ ...r, name }] : []; }).sort((a, b) => b.rating - a.rating || b.wins - a.wins);
     const publicRow = (r: Rating) => ({ name: r.name, rating: r.rating, games: r.games, wins: r.wins });
     return { best: rows.slice(0, 10).map(publicRow), board: rows.filter((r) => this.boards.results.some((g) => g.key === r.key && g.at > this.now() - 86_400_000)).slice(0, 10).map((r) => {
       const games = this.boards.results.filter((g) => g.key === r.key && g.at > this.now() - 86_400_000);

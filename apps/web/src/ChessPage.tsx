@@ -15,6 +15,7 @@ import "./games/live.css";
 import { type Seat, StakeLobby, StakeResult, tokenLabel, useEscrow } from "./stakes";
 import { alertJoined, doneWaiting, keepWaiting, Lounge, primeAlerts, useLounge, waitingOn, waitText } from "./games/lounge";
 import { useStakedSeat } from "./games/staked";
+import { handleFor, nameOr, typedName } from "./games/handle";
 
 const OPENING = new Chess().fen();
 const DEMO = "r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 7";
@@ -23,7 +24,8 @@ const PIECES: Record<PieceSymbol, string> = { p: "pawn", n: "knight", b: "bishop
 const REASONS: Record<string, string> = { checkmate: "Checkmate. The king has nowhere left to go.", timeout: "Time is up. The clock decided this one.", resignation: "The game ended by resignation.", stalemate: "Stalemate. No legal moves, no check.", repetition: "The same position appeared three times.", agreement: "A draw by mutual agreement.", abandonment: "A player was away from the table too long on their turn.", "insufficient material": "Neither side has enough material to mate.", "50-move rule": "Fifty moves without a pawn move or capture.", void: "Void: a player never came to the table or never made a move, so nobody loses. Both stakes go back." };
 
 function FrogPortrait({ frog = "007", className = "" }: { frog?: "001" | "002" | "007"; className?: string }) {
-  return <span className={`nc-frog-portrait ${className}`}><img className={frog === "007" ? "nc-face" : undefined} src={`/chess/frog-${frog}.webp`} alt={`NIGHT FROG #${Number(frog)}`} width="300" height="300" decoding="async"/></span>;
+  // the real onchain NIGHT FROG (its SVG, read from the contract), cropped to the face
+  return <span className={`nc-frog-portrait ${className}`}><img src={`/api/pinball/frog/${Number(frog)}`} alt={`NIGHT FROG #${Number(frog)}`} width="300" height="300" decoding="async" loading="lazy"/></span>;
 }
 function Wordmark() {
   return <span className="nc-wordmark"><Icon name="frog" size={32}/><span><b>NIGHT <em>CHESS</em></b><small>· by <strong>NIGHTSHIFT</strong></small></span></span>;
@@ -42,7 +44,10 @@ function PlayerCard({ player, ms, active, captured, advantage, label, away }: { 
 
 export function ChessPage() {
   const { address, signIn, busy: signing } = useSession();
-  const [name,setName] = useState(()=>{try{return localStorage.getItem("nc-name") ?? "";}catch{return "";}});
+  // the name typed once, else the player's own handle (never a name everyone shares)
+  const [name,setName] = useState(()=>{try{const n=localStorage.getItem("nc-name");return typedName(n) ? n! : handleFor();}catch{return handleFor();}});
+  useEffect(()=>{try{if(!typedName(localStorage.getItem("nc-name")))setName(handleFor(address));}catch { /* private window */ }},[address]);
+  const playName=nameOr(name,address);
   const [tc,setTc] = useState<TimeControl>("3+2");
   // ?accept=<match>&token=IMD (from the lounge): the stake lobby, where that challenge is accepted
   const [money,setMoney] = useState<"FREE" | "IMD" | "SHIFT">(()=>{const t=new URLSearchParams(location.search).get("token");return t==="IMD" || t==="SHIFT" ? t : "FREE";});
@@ -163,13 +168,15 @@ export function ChessPage() {
   },[time,running,match?.turn,myColor]);
   const start = async (practiceMode=false) => {
     if(actionPending.current)return;actionPending.current=true;setBusy(true);setErr(null);setClosedNote(null);sound.current?.unlock();if(!practiceMode)primeAlerts();
-    try {localStorage.setItem("nc-name",name);}catch { /* private window */ }
+    try {if(typedName(name) && name!==handleFor(address))localStorage.setItem("nc-name",name);}catch { /* private window */ }
     try {
       source.current?.close();setSelected(null);setConfirm(null);offset.current=0;shownPly.current=0;current.current=null;
-      if(practiceMode){setMode("practice");practice.current=new Practice(name,tc);receive(practice.current.state);setConnected(true);}
-      else {practice.current=null;setMode("online");const r=await api<{match:MatchView;player:string}>("queue",{name,tc});if(!mounted.current)return;playerToken.current=r.player;receive(r.match);follow(r.match.id,r.player);}
+      if(practiceMode){setMode("practice");practice.current=new Practice(playName,tc);receive(practice.current.state);setConnected(true);}
+      else {practice.current=null;setMode("online");const r=await api<{match:MatchView;player:string}>("queue",{name:playName,tc});if(!mounted.current)return;playerToken.current=r.player;receive(r.match);follow(r.match.id,r.player);}
     } catch(e){setErr((e as Error).message);}finally {actionPending.current=false;if(mounted.current)setBusy(false);}
   };
+  // /games/chess?practice=1 (the Game Room's Practice): straight to a game against Frog #7
+  useEffect(()=>{if(new URLSearchParams(location.search).get("practice")){window.history.replaceState(null,"","/games/chess");void start(true);}},[]);
   const move=useCallback(async (from: Square,to: Square,promote?: string)=>{
     const m=current.current;if(!m || m.done || actionPending.current)return;
     actionPending.current=true;setBusy(true);setErr(null);sound.current?.unlock();
@@ -192,7 +199,7 @@ export function ChessPage() {
   useStakedSeat("chess",seat,{busy:!!match && !match.done && !match.escrow && (mode==="practice" || !!match.startedAt),following:match?.escrow ? match.id : null,open:(s)=>{if(!new URLSearchParams(location.search).get("token"))setMoney((m)=>m==="FREE" ? s.token : m);}});
   const lobby=()=>{if(watching.current){watching.current=null;setWatchId(null);setViewers(0);window.history.replaceState(null,"","/games/chess");document.title="NIGHT CHESS · NIGHTSHIFT";}if(current.current)doneWaiting("chess",current.current.id);source.current?.close();source.current=null;practice.current=null;current.current=null;setMatch(null);setToken("");setSelected(null);setPromotion(null);setConfirm(null);setErr(null);setConnected(true);try{sessionStorage.removeItem("nc-match");}catch { /* private window */ }};
   /** A seat from the lounge on this page: the same as a seat from the queue. */
-  const loungeSeat=(_game: string,id: string,player: string)=>{source.current?.close();practice.current=null;current.current=null;offset.current=0;shownPly.current=0;setErr(null);setClosedNote(null);setMode("online");try{localStorage.setItem("nc-name",name);}catch { /* private window */ }follow(id,player);};
+  const loungeSeat=(_game: string,id: string,player: string)=>{source.current?.close();practice.current=null;current.current=null;offset.current=0;shownPly.current=0;setErr(null);setClosedNote(null);setMode("online");try{if(typedName(name) && name!==handleFor(address))localStorage.setItem("nc-name",name);}catch { /* private window */ }follow(id,player);};
   const cancelSearch=async()=>{
     if(!match || actionPending.current)return;actionPending.current=true;setBusy(true);
     try {await api(`match/${match.id}/leave`,{player:token});lobby();}
@@ -242,42 +249,33 @@ export function ChessPage() {
 
     {!inGame && <main className="nc-lobby">
       <section className="nc-stage" aria-labelledby="nc-title">
-        <span className="nc-kicker"><i className="nc-live"/> NIGHTSHIFT GAME ROOM / 02</span>
-        <h1 id="nc-title">The crew.<br/><em>Your move.</em></h1>
-        <p>Autonomous companies. Sleepless frogs.<br/>Sixty-four squares to own the night.</p>
-        <div className="nc-crew"><div className="nc-crew-faces"><FrogPortrait frog="001"/><FrogPortrait frog="007"/><FrogPortrait frog="002"/></div><span><b>NIGHT FROGS / ON DUTY</b><small>500 onchain originals. One night shift.</small></span><Icon name="bolt" size={20}/></div>
-        <div className="nc-cabinet"><div className="nc-marquee"><span><Icon name="frog" size={16}/> NIGHT CHESS</span><span className="nc-kicker">REAL-TIME / 3D</span></div><Board fen={DEMO} demo/><div className="nc-insert"><span>MOONLIGHT vs ULTRAVIOLET</span><span className="nc-shift-mark">$SHIFT / NIGHT FROGS</span></div></div>
-        <div className="nc-editorial"><span>AUTONOMOUS / AFTER HOURS<br/>ALWAYS SHIPPING. STILL THINKING.</span><i/><Icon name="frog" size={30}/></div>
+        <div className="nc-stage-head"><h1 id="nc-title">NIGHT <em>CHESS</em></h1><p>Real-time chess against people or Frog #7. Free and rated, or staked in $SHIFT or IMD.</p></div>
+        <div className="nc-cabinet"><Board fen={DEMO} demo/></div>
       </section>
       <section className="nc-panel" aria-label="Set up your game">
-        <div className="nc-panel-head"><span className="nc-kicker">CLOCK IN, NIGHT CREW</span><span className="nc-free">FREE TO PLAY</span></div>
-        <label className="nc-name-label" htmlFor="nc-name">YOUR PLAYER NAME · TAP TO EDIT</label>
-        <div className="nc-name-field"><input id="nc-name" value={name} maxLength={18} placeholder="Night crew" autoComplete="nickname" disabled={!!match || busy} onChange={e=>setName(e.target.value)}/><Icon name="edit" size={18}/></div>
-        <p className="nc-note">A seat at the table. No wallet required.</p>
-        <div className="nc-section-label"><span>01 / SET THE PACE</span><Icon name="clock" size={15}/></div>
-        <div className="nc-controls" role="group" aria-label="Time control">{(Object.keys(CONTROLS) as TimeControl[]).map(k=><button type="button" disabled={!!match || busy} key={k} className={tc===k ? "on" : ""} aria-pressed={tc===k} onClick={()=>setTc(k)}><span>{CONTROLS[k].label}</span><b>{k}</b><small>{k==="3+2" ? "+2 SEC / MOVE" : "NO INCREMENT"}</small><small className={`nc-waiting ${waitingOn(lounge,k) ? "on" : ""}`}>{waitingOn(lounge,k) ? `${waitingOn(lounge,k)} WAITING` : "NOBODY WAITING"}</small>{tc===k && <Icon name="check" size={13}/>}</button>)}</div>
-        <p className="nc-note">{CONTROLS[tc].note}. Your clock runs on your turn.</p>
-        <div className="nc-section-label"><span>02 / PLAY FOR</span><Icon name="diamond" size={15}/></div>
-        <div className="nc-controls" role="group" aria-label="Stake">{(["FREE","IMD","SHIFT"] as const).map(k=><button type="button" disabled={!!match || busy} key={k} className={money===k ? "on" : ""} aria-pressed={money===k} onClick={()=>setMoney(k)}><span>{k==="FREE" ? "Free" : "Stake"}</span><b>{k==="FREE" ? "FREE" : tokenLabel(k)}</b><small>{k==="FREE" ? "RATED · NO STAKE" : escrow?.live ? "WINNER TAKES 95%" : "OPENS WITH THE SIGNER"}</small>{money===k ? <Icon name="check" size={13}/> : k!=="FREE" && !escrow?.live ? <Icon name="lock" size={13}/> : null}</button>)}</div>
+        <div className="nc-name-row"><label className="nc-name-label" htmlFor="nc-name">Your name</label><div className="nc-name-field"><input id="nc-name" value={name} maxLength={18} placeholder={handleFor(address)} autoComplete="nickname" disabled={!!match || busy} onChange={e=>setName(e.target.value)}/><Icon name="edit" size={16}/></div></div>
+        <div className="nc-section-label"><span>Clock</span><span className="nc-muted">{CONTROLS[tc].note}</span></div>
+        <div className="nc-controls" role="group" aria-label="Time control">{(Object.keys(CONTROLS) as TimeControl[]).map(k=><button type="button" disabled={!!match || busy} key={k} className={tc===k ? "on" : ""} aria-pressed={tc===k} onClick={()=>setTc(k)}><b>{k}</b><span>{CONTROLS[k].label}</span><small className={`nc-waiting ${waitingOn(lounge,k) ? "on" : ""}`}>{waitingOn(lounge,k) ? `${waitingOn(lounge,k)} waiting` : "nobody waiting"}</small>{tc===k && <Icon name="check" size={13}/>}</button>)}</div>
+        <div className="nc-section-label"><span>Play for</span><span className="nc-muted">{money==="FREE" ? "rated, no wallet needed" : "winner gets 95% of the pot"}</span></div>
+        <div className="nc-controls" role="group" aria-label="Stake">{(["FREE","IMD","SHIFT"] as const).map(k=><button type="button" disabled={!!match || busy} key={k} className={money===k ? "on" : ""} aria-pressed={money===k} onClick={()=>setMoney(k)}><b>{k==="FREE" ? "Free" : tokenLabel(k)}</b><span>{k==="FREE" ? "no stake" : escrow?.live ? "stake" : "not open yet"}</span>{money===k ? <Icon name="check" size={13}/> : k!=="FREE" && !escrow?.live ? <Icon name="lock" size={13}/> : null}</button>)}</div>
         {money==="FREE" ? <button type="button" className="nc-btn primary" disabled={busy || !!match} onClick={()=>void start()}><Icon name="swords" size={19}/><span>{busy ? "OPENING YOUR TABLE" : "FIND A RIVAL"}</span><Icon name="arrow" size={18}/></button>
-          : <StakeLobby game="chess" token={money} name={name} tc={tc} address={address} signIn={signIn} onSeat={seat} theme="nc"/>}
-        <button type="button" className="nc-btn ghost" disabled={busy || !!match} onClick={()=>void start(true)}><FrogPortrait/>PLAY FROG #7 (BOT)<span className="nc-muted">OFFLINE</span></button>
+          : <StakeLobby game="chess" token={money} name={playName} tc={tc} address={address} signIn={signIn} onSeat={seat} theme="nc"/>}
+        <button type="button" className="nc-btn ghost" disabled={busy || !!match} onClick={()=>void start(true)}><FrogPortrait/>Practice vs Frog #7<span className="nc-muted">not rated</span></button>
         {closedNote && <div className="nc-error" role="status"><Icon name="clock" size={16}/><span>{closedNote}</span><button type="button" onClick={()=>setClosedNote(null)} aria-label="Dismiss"><Icon name="close" size={16}/></button></div>}
         {error}
         {money==="FREE" && <Lounge game="chess" onSeat={loungeSeat}/>}
-        <div className="nc-section-label"><span>03 / EVERY MOVE MATTERS</span></div>
-        <div className="nc-how">{[["swords","A real rival","Join the queue. Meet someone on the same clock."],["target","Choose your move","Tap a piece, then a glowing square. Drag to orbit."],["shield","A fair table","The server validates every move and keeps both clocks."],["trophy","Make your mark","Start at 1200. Play two moves each to count toward Elo."]].map(([icon,title,copy])=><div key={title}><Icon name={icon!} size={22}/><b>{title}</b><p>{copy}</p></div>)}</div>
-        <div className="nc-leaderboard"><div className="nc-section-label"><span><Icon name="trophy" size={15}/> THE NIGHT CREW</span><span>ELO</span></div>
+        <div className="nc-section-label"><span>How it plays</span></div>
+        <div className="nc-how">{[["swords","A real rival","Find a rival on the same clock, or join a table in the lounge."],["target","Your move","Tap a piece, then a glowing square. Drag to turn the board."],["shield","A fair table","The server checks every move and keeps both clocks."],["trophy","Your rating","Everyone starts at 1200. Two moves each and the game counts."]].map(([icon,title,copy])=><div key={title}><Icon name={icon!} size={22}/><b>{title}</b><p>{copy}</p></div>)}</div>
+        <div className="nc-leaderboard"><div className="nc-section-label"><span><Icon name="trophy" size={15}/> Leaderboard</span><span>ELO</span></div>
           <div className="nc-tabs" role="group" aria-label="Leaderboard period">{([['board','Tonight'],['best','All time']] as const).map(([k,label])=><button type="button" key={k} aria-pressed={tab===k} className={tab===k ? "on" : ""} onClick={()=>setTab(k)}>{label}</button>)}</div>
           {leaderboard[tab].length ? <ol>{leaderboard[tab].map((p,i)=><li className={i<3 ? `ns-place-${i+1}` : undefined} key={`${p.name}-${i}`}><span className={`ns-rank ${i<3 ? "ns-medal" : ""}`} aria-label={`Place ${i+1}`}>{i<3 && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="m8 14-2 8 6-3 6 3-2-8"/><circle cx="12" cy="9" r="7"/></svg>}<span aria-hidden="true">{i<3 ? i+1 : String(i+1).padStart(2,"0")}</span></span><div><b>{p.name}</b><small>{p.wins} W / {p.games} G</small></div><strong>{p.rating}</strong></li>)}</ol> : <p className="nc-empty">No rated games{tab==="board" ? " in the last 24 hours" : " yet"}.<br/>The first move is yours.</p>}
         </div>
-        <p className="nc-legal"><Icon name="lock" size={14}/><span>Free games need no wallet. Staked duels in IMD and $SHIFT are for adults 18+ only, where allowed: money games may be gambling, including in Romania. Practice never affects ratings.</span></p>
+        <p className="nc-legal"><Icon name="lock" size={14}/><span>Free games need no wallet. Staked games: 18+, only where allowed.</span></p>
       </section>
-      <footer className="nc-lobby-footer"><span>NIGHTSHIFT / AFTER HOURS</span><ImdSignature/></footer>
     </main>}
 
     {inGame && match && mine && rival && <main className="nc-game">
-      <div className="nc-game-heading"><span className="nc-kicker">{mode==="practice" ? "PRACTICE / FROG #7" : spectate ? <><i className="nc-live"/> SPECTATING · {viewers} WATCHING</> : <><i className="nc-live"/> LIVE DUEL</>}<span className="nc-heading-tc">{match.tc} · {CONTROLS[match.tc].label.toUpperCase()}</span></span><div className="nc-game-tools"><ImdSignature/>{spectate && <button type="button" className="nc-icon-btn" aria-label={flipped ? "View from white" : "View from black"} aria-pressed={flipped} onClick={()=>setFlipped(!flipped)}><Icon name="swap" size={20}/></button>}<button type="button" className="nc-icon-btn" aria-label={soundOn ? "Mute sounds" : "Enable sounds"} aria-pressed={soundOn} onClick={()=>{sound.current?.unlock();setSoundOn(!soundOn);}}><Icon name={soundOn ? "sound":"sound-off"} size={20}/></button></div></div>
+      <div className="nc-game-heading"><span className="nc-kicker">{mode==="practice" ? "PRACTICE / FROG #7" : spectate ? <><i className="nc-live"/> SPECTATING · {viewers} WATCHING</> : match.escrow ? <><i className="nc-live"/> STAKED · {Number(match.stake ?? 0).toLocaleString()} {tokenLabel(match.currency)} EACH</> : <><i className="nc-live"/> LIVE DUEL</>}<span className="nc-heading-tc">{match.tc} · {CONTROLS[match.tc].label.toUpperCase()}</span></span><div className="nc-game-tools"><ImdSignature/>{spectate && <button type="button" className="nc-icon-btn" aria-label={flipped ? "View from white" : "View from black"} aria-pressed={flipped} onClick={()=>setFlipped(!flipped)}><Icon name="swap" size={20}/></button>}<button type="button" className="nc-icon-btn" aria-label={soundOn ? "Mute sounds" : "Enable sounds"} aria-pressed={soundOn} onClick={()=>{sound.current?.unlock();setSoundOn(!soundOn);}}><Icon name={soundOn ? "sound":"sound-off"} size={20}/></button></div></div>
       <section className="nc-table" aria-label="Chess table">
         <div className="nc-rival-card">{playerCard(rival)}</div>
         <div className="nc-board-wrap"><Board fen={match.fen} color={myColor} selectableColor={!spectate && running && match.turn===myColor && !busy ? myColor : null} selected={selected} targets={targets} lastMove={match.lastMove} onSquare={spectate ? undefined : pick}/>

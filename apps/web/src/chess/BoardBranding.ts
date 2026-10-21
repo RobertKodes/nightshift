@@ -2,14 +2,12 @@ import * as THREE from "three";
 import { glossy } from "./glossy";
 
 type Disposable = { dispose(): void };
-type Card = { group: THREE.Group; heading: number; phase: number };
 
 /** All decoration belongs to the physical set. The playing surface uses one 2048px map. */
 export class BoardBranding {
   readonly group = new THREE.Group();
   readonly fitPoints: THREE.Vector3[] = [];
   private resources = new Set<Disposable>();
-  private cards: Card[] = [];
   private disposed = false;
   private anisotropy: number;
 
@@ -17,7 +15,6 @@ export class BoardBranding {
     this.anisotropy = renderer.capabilities.getMaxAnisotropy();
     this.group.name = "NIGHTSHIFT signature chess set";
     this.table();
-    for (const side of [-1, 1]) this.card(side);
     for (const x of [-4.68, 4.68]) for (const z of [-4.68, 4.68]) {
       for (const y of [-.42, 1.05]) this.fitPoints.push(new THREE.Vector3(x, y, z));
     }
@@ -165,50 +162,6 @@ export class BoardBranding {
     shape.lineTo(x + width, y + height - radius); shape.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
     shape.lineTo(x + radius, y + height); shape.quadraticCurveTo(x, y + height, x, y + height - radius);
     shape.lineTo(x, y + radius); shape.quadraticCurveTo(x, y, x + radius, y); return shape;
-  }
-
-  private card(side: number) {
-    const group = new THREE.Group(), heading = side === -1 ? 0 : Math.PI, number = side === -1 ? 1 : 7;
-    group.name = `NIGHT FROG #${number} glass collectible`; group.position.set(side * 5.38, 1.23, -side * 2.1); group.rotation.y = heading;
-    this.cards.push({ group, heading, phase: number }); this.group.add(group);
-    const frame = this.mesh(new THREE.ExtrudeGeometry(this.rounded(1.46, 2.05, .12), { depth: .045, bevelEnabled: true, bevelSize: .018, bevelThickness: .018, bevelSegments: 3, steps: 1 }),
-      glossy({ color: 0x21133b, metalness: .3, roughness: .16, clearcoat: 1, transparent: true, opacity: .86, emissive: 0x7c5cff, emissiveIntensity: .75 }));
-    frame.position.z = -.023; group.add(frame);
-    const outline = new THREE.EdgesGeometry(frame.geometry, 35);
-    group.add(new THREE.LineSegments(this.keep(outline), this.keep(new THREE.LineBasicMaterial({ color: 0xa48bff, transparent: true, opacity: .8, toneMapped: false }))));
-    const canvas = this.canvas(768, 1088), ctx = canvas.getContext("2d")!, texture = this.texture(canvas);
-    let art: HTMLImageElement | undefined;
-    const paint = () => {
-      ctx.clearRect(0, 0, 768, 1088); ctx.save(); ctx.beginPath(); ctx.roundRect(0, 0, 768, 1088, 42); ctx.clip();
-      ctx.fillStyle = "#0d0a1f"; ctx.fillRect(0, 0, 768, 1088);
-      if (art) {
-        // Contain the originals: the crown and laser eyes stay inside the card.
-        const scale = Math.min(736 / art.width, 804 / art.height), w = art.width * scale, h = art.height * scale;
-        ctx.drawImage(art, (768 - w) / 2, 24 + (804 - h) / 2, w, h);
-      }
-      ctx.textAlign = "center"; ctx.fillStyle = "#e9e2ff"; ctx.font = '700 55px "JetBrains Mono", monospace'; ctx.fillText(`NIGHT FROG #${number}`, 384, 918);
-      ctx.fillStyle = "#a48bff"; ctx.font = '500 27px "JetBrains Mono", monospace'; ctx.fillText("NIGHTSHIFT / NIGHT CREW", 384, 982);
-      ctx.fillStyle = number === 1 ? "#ffc46b" : "#b8ff4a"; ctx.fillRect(288, 1030, 192, 3); ctx.restore(); texture.needsUpdate = true;
-    };
-    paint(); void this.image(`chess/frog-${String(number).padStart(3, "0")}.webp`, image => { art = image; paint(); });
-    const material = this.keep(new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false }));
-    const faceGeometry = this.keep(new THREE.PlaneGeometry(1.36, 1.93));
-    // Printing both faces keeps the art and label readable from either default camera.
-    for (const face of [-1, 1]) {
-      const image = new THREE.Mesh(faceGeometry, material); image.position.z = face * .048; image.rotation.y = face === 1 ? 0 : Math.PI; group.add(image);
-    }
-    const stand = this.mesh(new THREE.CylinderGeometry(.48, .55, .07, 48), new THREE.MeshStandardMaterial({ color: 0x0d0a1f, metalness: .65, roughness: .25, emissive: 0x7c5cff, emissiveIntensity: .2 }));
-    stand.position.set(side * 5.38, .01, -side * 2.1); this.group.add(stand);
-    for (const x of [side * 5.38 - .8, side * 5.38 + .8]) for (const z of [-side * 2.1 - .12, -side * 2.1 + .12]) {
-      for (const y of [-.1, 2.35]) this.fitPoints.push(new THREE.Vector3(x, y, z));
-    }
-  }
-
-  update(now: number, reduced: boolean) {
-    for (const card of this.cards) {
-      card.group.position.y = 1.23 + (reduced ? 0 : Math.sin(now * .001 + card.phase) * .035);
-      card.group.rotation.y = card.heading + (reduced ? 0 : Math.sin(now * .0007 + card.phase) * THREE.MathUtils.degToRad(2));
-    }
   }
 
   dispose() { this.disposed = true; this.resources.forEach(resource => resource.dispose()); this.resources.clear(); }

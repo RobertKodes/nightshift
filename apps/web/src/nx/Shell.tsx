@@ -119,8 +119,8 @@ export function NxTabs({ room }: { room: RoomId | null }) {
   );
 }
 
-/** A room of the station: its own header, colours and footer around any page. */
-export function RoomShell({ room, path, children }: { room: RoomId; path: string; children: React.ReactNode }) {
+/** A room of the station: its own header, colours and footer around any page. `lean`: one bar only (the page leads to its own parts, as the Game Room does). */
+export function RoomShell({ room, path, lean = false, children }: { room: RoomId; path: string; lean?: boolean; children: React.ReactNode }) {
   const r = ROOMS[room];
   useEffect(() => rememberRoom(room), [room]);
   // the phone bar names the page, like an app: the menu entry it belongs to, else the room
@@ -130,7 +130,7 @@ export function RoomShell({ room, path, children }: { room: RoomId; path: string
       <div className="nx-backdrop" aria-hidden="true" />
       <header className="nx-head">
         <StationBar room={room} title={here?.label === r.nav[0]!.label ? r.name : here?.label ?? r.name} />
-        <RoomBar room={room} path={path} />
+        {!lean && <RoomBar room={room} path={path} />}
       </header>
       <main>{children}</main>
       <Footer room={room} />

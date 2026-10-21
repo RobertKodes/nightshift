@@ -87,6 +87,20 @@ describe("night chess", () => {
     for (const n of ["IMD Official", "imd team", "Admin Support", "NIGHTSHIFT Team", "nightshiftt", "i.m.d", "lMD"]) expect(cleanName(n), n).toBe("Night crew");
     expect(cleanName("Night Rook")).toBe("Night Rook");
   });
+  it("keeps one board row per wallet, whatever names it used, and never shows the shared default name", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs"), { join } = await import("node:path"), { tmpdir } = await import("node:os");
+    const file = join(mkdtempSync(join(tmpdir(), "chess-board-")), "chess.json"), now = Date.now();
+    const w = "0xabcdef0123456789abcdef0123456789abcdef01";
+    writeFileSync(file, JSON.stringify({ ratings: [
+      { key: JSON.stringify(["pearl", w]), name: "Pearl", rating: 1210, games: 2, wins: 1, at: now - 5_000 },
+      { key: JSON.stringify(["pearl night", w]), name: "Pearl Night", rating: 1230, games: 1, wins: 1, at: now - 1_000 },
+      { key: JSON.stringify(["night crew", "0x1111111111111111111111111111111111111111"]), name: "Night crew", rating: 1250, games: 3, wins: 2, at: now },
+      { key: JSON.stringify(["night crew", ""]), name: "Night crew", rating: 1300, games: 9, wins: 6, at: now },
+    ], results: [] }));
+    const best = new ChessGames(file).board().best;
+    expect(best.map((r) => r.name)).toEqual(["Frog-1111", "Pearl Night"]);
+    expect(best[1]).toMatchObject({ rating: 1230, games: 3, wins: 2 });
+  });
   it("flags a staked game whose move times barely vary, and does nothing else (fair play)", () => {
     const play = (gap: (i: number) => number) => {
       let now = 1_000_000;

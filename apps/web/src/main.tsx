@@ -101,7 +101,7 @@ function App() {
   // Each page names itself in the tab; pages that know more (a company, a product) set their own.
   document.title = `${seg[0] === "games" && seg[1] === "live" ? "Watch live" : TITLES[key ?? ""] ?? "Companies"} · NIGHTSHIFT`;
   void active;
-  return <RoomShell room={roomOf(path) ?? "geek"} path={path}>{page}</RoomShell>;
+  return <RoomShell room={roomOf(path) ?? "geek"} path={path} lean={seg[0] === "games"}>{page}</RoomShell>;
 }
 
 const TITLES: Record<string, string> = {
@@ -132,4 +132,10 @@ class Crash extends Component<{ children: ReactNode }, { error: Error | null }> 
   }
 }
 
-createRoot(document.getElementById("root")!).render(<StrictMode><Crash><SessionProvider><App /><WaitingBanner /><StakedBanner /></SessionProvider></Crash></StrictMode>);
+/** The banners that follow you across the site (a waiting table, a staked game): never on /tg, where the Mini App was. */
+function Banners() {
+  const path = useRoute();
+  return path === "/tg" || path.startsWith("/tg/") ? null : <><WaitingBanner /><StakedBanner /></>;
+}
+
+createRoot(document.getElementById("root")!).render(<StrictMode><Crash><SessionProvider><App /><Banners /></SessionProvider></Crash></StrictMode>);

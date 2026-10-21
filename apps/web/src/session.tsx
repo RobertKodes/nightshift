@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { chooseWallet, forgetWallet, returningFromWalletLogin } from "./wallet";
 import { createWalletClient, custom, getAddress } from "viem";
 import { api } from "./api";
+import { rememberWallet } from "./games/handle";
 
 interface Session { address: string | null; signIn: () => Promise<void>; signOut: () => Promise<void>; signOutEverywhere: () => Promise<void>; busy: boolean; error: string | null; refresh: () => Promise<void> }
 const Ctx = createContext<Session>({ address: null, signIn: async () => {}, signOut: async () => {}, signOutEverywhere: async () => {}, busy: false, error: null, refresh: async () => {} });
@@ -34,6 +35,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { api.me().then((m) => setAddress(m.address)).catch(() => {}); }, []);
+  // a player who never typed a name plays under a handle from this wallet
+  useEffect(() => rememberWallet(address), [address]);
 
   const signIn = useCallback(async () => {
     setError(null);

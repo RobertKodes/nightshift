@@ -3,7 +3,7 @@ import { type Address, type Hex, createPublicClient, createWalletClient, custom,
 import { mainnet } from "viem/chains";
 import { Icon } from "./Icon";
 import { api as session, authHeaders } from "./api";
-import { chooseWallet } from "./wallet";
+import { chooseWallet, knownWallet } from "./wallet";
 import { type Step, canBatch, sendSteps } from "./batch";
 import { useMyStakes } from "./games/staked";
 import "./stakes.css";
@@ -104,6 +104,21 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
   seat.current = onSeat;
   const lim = escrow?.limits[token] ?? null;
   const live = !!escrow?.live;
+  // the signed-in wallet's balance of the stake token, and its network if a wallet is connected: said before anything is signed
+  const [balance, setBalance] = useState<bigint | null>(null);
+  const [chainOk, setChainOk] = useState<boolean | null>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    setBalance(null); setChainOk(null);
+    if (!address) return;
+    let alive = true;
+    const read = () => void rpc.readContract({ address: STAKE_TOKENS[token], abi: erc20Abi, functionName: "balanceOf", args: [address as Address] }).then((b) => { if (alive) setBalance(b); }).catch(() => {});
+    read();
+    const t = setInterval(read, 30_000);
+    void knownWallet().then(async (p) => { if (!p || !alive) return; const id = Number(await p.request({ method: "eth_chainId" }).catch(() => "0x1")); if (alive) setChainOk(id === 1); }).catch(() => {});
+    return () => { alive = false; clearInterval(t); };
+  }, [address, token]);
+  const invited = new URLSearchParams(location.search).get("accept");
 
   const confirm = (title: string, lines: [string, string][]) => new Promise<boolean>((resolve) => setAsk({ title, lines, resolve }));
   const signedIn = async (): Promise<string> => {
@@ -225,38 +240,50 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
   const joinLeft = mine?.joinBy ? Math.max(0, Math.floor(mine.joinBy - now)) : null;
   const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
+  const typed = /^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/.test(amount.trim()) ? parseUnits(amount.trim(), 18) : null;
+  const short_ = balance !== null && typed !== null && typed > balance;
+  const phase = waiting || joining || dealing ? 3 : step ? 2 : 1;
+  const shareUrl = mineId && mine ? `${location.origin}/games/${game}?accept=${mineId}&token=${mine.token}` : "";
+  const sorted = invited ? [...list].sort((a, b) => Number(b.matchId === invited) - Number(a.matchId === invited)) : list;
+
   return <div className={`sk sk-${theme}`}>
-    <div className="sk-row">
-      <span className="sk-kicker">STAKE / {tokenLabel(token)}</span>
-      <span className="sk-limits">{lim ? `min ${Number(lim.min).toLocaleString()} · max ${Number(lim.max).toLocaleString()}` : "limits loading…"}</span>
+    <ol className="sk-steps" aria-label="Staked game, step by step">
+      {["Amount", "Confirm in wallet", "Waiting room"].map((label, i) => <li key={label} className={i + 1 < phase ? "done" : i + 1 === phase ? "on" : ""} aria-current={i + 1 === phase ? "step" : undefined}><b>{i + 1 < phase ? <Icon name="check" size={11} /> : i + 1}</b><span>{label}</span></li>)}
+    </ol>
+    <div className="sk-wallet">
+      {address ? <><Icon name="wallet" size={14} /><span>Signed in as <b>{short(address)}</b></span><span className="sk-bal">{balance === null ? "balance…" : `${fmt(balance)} ${tokenLabel(token)}`}</span></>
+        : <><Icon name="wallet" size={14} /><span>Sign in with the wallet you will stake from.</span><button type="button" className="sk-btn small" onClick={() => void signIn().catch(() => {})}>SIGN IN</button></>}
     </div>
-    {!live && <p className="sk-note" role="status"><Icon name="lock" size={13} /> Real-money duels open once the result signer is activated.</p>}
+    {chainOk === false && <p className="sk-note sk-bad" role="status">Your wallet is on another network: it will be asked to switch to Ethereum before anything is signed.</p>}
+    {!live && <p className="sk-note" role="status"><Icon name="lock" size={13} /> Staked games are not open on this server yet.</p>}
     <label className="sk-amount">
-      <input inputMode="decimal" placeholder={lim ? `e.g. ${lim.min}` : "amount"} value={amount} disabled={!live || !!step || !!waiting} onChange={(e) => setAmount(e.target.value.replace(",", "."))} aria-label={`Stake in ${tokenLabel(token)}`} />
+      <input inputMode="decimal" placeholder={lim ? `e.g. ${Number(lim.min).toLocaleString("en-US", { useGrouping: false })}` : "amount"} value={amount} disabled={!live || !!step || !!waiting} onChange={(e) => setAmount(e.target.value.replace(",", ".").replace(/[\s_]/g, ""))} aria-label={`Stake in ${tokenLabel(token)}`} />
       <b>{tokenLabel(token)}</b>
     </label>
+    {lim && <div className="sk-chips" role="group" aria-label="Quick amounts">{[1, 5, 10].map((k) => { const v = (Number(lim.min) * k).toString(); return <button type="button" key={k} className={amount === v ? "on" : ""} disabled={!live || !!step || !!waiting} onClick={() => setAmount(v)}>{Number(v).toLocaleString()}</button>; })}</div>}
     {(() => {
-      const ok = /^(?:0|[1-9]\d{0,17})(?:\.\d{1,18})?$/.test(amount.trim()) && lim;
-      if (!ok) return <p className="sk-note">Both players stake the same amount. The winner receives 95% of the pot; a draw refunds both.</p>;
-      const v = parseUnits(amount.trim(), 18), lo = parseUnits(lim.min, 18), hi = parseUnits(lim.max, 18);
-      if (v < lo || v > hi) return <p className="sk-note sk-bad">Choose between {lim.min} and {lim.max} {tokenLabel(token)}.</p>;
-      return <p className="sk-note">Each player stakes {fmt(v)} {tokenLabel(token)}. Winner receives <b>{fmt(payoutOf(v))}</b>. The 5% fee supports stakers, NIGHT FROGS holders and SHIFT + IMD burns.</p>;
+      if (typed === null || !lim) return <p className="sk-note">Both players stake the same amount. The winner gets 95% of the pot; a draw refunds both. Limits: {lim ? `${Number(lim.min).toLocaleString()} to ${Number(lim.max).toLocaleString()} ${tokenLabel(token)}` : "loading…"}.</p>;
+      const lo = parseUnits(lim.min, 18), hi = parseUnits(lim.max, 18);
+      if (typed < lo || typed > hi) return <p className="sk-note sk-bad">Choose between {Number(lim.min).toLocaleString()} and {Number(lim.max).toLocaleString()} {tokenLabel(token)}.</p>;
+      if (short_) return <p className="sk-note sk-bad">This wallet holds {fmt(balance!)} {tokenLabel(token)}: not enough for this stake.</p>;
+      return <p className="sk-note">Each player stakes {fmt(typed)} {tokenLabel(token)}. Winner gets <b>{fmt(payoutOf(typed))}</b>. Your wallet asks once: {tokenLabel(token)} approval for exactly this amount and the challenge, together where it can.</p>;
     })()}
-    <button type="button" className="sk-btn primary" disabled={!live || !!step || !!waiting} onClick={() => void create()}><Icon name={live ? "swords" : "lock"} size={18} /><span>{step ?? (live ? "CREATE CHALLENGE" : "OPENS WITH THE SIGNER")}</span></button>
+    <button type="button" className="sk-btn primary" disabled={!live || !!step || !!waiting || short_} onClick={() => void create()}><Icon name={live ? "swords" : "lock"} size={18} /><span>{step ?? (live ? "OPEN THE CHALLENGE" : "NOT OPEN YET")}</span></button>
+    {step && <p className="sk-note" role="status">{step} Check your wallet app: it shows the contract {short(ESCROW)} and exactly {amount} {tokenLabel(token)}.</p>}
     {err && <p className="sk-err" role="alert">{err}</p>}
 
     <div className="sk-row"><span className="sk-kicker">OPEN CHALLENGES</span><span className="sk-limits">{list.length || "none yet"}</span></div>
-    {list.length ? <ul className="sk-list">{list.map((c) => <li key={c.matchId}>
+    {sorted.length ? <ul className="sk-list">{sorted.map((c) => <li key={c.matchId} className={c.matchId === invited ? "sk-invited" : undefined}>
       <span><b>{c.name}</b><small>{short(c.creator)}{c.tc ? ` · ${c.tc}` : ""} · {clock(Math.max(0, Math.floor((c.joinBy ?? 0) - now)))} left</small></span>
       <strong>{Number(c.amount).toLocaleString()} {tokenLabel(c.token)}</strong>
       {c.you === "A" ? <em>YOURS</em> : <button type="button" className="sk-btn small" disabled={!live || !!step || !!waiting} onClick={() => void accept(c)}>ACCEPT</button>}
-    </li>)}</ul> : <p className="sk-note">No open {game === "chess" ? "chess" : game === "pool" ? "pool" : "pinball"} challenges. Create one; it stays open for an hour.</p>}
+    </li>)}</ul> : <p className="sk-note">{invited ? "The challenge you were sent is no longer open (taken, cancelled or expired)." : `No open ${game === "chess" ? "chess" : game === "pool" ? "pool" : "pinball"} challenges. Open one; it stays open for an hour.`}</p>}
     <p className="sk-note sk-fine">Contract <a href={`https://etherscan.io/address/${ESCROW}`} target="_blank" rel="noreferrer">{short(ESCROW)} ↗</a> · results signed by the server, paid by the contract.</p>
 
     {(joining || dealing) && <div className={`sk-overlay ${theme}-overlay`} role="dialog" aria-modal="true" aria-labelledby="sk-joining">
       <div className="sk-dialog">
         <div className="sk-radar"><Icon name="radar" size={30} /></div>
-        <span className="sk-kicker">{dealing ? "BOTH STAKES ARE IN" : "JOINING ON CHAIN"} · {mine.amount} {tokenLabel(mine.token)}</span>
+        <span className="sk-kicker">{dealing ? "BOTH STAKES ARE IN" : "JOINING ON CHAIN"} · {Number(mine.amount).toLocaleString()} {tokenLabel(mine.token)}</span>
         <h2 id="sk-joining">{dealing ? <>Setting up<br />your table</> : <>Your stake is<br />on its way</>}</h2>
         <p>{dealing ? "The game opens here in a moment. The clock starts only once you are both at the table." : `Ethereum is confirming your join. The game against ${mine.name} opens here as soon as it lands; if you leave this page, a "Take your seat" banner brings you back from any page.`}</p>
         {err && <p className="sk-err" role="alert">{err}</p>}
@@ -265,9 +292,12 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     {waiting && !joining && <div className={`sk-overlay ${theme}-overlay`} role="dialog" aria-modal="true" aria-labelledby="sk-wait">
       <div className="sk-dialog">
         <div className="sk-radar"><Icon name="radar" size={30} /></div>
-        <span className="sk-kicker">{mine.status === "pending" ? "CONFIRMING ON CHAIN" : "CHALLENGE OPEN"} · {mine.amount} {tokenLabel(mine.token)}</span>
+        <span className="sk-kicker">{mine.status === "pending" ? "CONFIRMING ON CHAIN" : "CHALLENGE OPEN"} · {Number(mine.amount).toLocaleString()} {tokenLabel(mine.token)}</span>
         <h2 id="sk-wait">Waiting for<br />a rival</h2>
         <p>{mine.status === "expired" && !mine.openedAt ? "This challenge was never opened on chain, so no stake is held." : mine.status === "pending" ? "Your stake is on its way to the escrow. The challenge is listed once the chain confirms it." : mine.status === "expired" ? "Nobody joined within the hour. Take your stake back." : `Anyone can accept it for the next ${clock(joinLeft ?? 0)}. The game starts for both of you when they join.`}</p>
+        {mine.status === "open" && <div className="sk-share"><input readOnly value={shareUrl} aria-label="Challenge link" onFocus={(e) => e.currentTarget.select()} /><button type="button" className="sk-btn small" onClick={() => { void navigator.clipboard?.writeText(shareUrl).then(() => setCopied(true)).catch(() => {}); }}>{copied ? "COPIED" : "COPY LINK"}</button>{"share" in navigator && <button type="button" className="sk-btn small" onClick={() => void navigator.share({ title: `${GAME_LABEL[game]} challenge`, url: shareUrl }).catch(() => {})}>SHARE</button>}</div>}
+        {mine.status === "open" && <p className="sk-note">Send the link to a rival, or leave this page: a banner on every page tells you when someone joins.</p>}
+        {mine.status === "open" && <a className="sk-btn ghost" href="/games">BROWSE WHILE YOU WAIT</a>}
         {mine.status !== "expired" && <button type="button" className="sk-btn" disabled={!!step || mine.status === "pending"} onClick={() => void close("cancel")}>{step ?? "CANCEL AND TAKE THE STAKE BACK"}</button>}
         {mine.openedAt && (mine.status === "expired" || joinLeft === 0) && <button type="button" className="sk-btn primary" disabled={!!step} onClick={() => void close("refund")}>{step ?? "REFUND MY STAKE"}</button>}
         {!mine.openedAt && mine.status === "expired" && <button type="button" className="sk-btn ghost" onClick={() => track(null)}>NOT OPENED ON CHAIN · DISMISS</button>}
@@ -332,7 +362,7 @@ export function StakeResult({ matchId, address }: { matchId: string; address: st
   // the server says so, or this page sees the relay stuck for over two minutes
   const claimable = !!c.claimable || !c.relay || c.relay.state === "failed" || (c.relay.state !== "mined" && !!c.relay.at && Date.now() - c.relay.at > 120_000);
   return <div className="sk-result" role="status">
-    <span className="sk-kicker">STAKE · {c.amount} {label} EACH · ESCROW {short(ESCROW)}</span>
+    <span className="sk-kicker">STAKE · {Number(c.amount).toLocaleString()} {label} EACH · ESCROW {short(ESCROW)}</span>
     {c.closed ? <p>{c.closed.kind === "settled" ? c.closed.draw ? `Draw: both stakes went back (${c.amount} ${label} each).` : `Paid out: ${fmt(payoutOf(stake))} ${label} to ${short(c.closed.winner)}${c.closed.winner === address?.toLowerCase() ? " (you)" : ""}.` : `Stakes ${c.closed.kind}.`} <a href={tx(c.closed.tx)} target="_blank" rel="noreferrer">Etherscan ↗</a></p>
       : c.refused ? <p className="sk-bad">No result can be signed for this match ({c.refused}). Both stakes can be refunded from {new Date((c.refundAt ?? 0) * 1000).toLocaleString()}.</p>
       : !c.outcome ? <p>Waiting for the verified result…</p>

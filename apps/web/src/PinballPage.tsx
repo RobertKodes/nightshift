@@ -10,6 +10,7 @@ const AppTabs = (_: { active: string }) => <AppTabsNx room="breakroom" />;
 import { type Seat, StakeLobby, StakeResult, useEscrow } from "./stakes";
 import { alertJoined, doneWaiting, keepSeat, keepWaiting, Lounge, primeAlerts, waitText } from "./games/lounge";
 import { useStakedSeat } from "./games/staked";
+import { handleFor, nameOr } from "./games/handle";
 import "./pinball/arcade.css";
 import { LITE, onHidden } from "./lite";
 
@@ -125,7 +126,7 @@ export function PinballPage() {
   // faces come in a stream's first frame (and when the players change), by each player's public key
   const faces = useRef(new Map<string, string | null>());
   const withFaces = (m: MatchView): MatchView => ({ ...m, players: m.players.map((p) => { if (p.avatar !== undefined) faces.current.set(p.key, p.avatar); return { ...p, avatar: faces.current.get(p.key) ?? null }; }) });
-  const me = name.trim() || "Night crew";
+  const me = nameOr(name, address);
   // the dealt game's salts: one array per deal (its commitment), filled in order as frames and replies bring them
   const luck = useRef<{ deal: string | null; salts: number[] }>({ deal: null, salts: [] });
   const take = (deal: string | null | undefined, l?: LuckPart | null) => {
@@ -220,6 +221,8 @@ export function PinballPage() {
   // the inputs go to the server while the game runs: a duel's to its match, a board run's to its run
   const onLive = play?.kind === "duel" ? (s: Live) => stream(`match/${play.match.id}/progress`, { player: play.player, ...s }, setErr, (l) => take(play.match.seed, l))
     : play?.kind === "practice" && play.id ? (s: Live) => stream(`solo/${play.id}/progress`, s, setErr, (l) => take(play.deal, l)) : undefined;
+  // /games/pinball?practice=1 (the Game Room's Practice): straight onto a solo table
+  useEffect(() => { if (new URLSearchParams(location.search).get("practice")) { history.replaceState(null, "", "/games/pinball"); setMode("PRACTICE"); void start("PRACTICE"); } }, []);
   /** Both stakes are in: take the seat the lobby gave this wallet, as any duel. */
   const seat = (s: Seat) => { setErr(null); setOver(null); clock.current = 0; follow(s.id, s.player); };
   // a staked seat found by the wallet (any tab, after a reload, from the banner's ?seat=): taken here unless another game is on
@@ -313,9 +316,9 @@ export function PinballPage() {
       {!play && <main className="arc-lobby">
         <section className="arc-stage" aria-labelledby="arc-title">
           <div className="arc-intro">
-            <span className="arc-kicker"><span className="arc-live-dot" /> THE AFTER-HOURS ARCADE / 01</span>
+            <span className="arc-kicker"><span className="arc-live-dot" /> GAME ROOM / SPACE PINBALL</span>
             <h1 id="arc-title">Space <em>Pinball</em></h1>
-            <p>A little skill. A little chaos. All night.</p>
+            <p>Duels on the same table and seed, every score verified by replay. Free, or staked in $SHIFT or IMD.</p>
           </div>
           <div className="arc-cabinet">
             <div className="arc-marquee"><span><Icon name="orbit" size={17} /> NIGHTSHIFT ORIGINAL</span><span className="arc-live" title="A bot plays this table while you choose your mode">DEMO · AUTOPLAY</span></div>
@@ -331,7 +334,7 @@ export function PinballPage() {
             <div>
               <label className="arc-kicker" htmlFor="arc-name">YOUR PLAYER NAME · TAP TO EDIT</label>
               <label className="arc-name-field" htmlFor="arc-name">
-                <input id="arc-name" className="arc-name" maxLength={18} autoComplete="nickname" placeholder="Type your name" value={name} onChange={(e) => setName(e.target.value)} />
+                <input id="arc-name" className="arc-name" maxLength={18} autoComplete="nickname" placeholder={handleFor(address)} value={name} onChange={(e) => setName(e.target.value)} />
                 <Icon name="edit" size={16} />
               </label>
               <span className="arc-player-note">{avatar ? "Your NIGHT FROG. Your seat at the table." : address ? "No NIGHT FROG in this wallet" : "Sign in to bring your NIGHT FROG"}</span>
@@ -385,7 +388,7 @@ export function PinballPage() {
               {board.length > 0 ? <ol>{board.map((b, i) => <li className={i<3 ? `ns-place-${i+1}` : undefined} key={`${b.name}-${b.at}-${i}`}><span className={`ns-rank ${i<3 ? "ns-medal" : ""}`} aria-label={`Place ${i+1}`}>{i<3 && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="m8 14-2 8 6-3 6 3-2-8"/><circle cx="12" cy="9" r="7"/></svg>}<span aria-hidden="true">{i<3 ? i+1 : String(i+1).padStart(2,"0")}</span></span><span>{b.name}</span><b>{b.score.toLocaleString()}</b></li>)}</ol> : <p className="arc-board-empty">{`No verified ${boardKind === "duel" ? "duels" : "solo runs"} yet${boardTab === "board" ? " tonight" : ""}. Be the first on the board.`}</p>}
             </div>
           </div>
-          <p className="arc-legal">18+ for staked play. Money games may be gambling, including in Romania. Staked duels open only where allowed.</p>
+          <p className="arc-legal">Free games need no wallet. Staked games: 18+, only where allowed.</p>
         </section>
       </main>}
 
