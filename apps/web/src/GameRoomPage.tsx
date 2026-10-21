@@ -14,7 +14,8 @@ const TILES: { game: Game; name: string; line: string; img: string; w: number; h
 /** The Game Room: the three games, the lounge, and how a staked game works, in plain words. */
 export function GameRoomPage() {
   const l = useLounge();
-  const live = (g: Game) => l?.live.filter((x) => x.game === g).length ?? 0;
+  const live = (g: Game) => l?.live.filter((x) => x.game === g && !x.house).length ?? 0;
+  const house = (g: Game) => l?.live.filter((x) => x.game === g && x.house).length ?? 0;
   const waiting = (g: Game) => (l ? g === "chess" ? Object.values(l.waiting.chess).reduce((a, b) => a + b, 0) : g === "pool" ? l.waiting.pool ?? 0 : l.waiting.pinball : 0);
   return (
     <div className="gr">
@@ -33,7 +34,7 @@ export function GameRoomPage() {
             <div className="gr-body">
               <h2><Icon name={GAME_ICON[t.game]} size={18} />{t.name}</h2>
               <p>{t.line}</p>
-              <span className="gr-now">{l === null ? "…" : `${waiting(t.game)} waiting · ${live(t.game)} playing now`}</span>
+              <span className="gr-now">{l === null ? "…" : `${waiting(t.game)} waiting · ${live(t.game)} playing now${house(t.game) ? " · house exhibition on" : ""}`}</span>
               <div className="gr-actions">
                 <Link to={`/games/${t.game}`} className="gr-btn primary"><Icon name="swords" size={16} />Play now</Link>
                 <Link to={t.practice} className="gr-btn ghost">{t.practiceLabel}</Link>

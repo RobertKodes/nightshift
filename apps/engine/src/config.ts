@@ -131,6 +131,12 @@ export const config = {
     address: ((v) => (/^0x[0-9a-fA-F]{40}$/.test(v) ? v : ""))(env.BETPOOL_ADDRESS ?? "0x76decb1958a1e04549e2e7f451cc22cd832d0fc3") as `0x${string}` | "",
     block: Math.max(0, Math.floor(num(env.BETPOOL_BLOCK, 26226964))),
   },
+  /**
+   * The house exhibition (housegame.ts): one NIGHT CHESS game between two house bots, always on,
+   * never rated or staked. It steps aside while more than HOUSE_GAMES_MAX_REAL real games are on.
+   */
+  houseGames: (env.HOUSE_GAMES ?? "1") !== "0",
+  houseGamesMaxReal: Math.max(0, num(env.HOUSE_GAMES_MAX_REAL, 12)),
   /** Companies one wallet may run at once. */
   maxCompaniesPerOwner: num(env.MAX_COMPANIES_PER_OWNER, 5),
   /**

@@ -41,7 +41,8 @@ export class OwnGameError extends Error {
 /** A lounge request that cannot be met (gone, taken, host away): a clear reason with an HTTP status. */
 export class LoungeError extends Error { constructor(readonly status: number, message: string) { super(message); } }
 /** "void": a staked game nobody can fairly lose (the players were never both there, or the loser never made a move): a draw, both stakes go back. */
-export type Reason = "checkmate" | "stalemate" | "repetition" | "insufficient material" | "50-move rule" | "resignation" | "agreement" | "abandonment" | "timeout" | "void";
+/** "paused": a house exhibition stopped because real players need the server (never a real game's result). */
+export type Reason = "checkmate" | "stalemate" | "repetition" | "insufficient material" | "50-move rule" | "resignation" | "agreement" | "abandonment" | "timeout" | "void" | "paused";
 /** `graceUsed`: the reconnection time a staked game's player has used on their own turns. */
 type Player = { id: string; name: string; wallet: string | null; color: Color; rating: number; moves: number; streams: number; offlineAt: number | null; agent?: boolean; times?: number[]; graceUsed?: number };
 type Match = {
@@ -61,6 +62,8 @@ type Match = {
   expired?: Expired;
   /** An open game folded into an older one in the same time control: its host's stream follows there. */
   movedTo?: string;
+  /** A house exhibition between two house bots (housegame.ts): never rated, staked, bet on or told to the arcade. */
+  house?: boolean;
 };
 /** An open free game as the lounge lists it: the host's public name and rating only, never a seat or a wallet. */
 export type OpenChess = { id: string; tc: TimeControl; any: boolean; host: { name: string; rating: number; agent?: boolean }; since: number; away: boolean; awayUntil: number | null };
@@ -128,10 +131,10 @@ export class ChessGames {
   }
   private match(id: string) { const m = this.matches.get(id); if (!m) throw new Error("No such match"); return m; }
   private rating(p: Pick<Player, "name" | "wallet">) { return this.boards.ratings.find((r) => r.key === keyOf(p))?.rating ?? 1200; }
-  private create(tc: TimeControl, players: Player[], staked?: Pick<Match, "currency" | "escrow" | "stake" | "showBy" | "onResult">): Match {
+  private create(tc: TimeControl, players: Player[], staked?: Pick<Match, "currency" | "escrow" | "stake" | "showBy" | "onResult">, house = false): Match {
     const now = this.now();
     const m: Match = { ...staked, id: randomBytes(10).toString("hex"), tc, currency: staked?.currency ?? "FREE", createdAt: now, startedAt: null, turnAt: now, game: new Chess(), players,
-      clocks: { w: CONTROLS[tc].time, b: CONTROLS[tc].time }, moves: [], version: 0, done: false, winner: null, reason: null, drawOffer: null, rematch: new Set(), rematchId: null, endedAt: null };
+      clocks: { w: CONTROLS[tc].time, b: CONTROLS[tc].time }, moves: [], version: 0, done: false, winner: null, reason: null, drawOffer: null, rematch: new Set(), rematchId: null, endedAt: null, ...(house ? { house: true } : {}) };
     this.matches.set(m.id, m);
     if (players.length === 2 && !m.escrow) this.start(m);
     return m;
@@ -188,6 +191,25 @@ export class ChessGames {
   private openGames() {
     return [...this.waiting.values()].flatMap((line) => [...line]).map((id) => this.matches.get(id)).filter((m): m is Match => !!m && this.isOpen(m)).sort((a, b) => a.createdAt - b.createdAt);
   }
+  /**
+   * A house exhibition: two house bots at one table, at once, with the 5-second countdown. Both seats
+   * count as here (the server plays them), so nobody is ever away; the result is never rated, never
+   * staked, never bet on and never reaches the arcade listeners (profiles, community cards, prizes).
+   */
+  createHouse(white: string, black: string, tc: TimeControl = "3+2"): { id: string; seats: Record<Color, string> } {
+    if (!Object.hasOwn(CONTROLS, tc)) throw new Error("Choose 3+2, 5+0 or 10+0");
+    const bot = (name: string, color: Color): Player => ({ id: randomUUID(), name, wallet: null, color, rating: 1200, moves: 0, streams: 1, offlineAt: null });
+    const w = bot(white, "w"), b = bot(black, "b");
+    const m = this.create(tc, [w, b], undefined, true);
+    return { id: m.id, seats: { w: w.id, b: b.id } };
+  }
+  /** Ends a house exhibition now (the server is busy, or the house loop stopped): no winner, reason "paused". */
+  stopHouse(id: string): void {
+    const m = this.matches.get(id);
+    if (m?.house && !m.done) { if (!m.startedAt) m.startedAt = this.now(); this.end(m, null, "paused"); }
+  }
+  /** Whether a match is a house exhibition (false for an unknown id). */
+  isHouse(id: string): boolean { return !!this.matches.get(id)?.house; }
   /**
    * Find a rival, or open a game in the lounge. `tc` "any" plays whoever waits in any time control
    * (on their clock), else opens a 3+2 game that the next rival of any time control takes on theirs.
@@ -289,7 +311,7 @@ export class ChessGames {
       you: m.players.find((p) => p.id === me)?.color ?? null, winnerIsYou: m.winner === me,
       drawOffer: m.drawOffer ? m.drawOffer === me ? "you" as const : "rival" as const : null,
       rematchRequested: m.rematch.has(me), rivalWantsRematch: m.players.some((p) => p.id !== me && m.rematch.has(p.id)), rematchId: m.rematchId,
-      waitingSince: m.createdAt, any: !!m.any, expired: m.expired ?? null, movedTo: m.movedTo ?? null, showBy: m.showBy ?? null,
+      waitingSince: m.createdAt, any: !!m.any, expired: m.expired ?? null, movedTo: m.movedTo ?? null, showBy: m.showBy ?? null, house: !!m.house,
       // a player away on their own turn: when they lose by abandonment, for both to see; a staked game's grace left
       players: m.players.map((p) => {
         const away = this.away(m, p), out = p.offlineAt !== null && !!m.startedAt && now >= m.startedAt && !m.done && m.game.turn() === p.color;
@@ -314,7 +336,7 @@ export class ChessGames {
    */
   live() {
     return [...this.matches.values()].filter((m) => !m.done && m.startedAt !== null && m.players.length === 2).map((m) => ({
-      id: m.id, tc: m.tc, currency: m.currency, stake: m.stake ?? null, startedAt: m.startedAt!,
+      id: m.id, tc: m.tc, currency: m.currency, stake: m.stake ?? null, startedAt: m.startedAt!, ...(m.house ? { house: true } : {}),
       players: [...m.players].sort((a, b) => a.color === "w" ? -1 : b.color === "w" ? 1 : 0).map((p) => ({ name: p.name, color: p.color, rating: p.rating, ...(p.agent ? { agent: true } : {}) })),
     }));
   }
@@ -330,6 +352,8 @@ export class ChessGames {
    */
   betInfo(id: string): { escrow: string | null; wallets: { w: string | null; b: string | null }; sharpAt: number | null; flagged: Flag | null; drawOffer: boolean } {
     const m = this.match(id), by = (c: Color) => m.players.find((p) => p.color === c)?.wallet?.toLowerCase() ?? null;
+    // a game the server plays against itself is never a market
+    if (m.house) throw new Error("No betting on a house exhibition");
     return { escrow: m.escrow ?? null, wallets: { w: by("w"), b: by("b") }, sharpAt: m.sharpAt ?? null, flagged: m.flagged ?? null, drawOffer: !!m.drawOffer };
   }
   /** Staked games flagged for machine-like move times, newest first: for the operator, never acted on automatically. */
@@ -393,6 +417,7 @@ export class ChessGames {
     const m = this.match(id); this.player(m, me);
     if (!m.done || !m.startedAt) throw new Error("Finish this game first");
     if (m.escrow) throw new Error("A staked game has no rematch: open a new challenge.");
+    if (m.house) throw new Error("A house exhibition has no rematch: the next one starts a minute after this one.");
     if (!m.rematchId) {
       m.rematch.add(me);
       if (m.rematch.size === 2) {
@@ -420,6 +445,8 @@ export class ChessGames {
     if (m.escrow && winner !== null && (reason === "abandonment" || reason === "timeout") && m.players.find((p) => p.color !== winner)?.moves === 0) { winner = null; reason = "void"; }
     m.clocks = this.clocks(m); m.done = true; m.reason = reason; m.endedAt = this.now(); m.drawOffer = null;
     m.winner = m.players.find((p) => p.color === winner)?.id ?? null;
+    // a house exhibition: no rating, no arcade (profiles, community, prizes), no stake
+    if (m.house) { this.emit(m); return; }
     const rated = m.players.every((p) => p.moves >= 2);
     if (rated) this.record(m);
     const white = m.players.find((p) => p.color === "w")!, black = m.players.find((p) => p.color === "b")!;

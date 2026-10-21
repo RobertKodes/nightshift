@@ -11,6 +11,7 @@
 .lv-who em { color: var(--dim, #a9a3c4); font: italic 400 15px var(--serif, Georgia, serif); }
 .lv-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
 .lv-agent { padding: 2px 5px; border: 1px solid rgba(184, 255, 74, .45); color: var(--acid, #b8ff4a); font: 600 8.5px/1 var(--mono, "JetBrains Mono", monospace); font-style: normal; letter-spacing: .12em; }
+.lv-house { display: inline-block; margin-left: 8px; padding: 2px 6px; border: 1px solid rgba(255, 92, 168, .5); color: #ff8cc4; font: 600 8.5px/1 var(--mono, "JetBrains Mono", monospace); font-style: normal; letter-spacing: .1em; text-transform: uppercase; vertical-align: 1px; }
 .lv-stake { padding: 5px 9px; border: 1px solid rgba(164, 139, 255, .3); color: var(--dim, #a9a3c4); font: 600 10px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .1em; white-space: nowrap; }
 .lv-stake.on { border-color: rgba(255, 196, 107, .55); color: #ffc46b; background: rgba(255, 196, 107, .06); }
 .lv-meta { display: inline-flex; gap: 12px; color: var(--dim, #a9a3c4); font: 500 11px/1 var(--mono, "JetBrains Mono", monospace); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -26,6 +27,7 @@
 .lv-filters button.on { border-color: rgba(164, 139, 255, .6); background: rgba(124, 92, 255, .14); color: var(--ink, #f2efff); }
 .lv-note { color: var(--faint, #6c6688); font: 400 12.5px/1.5 Inter, system-ui, sans-serif; }
 @media (max-width: 700px) {
+  .lv-house { display: table; margin: 5px 0 0; white-space: nowrap; }
   .lv-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "g who who" "stake meta watch"; gap: 10px 12px; padding: 12px; }
   .lv-game { grid-area: g; width: 36px; height: 36px; }
   .lv-who { grid-area: who; }

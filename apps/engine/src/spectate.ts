@@ -17,6 +17,8 @@ export type Game = "chess" | "pinball" | "pool";
 export type LiveGame = {
   game: Game; id: string; players: { name: string; avatar?: string; agent?: boolean }[];
   stake: { currency: "FREE" | "IMD" | "SHIFT"; amount: number }; startedAt: number; watch: string; viewers: number; tc?: string; rules?: string;
+  /** A house exhibition between two house bots: shown as HOUSE, never rated, staked or bet on. */
+  house?: boolean;
 };
 
 /** Spectators per match at most, and spectator streams per IP and in all. */
@@ -35,7 +37,7 @@ export const addLiveSource = (fn: () => LiveGame[]) => { sources.push(fn); };
 export function liveGames(): LiveGame[] {
   const games: LiveGame[] = [
     ...sources.flatMap((fn) => { try { return fn(); } catch { return []; } }),
-    ...chess.live().map((m) => ({ game: "chess" as const, id: m.id, tc: m.tc, players: m.players.map((p) => ({ name: p.name, ...(p.agent ? { agent: true } : {}) })),
+    ...chess.live().map((m) => ({ game: "chess" as const, id: m.id, tc: m.tc, ...(m.house ? { house: true } : {}), players: m.players.map((p) => ({ name: p.name, ...(p.agent ? { agent: true } : {}) })),
       stake: { currency: m.currency, amount: Number(m.stake ?? 0) || 0 }, startedAt: m.startedAt, watch: `/games/chess?watch=${m.id}`, viewers: viewersOf("chess", m.id) })),
     ...pinLive().map((m) => ({ game: "pinball" as const, id: m.id, players: m.players.map((p) => ({ name: p.name, ...(p.avatar ? { avatar: p.avatar } : {}), ...(p.agent ? { agent: true } : {}) })),
       stake: { currency: m.currency, amount: m.stake }, startedAt: m.startedAt, watch: `/games/pinball?watch=${m.id}`, viewers: viewersOf("pinball", m.id) })),

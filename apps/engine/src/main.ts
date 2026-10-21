@@ -5,6 +5,7 @@ import { ADMIN } from "./admin.js";
 import { live as gameLobby } from "./games-routes.js";
 import { wireGameRoom } from "./locker-routes.js";
 import { startCrew } from "./crew.js";
+import { startHouseGames } from "./housegame.js";
 
 const engine = new Engine();
 // Real funds need the vault key outside the data folder: a copy of the volume or a backup alone
@@ -19,6 +20,8 @@ wireGameRoom();
 serve(engine);
 // The stakes lobby follows the escrow from the start, so a deposit is never waiting on a page visit.
 gameLobby(engine.vault);
+// The house exhibition: one chess game between house bots, always on, never rated (off with HOUSE_GAMES=0).
+startHouseGames();
 // The crew ledger reads IMD in the background, so the HR & Economy pages never wait on IMD.
 startCrew(() => [...engine.store.companies.values()].filter((c) => !c.house).flatMap((c) => c.tasks
   .filter((t) => t.imd?.jobId && t.costImd > 0n)

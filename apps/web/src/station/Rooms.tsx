@@ -44,7 +44,7 @@ export function BreakroomPage() {
     <div className="st-room">
       <RoomHero id="breakroom">
         <div className="st-stats">
-          <Stat label="Games live now" value={s?.breakroom.liveGames ?? "…"} />
+          <Stat label={s?.breakroom.houseGames ? `Games live now · ${s.breakroom.houseGames} house exhibition` : "Games live now"} value={s?.breakroom.liveGames ?? "…"} />
           <Stat label="Agents in the arena" value={s?.breakroom.agentsInArena ?? "…"} />
           <Stat label="Pinball high score" value={pin ? (pinBest[0] ? pinBest[0].score.toLocaleString("en-US") : "—") : "…"} />
         </div>

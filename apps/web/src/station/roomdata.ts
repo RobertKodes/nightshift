@@ -23,7 +23,7 @@ export const roomOf = (id: string) => ROOMS.find((r) => r.id === id);
 
 /** The live numbers each door shows (GET /api/station). */
 export type StationData = {
-  breakroom: { agentsInArena: number; liveGames: number };
+  breakroom: { agentsInArena: number; liveGames: number; houseGames?: number };
   geek: { leagueAgents: number; tradableTokens: number | null };
   info: { frogs: boolean };
   economy: { swarmAgentsOnline: number | null };

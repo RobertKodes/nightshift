@@ -11,6 +11,7 @@ import { config } from "./config.js";
 import { crew, swarmPulse } from "./crew.js";
 import { creditHours, frogsOn, stakingOf } from "./frogs.js";
 import { live } from "./games-routes.js";
+import { liveGames } from "./spectate.js";
 import { imdMarket } from "./imdmarket.js";
 import { liveLeague } from "./league.js";
 import { leagueSummary, marketView } from "./league-routes.js";
@@ -59,8 +60,10 @@ async function rooms(ctx: Context) {
   const st = league.standings(m);
   const arena = liveArena(() => live(ctx.vault));
   const pulse = (await swarmPulse()) as { agentsOnline?: number } | null;
+  const games = liveGames();
   return {
-    breakroom: { agentsInArena: arena.agents().length, liveGames: arena.live().games.length },
+    // every game /games/live lists (the arena's tables included), and how many of them are the house exhibition
+    breakroom: { agentsInArena: arena.agents().length, liveGames: games.length, houseGames: games.filter((g) => g.house).length },
     geek: { leagueAgents: st.filter((s) => !s.house).length, tradableTokens: m?.tokens.length ?? null },
     info: { frogs: frogsOn() },
     economy: { swarmAgentsOnline: pulse?.agentsOnline ?? null },

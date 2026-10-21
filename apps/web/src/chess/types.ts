@@ -13,6 +13,8 @@ export type MatchView = {
   waitingSince?: number; any?: boolean; expired?: "away" | "timeout" | null; movedTo?: string | null;
   /** A staked game: when it is void if both players have not been at the table (server clock). */
   showBy?: number | null;
+  /** The house exhibition: two house bots, never rated, staked or bet on. */
+  house?: boolean;
 };
 export type BoardEntry = { name: string; rating: number; games: number; wins: number };
 export type Leaderboard = { board: BoardEntry[]; best: BoardEntry[] };

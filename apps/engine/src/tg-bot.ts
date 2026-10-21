@@ -63,7 +63,7 @@ function liveCard(games: LiveGame[]): Reply {
   if (!games.length) return { text: ["👀 <b>NO LIVE GAMES RIGHT NOW</b>", "", "Start one on the website and the night crew can watch it there.", "", INSTALL].join("\n"), buttons: [...room(), [{ text: "🔄 Refresh", data: "/watch" }]] };
   const shown = games.slice(0, 8);
   const vs = (g: LiveGame) => `${esc(g.players[0]?.name ?? "Player")} vs ${esc(g.players[1]?.name ?? "Player")}`;
-  const stake = (g: LiveGame) => (g.stake.currency === "FREE" ? "free" : `💎 ${g.stake.amount.toLocaleString("en-US")} ${g.stake.currency === "SHIFT" ? "$SHIFT" : "IMD"}`);
+  const stake = (g: LiveGame) => (g.house ? "HOUSE · exhibition, not rated" : g.stake.currency === "FREE" ? "free" : `💎 ${g.stake.amount.toLocaleString("en-US")} ${g.stake.currency === "SHIFT" ? "$SHIFT" : "IMD"}`);
   const kind = (g: LiveGame) => (g.game === "chess" ? g.tc ?? "chess" : g.game === "pool" ? "pool" : "pinball");
   const lines = shown.map((g) => `${GAME[g.game].icon} <b>${vs(g)}</b> · ${kind(g)} · ${stake(g)}${g.viewers ? ` · 👁 ${g.viewers}` : ""}`);
   return {

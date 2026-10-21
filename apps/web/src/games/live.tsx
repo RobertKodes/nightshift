@@ -8,6 +8,8 @@ import "./live.css";
 export type LiveGame = {
   game: "chess" | "pinball" | "pool"; id: string; players: { name: string; avatar?: string; agent?: boolean }[];
   stake: { currency: "FREE" | "IMD" | "SHIFT"; amount: number }; startedAt: number; watch: string; viewers: number; tc?: string; rules?: string;
+  /** The house exhibition: two house bots, never rated, staked or bet on. */
+  house?: boolean;
 };
 
 /** The live list, polled while the page is visible. `null` until the first answer. */
@@ -38,10 +40,10 @@ export function LiveRow({ g, now }: { g: LiveGame; now: number }) {
   return <li className="lv-row">
     <span className={`lv-game ${g.game}`} aria-hidden="true"><Icon name={g.game === "chess" ? "chess-knight" : g.game === "pool" ? "pool" : "orbit"} size={20} /></span>
     <div className="lv-who">
-      <span className="lv-kind">{g.game === "chess" ? `NIGHT CHESS${g.tc ? ` · ${g.tc}` : ""}` : g.game === "pool" ? `NIGHT POOL · ${g.rules === "quick" ? "QUICK" : "WPA"}` : "SPACE PINBALL"}</span>
+      <span className="lv-kind">{g.game === "chess" ? `NIGHT CHESS${g.tc ? ` · ${g.tc}` : ""}` : g.game === "pool" ? `NIGHT POOL · ${g.rules === "quick" ? "QUICK" : "WPA"}` : "SPACE PINBALL"}{g.house && <i className="lv-house" title="Two house bots play an exhibition: never rated, never staked">HOUSE · exhibition, not rated</i>}</span>
       <b>{who(a)}<em>vs</em>{who(b)}</b>
     </div>
-    <span className={`lv-stake ${g.stake.currency === "FREE" ? "" : "on"}`}>{stakeText(g.stake)}</span>
+    <span className={`lv-stake ${g.stake.currency === "FREE" ? "" : "on"}`}>{g.house ? "EXHIBITION" : stakeText(g.stake)}</span>
     <span className="lv-meta"><span title="Spectators"><Icon name="user" size={13} />{g.viewers}</span><span title="Playing for"><Icon name="clock" size={13} />{since(g.startedAt, now)}</span></span>
     <Link to={g.watch} className="lv-watch"><Icon name="radar" size={15} /><span>WATCH</span></Link>
   </li>;

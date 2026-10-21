@@ -297,7 +297,8 @@ export class Engine {
     const seenDuels = new Set<string>();
     let primed = false, lastFree = 0, lastAgent = 0;
     setInterval(() => {
-      const games = liveGames().filter((g) => g.players.length === 2 && g.stake.currency === "FREE");
+      // the house exhibition is the server playing itself: never a duel card
+      const games = liveGames().filter((g) => g.players.length === 2 && g.stake.currency === "FREE" && !g.house);
       for (const g of games) {
         if (seenDuels.has(g.id)) continue;
         seenDuels.add(g.id);
