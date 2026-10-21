@@ -162,7 +162,7 @@ describe("the CEO's memory", () => {
 
   it("spaces posts out whoever decides them: no second post within 20 hours, never the same title twice", () => {
     const at = Date.parse("2026-10-21T12:25:00Z");
-    const c = company({ site: { url: "http://sites/acme", at: 0 } as Company["site"], marketing: [{ at, channel: "x", text: "Missed calls are lost jobs.", status: "drafted" }],
+    const c = company({ site: { url: "http://sites/acme", jobId: "job-site" }, marketing: [{ at, channel: "x", text: "Missed calls are lost jobs.", status: "drafted" }],
       tasks: [{ id: "t7", cycle: 7, kind: "marketing", title: "Contractor post: missed calls", why: "", status: "done", createdAt: at, updatedAt: at } as Task] });
     const post = { kind: "marketing" as const, title: "Contractor post: missed calls", why: "no visits", brief: "", post: "Every missed call is a job lost to a rival." };
     // the live case: the model asked for another post a minute later
