@@ -96,7 +96,8 @@ function BurnBar({ ov }: { ov: Overview | null }) {
 /** $SHIFT at a glance, read live from Ethereum: the two things holders do (swap, stake), one tap each, and the numbers behind them. */
 function TokenDeck({ ov }: { ov: Overview | null }) {
   const cells: { k: string; v: string | null; sub?: string; acc: string; to: string }[] = [
-    { k: "Price", v: ov?.market ? money(ov.market.priceUsd) : null, sub: ov?.market ? `mcap ${money(ov.market.mcap)}` : undefined, acc: "#ffc861", to: "/token" },
+    { k: "Price", v: ov?.market ? money(ov.market.priceUsd) : null, sub: "per $SHIFT", acc: "#ffc861", to: "/token" },
+    { k: "Market cap", v: ov?.market ? money(ov.market.mcap) : null, sub: "DexScreener", acc: "#ff9f5a", to: "/token" },
     { k: "Staked", v: ov?.staked != null ? amount(ov.staked) : null, sub: ov?.stakedPct != null ? `${ov.stakedPct.toFixed(1)}% of supply` : undefined, acc: "#b8ff4a", to: "/stake" },
     { k: "$SHIFT burned", v: ov?.burnedShift != null ? amount(ov.burnedShift) : null, sub: "gone for good", acc: "#ff5ca8", to: "/tokenomics" },
     { k: "IMD burned", v: ov?.burnedImd != null ? amount(ov.burnedImd) : null, sub: "at BurnExecutor", acc: "#4ad8ff", to: "/impact" },
