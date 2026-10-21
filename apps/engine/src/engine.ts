@@ -42,7 +42,7 @@ import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
 import { forgive, judge, muteMinutes, strike, track } from "./moderation.js";
 import { liveStats } from "./live.js";
 import { type Facts, allowed, answer, spend, worthAsking } from "./assistant.js";
-import { type KeeperRun, runKeeper } from "./keeper.js";
+import { type KeeperRun, keeperAccount, keeperGasAlert, markGasAlert, runKeeper, sampleKeeper } from "./keeper.js";
 import { buildEpoch } from "./frogpot.js";
 import { IMD_MAINNET } from "@nightshift/imd";
 import { config } from "./config.js";
@@ -262,6 +262,8 @@ export class Engine {
       if (d.getUTCHours() % 2 === 1 && kept !== slot) { kept = slot; void this.keeperRun(); }
       if (d.getUTCDay() === 1 && d.getUTCHours() === 0 && built !== day) { built = day; void this.frogEpoch(); }
     }, 60_000);
+    // The keeper also relays staked-game payouts: its balance is read every hour, and the admins told once a day when it runs low.
+    if (config.mode === "live") { const gas = () => void this.#keeperGas().catch((e) => console.error("keeper gas", e)); setTimeout(gas, 90_000); setInterval(gas, 3_600_000); }
     setInterval(() => void houseTick().catch((e) => console.error("house", e)), 60_000);
     // The Night League: market reads, Monday seasons and the house agents, every five minutes.
     startLeague();
@@ -640,10 +642,24 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       n = await fetch(`https://api.imd.fun/launches/${l.launchId}`, { signal: AbortSignal.timeout(15000) }).then((x) => x.json() as Promise<{ launchNumber?: number }>).then((d) => d.launchNumber).catch(() => undefined);
       if (n) patchLaunch({ launchNumber: n });
     }
-    const r = await runKeeper(this.vault, l?.contracts ?? {}, { launchNumber: n, payer: DEV_WALLET }, o).catch((e) => ({ at: Date.now(), did: [], skipped: [], error: (e as Error).message }));
+    // $SHIFT and IMD in ETH, so the keeper weighs what a split or a fee moves against its gas
+    const m = await marketSnapshot().catch(() => null);
+    const prices = m?.ethUsd ? { shift: m.priceUsd / m.ethUsd, imd: config.imdUsd / m.ethUsd } : undefined;
+    const r = await runKeeper(this.vault, l?.contracts ?? {}, { launchNumber: n, payer: DEV_WALLET }, { prices, ...o }).catch((e) => ({ at: Date.now(), did: [], skipped: [], error: (e as Error).message }));
     this.lastKeeper = r;
     if (r.error || r.did.length) void this.adminCard(`🧹 <b>Keeper run</b>\n${r.error ? `⚠️ ${esc(r.error)}` : ""}${r.did.map((x) => `✅ ${esc(x)}`).join("\n")}${r.skipped.length ? `\n${r.skipped.map((x) => `· ${esc(x)}`).join("\n")}` : ""}`, [[{ text: "⚙️ Setup", url: `${config.publicUrl}/setup` }]], `keeper-${r.at}`, r.error ? "alert" : "report");
     return r;
+  }
+
+  /** The keeper's balance, once an hour; under 0.004 ETH the admins hear it once a day, with how long it lasts. */
+  async #keeperGas() {
+    const a = keeperAccount(this.vault).address;
+    const wei = await eth.getBalance({ address: a });
+    sampleKeeper(wei);
+    const note = keeperGasAlert(a, wei);
+    if (!note) return;
+    if (await this.adminCard(`⛽ <b>Keeper gas is low</b>
+${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${a}` }, { text: "⚙️ Setup", url: `${config.publicUrl}/setup` }]], "keeper-gas", "alert")) markGasAlert();
   }
 
   /** This week's NIGHT FROGS list; the dev wallet posts its root from /setup. */

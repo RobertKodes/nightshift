@@ -46,7 +46,7 @@ export function GameStakes({ token }: { token: string }) {
       <div><b>On-chain signer</b> <span className="mono">{s?.signer ?? "…"}</span>{s?.signer === DEV && <span className="faint"> (the dev wallet)</span>}</div>
       <div><b>Server signer</b> <span className="mono">{s?.serverSigner ?? "…"}</span></div>
       <div><span className={`pill ${s?.live ? "done" : "failed"}`}>{s?.live ? "live: duels for IMD and $SHIFT are open" : s?.paused ? "paused" : "not live"}</span></div>
-      <p className="dim" style={{ margin: 0 }}>The server signs each staked game's result with its own key; the contract pays only a match both players joined. The keeper {s ? <span className="mono">{s.keeper.slice(0, 8)}…</span> : null} relays the payout and pays the gas: {gas.toFixed(4)} ETH now{gas < 0.002 ? ", send it ~0.01 ETH" : ""}.</p>
+      <p className="dim" style={{ margin: 0 }}>The server signs each staked game's result with its own key; the contract pays only a match both players joined. The keeper {s ? <span className="mono">{s.keeper.slice(0, 8)}…</span> : null} relays the payout and pays the gas: {gas.toFixed(4)} ETH now{gas < 0.004 ? ", under 0.004: top it up (see the keeper above)" : ""}.</p>
       {!same && <div className="setup-tools"><button className="btn primary" disabled={busy || !s} onClick={() => void activate()}>Make the server the game result signer (dev wallet)</button></div>}
       {msg && <span>{msg}</span>}
     </div>

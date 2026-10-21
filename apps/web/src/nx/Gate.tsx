@@ -7,11 +7,13 @@ import { InstallButton } from "../landing/app";
 import { ImdVisitor } from "../landing/visitor";
 import { NxTabs, lastRoom, rememberRoom } from "./Shell";
 import { StationMap, useDock } from "./StationMap";
+import { RewardsCard } from "./Rewards";
 import type { RoomId } from "./map";
 import "./nx.css";
 
 type Station = { breakroom: { agentsInArena: number; liveGames: number }; geek: { leagueAgents: number; tradableTokens: number | null }; command: { missions: number }; leader: { name: string; returnPct: number } | null };
-type Overview = { market: { priceUsd: number; mcap: number; liquidity?: number } | null; staked?: number | null; stakedPct: number | null; burnedShift?: number | null; burnedImd?: number | null; frogs: { minted: number; max: number } | null };
+type Overview = { market: { priceUsd: number; mcap: number; liquidity?: number } | null; staked?: number | null; stakedPct: number | null; burnedShift?: number | null; burnedImd?: number | null; frogs: { minted: number; max: number } | null;
+  burnReserveEth?: number | null; burnAtEth?: number | null; lastBurn?: { at: number; tx: string; imd: number | null } | null };
 
 /** A slow starfield with a little parallax, drawn once per frame; still when the visitor prefers less motion. */
 function useStars(ref: React.RefObject<HTMLCanvasElement | null>) {
@@ -68,6 +70,29 @@ const get = <T,>(u: string) => fetch(u).then((r) => (r.ok ? (r.json() as Promise
 const money = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toPrecision(3)}`);
 const amount = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : n >= 100 ? n.toFixed(0) : n.toFixed(2));
 
+/** The keeper runs at every odd UTC hour (its burn lands within about an hour of it). */
+const nextRun = () => { const d = new Date(); d.setUTCMinutes(0, 0, 0); d.setUTCHours(d.getUTCHours() + (d.getUTCHours() % 2 === 1 ? 2 : 1)); return `${String(d.getUTCHours()).padStart(2, "0")}:00 UTC`; };
+const eth = (n: number) => n.toFixed(n < 0.01 ? 4 : 3);
+
+/** The next IMD burn: the fee splitter's ETH reserve against what the keeper waits for at today's gas price, and the last burn. */
+function BurnBar({ ov }: { ov: Overview | null }) {
+  const r = ov?.burnReserveEth, at = ov?.burnAtEth, last = ov?.lastBurn;
+  if (r == null && !last) return null;
+  const ready = r != null && at != null && r >= at;
+  const pct = r != null && at ? Math.min(100, (r / at) * 100) : 0;
+  return (
+    <div className="nx-burn" aria-label="Next IMD burn">
+      <span className="nx-burn-k">Next IMD burn</span>
+      {r != null && at != null && <>
+        <span className="nx-burn-bar" role="progressbar" aria-label="Burn reserve" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}><i style={{ width: `${pct}%` }} /></span>
+        <span className="nx-burn-v">{ready ? <><b>{eth(r)} ETH</b> · burns at the next keeper run, about {nextRun()}</> : <><b>{eth(r)}</b> / {eth(at)} ETH</>}</span>
+      </>}
+      {last && <a className="nx-burn-last" href={`https://etherscan.io/tx/${last.tx}`} target="_blank" rel="noreferrer">Last burn {new Date(last.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })} UTC{last.imd ? ` · ${amount(last.imd)} IMD` : ""} ↗</a>}
+      {ov?.burnedImd != null && <Link className="nx-burn-sum" to="/impact">{amount(ov.burnedImd)} IMD burned in all</Link>}
+    </div>
+  );
+}
+
 /** $SHIFT at a glance, read live from Ethereum: the two things holders do (swap, stake), one tap each, and the numbers behind them. */
 function TokenDeck({ ov }: { ov: Overview | null }) {
   const cells: { k: string; v: string | null; sub?: string; acc: string; to: string }[] = [
@@ -92,6 +117,7 @@ function TokenDeck({ ov }: { ov: Overview | null }) {
           </Link>
         ))}
       </dl>
+      <BurnBar ov={ov} />
     </section>
   );
 }
@@ -164,6 +190,7 @@ export function Gate() {
         <div className="nx-spectrum" aria-hidden="true">{["#ff5ca8", "#4ad8ff", "#c9c2ff", "#ffc861", "#b8ff4a"].map((c) => <i key={c} style={{ background: c, color: c }} />)}</div>
         <p className="nx-gate-lead">An AI company station built on IMD, the swarm of AI agents that builds, audits and ships. Five rooms, one crew of frogs. Pick the door that fits you.</p>
         <TokenDeck ov={ov} />
+        <RewardsCard />
         {back && <button className="nx-continue" style={{ "--acc": ROOMS[back].accent } as React.CSSProperties} onClick={() => dock.start(back, () => { go(ROOMS[back].nav[0]!.to); scrollTo(0, 0); })}>Continue to the {ROOMS[back].name} <NxIcon name="arrow" size={16} /></button>}
 
         <div className="nx-ways">

@@ -16,7 +16,7 @@ const errText = (e: unknown) => ((e as { shortMessage?: string }).shortMessage ?
 
 /** After launch, from /setup: the keeper (gas, owner switch, run now) and the weekly NIGHT FROGS roots. */
 export function AfterLaunch({ call, token }: { call: Call; token: string }) {
-  const [k, setK] = useState<{ address: string; eth: string; last: { at: number; did: string[]; skipped: string[]; error?: string } | null } | null>(null);
+  const [k, setK] = useState<{ address: string; eth: string; perDay: string | null; daysLeft: number | null; low: string; reserve: string; last: { at: number; did: string[]; skipped: string[]; error?: string; line?: string; spentWei?: string } | null } | null>(null);
   const [eps, setEps] = useState<Epoch[]>([]);
   const [contracts, setContracts] = useState<Record<string, string> | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -41,13 +41,20 @@ export function AfterLaunch({ call, token }: { call: Call; token: string }) {
     try { const r = await fn(); setMsg(r || "Done."); load(); } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
   };
 
-  if (!contracts?.splitter) return <div className="card-b dim" style={{ fontSize: 13 }}>Opens when $SHIFT is deployed: the keeper and the NIGHT FROGS weekly roots are run from here.</div>;
   const gas = k ? Number(k.eth) / 1e18 : 0;
+  const low = k ? gas < Number(k.low) / 1e18 : false, perDay = k?.perDay ? Number(k.perDay) / 1e18 : null;
+  // the keeper's gas, before the rest: it also relays the staked-game payouts
+  const fuel = k && <p className={low ? "bad" : "dim"} style={{ fontSize: 13, margin: "4px 0" }}>
+    Gas: <b className="mono">{gas.toFixed(4)} ETH</b>{perDay !== null ? <> · spends about <span className="mono">{perDay.toFixed(5)}</span> ETH a day{k.daysLeft !== null ? <> · lasts about <b>{Math.floor(k.daysLeft)} days</b></> : null}</> : " · daily spend still being measured"}.
+    {low ? ` Under ${(Number(k.low) / 1e18).toFixed(3)} ETH: send ${k.address.slice(0, 6)}…${k.address.slice(-4)} about ${Math.max(0.01, Math.ceil(((perDay ?? 0) * 90) / 0.005) * 0.005).toFixed(3)} ETH (90 days at this rate).` : ""}
+    {" "}Under {(Number(k.reserve) / 1e18).toFixed(3)} ETH it sends nothing of its own and keeps the rest for staked-game payouts.</p>;
+  if (!contracts?.splitter) return <div className="card-b dim" style={{ fontSize: 13 }}>{k && <><b>Keeper</b> <span className="mono faint" style={{ fontSize: 12 }}>{k.address}</span>{fuel}</>}Opens when $SHIFT is deployed: the keeper and the NIGHT FROGS weekly roots are run from here.</div>;
   return (
     <div className="card-b" style={{ display: "grid", gap: 14 }}>
       <div>
         <b>Keeper</b> <span className="mono faint" style={{ fontSize: 12 }}>{k?.address}</span>
-        <p className="dim" style={{ fontSize: 13, margin: "4px 0" }}>Every day at 03:00 UTC it splits what the fee splitter received and burns the ETH reserve as IMD. It only pays gas: {gas.toFixed(4)} ETH now{gas < 0.002 ? ", send it ~0.01 ETH" : ""}.</p>
+        <p className="dim" style={{ fontSize: 13, margin: "4px 0" }}>Every two hours (odd UTC hours) it looks; it only sends what is worth its gas. Each token is split at most once a day, when it is worth 50x the gas; the ETH burn reserve is burned as IMD from 0.002 ETH and 30x the gas; the launch fee is collected once a day, when worth 50x the gas. Nothing refills it: the splitter's split is fixed.</p>
+        {fuel}
         <div className="setup-tools">
           <button className="btn" disabled={busy || !k} onClick={() => void act(async () => {
             const { w, a } = await dev();
@@ -57,7 +64,7 @@ export function AfterLaunch({ call, token }: { call: Call; token: string }) {
           })}>Make the server the keeper (dev wallet)</button>
           <button className="btn" disabled={busy} onClick={() => void act(async () => { const r = await call(token, "keeper/run", {}); return r.error ?? `Ran: ${r.did.length} done, ${r.skipped.length} skipped.`; })}>Run it now</button>
         </div>
-        {k?.last && <p className="faint" style={{ fontSize: 12, margin: "4px 0" }}>Last run {new Date(k.last.at).toUTCString().slice(5, 22)}: {k.last.error ?? `${k.last.did.length} done`}</p>}
+        {k?.last && <p className="faint mono" style={{ fontSize: 11.5, margin: "4px 0", overflowWrap: "anywhere" }}>{k.last.error ? `Last run ${new Date(k.last.at).toUTCString().slice(5, 22)}: ${k.last.error}` : k.last.line ?? `Last run ${new Date(k.last.at).toUTCString().slice(5, 22)}: ${k.last.did.length} done`}</p>}
       </div>
       <div>
         <b>NIGHT FROGS weekly rewards</b>

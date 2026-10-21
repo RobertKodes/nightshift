@@ -8,7 +8,8 @@ import { balances, eth, sales } from "./chain.js";
 import { NoGasError, PaymentRefused, PendingError } from "./checkout.js";
 import { findPool } from "./v4.js";
 import { liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
-import { keeperAccount } from "./keeper.js";
+import { KEEPER_LOW, KEEPER_RESERVE, burnStatus, keeperAccount, keeperBurnRate, keeperState } from "./keeper.js";
+import { type CompanyClaim, rewardsOf } from "./rewards.js";
 import { frogPng } from "./frogpng.js";
 import { board as pinBoard, frogImage as pinFrogImage, inMatch as pinInMatch, soloFinish as pinSoloFinish, soloProgress as pinSoloProgress, soloStart as pinSoloStart, finish as pinFinish, get as pinGet, leave as pinLeave, listen as pinListen, progress as pinProgress, queue as pinQueue, stakes as pinStakes } from "./pinball.js";
 import { claimsOf, epochs, markPosted } from "./frogpot.js";
@@ -338,11 +339,12 @@ let overviewCache: { at: number; v: unknown } | null = null;
 async function tokenOverview(): Promise<unknown> {
   if (overviewCache && Date.now() - overviewCache.at < 60_000) return overviewCache.v;
   const token = config.token.address as `0x${string}` | "";
-  const [m, staked, dead, frogs] = await Promise.all([
+  const [m, staked, dead, frogs, burn] = await Promise.all([
     marketSnapshot().catch(() => null),
     stakedNow(),
     token ? eth.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [DEAD] }).then((v) => Number(v / 10n ** 18n)).catch(() => null) : Promise.resolve(null),
     frogStats().catch(() => null),
+    burnStatus(launchState()?.contracts?.splitter).catch(() => null),
   ]);
   const burnedShift = dead ?? 0;
   const v = {
@@ -352,6 +354,10 @@ async function tokenOverview(): Promise<unknown> {
     burnedShift, burnedImd: burnTotals().imd,
     circulating: SUPPLY - burnedShift - (staked ?? 0),
     frogs: frogs ? { minted: Number(frogs.minted), max: 500 } : null,
+    // the next IMD burn: the splitter's ETH reserve against what the keeper waits for at today's gas price
+    burnReserveEth: burn?.reserve != null ? Number(burn.reserve) / 1e18 : null,
+    burnAtEth: burn ? Number(burn.at) / 1e18 : null,
+    lastBurn: burn?.last ? { at: burn.last.at, tx: burn.last.tx, imd: burn.last.imd != null ? Number(burn.last.imd) : null } : null,
   };
   overviewCache = { at: Date.now(), v };
   return v;
@@ -467,7 +473,9 @@ export function serve(engine: Engine) {
         if (p === "/api/admin/live" && req.method === "GET") return json(res, 200, liveStats());
         if (p === "/api/admin/keeper" && req.method === "GET") {
           const a = keeperAccount(engine.vault).address;
-          return json(res, 200, { address: a, eth: (await eth.getBalance({ address: a }).catch(() => 0n)).toString(), last: engine.lastKeeper });
+          const wei = await eth.getBalance({ address: a }).catch(() => null);
+          const rate = wei === null ? { perDay: null, daysLeft: null } : keeperBurnRate(wei);
+          return json(res, 200, { address: a, eth: (wei ?? 0n).toString(), last: engine.lastKeeper ?? keeperState().last ?? null, perDay: rate.perDay?.toString() ?? null, daysLeft: rate.daysLeft, low: KEEPER_LOW.toString(), reserve: KEEPER_RESERVE.toString() });
         }
         if (p === "/api/admin/keeper/run" && req.method === "POST") return json(res, 200, await engine.keeperRun({ burnDelayMs: 0 }));
         if (p === "/api/admin/frogpot" && req.method === "GET") return json(res, 200, { epochs: epochs() });
@@ -614,6 +622,22 @@ export function serve(engine: Engine) {
       }
       if (p === "/api/token/overview") return json(res, 200, await tokenOverview());
       if (p === "/api/prices") { const d = await prices(); return d ? json(res, 200, d) : json(res, 503, { error: "No price data right now." }); }
+      // ---- what one wallet can claim now, across staking, NIGHT FROGS, staked games and (signed in as it) its companies
+      if (seg[0] === "api" && seg[1] === "rewards" && req.method === "GET") {
+        const w = seg[2] ?? "";
+        if (seg.length !== 3 || !/^0x[0-9a-fA-F]{40}$/.test(w)) return json(res, 400, { error: "GET /api/rewards/<wallet address>" });
+        if (limited(req, "rewards", 30, 60_000)) return json(res, 429, { error: "slow down" });
+        const me = owner !== null && owner.toLowerCase() === w.toLowerCase();
+        const companies = async (): Promise<CompanyClaim[] | null> => {
+          if (!me) return null;
+          const fee = config.platformTreasury ? config.platformFeeBps : 0;
+          const mine = [...engine.store.companies.values()].filter((c) => c.owner === owner && !c.house && !(config.mode === "live" && c.sim));
+          const rows = await Promise.all(mine.map(async (c) => ({ id: c.id, slug: c.slug, name: c.name, usd: fromUsdc(await engine.withdrawable(c)), feeBps: fee })));
+          return rows.filter((r) => r.usd >= 0.01);
+        };
+        const r = await rewardsOf(w, { fresh: me && url.searchParams.get("fresh") === "1", games: () => gameLobby(engine.vault).escrow.challenges.values(), companies });
+        return json(res, 200, r, { "Cache-Control": "private, max-age=30" });
+      }
       if (p === "/api/frogs/claims") {
         const a = url.searchParams.get("address") ?? "";
         if (!/^0x[0-9a-fA-F]{40}$/.test(a)) return json(res, 400, { error: "address" });
