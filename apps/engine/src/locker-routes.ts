@@ -4,6 +4,7 @@ import { type Locker, isKey, locker as live } from "./locker.js";
 import { onArcade } from "./pinball.js";
 import { onPool, pool } from "./pool.js";
 import { onPoker, poker } from "./poker.js";
+import { ring } from "./poker/ring.js";
 
 type Context = {
   json(res: ServerResponse, status: number, body: unknown): void;
@@ -25,6 +26,7 @@ export function wireGameRoom(l: Locker = live): void {
   pool.setLooks((key, staked) => l.look(key, staked));
   onPool((e) => l.poolEnded(e));
   poker.setLooks((key, staked) => l.look(key, staked));
+  ring.setLooks((key, staked) => l.look(key, staked));
   onPoker((e) => {
     if (!e.rated) return;
     for (const pl of e.players) if (pl.key && isKey(pl.key) && !pl.agent) l.record(pl.key, { game: "poker", result: pl.result, name: pl.name });

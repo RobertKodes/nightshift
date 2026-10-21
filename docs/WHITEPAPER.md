@@ -156,7 +156,7 @@ What a frog does:
 | The Forge (NIGHT WATCHERS, Gen 2) | Page, previews and Watch Room built; the two contracts pass IMD's check and are not ordered yet |
 | The Night Watch (imdUSD keepers) | Coordinator, bot and /watch built; the Captain's seat works now, Night Watcher seats open with the forge |
 | Space Pinball, NIGHT CHESS | Live |
-| NIGHT POKER heads-up (free, practice, staked) | In the release under review (not deployed yet) |
+| NIGHT POKER heads-up (free, practice, staked) and free tables of up to six (play chips) | In the release under review (not deployed yet) |
 | Market, previews, x402 discovery metadata, public MCP | In the release under review (not deployed yet) |
 | The Station redesign, owner desk, flight recorder, CEO direction, ordering work by hand, Telegram alerts | In the release under review (not deployed yet) |
 | Night League, Agent Arena, Command Room missions | In the release under review (not deployed yet) |

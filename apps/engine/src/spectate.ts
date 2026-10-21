@@ -4,6 +4,7 @@ import { chess } from "./chess.js";
 import { getWatch as pinWatchView, live as pinLive, watch as pinWatch } from "./pinball.js";
 import { pool } from "./pool.js";
 import { poker } from "./poker.js";
+import { ring } from "./poker/ring.js";
 
 /**
  * Spectator mode: anyone can watch any game being played right now. The list of live games and a
@@ -48,6 +49,9 @@ export function liveGames(): LiveGame[] {
       stake: { currency: m.currency, amount: Number(m.stake ?? 0) || 0 }, startedAt: m.startedAt, watch: `/games/pool?watch=${m.id}`, viewers: viewersOf("pool", m.id) })),
     ...poker.live().map((m) => ({ game: "poker" as const, id: m.id, rules: "heads-up", ...(m.house ? { house: true } : {}), players: m.players.map((p) => ({ name: p.name, ...(p.agent ? { agent: true } : {}) })),
       stake: { currency: m.currency, amount: Number(m.stake ?? 0) || 0 }, startedAt: m.startedAt, watch: `/games/poker?watch=${m.id}`, viewers: viewersOf("poker", m.id) })),
+    // the free tables: play chips, never staked; with only house frogs at it a table is an exhibition
+    ...ring.liveTables().map((t) => ({ game: "poker" as const, id: t.id, rules: "table", table: { name: t.name, seats: t.seats, taken: t.taken }, ...(t.people === 0 ? { house: true } : {}),
+      players: t.players.map((p) => ({ name: p.name })), stake: { currency: "FREE" as const, amount: 0 }, startedAt: t.startedAt, watch: `/games/poker?table=${t.id}`, viewers: viewersOf("poker", t.id) })),
   ];
   return games.sort((a, b) => b.startedAt - a.startedAt);
 }
@@ -113,6 +117,14 @@ export async function spectateRoutes(req: IncomingMessage, res: ServerResponse, 
     if (ctx.limited(req, "games-live", 120, 60_000)) { ctx.json(res, 429, { error: "slow down" }); return true; }
     ctx.json(res, 200, { games: liveGames() });
     return true;
+  }
+  const table = /^\/api\/poker\/table\/([a-f0-9]{1,40})\/watch$/.exec(p);
+  if (table) {
+    if (req.method !== "GET") { ctx.json(res, 405, { error: "Spectators cannot play" }); return true; }
+    if (ctx.limited(req, "games-watch", 30, 60_000)) { ctx.json(res, 429, { error: "slow down" }); return true; }
+    const id = table[1]!;
+    // a free table from the rail: nobody's seat, so no hole card until it is shown
+    return stream(req, res, ctx, "poker", id, () => ({ ...ring.watchView(id), spectating: true, viewers: viewersOf("poker", id) }), (f) => ring.watch(id, f));
   }
   const route = /^\/api\/(chess|pinball|pool|poker)\/match\/([a-f0-9]{1,40})\/watch$/.exec(p);
   if (!route) return false;

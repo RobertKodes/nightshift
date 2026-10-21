@@ -2,6 +2,11 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-22 · NIGHT POKER free tables for up to six
+- Three free NIGHT POKER tables of up to six seats, with play chips that have no value: sit in any empty seat, sit out, top up and stand up between hands. Signed-in players get 10,000 play chips a day; guests sit with fresh chips each time.
+- House frogs, clearly marked HOUSE, fill empty seats so a table is always playable and stand up when people arrive. The first table always plays, so there is always a game to watch.
+- Free tables are never rated, staked or bet on. Each hand's deck is committed before the deal, and its seed is shown once everyone dealt in has left the table.
+
 ## 2026-10-22 · NIGHT POKER: heads-up Hold'em in the Game Room
 - NIGHT POKER is heads-up No-Limit Texas Hold'em: 2,000 chips each (100 big blinds), blinds up every 3 minutes, 20 seconds a move plus a time bank, until one player has every chip. Free and rated like chess, practice against Frog #7, or a house exhibition to watch.
 - Every deck is provably fair: the server commits to each hand's seed before the deal, your browser adds its own seed, and when the match ends every seed is revealed so you can rebuild any hand's deck on /games/poker/verify.

@@ -11,7 +11,8 @@ import { handleFor, nameOr, typedName } from "../games/handle";
 import { Emote } from "../pool/cosmetics";
 import "../chess/chess.css";
 import "../games/live.css";
-import { type Action, type Board, type HandView, type MatchView, type PlayerView, chips, newClientSeed, poker } from "./api";
+import { type Action, type Board, type HandView, type MatchView, type PlayerView, type TablesList, chips, newClientSeed, poker } from "./api";
+import { FreeTable, TABLE_SEAT } from "./FreeTable";
 import { CardDefs } from "./Card";
 import { HandHistory } from "./History";
 import { ActionBar, PokerTable, useNow } from "./Table";
@@ -70,6 +71,18 @@ export function PokerPage() {
   const source = useRef<EventSource | null>(null), token = useRef(""), current = useRef<MatchView | null>(null), mounted = useRef(true), sound = useRef<PokerSound | null>(null);
   const seeded = useRef(new Set<string>());
   const watchId = params.get("watch");
+  // a free table (?table=<id>): from the rail, or from this tab's seat after a reload
+  const [tableId, setTableId] = useState<string | null>(() => params.get("table") ?? (() => { try { return (JSON.parse(sessionStorage.getItem(TABLE_SEAT) ?? "null") as { id: string } | null)?.id ?? null; } catch { return null; } })());
+  const [tables, setTables] = useState<TablesList | null>(null);
+  useEffect(() => {
+    if (tableId || verifying) return;
+    let alive = true;
+    const load = () => { if (!document.hidden) void poker<TablesList>("tables").then((t) => { if (alive) setTables(t); }).catch(() => {}); };
+    load();
+    const t = setInterval(load, 5_000);
+    return () => { alive = false; clearInterval(t); };
+  }, [tableId, verifying, address]);
+  const openTable = (id: string | null) => { setTableId(id); history.replaceState(null, "", id ? `/games/poker?table=${id}` : "/games/poker"); window.scrollTo(0, 0); };
 
   /** Sounds for what changed: a new hand dealt, an action, your turn, a pot won. */
   const sounds = (old: MatchView | null, v: MatchView) => {
@@ -189,6 +202,19 @@ export function PokerPage() {
   const status = !match ? "" : away && !match.done ? away : match.done ? "Match over" : countdown > 0 ? `The first hand in ${countdown}` : !match.hand ? "Shuffling the first deck…" : match.hand.street === "done" ? "Next hand…" : match.legal ? "Your turn" : spectate ? `${toActName} to act` : `${toActName || "Your rival"} is thinking…`;
   const levelLeft = match?.levelAt ? Math.max(0, match.levelAt - now) : null;
 
+  if (tableId && !watchId) return <div className="pk pk-page pk-playing">
+    <CardDefs />
+    <header className="pk-top">
+      <a href="/games/poker" className="pk-back" onClick={(e) => { e.preventDefault(); openTable(null); }}><Icon name="arrow" size={16} /><span>NIGHT POKER</span></a>
+      <a href="/games/poker" className="pk-brand" aria-label="Night Poker by NIGHTSHIFT" onClick={(e) => { e.preventDefault(); openTable(null); }}><Wordmark /></a>
+      <div className="pk-account">
+        <button type="button" className="pk-icon-btn" aria-label={soundOn ? "Mute" : "Sound on"} aria-pressed={soundOn} onClick={() => { sound.current?.unlock(); setSoundOn(!soundOn); }}><Icon name={soundOn ? "sound" : "sound-off"} size={18} /></button>
+        {address ? <span className="pk-wallet"><Icon name="user" size={15} /><span>{address.slice(0, 6)}…{address.slice(-4)}</span></span> : <button type="button" className="pk-btn ghost small" disabled={signing} onClick={() => void signIn()}><Icon name="user" size={15} /><span>{signing ? "SIGNING IN" : "SIGN IN"}</span></button>}
+      </div>
+    </header>
+    <FreeTable id={tableId} name={playName} address={address} sound={sound.current} onExit={() => openTable(null)} />
+  </div>;
+
   if (verifying) return <div className="pk pk-page">
     <header className="pk-top"><a href="/games/poker" className="pk-back" onClick={(e) => { e.preventDefault(); go("/games/poker"); }}><Icon name="arrow" size={16} /><span>NIGHT POKER</span></a><Wordmark /><span /></header>
     <CardDefs /><VerifyDeck />
@@ -223,6 +249,15 @@ export function PokerPage() {
         <a className="pk-fair-link" href="/games/poker/verify" onClick={(e) => { e.preventDefault(); go("/games/poker/verify"); }}><Icon name="shield" size={15} /><span><b>Provably fair deck</b>Each hand is committed before the deal and shuffled with your browser's seed. Check any hand.</span><Icon name="arrow" size={14} /></a>
       </section>
       <section className="pk-more" aria-label="Open tables and the leaderboard">
+        <section className="pk-tables" aria-labelledby="pk-tables-title">
+          <div className="pk-section"><span id="pk-tables-title">Free tables, up to six</span><span>{tables?.chips != null ? `${chips(tables.chips)} play chips` : ""}</span></div>
+          <p className="pk-note">Blinds {tables ? `${tables.blinds[0]}/${tables.blinds[1]}` : "10/20"}, buy in with {tables ? `${chips(tables.buyIn.min)} to ${chips(tables.buyIn.max)}` : "800 to 2,000"} play chips{address ? `; ${chips(tables?.daily ?? 10_000)} in your wallet each day` : "; sign in to keep them, 10,000 a day"}. House frogs fill the empty seats and stand up for people. Never rated, staked or bet on.</p>
+          {tables === null ? <p className="pk-empty">Looking for the tables…</p> : <ul className="pk-table-list">{tables.tables.map((t) => <li key={t.id}>
+            <div><b>{t.name}</b><small>{t.people + t.frogs}/{t.seats} seated · {t.people} {t.people === 1 ? "person" : "people"}{t.frogs ? ` · ${t.frogs} house ${t.frogs === 1 ? "frog" : "frogs"}` : ""}{t.hand ? ` · hand #${t.hand}` : ""}</small>
+              <span className="pk-table-names">{t.players.map((p) => <i key={p.name} className={p.house ? "house" : ""}>{p.name}</i>)}</span></div>
+            <button type="button" className={`pk-btn small ${t.people + t.frogs >= t.seats ? "ghost" : ""}`} onClick={() => openTable(t.id)}>{t.people + t.frogs >= t.seats ? "Watch" : "Sit down"}</button>
+          </li>)}</ul>}
+        </section>
         {money === "FREE" && <Lounge game="poker" onSeat={loungeSeat} />}
         <WeeklyPrizes game="poker" />
         <div className="pk-leaders"><div className="pk-section"><span>Leaderboard</span><span>Elo</span></div>

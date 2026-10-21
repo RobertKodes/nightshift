@@ -51,3 +51,18 @@ export async function poker<T>(path: string, body?: unknown): Promise<T> {
 /** A fresh client seed for one hand: 128 random bits from this browser, as hex. */
 export const newClientSeed = () => [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
 export const chips = (n: number) => n.toLocaleString("en-US");
+
+/** A free table as the lobby lists it (poker/ring.ts list()). */
+export type TableSummary = { id: string; name: string; seats: number; blinds: [number, number]; buyIn: { min: number; max: number }; people: number; frogs: number; players: { name: string; house: boolean }[]; hand: number | null; live: boolean };
+export type TablesList = { tables: TableSummary[]; chips: number | null; buyIn: { min: number; max: number }; blinds: [number, number]; daily: number };
+/** One free table for one seat, or for the rail (poker/ring.ts view()). */
+export type TableView = {
+  id: string; kind: "table"; name: string; seatsMax: number; blinds: [number, number]; buyIn: { min: number; max: number }; version: number; now: number;
+  hand: HandView | null; you: number | null; legal: Legal | null;
+  clock: { seat: number; turnAt: number; actionMs: number; deadline: number } | null;
+  next: { n: number; commit: string; dealAt: number; seedSent: boolean } | null;
+  history: HandRecord[]; emotes: { seat: number; id: string; at: number }[];
+  players: ((PlayerView & { stack: number }) | null)[];
+  chips: number | null; guest: boolean;
+  spectating?: boolean; viewers?: number;
+};

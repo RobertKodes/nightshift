@@ -3,6 +3,7 @@ import { clientIp } from "./auth.js";
 import { type PokerGames, poker } from "./poker.js";
 import { cardText } from "./poker/cards.js";
 import { cleanSeed, commitOf, dealPlan, deckOrder } from "./poker/deck.js";
+import { BUY_IN, DAILY_CHIPS, RING_BLINDS, type RingTables, ring } from "./poker/ring.js";
 
 type Context = {
   json(res: ServerResponse, status: number, body: unknown): void;
@@ -10,7 +11,7 @@ type Context = {
   limited(req: IncomingMessage, key: string, n: number, ms: number): boolean;
   owner: string | null; url: URL;
   /** Tests pass their own tables; the server uses the live ones. */
-  games?: PokerGames;
+  games?: PokerGames; tables?: RingTables;
 };
 const streams = new Map<string, number>();
 let total = 0;
@@ -65,11 +66,11 @@ export function verify(serverSeed: string, seeds: string[], hand: number, player
     hole: plan.hole.map(([a, b]) => [cardText(deck[a]!), cardText(deck[b]!)]), board: [...plan.flop, plan.turn, plan.river].map((i) => cardText(deck[i]!)), seeds: seeds.map(cleanSeed) };
 }
 
-/** /api/poker/*: the queue, practice, a table's state and stream, every action at it, the leaderboard and the deck check. Identity is the private seat token. */
+/** /api/poker/*: the queue, practice, a match's state and stream, the free tables, every action, the leaderboard and the deck check. Identity is the private seat token. */
 export async function pokerRoutes(req: IncomingMessage, res: ServerResponse, p: string, ctx: Context): Promise<boolean> {
   if (!p.startsWith("/api/poker/")) return false;
   const { json, body, limited, owner, url } = ctx;
-  const games = ctx.games ?? poker;
+  const games = ctx.games ?? poker, tables = ctx.tables ?? ring;
   const reply = (status: number, value: unknown) => { json(res, status, value); return true; };
   try {
     if (p === "/api/poker/board" && req.method === "GET") return reply(200, games.board());
@@ -82,6 +83,29 @@ export async function pokerRoutes(req: IncomingMessage, res: ServerResponse, p: 
       if (limited(req, "poker-queue", 20, 600_000)) return reply(429, { error: "Too many searches. Try again shortly." });
       const b = await body(req, 2_000), name = String(b.name ?? "");
       return reply(200, p.endsWith("practice") ? games.practice(name, owner) : games.queue(name, owner));
+    }
+    // the free tables: the list (and the signed-in wallet's play chips), a seat, its stream and every action at it
+    if (p === "/api/poker/tables" && req.method === "GET") return reply(200, { tables: tables.list(), chips: tables.chips(owner), buyIn: BUY_IN, blinds: RING_BLINDS, daily: DAILY_CHIPS });
+    const tbl = /^\/api\/poker\/table\/([a-f0-9]{1,40})(?:\/(events|sit|act|seed|emote|leave|sitout|topup))?$/.exec(p);
+    if (tbl) {
+      const id = tbl[1]!, action = tbl[2];
+      if (!action && req.method === "GET") return reply(200, tables.get(id, url.searchParams.get("player") ?? ""));
+      if (action === "events") {
+        if (req.method !== "GET") return reply(405, { error: "Method not allowed" });
+        const player = url.searchParams.get("player") ?? "";
+        return stream(req, res, ctx, () => tables.get(id, player), (f) => tables.listen(id, player, f));
+      }
+      if (req.method !== "POST" || !action) return reply(405, { error: "Method not allowed" });
+      const budget = action === "act" ? ["poker-act", 120] : action === "seed" ? ["poker-seed", 120] : action === "sit" ? ["poker-sit", 30] : ["poker-action", 60];
+      if (limited(req, budget[0] as string, budget[1] as number, 60_000)) return reply(429, { error: "Slow down" });
+      const b = await body(req, 2_000), player = String(b.player ?? "");
+      if (action === "sit") return reply(200, tables.sit(id, b.seat, String(b.name ?? ""), owner, b.buyIn));
+      if (action === "act") return reply(200, tables.act(id, player, { kind: b.kind, to: b.to }));
+      if (action === "seed") return reply(200, tables.seed(id, player, b.hand, b.seed));
+      if (action === "emote") { tables.emote(id, player, String(b.emote ?? "")); return reply(200, { ok: true }); }
+      if (action === "sitout") return reply(200, tables.sitOut(id, player, b.on));
+      if (action === "topup") return reply(200, tables.topUp(id, player));
+      return reply(200, tables.leave(id, player));
     }
     const state = /^\/api\/poker\/match\/([a-f0-9]{1,40})$/.exec(p);
     if (state && req.method === "GET") return reply(200, games.get(state[1]!, url.searchParams.get("player") ?? ""));

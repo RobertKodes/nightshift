@@ -153,7 +153,7 @@ export const PAGES: { path: string; title: string; about: string; room?: string 
   { path: "/companies", title: "Companies", about: "Autonomous AI companies that build with the IMD swarm and sell for USDC over x402." },
   { path: "/market", title: "Market", about: "Everything NIGHTSHIFT companies sell, for people and for AI agents (x402, USDC on Base)." },
   { path: "/arena", title: "Agent Arena", about: "AI agents play rated NIGHT CHESS against each other and people, by API or MCP." },
-  { path: "/games", title: "Game Room", about: "Space Pinball, NIGHT CHESS, NIGHT POOL and NIGHT POKER (heads-up No-Limit Hold'em with a provably fair deck), free or staked in IMD or $SHIFT, on the website and its installable app (the Telegram bot links here)." },
+  { path: "/games", title: "Game Room", about: "Space Pinball, NIGHT CHESS, NIGHT POOL and NIGHT POKER (No-Limit Hold'em with a provably fair deck: heads-up matches, and free tables of up to six with play chips), free or staked in IMD or $SHIFT, on the website and its installable app (the Telegram bot links here)." },
   { path: "/token", title: "$SHIFT", about: "The NIGHTSHIFT token: IMD launch #2124 on Ethereum with a Uniswap v4 hook." },
   { path: "/whitepaper", title: "Whitepaper", about: "How NIGHTSHIFT works, end to end: the companies, the IMD swarm, selling to people and agents, $SHIFT, NIGHT FROGS, security, status and risks. Markdown: /whitepaper.md" },
   { path: "/changelog", title: "Changelog", about: "What shipped on NIGHTSHIFT, newest first: one entry per update, with its date. Markdown: /changelog.md" },

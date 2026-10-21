@@ -6,6 +6,7 @@ import { live as gameLobby } from "./games-routes.js";
 import { wireGameRoom } from "./locker-routes.js";
 import { startCrew } from "./crew.js";
 import { startHouseGames } from "./housegame.js";
+import { startTables } from "./poker/ring.js";
 import { wirePrizes } from "./prizes.js";
 
 const engine = new Engine();
@@ -23,6 +24,8 @@ serve(engine);
 gameLobby(engine.vault);
 // The house exhibition: one chess game between house bots, always on, never rated (off with HOUSE_GAMES=0).
 startHouseGames();
+// NIGHT POKER's free tables: dealt every few seconds, the first one kept playing by house frogs.
+startTables();
 // Weekly prizes: the week's best players get bonus shift hours, held 48 h (off with WEEKLY_PRIZES=0).
 wirePrizes();
 // The crew ledger reads IMD in the background, so the HR & Economy pages never wait on IMD.
