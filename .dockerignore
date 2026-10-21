@@ -14,7 +14,8 @@ data-*
 *.log
 **/*.log
 **/*.test.ts
-# docs stay out of the image, except the whitepaper the web build imports
+# docs stay out of the image, except the whitepaper and the changelog the web build and the engine read
 docs/*
 !docs/WHITEPAPER.md
+!docs/CHANGELOG.md
 deploy

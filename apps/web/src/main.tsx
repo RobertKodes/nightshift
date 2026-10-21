@@ -39,6 +39,7 @@ const ChessPage = lazy(() => import("./ChessPage").then((x) => ({ default: x.Che
 const PoolPage = lazy(() => import("./pool/PoolPage").then((x) => ({ default: x.PoolPage })));
 const LeaguePage = lazy(() => import("./station/LeaguePage").then((x) => ({ default: x.LeaguePage })));
 const WhitepaperPage = lazy(() => import("./WhitepaperPage").then((x) => ({ default: x.WhitepaperPage })));
+const ChangelogPage = lazy(() => import("./ChangelogPage").then((x) => ({ default: x.ChangelogPage })));
 const BreakroomPage = lazy(() => import("./station/Rooms").then((x) => ({ default: x.BreakroomPage })));
 const GeekPage = lazy(() => import("./station/Rooms").then((x) => ({ default: x.GeekPage })));
 const InfoPage = lazy(() => import("./station/Rooms").then((x) => ({ default: x.InfoPage })));
@@ -78,6 +79,7 @@ function App() {
   if (seg[0] === "market") page = <MarketPage />;
   if (seg[0] === "my") page = <OwnerDesk health={health} />;
   if (seg[0] === "whitepaper") page = <Suspense fallback={<div className="docs" />}><WhitepaperPage /></Suspense>;
+  if (seg[0] === "changelog") page = <Suspense fallback={<div className="docs" />}><ChangelogPage /></Suspense>;
   if (seg[0] === "token") page = <TokenPage />;
   if (seg[0] === "frogs") page = <FrogsPage />;
   if (seg[0] === "swap") page = <SwapPage />;
@@ -105,7 +107,7 @@ function App() {
 }
 
 const TITLES: Record<string, string> = {
-  companies: "Companies", launch: "Launch a company", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
+  companies: "Companies", launch: "Launch a company", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
   market: "Market", token: "$SHIFT", frogs: "NIGHT FROGS", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
   tokenomics: "Tokenomics", games: "Game Room", launchpad: "Launchpad", arena: "Agent Arena",
   services: "House services", breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League",

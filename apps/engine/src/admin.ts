@@ -40,7 +40,7 @@ export async function setupState(engine: Engine) {
     GUMROAD_CLIENT_ID: config.gumroad.clientId,
     HOUSE_GAMES: config.houseGames ? "1" : "0", HOUSE_GAMES_MAX_REAL: String(config.houseGamesMaxReal),
     WEEKLY_PRIZES: config.weeklyPrizes ? "1" : "0", PRIZE_HOURS: config.prizeHours.join(","),
-    DIGEST: config.digest ? "1" : "0", DIGEST_HOUR: String(config.digestHour),
+    DIGEST: config.digest ? "1" : "0", DIGEST_HOUR: String(config.digestHour), CHANGELOG_POST: config.changelogPost ? "1" : "0",
     // read live by /api/wallet-config: a saved change applies at once, never "pending a restart"
     WALLET_SOCIAL_LOGIN: socialLogin() ? "1" : "0",
   };

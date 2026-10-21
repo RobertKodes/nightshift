@@ -1,0 +1,12 @@
+/* The changelog page: one section per day, newest first, each update a title and up to three plain lines. */
+.cl { max-width: 860px; }
+.cl-head { display: grid; gap: 14px; }
+.cl-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.cl-day { display: grid; gap: 10px; }
+.cl-day h2 { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; margin: 22px 0 0; padding-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, .1); font: 600 19px/1.25 Inter, system-ui, sans-serif; letter-spacing: -.01em; }
+.cl-day h2 span { color: var(--s-faint, #74718a); font: 500 11px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .08em; text-transform: uppercase; }
+.cl-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.cl-entry { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .025); }
+.cl-entry > b { font: 600 15.5px/1.35 Inter, system-ui, sans-serif; color: var(--s-text, #ecebf3); }
+.cl-entry ul { display: grid; gap: 4px; margin: 0; padding-left: 18px; color: var(--s-dim, #a4a1b8); font: 400 14px/1.55 Inter, system-ui, sans-serif; }
+@media (max-width: 600px) { .cl-entry { padding: 12px 13px; } .cl-day h2 { font-size: 17px; } }

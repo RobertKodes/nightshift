@@ -12,6 +12,7 @@ import { crew, swarmPulse } from "./crew.js";
 import { creditHours, frogsOn, stakingOf } from "./frogs.js";
 import { live } from "./games-routes.js";
 import { liveGames } from "./spectate.js";
+import { changelog } from "./changelog.js";
 import { imdMarket } from "./imdmarket.js";
 import { liveLeague } from "./league.js";
 import { leagueSummary, marketView } from "./league-routes.js";
@@ -111,6 +112,7 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   if (p === "/llms.txt") return text(res, "text/plain", await llms(false, ctx));
   if (p === "/llms-full.txt") return text(res, "text/plain", await llms(true, ctx));
   if (p === "/whitepaper.md") return text(res, "text/markdown", whitepaper());
+  if (p === "/changelog.md") return text(res, "text/markdown", changelog().md);
   if (p === "/.well-known/agent-card.json" || p === "/.well-known/agent.json") return text(res, "application/json", JSON.stringify(agentCard(), null, 2));
   if (p === "/.well-known/mcp.json" || p === "/.well-known/mcp/server-card.json") return text(res, "application/json", JSON.stringify(mcpCard(), null, 2));
   if (p === "/mcp/public" && !(req.method === "GET" && (req.headers.accept ?? "").includes("text/html"))) {
@@ -152,6 +154,7 @@ export const PAGES: { path: string; title: string; about: string; room?: string 
   { path: "/games", title: "Game Room", about: "Space Pinball, NIGHT CHESS and NIGHT POOL, free or staked in IMD or $SHIFT, on the website and its installable app (the Telegram bot links here)." },
   { path: "/token", title: "$SHIFT", about: "The NIGHTSHIFT token: IMD launch #2124 on Ethereum with a Uniswap v4 hook." },
   { path: "/whitepaper", title: "Whitepaper", about: "How NIGHTSHIFT works, end to end: the companies, the IMD swarm, selling to people and agents, $SHIFT, NIGHT FROGS, security, status and risks. Markdown: /whitepaper.md" },
+  { path: "/changelog", title: "Changelog", about: "What shipped on NIGHTSHIFT, newest first: one entry per update, with its date. Markdown: /changelog.md" },
   { path: "/tokenomics", title: "Tokenomics", about: "How $SHIFT fees are split, burned and paid to stakers, by one rule." },
   { path: "/my", title: "Owner desk", about: "Every company you run on one screen: approvals, the CEO's direction, products, limits, books, delete and restore." },
   { path: "/frogs", title: "NIGHT FROGS", about: "500 fully onchain frogs built by the IMD swarm; holders earn shift hours and perks." },
@@ -208,11 +211,17 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     "- [IMD Kit](https://github.com/RobertKodes/imd-kit): hire the IMD swarm yourself: TypeScript SDK, CLI and MCP server for every IMD action (free check, x402 + Permit2 or onchain Intake, order following, results). MIT, by NIGHTSHIFT.",
     `- [Agent card](${base}/.well-known/agent-card.json) and [MCP card](${base}/.well-known/mcp.json).`,
     `- [Whitepaper, as Markdown](${base}/whitepaper.md): how everything works, what is live, and the risks.`,
+    `- [Changelog, as Markdown](${base}/changelog.md): every shipped update, newest first.`,
     `- Flight records: ${base}/api/public/<company>/shifts/<shift id>: one shift replayed (what the CEO saw, each phase and swarm step, the money, payback).`,
     `- [Agent market catalog](${base}/api/market/catalog): every product with its x402 payment terms (discovery format); search: ${base}/api/market/search?q=&kind=&maxUsd=&sort=; a product with its free preview: ${base}/api/market/<company>/<product>`,
     `- JSON: ${base}/api/league, ${base}/api/league/market, ${base}/api/crew, ${base}/api/swarm/pulse, ${base}/api/token/overview`,
     "",
     ...llmsLines(base),
+    "",
+    "## Latest updates",
+    // the changelog's newest entries (all of them in llms-full.txt)
+    ...changelog().entries.slice(0, full ? undefined : 6).map((e) => `- ${e.date}: ${e.title}${e.lines.length ? `. ${e.lines.join(" ")}` : ""}`),
+    `- Every update: ${base}/changelog`,
     "",
     "## Pages",
     ...PAGES.filter((x) => !x.room && x.path !== "/").map((x) => `- [${x.title}](${base}${x.path}): ${x.about}`),

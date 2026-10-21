@@ -119,6 +119,7 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "BUYBOT_MEDIA", label: "Custom buy GIF/MP4 URL (optional)", hint: "https://…/buy.mp4" },
     { k: "DIGEST", label: "Daily company digest (live companies, real records only)", options: [["", "Default (on)"], ["1", "On"], ["0", "Off"]] },
     { k: "DIGEST_HOUR", label: "Digest hour (UTC)", hint: "18" },
+    { k: "CHANGELOG_POST", label: "Weekly changelog, posted and pinned Mondays 09:00 UTC", options: [["", "Default (on)"], ["1", "On"], ["0", "Off"]] },
     { k: "X_URL", label: "X profile", hint: "https://x.com/…" },
     { k: "TELEGRAM_URL", label: "Telegram link", hint: "https://t.me/…" },
   ] },
