@@ -548,9 +548,10 @@ export function serve(engine: Engine) {
         if (parts[2] === "frog" && parts[3] && req.method === "GET") {
           if (limited(req, "pinball-frog", 120, 60_000)) return json(res, 429, { error: "slow down" });
           // the same frog as a PNG, for Telegram photos and link previews
-          const pngId = /^(\d{1,5})\.png$/.exec(parts[3])?.[1];
+          // and small (…/7-128.png): the face NIGHT POKER's tables show, cheap to paint where the SVG's filters are not
+          const pngMatch = /^(\d{1,5})(-128)?\.png$/.exec(parts[3]), pngId = pngMatch?.[1];
           if (pngId) {
-            const png = await frogPng(Number(pngId)).catch(() => null);
+            const png = await frogPng(Number(pngId), pngMatch?.[2] ? 128 : 800).catch(() => null);
             if (!png) return json(res, 404, { error: "no such frog" });
             res.writeHead(200, { "Content-Type": "image/png", "Content-Length": png.length, "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff" });
             res.end(png);

@@ -215,7 +215,7 @@ export class RingTables {
       const name = FROGS.find((f) => !used.has(f)) ?? `Frog #${100 + randomInt(400)}`;
       used.add(name);
       const num = /#(\d+)/.exec(name)![1];
-      t.seats[empty[randomInt(empty.length)]!] = { id: randomUUID(), name, wallet: null, stack: BUY_IN.max, bot: true, look: { ...PLAIN, avatar: `/api/pinball/frog/${Number(num)}` }, streams: 1, offlineAt: null,
+      t.seats[empty[randomInt(empty.length)]!] = { id: randomUUID(), name, wallet: null, stack: BUY_IN.max, bot: true, look: { ...PLAIN, avatar: `/api/pinball/frog/${Number(num)}-128.png` }, streams: 1, offlineAt: null,
         sittingOut: false, sitOutAt: null, leaving: false, joinedAt: this.now(), bank: RING_BANK_MS, seeds: new Map(), timeouts: 0 };
       n++;
     }

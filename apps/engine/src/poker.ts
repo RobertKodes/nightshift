@@ -145,7 +145,7 @@ export class PokerGames {
   private frog(name: string): Player {
     const n = /#(\d+)/.exec(name)?.[1];
     return { id: randomUUID(), name, wallet: null, rating: 1200, streams: 1, offlineAt: null, seen: true, bot: true, acted: 0, timeouts: 0, bank: BANK_MS, graceUsed: 0, seeds: new Map(),
-      look: { ...PLAIN, avatar: n ? `/api/pinball/frog/${Number(n)}` : null } };
+      look: { ...PLAIN, avatar: n ? `/api/pinball/frog/${Number(n)}-128.png` : null } };
   }
   private create(players: Player[], o: Partial<Pick<Match, "currency" | "escrow" | "stake" | "showBy" | "onResult" | "practice" | "house">> = {}): Match {
     const now = this.now(), seed = newServerSeed();

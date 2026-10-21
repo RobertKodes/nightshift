@@ -44,7 +44,7 @@ const DEMO_HAND: HandView = {
 };
 const DEMO_PLAYERS: PlayerView[] = [
   { seat: 0, name: "You", rating: 1240, you: true, connected: true, bot: false, avatar: "/games/pinball/frog-2.webp", level: null, emotes: [], bank: 45_000, awayUntil: null, grace: null },
-  { seat: 1, name: "Frog #7", rating: 1200, you: false, connected: true, bot: true, avatar: "/api/pinball/frog/7", level: null, emotes: [], bank: 45_000, awayUntil: null, grace: null },
+  { seat: 1, name: "Frog #7", rating: 1200, you: false, connected: true, bot: true, avatar: "/api/pinball/frog/7-128.png", level: null, emotes: [], bank: 45_000, awayUntil: null, grace: null },
 ];
 
 /** /games/poker: the lobby, the heads-up table (online, staked, practice), the rail, and the deck check. */
@@ -242,7 +242,7 @@ export function PokerPage() {
         <ul className="pk-facts"><li><b>2,000</b><span>chips each · 100 big blinds</span></li><li><b>3 min</b><span>blind levels</span></li><li><b>20 s</b><span>a move · +45 s time bank</span></li></ul>
         {money === "FREE" ? <>
           <button type="button" className="pk-btn primary" disabled={busy || waiting} onClick={() => void start()}><Icon name="swords" size={18} /><span>{busy ? "OPENING YOUR TABLE" : "FIND A RIVAL · RATED"}</span><Icon name="arrow" size={17} /></button>
-          <button type="button" className="pk-btn ghost" disabled={busy || waiting} onClick={() => void start(true)}><img className="pk-frog-mini" src="/api/pinball/frog/7" alt="" width="22" height="22" /><span>PRACTICE VS FROG #7 · NOT RATED</span></button>
+          <button type="button" className="pk-btn ghost" disabled={busy || waiting} onClick={() => void start(true)}><img className="pk-frog-mini" src="/api/pinball/frog/7-128.png" alt="" width="22" height="22" /><span>PRACTICE VS FROG #7 · NOT RATED</span></button>
         </> : <StakeLobby game="poker" token={money} name={playName} address={address} signIn={signIn} onSeat={seat} theme="nc" />}
         {closedNote && <p className="pk-error" role="status"><Icon name="clock" size={15} />{closedNote}</p>}
         {err && <p className="pk-error" role="alert"><Icon name="alert" size={15} />{err}</p>}
