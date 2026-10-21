@@ -15,6 +15,7 @@ import { stakingBoard } from "./frogs.js";
  */
 const DISTRIBUTED = parseAbiItem("event Distributed(address indexed token, uint256 rewards, uint256 dev, uint256 treasury, uint256 burned)");
 const ETH: Address = "0x0000000000000000000000000000000000000000";
+const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
 const TYPES = ["uint256", "address", "address", "uint256"];
 
 type TokenEpoch = { token: string; symbol: string; total: string; root: string; tree: unknown; posted?: string };
@@ -53,7 +54,10 @@ export async function buildEpoch(c: { splitter?: string; token?: string }, start
   const tokens: TokenEpoch[] = [];
   // The logs up to head are read once: whatever this epoch does not pay out is carried, never dropped.
   const carry: Record<string, string> = { ...(s.carry ?? {}) };
-  for (const [token, symbol] of [[ETH, "ETH"], [c.token.toLowerCase(), "SHIFT"]] as const) {
+  // Every token the splitter paid rewards in: ETH and SHIFT from the hook, IMD from game fees.
+  const symbols = new Map<string, string>([[ETH, "ETH"], [c.token.toLowerCase(), "SHIFT"], [IMD, "IMD"]]);
+  const seen = [...new Set([...symbols.keys(), ...pot.keys(), ...Object.keys(carry)])];
+  for (const [token, symbol] of seen.map((t) => [t, symbols.get(t) ?? "TOKEN"] as const)) {
     const total = (pot.get(token) ?? 0n) + BigInt(carry[token] ?? "0");
     if (total > 0n) carry[token] = total.toString();
     if (total <= 0n || sum <= 0) continue;

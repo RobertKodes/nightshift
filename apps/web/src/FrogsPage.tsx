@@ -144,6 +144,7 @@ export function FrogsPage() {
         <li><b>+{info?.extraSlots ?? 2} company slots</b>run {5 + (info?.extraSlots ?? 2)} companies instead of 5.</li>
         <li><b>Every mint burns IMD.</b> 1 IMD of every 2 goes to the burn address, provable onchain (<code>totalBurned</code>).</li>
         <li><b>Soft staking:</b> earn shift hours just by holding, no locking (below).</li>
+        <li><b>The Forge (Gen 2):</b> burn 10 frogs for 1 Night Watcher that earns 10× to 40× shift hours (never less than its 10 did), crews every mission, takes a seat in the Night Watch (the imdUSD keeper network) and opens the private Watch Room. The rarer the 10, the higher the tier: an ordinary frog earns by its number, a forged one by its rarity. <a href="/forge">Open the Forge →</a></li>
         <li><b>Coming next:</b> a holders-only crew chat and votes on what the swarm builds next.</li>
       </ul>
 
@@ -185,7 +186,7 @@ function Staking({ on }: { on: boolean }) {
     <section id="staking">
       <h2>Soft staking · shift hours</h2>
       <FrogClaims />
-      <p className="dim">Keep your frog in your own wallet. Nothing is locked or sent anywhere, no transactions, no gas. Every hour you hold it you earn shift hours: <b>1×</b> a frog, <b>2×</b> a Genesis (#26–77), <b>3×</b> an early Genesis (#2–25), <b>6×</b> the Zero-Sleep Captain (#1). Holding an <b>IMD seat</b> as well doubles it all. Hours go to the wallet holding the frog; selling it stops the clock.</p>
+      <p className="dim">Keep your frog in your own wallet. Nothing is locked or sent anywhere, no transactions, no gas. Every hour you hold it you earn shift hours: <b>1×</b> a frog, <b>2×</b> a Genesis (#26–77), <b>3×</b> an early Genesis (#2–25), <b>50×</b> the Zero-Sleep Captain (#1), the top of the crew, which also holds the Night Watch's Captain's seat. A Night Watcher (Gen 2) from <a href="/forge">the Forge</a> earns <b>10× to 40×</b>. Holding an <b>IMD seat</b> as well doubles it all. Hours go to the wallet holding the frog; selling it stops the clock.</p>
       <p className="dim"><b>How shift hours count:</b> your total is cumulative and never resets; selling a frog only stops it growing. Rewards are paid per weekly epoch: every Monday at 00:00 UTC the frog pot collected since the last epoch (half of the 40% rewards share of every fee, in ETH and $SHIFT) is split by the hours each wallet added since the last paid epoch, and you claim your part above once the dev wallet posts that epoch's root. A week with no pot carries its hours into the next one. Mission bonus hours from the Command Room go into the same total, and the weekly top crew is posted in the Telegram chat every Sunday.</p>
       {on ? (
         <>

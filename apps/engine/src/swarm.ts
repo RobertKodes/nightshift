@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { writeAtomic } from "./atomic.js";
 import { join } from "node:path";
 import { config } from "./config.js";
+import { FORGE_ART_ORDER, FORGE_ORDER, FORGE_SKIN_ORDER } from "./order-forge.js";
 
 /**
  * Work the operator orders from the IMD swarm from /setup: ready-made orders for Space Pinball
@@ -123,6 +124,9 @@ Tests (Foundry): full flows for both tokens with several bettors on both sides a
       paths: ["apps/engine/src", "apps/web/src", "packages", "apps/web/public/sw.js", "deploy"],
     },
   },
+  FORGE_ART_ORDER,
+  FORGE_SKIN_ORDER,
+  FORGE_ORDER,
 ];
 
 type Placed = { tx: string; at: number; posted?: boolean; earlier?: string[]; job?: string };
@@ -203,6 +207,27 @@ export function followSwarm(say: (text: string, buttons: { text: string; url: st
   };
   setInterval(() => void tick().catch((e) => console.error("swarm follow", e)), 10 * 60_000);
   void tick().catch(() => {});
+}
+
+const FORGE_KEYS = ["frog-forge-art", "frog-forge-skin", "frog-forge"];
+type Build = { key: string; title: string; stage: string; job: string | null };
+let build: { at: number; rows: Build[] } | null = null;
+/** Where the IMD swarm is with the three Night Watchers contracts, for the public pages (read at most every 5 minutes). */
+export async function forgeBuild(): Promise<Build[]> {
+  if (build && Date.now() - build.at < 5 * 60_000) return build.rows;
+  const placed = load();
+  const rows = await Promise.all(FORGE_KEYS.map(async (key): Promise<Build> => {
+    const o = ORDERS.find((x) => x.key === key)!, p = placed[key];
+    if (!p) return { key, title: o.title, stage: "not ordered yet", job: null };
+    const job = await admittedJob(p).catch(() => undefined);
+    if (!job) return { key, title: o.title, stage: "paid, waiting for IMD to start it", job: null };
+    const j = await fetch(`https://api.imd.fun/jobs/${job}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as (Job & { job?: Job }) | null;
+    const st = String((j?.job ?? j)?.state ?? "").toLowerCase();
+    const stage = DONE.has(st) ? "built and audited, deploying" : ["failed", "cancelled", "canceled", "rejected"].includes(st) ? "stopped: ordered again soon" : "the swarm is building it";
+    return { key, title: o.title, stage, job };
+  }));
+  build = { at: Date.now(), rows };
+  return rows;
 }
 
 /** Every order with its state at IMD, read from the Intake follower. */

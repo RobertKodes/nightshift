@@ -97,7 +97,9 @@ export function EconomyPage() {
 
 // ------------------------------------------------------------------ Command Room
 type Mission = { id: string; title: string; brief: string; station: string; link: string; hours: number; frog: number | null; bonus: number | null; state: "open" | "underway" | "ready" | "done"; progress: string; earned: number };
-type Board = { week: { startedAt: number; endsAt: number }; hoursEarned: number; frogs: { id: number; multiplier: number; on: string | null }[]; missions: Mission[]; frogsOn: boolean };
+type Board = { week: { startedAt: number; endsAt: number }; hoursEarned: number; frogs: { id: number; multiplier: number; on: string | null; crew?: boolean }[]; missions: Mission[]; frogsOn: boolean };
+/** NIGHT FROGS keep their number; a Night Watcher is kept as 1000 + its number (The Captain, token 0, as 1000). */
+const crewName = (id: number) => (id === 1000 ? "The Captain" : id > 1000 ? `Night Watcher #${id - 1000}` : `Frog #${id}`);
 type Staking = { board: { wallet: string; hours: number; frogs: number }[]; me: { hours: number; rank: number | null; perHour: number; imdSeat: boolean } | null };
 const MISSION_PREVIEW = [
   ["Desk duty", "Your agent makes 3 trades in this week's Night League.", 24],
@@ -123,7 +125,8 @@ export function CommandPage() {
     if (d.hours) setMsg(`Mission complete: +${d.hours} shift hours.`);
     setB(d as Board); load();
   };
-  const free = b?.frogs.filter((f) => !f.on) ?? [];
+  // a Night Watcher crews every mission at once
+  const free = b?.frogs.filter((f) => !f.on || f.crew) ?? [];
   return (
     <div className="st-room">
       <RoomHero id="command">
@@ -135,7 +138,7 @@ export function CommandPage() {
       </RoomHero>
       <div className="st-body">
         <h2>This week's missions</h2>
-        <p className="st-note">Each frog crews one mission a week. A mission is real work on the station that the server checks for itself; bring it home and the frog earns its base hours times its multiplier (6× for #1, 3× for #2–25, 2× Genesis, 1× the rest). Shift hours are the same points soft staking pays every hour: your total is cumulative and never resets, missions reset every Monday at 00:00 UTC, and that same Monday the frog rewards epoch pays out by the hours each wallet added since the last paid epoch.</p>
+        <p className="st-note">Each frog crews one mission a week. A mission is real work on the station that the server checks for itself; bring it home and the frog earns its base hours times its multiplier (50× for #1, 3× for #2–25, 2× Genesis, 1× the rest). A Night Watcher from <Link to="/forge">the Forge</Link> crews all three at once, at 10× to 40×. Shift hours are the same points soft staking pays every hour: your total is cumulative and never resets, missions reset every Monday at 00:00 UTC, and that same Monday the frog rewards epoch pays out by the hours each wallet added since the last paid epoch.</p>
         {msg && <p className="st-msg">{msg}</p>}
         {!address ? (
           <>
@@ -151,10 +154,10 @@ export function CommandPage() {
           <div className="st-missions">{b.missions.map((m) => (
             <div key={m.id} className={`st-mission ${m.state}`}>
               <b>{m.title}</b><p>{m.brief}</p>
-              <span>{m.state === "done" ? `Done: +${m.earned} h` : m.frog ? `Frog #${m.frog} · ${m.progress} · pays ${m.bonus} h` : `${m.hours} h × frog`}</span>
+              <span>{m.state === "done" ? `Done: +${m.earned} h` : m.frog ? `${crewName(m.frog)} · ${m.progress} · pays ${m.bonus} h` : `${m.hours} h × frog`}</span>
               {m.state === "open" && (free.length ? (
                 <div className="st-mission-go">
-                  <select value={pick[m.id] ?? free[0]!.id} onChange={(e) => setPick({ ...pick, [m.id]: Number(e.target.value) })}>{free.map((f) => <option key={f.id} value={f.id}>Frog #{f.id} · {f.multiplier}×</option>)}</select>
+                  <select value={pick[m.id] ?? free[0]!.id} onChange={(e) => setPick({ ...pick, [m.id]: Number(e.target.value) })}>{free.map((f) => <option key={f.id} value={f.id}>{crewName(f.id)} · {f.multiplier}×</option>)}</select>
                   <button onClick={() => void act("/api/missions/start", { mission: m.id, frog: pick[m.id] ?? free[0]!.id })}>Send</button>
                 </div>
               ) : <small>Every frog is out this week.</small>)}
@@ -167,6 +170,7 @@ export function CommandPage() {
         {st?.board.length ? <ol className="st-rank wide">{st.board.slice(0, 10).map((w) => <li key={w.wallet}><b className="mono">{w.wallet.slice(0, 6)}…{w.wallet.slice(-4)}</b><span>{w.frogs} frog{w.frogs === 1 ? "" : "s"}</span><i>{w.hours.toLocaleString("en-US")} h</i></li>)}</ol> : <p className="st-empty">No shift hours yet.</p>}
         <Tiles items={[
           { to: "/frogs", title: "NIGHT FROGS", note: "Mint in IMD, see the crew and the perks.", icon: "frog" },
+          { to: "/forge", title: "The Forge", note: "Burn 10 frogs, forge 1 Night Watcher.", icon: "flame" },
           { to: "/league", title: "Night League", note: "Missions: Desk duty, Beat the holder.", icon: "chart" },
           { to: "/arena", title: "Agent Arena", note: "Mission: Board watch.", icon: "swords" },
         ]} />

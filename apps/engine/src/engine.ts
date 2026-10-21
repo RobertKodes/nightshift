@@ -64,7 +64,9 @@ import { liveGames } from "./spectate.js";
 import { startDigest } from "./digest.js";
 import { startChangelog } from "./changelog.js";
 import { type ChessEvent, onChess } from "./chess.js";
-import { accrueStaking, frogCached, frogCount, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
+import { accrueStaking, frogCached, frogCount, frogSlots, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
+import { roomLink, sweepRoom } from "./watch-room.js";
+import { startNightWatch } from "./nightwatch.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { type Anim, burnTotals, buyCard, chats, marketSnapshot, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
@@ -240,12 +242,14 @@ export class Engine {
         // Raids are off: a shared X post is not reposted to the community.
         adminText: async () => null,
         joined: (chat, names) => { const w = welcome(names); void sendCard(chat, "welcome", w.text, w.buttons); },
-        link: (chat, code) => this.#linkAlerts(chat, code),
+        // /start nw_<code>: a Night Watcher holder entering the Watch Room; any other code links company alerts
+        link: (chat, code) => (code.startsWith("nw_") ? roomLink(chat, code) : this.#linkAlerts(chat, code)),
         // the games: /play /live /profile /challenge and "@bot chess", each a link to the website
         games: (cmd, args, ctx) => this.gameBot.command(cmd, args, ctx),
         inline: (q) => this.gameBot.inline(q),
       });
       startCommunity();
+      setInterval(() => void sweepRoom().catch((e) => console.error("watch room", e)), 3_600_000);
     }
     // The daily digest of what the live companies did, from their records and the ledger (sim mode: a dry-run log only).
     startDigest(() => this.store.companies.values(), () => this.ledger.store.list(""));
@@ -285,6 +289,14 @@ export class Engine {
     // Soft staking: credit shift hours every hour; the week's top holders on Sunday 18:00 UTC.
     setInterval(() => void accrueStaking().catch((e) => console.error("staking", e)), 3_600_000);
     void accrueStaking().catch(() => {});
+    // The Night Watch: the imdUSD book every minute, the seats' jobs, and each seat's liquidation to the community.
+    startNightWatch((row, seat) => {
+      if (!seat) return;
+      const debt = Number(row.debtRepaid) / 1e18;
+      void toCommunity(`🌙🛡 <b>NIGHT WATCH · liquidation</b>
+
+Night Watcher #${seat.watcher} repaid ${debt.toLocaleString("en-US", { maximumFractionDigits: 0 })} imdUSD of an unsafe loan and kept a $${row.bonusUsd.toFixed(2)} bonus. A tenth of it goes to $SHIFT stakers, frog holders and the IMD burn.`, [[{ text: "🛡 The Night Watch", url: `${config.publicUrl}/watch` }], [{ text: "Transaction", url: `https://etherscan.io/tx/${row.tx}` }]], "milestone");
+    });
     let boardWeek = "";
     setInterval(() => {
       const d = new Date();
@@ -294,7 +306,7 @@ export class Engine {
       const top = stakingBoard(5);
       if (!top.length) return;
       const medal = ["🥇", "🥈", "🥉", "4.", "5."];
-      void toCommunity(`🐸⏱ <b>NIGHT SHIFT HOURS · top of the crew</b>\n\n${top.map((t, i) => `${medal[i]} <a href="https://etherscan.io/address/${t.wallet}">${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}</a> · ${t.hours.toLocaleString("en-US")} h · ${t.frogs} frog${t.frogs === 1 ? "" : "s"}`).join("\n")}\n\nHold a frog, earn hours. Genesis 2×, #1 5×. No locking, no gas.`, [[{ text: "⏱ My shift hours", url: `${config.publicUrl}/frogs#staking` }]], "frog");
+      void toCommunity(`🐸⏱ <b>NIGHT SHIFT HOURS · top of the crew</b>\n\n${top.map((t, i) => `${medal[i]} <a href="https://etherscan.io/address/${t.wallet}">${t.wallet.slice(0, 6)}…${t.wallet.slice(-4)}</a> · ${t.hours.toLocaleString("en-US")} h · ${t.frogs} frog${t.frogs === 1 ? "" : "s"}`).join("\n")}\n\nHold a frog, earn hours. Genesis 2×, Night Watchers 10× to 40×, #1 50×. No locking, no gas.`, [[{ text: "⏱ My shift hours", url: `${config.publicUrl}/frogs#staking` }]], "frog");
     }, 60_000);
     // Duels to the community: every staked challenge (listed, on, won), and free PvP or agent games now and then.
     gameLobby(this.vault).escrow.onEvent((kind, c) => void duelCard(kind, c).then((card) => card && toCommunity(card.text, card.buttons, kind === "settled" ? "milestone" : "launch")).catch((e) => console.error("duel card", e)));
@@ -720,7 +732,7 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
       oneRule: "Every NIGHTSHIFT fee is split the same way, hard-coded: 40% rewards (half to SHIFT stakers, half to NIGHT FROGS holders), 20% dev wallet, 20% treasury, 20% burned. SHIFT is burned to 0x...dEaD; every day at 03:00 UTC the NIGHTSHIFT keeper buys IMD with the ETH part and burns it at IMD's BurnExecutor 0xe29386719c155b6847ad5a4e97c6674f10ffc750. The keeper only pays gas and cannot move funds anywhere else.",
       burnedSoFar: { shift: burns.shift, imd: burns.imd },
       staking: `At ${u}/stake: stake SHIFT with a lock from 0 to 730 days (24 months). Stakers share 20% of every NIGHTSHIFT fee (half of the 40% rewards part; the other half goes to NIGHT FROGS holders), streamed over 7 days in ETH and SHIFT. More stake and a longer lock earn a bigger share. Locked stake cannot be withdrawn early by anyone, the owner included. Rewards can be claimed any time; unlocked stake can be withdrawn any time.`,
-      nightFrogs: { about: "500 fully onchain NIGHT FROGS on Ethereum, minted only in IMD (2 IMD each, half burned). Holders get the frog half of rewards weekly by shift hours: #1 6x, #2-25 3x, #26-77 2x, the rest 1x; holding an IMD seat doubles it. Claim at /frogs.", minted: frogs?.minted ?? null, contract: config.nft.address || null },
+      nightFrogs: { about: "500 fully onchain NIGHT FROGS on Ethereum, minted only in IMD (2 IMD each, half burned). Holders get the frog half of rewards weekly by shift hours: #1 50x, Night Watchers (Gen 2, forged from 10 at /forge, never #1) 10x-40x by rarity and never less than their 10 frogs, #2-25 3x, #26-77 2x, the rest 1x; holding an IMD seat doubles it. Claim at /frogs.", minted: frogs?.minted ?? null, contract: config.nft.address || null },
       companies: { live: companies.length, costPerSwarmJob: "0.5 IMD", platformFee: `${config.platformFeeBps / 100}% of withdrawals; 0% for SHIFT and NIGHT FROGS holders`, start: `${u} (sign in with a wallet, press Launch a company)` },
       imdPriceUsd: config.imdUsd,
       links: { website: u, tokenomics: `${u}/tokenomics`, stake: `${u}/stake`, swap: `${u}/swap`, frogs: `${u}/frogs`, guide: `${u}/guide`, telegram: config.telegramUrl || "t.me/getnightshift", x: config.xUrl || null },
@@ -934,7 +946,7 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
     if (owner) {
       const mine = [...this.store.companies.values()].filter((x) => x.owner === owner.toLowerCase()).length;
       // NIGHT FROGS holders may run a few more companies.
-      const cap = config.maxCompaniesPerOwner + ((await frogCount(owner)) > 0 ? config.nft.extraSlots : 0);
+      const cap = config.maxCompaniesPerOwner + (await frogSlots(owner));
       if (mine >= cap) throw new Error(`One wallet can run ${cap} companies at once.${frogsOn() && cap === config.maxCompaniesPerOwner ? ` Holding a NIGHT FROG adds ${config.nft.extraSlots}.` : ""}`);
     }
     const clean = idea.trim();
@@ -1156,7 +1168,7 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     if (config.requireAuth && (!owner || c.owner !== owner)) throw new Error("Only its owner can restore it.");
     if (c.owner) {
       const mine = [...this.store.companies.values()].filter((x) => x.owner === c.owner).length;
-      const cap = config.maxCompaniesPerOwner + ((await frogCount(c.owner)) > 0 ? config.nft.extraSlots : 0);
+      const cap = config.maxCompaniesPerOwner + (await frogSlots(c.owner));
       if (mine >= cap) throw new Error(`One wallet can run ${cap} companies at once. Delete another one first.`);
     }
     this.store.archived.delete(id);

@@ -1,0 +1,29 @@
+# systemd user unit: the bot never runs as root.
+#
+#   mkdir -p ~/nightwatch/state ~/.config/systemd/user
+#   cp nightwatch.service ~/.config/systemd/user/
+#   loginctl enable-linger $USER
+#   systemctl --user daemon-reload && systemctl --user enable --now nightwatch
+#   journalctl --user -u nightwatch -f
+#
+# Report-only until you add --execute to ExecStart. Watch a few passes first.
+[Unit]
+Description=NIGHT WATCH keeper (Night Watcher seat)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/nightwatch
+EnvironmentFile=-%h/nightwatch/.env
+ExecStart=/usr/bin/env node bot.mjs
+Restart=always
+RestartSec=30
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/nightwatch/state
+
+[Install]
+WantedBy=default.target

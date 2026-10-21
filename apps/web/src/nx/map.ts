@@ -70,6 +70,8 @@ export const ROOMS: Record<RoomId, Room> = {
     tagline: "Your NIGHT FROGS, on missions", emblem: "/art/station/room-command-door-768.webp", art: "/art/station/room-command-1600x900.webp",
     nav: [
       { to: "/command", label: "Missions", icon: "missions" },
+      { to: "/forge", label: "Forge", icon: "forge" },
+      { to: "/watch", label: "Night Watch", icon: "security" },
       { to: "/frogs", label: "Fleet", icon: "frogs", room: "info" },
       { to: "/stake", label: "Staking", icon: "stake", room: "info" },
     ],
@@ -87,7 +89,7 @@ export function roomOf(path: string): RoomId | null {
   if (a === "geek" || a === "services" || a === "league" || a === "companies" || a === "my" || a === "launch" || a === "co" || a === "c" || a === "mcp" || a === "launchpad" || a === "guide" || a === "setup") return "geek";
   if (a === "info" || a === "whitepaper" || a === "token" || a === "tokenomics" || a === "frogs" || a === "stake" || a === "staking" || a === "swap" || a === "security" || a === "terms") return "info";
   if (a === "economy" || a === "hr" || a === "market" || a === "impact") return "economy";
-  if (a === "command") return "command";
+  if (a === "command" || a === "forge" || a === "watch") return "command";
   return "geek";
 }
 

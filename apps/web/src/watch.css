@@ -1,0 +1,52 @@
+/* THE NIGHT WATCH (/watch): built on the Forge's page parts (forge.css), in the Watch's cyan. */
+.nw { --acc: #3fe6ff; }
+.nw-table { display: grid; gap: 6px; }
+.nw-row { display: grid; grid-template-columns: 1.3fr 1fr .7fr 1.2fr 1.3fr; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 12px; background: rgba(8, 7, 13, .55); font-size: 14px; }
+.nw-row.nw-seats { grid-template-columns: 1.6fr .9fr 1.6fr .8fr .9fr .7fr; }
+.nw-th { background: none; border-color: transparent; padding-block: 0; font: 600 11px var(--nx-mono, monospace); letter-spacing: .12em; text-transform: uppercase; color: var(--faint, #6c6688); }
+.nw-row i { font-style: normal; color: var(--faint, #6c6688); font-size: 12px; margin-left: 6px; }
+.nw-unmarked, .nw-expired { border-color: color-mix(in srgb, #ffc46b 45%, transparent); }
+.nw-grace { border-color: color-mix(in srgb, #ff4fd8 45%, transparent); }
+.nw-actionable { border-color: color-mix(in srgb, #b8ff4a 55%, transparent); box-shadow: 0 0 24px color-mix(in srgb, #b8ff4a 12%, transparent); }
+.nw-captain { border-color: color-mix(in srgb, #ffc46b 55%, transparent); background: linear-gradient(90deg, color-mix(in srgb, #ffc46b 9%, transparent), rgba(8, 7, 13, .55)); }
+.nw-recent { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; font-size: 14px; color: var(--dim, #a9a3c4); }
+.nw-terms { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.nw-term { display: grid; gap: 4px; padding: 16px 14px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 14px; background: rgba(8, 7, 13, .55); }
+.nw-term b { font-size: 16px; }
+.nw-term span, .nw-term small { color: var(--faint, #6c6688); font-size: 12px; }
+.nw-term strong { color: var(--acc); font: 600 20px var(--nx-mono, monospace); }
+.nw-term em { font-style: normal; font: 600 14px var(--nx-mono, monospace); }
+.nw-term.nw-captain strong { color: #ffc46b; }
+.nw-setup { display: grid; gap: 14px; margin-bottom: 18px; }
+.nw-code { margin: 0; padding: 16px 18px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 12px; background: #05040a; font: 13px/1.7 var(--nx-mono, monospace); color: #d8f9ff; overflow-x: auto; white-space: pre; }
+.nw-pair { max-width: 560px; }
+.nw-field { display: grid; gap: 6px; width: 100%; font-size: 13px; color: var(--dim, #a9a3c4); text-align: left; }
+.nw-field select { width: 100%; }
+@media (max-width: 900px) {
+  .nw-terms { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .nw-row, .nw-row.nw-seats { grid-template-columns: 1fr 1fr; }
+  .nw-th { display: none; }
+}
+@media (max-width: 520px) {
+  .nw-terms { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* the holder's desk: check, install, sign */
+.nw-desk { display: grid; gap: 14px; }
+.nw-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.nw-steps > li { display: grid; gap: 10px; justify-items: start; padding: 18px 20px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 14px; background: rgba(8, 7, 13, .55); }
+.nw-steps > li > b { font-size: 16px; color: var(--acc); }
+.nw-steps > li > span { color: var(--dim, #a9a3c4); font-size: 14px; line-height: 1.55; }
+.nw-held { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; width: 100%; }
+.nw-held li { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 10px; font-size: 14px; }
+.nw-held li span { color: var(--faint, #6c6688); font-size: 13px; }
+.nw-held li.on { border-color: color-mix(in srgb, #b8ff4a 55%, transparent); }
+.nw-held li.on span { color: #b8ff4a; }
+.nw-held li.half { border-color: color-mix(in srgb, #ffc46b 45%, transparent); }
+.nw-cmd { display: flex; gap: 8px; align-items: center; width: 100%; }
+.nw-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 12px 14px; border-radius: 10px; background: #05040a; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); font: 13px var(--nx-mono, monospace); color: #d8f9ff; }
+
+/* what comes next: the swarm fund, marked as a plan */
+.nw-next { padding: 28px; border: 1px dashed color-mix(in srgb, var(--acc) 45%, transparent); border-radius: 18px; background: radial-gradient(circle at 85% 20%, color-mix(in srgb, #8b5cf6 14%, transparent), rgba(8, 7, 13, .55) 60%); }
+.nw-next h2 { margin: 6px 0 12px; }
+.nw-next p { max-width: 860px; line-height: 1.6; }

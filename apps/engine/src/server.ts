@@ -28,6 +28,8 @@ import { burnTotals, marketSnapshot } from "./community.js";
 import { chessRoutes } from "./chess-routes.js";
 import { chess } from "./chess.js";
 import { gamesRoutes, live as gameLobby } from "./games-routes.js";
+import { forgeRoutes } from "./forge-routes.js";
+import { watchRoutes } from "./watch-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
 import { leagueRoutes } from "./league-routes.js";
 import { stationRoutes, withPageHead } from "./station-routes.js";
@@ -528,6 +530,8 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/locker/") && await lockerRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/bets/") && await betsRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if (prizesRoutes(req, res, p, { json, limited, owner, url })) return;
+      if (p.startsWith("/api/forge") && await forgeRoutes(req, res, p, { json, limited, url, owner })) return;
+      if ((p.startsWith("/api/watch") || p.startsWith("/nightwatch/")) && await watchRoutes(req, res, p, { json, body, limited, url })) return;
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
       if ((p.startsWith("/api/league") || p === "/league/agents.md") && await leagueRoutes(req, res, p, { json, body, limited, url, vault: engine.vault })) return;

@@ -87,7 +87,7 @@ export const UTILITIES: { to: string; label: string; note: string; soon?: boolea
   { to: "/impact", label: "IMD Impact", note: "What NIGHTSHIFT gives the IMD network" },
   { to: "/mcp", label: "MCP for agents", note: "Let AI agents use NIGHTSHIFT" },
 ];
-export type Active = "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide" | "tokenomics" | "games" | "impact" | "launchpad" | "stake" | "arena" | "breakroom" | "geek" | "info" | "economy" | "command" | "league";
+export type Active = "home" | "companies" | "mcp" | "terms" | "company" | "market" | "token" | "frogs" | "swap" | "guide" | "tokenomics" | "games" | "impact" | "launchpad" | "stake" | "arena" | "breakroom" | "geek" | "info" | "economy" | "command" | "league" | "forge" | "watch";
 const UTIL_KEYS: Active[] = ["token", "tokenomics", "frogs", "swap", "stake", "launchpad", "games", "arena", "impact", "mcp"];
 
 /** The station's five rooms, a menu of their own. */

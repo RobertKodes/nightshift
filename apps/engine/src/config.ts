@@ -127,6 +127,12 @@ export const config = {
     /** The owner's Chainlink VRF v2.5 subscription, prefilled in /setup for configureVRF. */
     vrfSub: env.NFT_VRF_SUB ?? "",
   },
+  /** NIGHT WATCHERS, the NIGHT FROGS Gen 2 forge (10 frogs in, 1 Night Watcher out): off while FORGE_ADDRESS is empty. */
+  forge: {
+    address: (env.FORGE_ADDRESS ?? "") as `0x${string}` | "",
+    /** The Watch Room: the private Telegram group (chat id) only Night Watcher holders may join; the bot must be its admin. */
+    room: env.WATCH_ROOM_CHAT ?? "",
+  },
   /**
    * Live betting for spectators (BetPool on Ethereum, built by the IMD swarm): off while
    * BETPOOL_ADDRESS is empty. BETPOOL_BLOCK is its deploy block, where the event follower starts.

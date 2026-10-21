@@ -4,6 +4,7 @@ import { parseAbi } from "viem";
 import { writeAtomic } from "./atomic.js";
 import { eth } from "./chain.js";
 import { config } from "./config.js";
+import { frogOf } from "./forge.js";
 import { OPENSEA_SLUG } from "./frogmarket.js";
 import { type Button, esc, tgCall } from "./social.js";
 
@@ -48,15 +49,13 @@ export function fillTraits(): Promise<void> {
   return filling;
 }
 
-/** Rank by summed trait rarity (1 = rarest), over every frog whose traits are known. */
-function rank(id: number): { rank: number; of: number } | null {
-  const all = Object.entries(book.traits);
-  if (all.length < SUPPLY * 0.9 || !book.traits[id]) return null;
-  const count = new Map<string, number>();
-  for (const [, t] of all) for (const [k, v] of Object.entries(t)) count.set(`${k}\u0000${v}`, (count.get(`${k}\u0000${v}`) ?? 0) + 1);
-  const score = (t: Traits) => Object.entries(t).reduce((s, [k, v]) => s + all.length / (count.get(`${k}\u0000${v}`) ?? 1), 0);
-  const mine = score(book.traits[id]);
-  return { rank: 1 + all.filter(([, t]) => score(t) > mine).length, of: all.length };
+/**
+ * Rank by summed trait rarity over the 7 art layers (1 = rarest; #1 is the 1-of-1), the same table the
+ * Forge uses. Edition and Signature are not art layers and are left out.
+ */
+function rank(id: number): { rank: number; of: number; tier: string } | null {
+  const f = frogOf(id);
+  return f ? { rank: f.rank, of: SUPPLY, tier: f.tier } : null;
 }
 
 let floors: { at: number; prices: Map<number, number> } | null = null;
@@ -100,7 +99,7 @@ export async function frogCaption(e: FrogEvent, who: (a: string) => string): Pro
   const price = `💵 <b>${eth4(e.eth)} ETH</b>${e.usd ? ` (≈ $${e.usd.toFixed(0)})` : ""}`;
   const r = rank(e.id);
   const lines = [head, price];
-  if (r) lines.push(`🏆 Rarity <b>${r.rank}</b>/${r.of}`);
+  if (r) lines.push(`🏆 Rarity <b>${r.rank}</b>/${r.of} · ${r.tier}`);
   if (e.kind === "sold") { if (e.buyer) lines.push(`👤 Buyer ${who(e.buyer)}`); if (e.seller) lines.push(`🏷 Seller ${who(e.seller)}`); }
   else if (e.seller) lines.push(`👤 ${who(e.seller)}`);
   let body = lines.join("\n");

@@ -23,7 +23,7 @@ const where = (bps: number): [string, string, string][] => [
   ["IMD bot premium", "Paid in $SHIFT", "Coming soon"],
 ];
 
-const FROG_TIERS: [string, string][] = [["#1 · Zero-Sleep Captain", "6×"], ["#2–25 · early Genesis", "3×"], ["#26–77 · Genesis", "2×"], ["#78–500", "1×"], ["Also holding an IMD seat", "everything 2×"]];
+const FROG_TIERS: [string, string][] = [["#1 · Zero-Sleep Captain", "50×"], ["Night Watchers · Gen 2", "10×–40×"], ["#2–25 · early Genesis", "3×"], ["#26–77 · Genesis", "2×"], ["#78–500", "1×"], ["Also holding an IMD seat", "everything 2×"]];
 
 /** Tokenomics: every number, wallet, rule and power, in one place, with the risks said plainly. */
 export function TokenomicsPage() {

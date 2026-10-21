@@ -84,4 +84,12 @@ describe("frog epochs", () => {
     board.rows = [{ wallet: W, hours: 9 }];
     expect(total(await buildEpoch(C, 0))).toBe(10n ** 18n);
   });
+
+  it("pays the IMD that game fees sent to rewards, not only ETH and SHIFT", async () => {
+    const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
+    board.rows = [{ wallet: W, hours: 5 }];
+    chain.logs.push({ block: 90n, token: IMD, rewards: 6n * 10n ** 18n });
+    const t = (await buildEpoch(C, 0))!.tokens.find((x) => x.token === IMD);
+    expect([t?.symbol, t?.total]).toEqual(["IMD", String(3n * 10n ** 18n)]);
+  });
 });

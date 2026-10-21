@@ -1,0 +1,15 @@
+{
+  "name": "nightwatch",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "NIGHT WATCH: the keeper bot of a Night Watcher seat (NIGHT FROGS Gen 2). Marks and liquidates unsafe imdUSD loans as the NIGHTSHIFT coordinator assigns them. Report-only by default.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "pair": "node --env-file=.env bot.mjs pair",
+    "start": "node --env-file=.env bot.mjs",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "dependencies": { "viem": "2.57.7" }
+}

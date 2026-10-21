@@ -2,6 +2,11 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-22 · NIGHT WATCHERS (Gen 2) and the Night Watch, waiting for IMD
+- Burn 10 NIGHT FROGS and 2 IMD to forge a Night Watcher: 10× to 40× shift hours by rarity and never less than the 10 earned, +20% to +100% on the frogs you keep, a week of hours up front, and a seat in the Night Watch. A forge with #1 also makes The Captain, a 1 of 1 at 60×.
+- The Night Watch is the bot crew that keeps imdUSD safe: each seat runs its own bot with its own wallet and liquidates unsafe loans for a 16–18% bonus. The Captain's seat (NIGHT FROG #1, now 50×) is open now; setup is one command at /watch.
+- Waiting for IMD: the swarm builds the three contracts, and the Forge opens once they are deployed and checked.
+
 ## 2026-10-21 · The daily company post and this changelog
 - Every day at 18:00 UTC the bot posts what the companies did in the last 24 hours, built only from their records: shifts, products shipped, sites launched, sales and IMD orders. A quiet day gets no post.
 - This changelog is on the site at /changelog, and every Monday at 09:00 UTC the bot posts the past week's entries in the community chat and pins them.

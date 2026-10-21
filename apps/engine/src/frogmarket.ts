@@ -33,22 +33,28 @@ export async function newFrogSales(): Promise<FrogSale[]> {
   const logs = await eth.getLogs({ address: SEAPORT, event: FULFILLED, fromBlock: BigInt(from), toBlock: BigInt(head) });
   st.block = head;
   save(st);
-  const out: FrogSale[] = [];
+  const sales = new Map<string, FrogSale>();
+  const who = (a: string) => (/^0x0{40}$/i.test(a) ? "" : a);
   for (const l of logs) {
     const { offerer, recipient, offer = [], consideration = [] } = l.args;
     if (!offerer || !recipient) continue;
-    // A listing filled: the seller offers the frog, the buyer pays ETH. An offer accepted: the buyer offers WETH, the frog is in the consideration.
+    // A listing filled: the seller offers the frog and the fulfiller pays. An offer accepted: the buyer offers WETH
+    // and the fulfiller (the event's recipient) sends the frog. OpenSea matches an accepted offer with a mirror
+    // order, so one sale can log twice: both are merged into one sale per transaction and frog.
     const listed = offer.find((i) => i.token.toLowerCase() === nft && (i.itemType === 2 || i.itemType === 4));
     const bid = consideration.find((i) => i.token.toLowerCase() === nft && (i.itemType === 2 || i.itemType === 4));
     if (!listed && !bid) continue;
     const pay = listed ? consideration.filter((i) => i.itemType === 0 || i.token.toLowerCase() === WETH) : offer.filter((i) => i.itemType === 0 || i.token.toLowerCase() === WETH);
-    const total = pay.reduce((s, i) => s + i.amount, 0n);
-    out.push({
-      id: Number((listed ?? bid)!.identifier), eth: Number(formatEther(total)),
-      buyer: listed ? recipient : offerer, seller: listed ? offerer : (bid as { recipient: string }).recipient, tx: l.transactionHash!,
-    });
+    const total = Number(formatEther(pay.reduce((s, i) => s + i.amount, 0n)));
+    const id = Number((listed ?? bid)!.identifier);
+    const key = `${l.transactionHash}:${id}`;
+    const s = sales.get(key) ?? { id, eth: 0, buyer: "", seller: "", tx: l.transactionHash! };
+    if (listed) { s.seller ||= offerer; s.buyer ||= who(recipient); }
+    else { s.buyer ||= offerer; s.seller ||= who(recipient); }
+    s.eth = Math.max(s.eth, total);
+    sales.set(key, s);
   }
-  return out;
+  return [...sales.values()].filter((s) => !s.buyer || s.buyer.toLowerCase() !== s.seller.toLowerCase());
 }
 
 /** New OpenSea listings since the last call; nothing without an API key. */

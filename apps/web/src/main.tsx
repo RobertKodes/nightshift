@@ -18,6 +18,8 @@ import { MarketPage } from "./MarketPage";
 import { OwnerDesk } from "./OwnerDesk";
 import { TokenPage } from "./TokenPage";
 import { FrogsPage } from "./FrogsPage";
+import { ForgePage } from "./ForgePage";
+import { WatchPage } from "./WatchPage";
 import { SwapPage } from "./SwapPage";
 import { StakePage } from "./StakePage";
 import { ImpactPage } from "./ImpactPage";
@@ -82,6 +84,8 @@ function App() {
   if (seg[0] === "changelog") page = <Suspense fallback={<div className="docs" />}><ChangelogPage /></Suspense>;
   if (seg[0] === "token") page = <TokenPage />;
   if (seg[0] === "frogs") page = <FrogsPage />;
+  if (seg[0] === "forge") page = <ForgePage />;
+  if (seg[0] === "watch") page = <WatchPage />;
   if (seg[0] === "swap") page = <SwapPage />;
   if (seg[0] === "stake" || seg[0] === "staking") page = <StakePage />;
   if (seg[0] === "impact") page = <ImpactPage />;
@@ -97,7 +101,7 @@ function App() {
   if (seg[0] === "league") page = <Suspense fallback={<div className="st-room" />}><LeaguePage id={seg[1]} /></Suspense>;
   if (seg[0] === "services") page = <Suspense fallback={<div className="st-room" />}>{seg[1] === "verdict" ? <VerdictPage /> : seg[1] === "hook" ? <HookPage /> : seg[1] === "imd-feed" ? <FeedPage /> : <ServicesPage />}</Suspense>;
   if (seg[0] === "arena") page = <Suspense fallback={<div className="docs"><p className="dim">Loading the arena…</p></div>}><ArenaPage /></Suspense>;
-  const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "stake", "guide", "tokenomics", "games", "impact", "launchpad", "arena", "breakroom", "geek", "info", "economy", "command", "league"];
+  const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "stake", "guide", "tokenomics", "games", "impact", "launchpad", "arena", "breakroom", "geek", "info", "economy", "command", "league", "forge", "watch"];
   const key = seg[0] === "staking" ? "stake" : seg[0] === "hr" ? "economy" : seg[0];
   const active: Active = seg[0] === "co" ? "company" : named.includes(key as Active) ? (key as Active) : "companies";
   // Each page names itself in the tab; pages that know more (a company, a product) set their own.
@@ -110,7 +114,7 @@ const TITLES: Record<string, string> = {
   companies: "Companies", launch: "Launch a company", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
   market: "Market", token: "$SHIFT", frogs: "NIGHT FROGS", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
   tokenomics: "Tokenomics", games: "Game Room", launchpad: "Launchpad", arena: "Agent Arena",
-  services: "House services", breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League",
+  services: "House services", breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League", forge: "The Forge", watch: "The Night Watch",
 };
 
 // The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.

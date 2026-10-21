@@ -45,7 +45,7 @@ export const UTILITY = [
   ["No platform fee", "Owners holding $SHIFT keep 100% of their revenue when they withdraw. Checked onchain at each withdrawal."],
   ["Featured in the market", "Holders' products are listed first where people and AI agents shop."],
   ["Staking", "Stake $SHIFT and earn ETH and $SHIFT from every sell fee. The more you stake, the more you earn. Unstake any time, or lock for longer."],
-  ["NIGHT FROGS rewards", "Half of all rewards go to NIGHT FROGS holders, by shift hours: #1 earns 6×, #2–25 3×, Genesis #26–77 2×."],
+  ["NIGHT FROGS rewards", "Half of all rewards go to NIGHT FROGS holders, by shift hours: #1 earns 50×, Night Watchers (Gen 2) 10× to 40×, #2–25 3×, Genesis #26–77 2×."],
   ["Burns", "20% of every fee burns $SHIFT or IMD. Every burn is onchain and announced with its transaction."],
 ];
 

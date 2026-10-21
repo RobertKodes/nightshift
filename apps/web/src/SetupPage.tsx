@@ -140,6 +140,8 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "TOKEN_BUY_URL", label: "Where to buy it", hint: "https://app.uniswap.org/…" },
     { k: "NFT_ADDRESS", label: "NIGHT FROGS contract (fills itself in)", hint: "0x…" },
     { k: "NFT_EXTRA_SLOTS", label: "Extra company slots per frog holder", hint: "2" },
+    { k: "FORGE_ADDRESS", label: "NIGHT WATCHERS forge contract (the swarm's frog-forge order; also pin it in ForgePage.tsx)", hint: "0x…" },
+    { k: "WATCH_ROOM_CHAT", label: "Watch Room: chat id of the private Telegram group for Night Watcher holders (add the bot as admin with invite and ban rights)", hint: "-100…" },
   ] },
   { title: "Live betting", note: "BetPool on Ethereum (the swarm's arena-bets order). Empty = off. Once deployed: its address and deploy block here, setSigner(the game signer) from the owner wallet, and the same address pinned in the web app (bets.tsx).", fields: [
     { k: "BETPOOL_ADDRESS", label: "BetPool contract", hint: "0x…" },
