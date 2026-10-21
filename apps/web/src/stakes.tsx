@@ -88,8 +88,10 @@ const keep = (game: StakeGame, matchId: Hex | null) => { try { if (matchId) loca
  * open it), wait for a rival (cancel before a join, refund after the hour), or accept an open one
  * (approve exactly, join). Once both stakes are in, the game hands over the seat.
  */
-export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, theme }: {
+export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, theme, guide = game !== "pool" }: {
   game: StakeGame; token: StakeToken; name: string; tc?: string; address: string | null; signIn: () => Promise<void>; onSeat: (s: Seat) => void; theme: "arc" | "nc";
+  /** The three steps and the wallet line on top (NIGHT POOL's page draws its own steps around the lobby). */
+  guide?: boolean;
 }) {
   const escrow = useEscrow();
   const [amount, setAmount] = useState("");
@@ -247,13 +249,13 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
   const sorted = invited ? [...list].sort((a, b) => Number(b.matchId === invited) - Number(a.matchId === invited)) : list;
 
   return <div className={`sk sk-${theme}`}>
-    <ol className="sk-steps" aria-label="Staked game, step by step">
+    {guide && <ol className="sk-steps" aria-label="Staked game, step by step">
       {["Amount", "Confirm in wallet", "Waiting room"].map((label, i) => <li key={label} className={i + 1 < phase ? "done" : i + 1 === phase ? "on" : ""} aria-current={i + 1 === phase ? "step" : undefined}><b>{i + 1 < phase ? <Icon name="check" size={11} /> : i + 1}</b><span>{label}</span></li>)}
-    </ol>
-    <div className="sk-wallet">
+    </ol>}
+    {guide && <div className="sk-wallet">
       {address ? <><Icon name="wallet" size={14} /><span>Signed in as <b>{short(address)}</b></span><span className="sk-bal">{balance === null ? "balance…" : `${fmt(balance)} ${tokenLabel(token)}`}</span></>
         : <><Icon name="wallet" size={14} /><span>Sign in with the wallet you will stake from.</span><button type="button" className="sk-btn small" onClick={() => void signIn().catch(() => {})}>SIGN IN</button></>}
-    </div>
+    </div>}
     {chainOk === false && <p className="sk-note sk-bad" role="status">Your wallet is on another network: it will be asked to switch to Ethereum before anything is signed.</p>}
     {!live && <p className="sk-note" role="status"><Icon name="lock" size={13} /> Staked games are not open on this server yet.</p>}
     <label className="sk-amount">

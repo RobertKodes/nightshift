@@ -51,3 +51,6 @@ export function publicName(raw: unknown, o: { max: number }): string | null {
   if (judge(n, { ourAddresses: [], ourTelegram: [] }) !== null || judge(typed, { ourAddresses: [], ourTelegram: [] }) !== null) return null;
   return n;
 }
+
+/** A player who gave no name plays under a handle from their wallet ("Frog-7F3A"), never a name everyone shares. */
+export const walletHandle = (wallet: string | null | undefined): string | null => (wallet && /^0x[0-9a-fA-F]{40}$/.test(wallet) ? `Frog-${wallet.slice(2, 6).toUpperCase()}` : null);

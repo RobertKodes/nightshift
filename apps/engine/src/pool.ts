@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname, join } from "node:path";
 import { LOUNGE_GRACE_MS, LOUNGE_WAIT_MS, LoungeError, OwnGameError, type Expired } from "./chess.js";
 import { config } from "./config.js";
-import { publicName } from "./names.js";
+import { publicName, walletHandle } from "./names.js";
 import { type Ball, type Frame, HEAD_Y, POCKETED, type Shot, STILL, fits, isInt, simulate, validShot } from "./pool/physics.js";
 import { type Call, type Choice, type Options, QUICK, type Rack, type Seat, type Verdict, WPA, badCall, decide as rulesDecide, defaultChoice, newRack, onEight, standing, summarize, targets, timeFoul, judge } from "./pool/rules.js";
 
@@ -82,7 +82,7 @@ export type PoolEvent = {
 };
 const ended: ((e: PoolEvent) => void)[] = [];
 export const onPool = (f: (e: PoolEvent) => void) => { ended.push(f); };
-export function cleanName(name: string): string { return publicName(name, { max: 18 }) ?? "Night crew"; }
+export function cleanName(name: string, wallet?: string | null): string { return publicName(name, { max: 18 }) ?? walletHandle(wallet) ?? "Night crew"; }
 const keyOf = (p: Pick<Player, "name" | "wallet">) => JSON.stringify([p.name.toLowerCase(), p.wallet?.toLowerCase() ?? ""]);
 const other = (s: Seat): Seat => (s === 0 ? 1 : 0);
 
@@ -125,7 +125,7 @@ export class PoolGames {
     const look = this.safeLook(wallet, staked);
     // a guest (no profile) gets one of the crew frogs at random
     if (!look.avatar) look.avatar = `/games/pinball/frog-${randomInt(5)}.webp`;
-    const p: Player = { id: randomUUID(), name: cleanName(name), wallet: wallet ? wallet.toLowerCase() : null, rating: 1200, streams: 0, offlineAt: this.now(), seen: false, shots: 0, potted: 0, look, ...(agent ? { agent: true } : {}) };
+    const p: Player = { id: randomUUID(), name: cleanName(name, wallet), wallet: wallet ? wallet.toLowerCase() : null, rating: 1200, streams: 0, offlineAt: this.now(), seen: false, shots: 0, potted: 0, look, ...(agent ? { agent: true } : {}) };
     p.rating = this.rating(p);
     return p;
   }

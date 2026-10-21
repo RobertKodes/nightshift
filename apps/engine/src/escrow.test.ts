@@ -296,6 +296,9 @@ describe("staked NIGHT CHESS", () => {
     expect(a).toMatchObject({ status: "joined", you: "A", seat: { game: "chess" } });
     expect(b).toMatchObject({ status: "joined", you: "B", seat: { game: "chess" } });
     expect(a.seat!.id).toBe(b.seat!.id); expect(a.seat!.player).not.toBe(b.seat!.player);
+    // B gave no name: B plays under its wallet's handle, never the shared default
+    expect(b.nameB).toBe("Frog-2222");
+    expect(games.get(b.seat!.id, a.seat!.player).players.map((p) => p.name).sort()).toEqual(["Frog-2222", "SOLDIER"]);
     expect(a.startBy).toBe(t.escrow.challenges.get(id)!.dealtAt! + 15 * 60_000);
     expect(lobby.mine(C)).toEqual([]); expect(lobby.mine(null)).toEqual([]);
     // both pages sit down from what they found: the game starts

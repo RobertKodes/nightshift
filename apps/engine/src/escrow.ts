@@ -7,7 +7,7 @@ import { eth } from "./chain.js";
 import { CONTROLS } from "./chess.js";
 import { config } from "./config.js";
 import { keeperAccount, keeperWrite } from "./keeper.js";
-import { publicName } from "./names.js";
+import { publicName, walletHandle } from "./names.js";
 import type { Vault } from "./vault.js";
 
 /**
@@ -228,7 +228,7 @@ export class Escrow {
     const me = lc(viewer);
     return {
       matchId: c.matchId, game: c.game, token: c.token, tokenAddress: TOKENS[c.token], stake: c.stake, amount: formatUnits(BigInt(c.stake), 18), tc: c.tc,
-      creator: c.creator, name: c.name || "Night crew", playerB: c.playerB ?? null, nameB: c.playerB ? c.nameB || "Night crew" : null, status: this.status(c),
+      creator: c.creator, name: c.name || walletHandle(c.creator) || "Night crew", playerB: c.playerB ?? null, nameB: c.playerB ? c.nameB || walletHandle(c.playerB) || "Night crew" : null, status: this.status(c),
       openedAt: c.openedAt ?? null, joinBy: c.openedAt ? c.openedAt + JOIN_TIMEOUT : null, joinedAt: c.joinedAt ?? null, refundAt: c.joinedAt ? c.joinedAt + SETTLE_TIMEOUT : c.openedAt ? c.openedAt + JOIN_TIMEOUT : null,
       outcome: c.outcome ? { draw: c.outcome.draw, winner: c.outcome.winner, reason: c.outcome.reason ?? null } : null, signed: !!c.result, refused: c.refused ?? null,
       relay: c.relay ? { state: c.relay.state, tx: c.relay.tx ?? null, at: c.relay.at } : null, closed: c.closed ?? null,

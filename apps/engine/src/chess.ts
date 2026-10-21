@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname, join } from "node:path";
 import { Chess, type Color, type Move } from "chess.js";
 import { config } from "./config.js";
-import { publicName } from "./names.js";
+import { publicName, walletHandle } from "./names.js";
 
 /**
  * Chess duels. Moves, elapsed time and results are decided here, never by a browser. Queue games
@@ -87,8 +87,8 @@ const arcade: ((e: ChessEvent) => void)[] = [];
 export const onChess = (f: (e: ChessEvent) => void) => { arcade.push(f); };
 const opposite = (c: Color): Color => c === "w" ? "b" : "w";
 /** A display name by the shared rule (names.ts): not one of ours however it is spelled, nothing the community guard deletes. */
-export function cleanName(name: string): string {
-  return publicName(name, { max: 18 }) ?? "Night crew";
+export function cleanName(name: string, wallet?: string | null): string {
+  return publicName(name, { max: 18 }) ?? walletHandle(wallet) ?? "Night crew";
 }
 /** A player's rating key: their wallet when they have one (one row whatever name they use), else their name. */
 const keyOf = (p: Pick<Player, "name" | "wallet">) => (p.wallet ? `w:${p.wallet.toLowerCase()}` : `n:${p.name.toLowerCase()}`);
@@ -145,7 +145,7 @@ export class ChessGames {
   createStaked(o: { escrow: string; tc: TimeControl; currency: "IMD" | "SHIFT"; stake: string; a: { wallet: string; name: string; agent?: boolean }; b: { wallet: string; name: string; agent?: boolean }; onResult: (r: { draw: boolean; winner: string | null }) => void }): { id: string; seats: Record<string, string> } {
     if (!Object.hasOwn(CONTROLS, o.tc)) throw new Error("Choose 3+2, 5+0 or 10+0");
     const seat = (s: { wallet: string; name: string; agent?: boolean }, color: Color): Player => {
-      const p: Player = { id: randomUUID(), name: cleanName(s.name), wallet: s.wallet.toLowerCase(), color, rating: 1200, moves: 0, streams: 0, offlineAt: this.now(), ...(s.agent ? { agent: true } : {}) };
+      const p: Player = { id: randomUUID(), name: cleanName(s.name, s.wallet), wallet: s.wallet.toLowerCase(), color, rating: 1200, moves: 0, streams: 0, offlineAt: this.now(), ...(s.agent ? { agent: true } : {}) };
       p.rating = this.rating(p);
       return p;
     };
@@ -174,7 +174,7 @@ export class ChessGames {
   private sameWallet(m: Match, wallet: string | null) { const w = m.players[0]?.wallet; return !!wallet && !!w && w.toLowerCase() === wallet.toLowerCase(); }
   private unlist(m: Match) { for (const line of this.waiting.values()) line.delete(m.id); }
   private newPlayer(name: string, wallet: string | null, agent: boolean): Player {
-    const p: Player = { id: randomUUID(), name: cleanName(name), wallet, color: randomInt(2) ? "w" : "b", rating: 1200, moves: 0, streams: 0, offlineAt: this.now(), ...(agent ? { agent: true } : {}) };
+    const p: Player = { id: randomUUID(), name: cleanName(name, wallet), wallet, color: randomInt(2) ? "w" : "b", rating: 1200, moves: 0, streams: 0, offlineAt: this.now(), ...(agent ? { agent: true } : {}) };
     p.rating = this.rating(p);
     return p;
   }

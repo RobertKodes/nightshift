@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { parseAbi } from "viem";
 import { eth } from "./chain.js";
 import { config } from "./config.js";
-import { publicName } from "./names.js";
+import { publicName, walletHandle } from "./names.js";
 import { LOUNGE_GRACE_MS, LOUNGE_WAIT_MS, LoungeError, OwnGameError, type Expired } from "./chess.js";
 import { ATTACK_DELAY, type Attack, type Input, type Landing, MAX_TICKS, SEGMENTS, Table, replay, segmentOf } from "./pinball/engine.js";
 
@@ -151,8 +151,8 @@ function record(list: Score[], kind: keyof Boards = "duel"): void {
 }
 
 /** A display name: letters, digits, space . - _, nothing the community guard would delete, and not one of ours (names.ts). */
-export function cleanName(name: string): string {
-  return publicName(name, { max: 18 }) ?? "Night crew";
+export function cleanName(name: string, wallet?: string | null): string {
+  return publicName(name, { max: 18 }) ?? walletHandle(wallet) ?? "Night crew";
 }
 
 /** NIGHT FROGS on Ethereum. */
@@ -317,7 +317,7 @@ export function createStaked(o: { escrow: string; currency: "IMD" | "SHIFT"; sta
   const id = randomBytes(5).toString("hex"), d = deal(id), pa = randomUUID(), pb = randomUUID();
   const m: Match = {
     id, deal: d, currency: o.currency, stake: o.stake, createdAt: Date.now(), startedAt: null, go: false, roster: 0, winner: null, draw: false, done: false, void: null,
-    players: [{ ...fresh(pa, cleanName(o.a.name), o.a.wallet, "/games/pinball/frog-0.webp", d), ...(o.a.agent ? { agent: true } : {}) }, { ...fresh(pb, cleanName(o.b.name), o.b.wallet, "/games/pinball/frog-3.webp", d), ...(o.b.agent ? { agent: true } : {}) }],
+    players: [{ ...fresh(pa, cleanName(o.a.name, o.a.wallet), o.a.wallet, "/games/pinball/frog-0.webp", d), ...(o.a.agent ? { agent: true } : {}) }, { ...fresh(pb, cleanName(o.b.name, o.b.wallet), o.b.wallet, "/games/pinball/frog-3.webp", d), ...(o.b.agent ? { agent: true } : {}) }],
     escrow: o.escrow, showBy: Date.now() + STAKED_SHOW_MS, onResult: o.onResult,
   };
   matches.set(id, m);
@@ -354,7 +354,7 @@ export async function queue(name: string, wallet: string | null, currency: Curre
   stake = 0; // a free duel never carries a stake, whatever an old page sends
   const open = openDuels();
   if (open.some((m) => ownDuel(m, wallet, agent))) throw new OwnGameError();
-  const clean = cleanName(name), pic = await face(avatar, wallet);
+  const clean = cleanName(name, wallet), pic = await face(avatar, wallet);
   const pid = randomUUID();
   // the face lookup may take a moment: whoever is still open then
   const m = openDuels().find((x) => joinable(x) && !sameWallet(x, wallet));
@@ -388,7 +388,7 @@ export async function joinOpen(id: string, name: string, wallet: string | null, 
   const m = check();
   for (const o of openDuels()) if (ownDuel(o, wallet, false)) { o.done = true; emit(o); matches.delete(o.id); }
   const pid = randomUUID();
-  sit(m, fresh(pid, cleanName(name), wallet, pic, m.deal));
+  sit(m, fresh(pid, cleanName(name, wallet), wallet, pic, m.deal));
   return { match: view(m, pid), player: pid };
 }
 
