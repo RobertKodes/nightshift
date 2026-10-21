@@ -22,7 +22,7 @@ export const verifyLink = (h: HandRecord, players: number) => `/games/poker/veri
 /** The hands of this match (or this table), newest first: who won what, the action street by street, and each deck's seeds. */
 export function HandHistory({ history, players, you, seats, sealed }: { history: HandRecord[]; players: (PlayerView | null)[]; you: number | null; seats: number; sealed: string }) {
   const [open, setOpen] = useState<number | null>(null);
-  if (!history.length) return <p className="pk-empty">No hand played yet. Each hand's deck is committed before the deal.</p>;
+  if (!history.length) return <p className="pk-empty">No hands yet.</p>;
   return <ol className="pk-history">
     {history.map((h) => {
       const name = (s: number) => h.names?.[s] ?? players[s]?.name ?? `Seat ${s + 1}`;

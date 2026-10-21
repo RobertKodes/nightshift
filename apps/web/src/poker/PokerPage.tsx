@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BetPanel } from "../bets";
 import { Icon } from "../Icon";
-import { PHONE } from "../lite";
 import { go } from "../router";
 import { useSession } from "../session";
 import { type Seat, StakeLobby, StakeResult, tokenLabel, useEscrow } from "../stakes";
@@ -208,11 +207,11 @@ export function PokerPage() {
 
     {!inGame && <main className="pk-lobby">
       <section className="pk-front" aria-labelledby="pk-title">
-        <h1 id="pk-title">Heads-up. <em>No limit.</em></h1>
+        <h1 id="pk-title">No-Limit Texas Hold'em</h1>
         <div className="pk-cabinet"><PokerTable hand={DEMO_HAND} players={DEMO_PLAYERS} seats={2} you={0} clock={null} skew={0} emotes={[]} /></div>
       </section>
       <section className="pk-panel pk-play" aria-label="Play">
-        <div className="pk-playas"><span className="pk-label">PLAYING AS</span><NameEdit value={playName} disabled={busy || waiting} onChange={(n) => { setName(n); try { localStorage.setItem("nk-name", n); } catch { /* private window */ } }} /></div>
+        <div className="pk-playas"><span className="pk-label">Playing as</span><NameEdit value={playName} disabled={busy || waiting} onChange={(n) => { setName(n); try { localStorage.setItem("nk-name", n); } catch { /* private window */ } }} /></div>
         <div className="pk-money" role="group" aria-label="Play for">{(["FREE", "SHIFT", "IMD"] as const).map((k) => <button type="button" key={k} className={money === k ? "on" : ""} aria-pressed={money === k} disabled={waiting} onClick={() => setMoney(k)}>{k === "FREE" ? "FREE" : tokenLabel(k)}{k !== "FREE" && !escrow?.live && <Icon name="lock" size={12} />}</button>)}</div>
         <ul className="pk-facts"><li><b>2,000</b><span>chips each · 100 big blinds</span></li><li><b>3 min</b><span>blind levels</span></li><li><b>20 s</b><span>a move · +45 s time bank</span></li></ul>
         {money === "FREE" ? <>
@@ -226,7 +225,7 @@ export function PokerPage() {
       <section className="pk-more" aria-label="Open tables and the leaderboard">
         {money === "FREE" && <Lounge game="poker" onSeat={loungeSeat} />}
         <WeeklyPrizes game="poker" />
-        <div className="pk-leaders"><div className="pk-section"><span><Icon name="trophy" size={14} /> LEADERBOARD</span><span>ELO</span></div>
+        <div className="pk-leaders"><div className="pk-section"><span>Leaderboard</span><span>Elo</span></div>
           <div className="pk-tabs" role="group" aria-label="Leaderboard period">{([["board", "Tonight"], ["best", "All time"]] as const).map(([k, l]) => <button type="button" key={k} aria-pressed={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
           {board[tab].length ? <ol>{board[tab].map((p, i) => <li key={`${p.name}-${i}`}><span className="pk-rank">{String(i + 1).padStart(2, "0")}</span><div><b>{p.name}</b><small>{p.wins} W / {p.games} G</small></div><strong>{p.rating}</strong></li>)}</ol> : <p className="pk-empty">No rated match {tab === "board" ? "in the last 24 hours" : "yet"}.</p>}
         </div>
@@ -237,7 +236,7 @@ export function PokerPage() {
     {waiting && match && <div className="pk-overlay" role="dialog" aria-modal="true" aria-labelledby="pk-wait"><div className="pk-dialog">
       <div className="pk-radar"><Icon name="radar" size={34} /></div>
       <span className="pk-kicker">{match.escrow ? "STAKED MATCH" : "MATCHMAKING · HEADS-UP"}</span>
-      <h2 id="pk-wait">{match.escrow ? <>Waiting for<br />your <em>rival.</em></> : <>Shuffling<br />the <em>deck.</em></>}</h2>
+      <h2 id="pk-wait">{match.escrow ? "Waiting for your rival" : "Waiting for a rival"}</h2>
       <p>{match.escrow ? <>Both stakes are in. The first hand is dealt only once you are both at the table, after a 10-second countdown. {rival?.connected ? <b>Your rival is here.</b> : <>Your rival has not opened the table yet: they see a "Take your seat" banner on any page.</>}{match.showBy && <> If you are not both here in <b>{waitText(Math.max(0, match.showBy - now))}</b>, the match is void and both stakes go back.</>}</> : "Your table is open in the lounge. Browse the site meanwhile: you hear it when someone sits down."}</p>
       <span className="pk-kicker">{match.escrow ? `${match.players.filter((p) => p.connected).length} / 2 AT THE TABLE · ${match.stake} ${tokenLabel(match.currency)} EACH` : `WAITING ${waitText(now - match.waitingSince)}`}</span>
       {!match.escrow && <><button type="button" className="pk-btn" onClick={() => go("/games")}><Icon name="radar" size={16} />BROWSE WHILE YOU WAIT</button><button type="button" className="pk-btn ghost" onClick={() => void cancel()}>CANCEL</button></>}
@@ -249,7 +248,7 @@ export function PokerPage() {
           <span className="pk-kicker">{mode === "practice" ? <>PRACTICE · FROG #7 · NOT RATED</> : match.house ? <><i className="pk-live" /> HOUSE · EXHIBITION, NOT RATED · {match.viewers ?? 0} WATCHING</> : spectate ? <><i className="pk-live" /> SPECTATING{match.currency !== "FREE" ? ` · STAKED ${Number(match.stake ?? 0).toLocaleString()} ${tokenLabel(match.currency)} EACH` : ""} · {match.viewers ?? 0} WATCHING</> : match.escrow ? <><i className="pk-live" /> STAKED · {Number(match.stake ?? 0).toLocaleString()} {tokenLabel(match.currency)} EACH</> : <><i className="pk-live" /> HEADS-UP · RATED</>}</span>
           <span className="pk-blinds"><b>BLINDS {chips(match.blinds[0])}/{chips(match.blinds[1])}</b>{levelLeft !== null && !match.done && <small>{chips(match.nextBlinds[0])}/{chips(match.nextBlinds[1])} in {waitText(levelLeft)}</small>}{match.hand && <small>HAND #{match.hand.n}</small>}</span>
         </div>
-        <PokerTable hand={match.hand} players={match.players} seats={2} you={spectate ? null : match.you} clock={match.clock} skew={skew} emotes={match.emotes}
+        <PokerTable hand={match.hand} players={match.players} seats={2} you={spectate ? null : match.you} clock={match.clock} skew={skew} emotes={match.emotes} turn={!!match.legal}
           center={countdown > 0 && !match.done ? <div className="pk-count"><span className="pk-kicker">{spectate ? "BOTH PLAYERS ARE HERE" : "YOUR RIVAL IS HERE"}</span><strong key={countdown}>{countdown}</strong></div>
             : dealing !== null && dealing > 0 && !match.hand?.result ? <span className="pk-kicker">{match.hand ? "NEXT HAND" : "DEALING"}</span> : null} />
         {match.done && review && <div className="pk-bar pk-over"><span className="pk-kicker">MATCH OVER · {match.winner === null ? "NO WINNER" : spectate ? `${match.players[match.winner]?.name ?? ""} WON` : match.winnerIsYou ? "YOU WON" : "YOU LOST"}</span><button type="button" className="pk-btn small" onClick={() => setReview(false)}>THE RESULT</button><button type="button" className="pk-btn ghost small" onClick={lobby}>BACK TO THE LOBBY</button></div>}
@@ -264,19 +263,18 @@ export function PokerPage() {
         {err && <p className="pk-error floating" role="alert"><Icon name="alert" size={15} />{err}<button type="button" aria-label="Dismiss" onClick={() => setErr(null)}><Icon name="close" size={14} /></button></p>}
       </section>
       <aside className="pk-side">
-        <div className="pk-side-head"><span className="pk-kicker">THE HANDS</span><span className="pk-kicker">{match.history.length} PLAYED</span></div>
+        <div className="pk-section"><span>Hands</span><span>{match.history.length} played</span></div>
         <HandHistory history={match.history} players={match.players} you={spectate ? null : match.you} seats={2} sealed="revealed when the match ends" />
         {!match.done && (match.next || match.hand?.commit) && <p className="pk-fair"><Icon name="shield" size={14} /><span>{match.next ? <>Hand #{match.next.n} is committed: <code>{match.next.commit.slice(0, 16)}…</code>{spectate ? "" : match.next.seedSent ? " · your seed is in" : " · sending your seed"}</> : <>Hand #{match.hand!.n} was committed before the deal: <code>{match.hand!.commit!.slice(0, 16)}…</code> · its seed is shown when the match ends</>}</span></p>}
         {match.escrow && match.done && <StakeResult matchId={match.escrow} address={address} />}
         {spectate && !match.house && <BetPanel game="poker" id={match.id} theme="nc" />}
         {!spectate && !match.done && <button type="button" className="pk-btn ghost small" onClick={() => setConfirmLeave(true)}><Icon name="flag" size={14} />LEAVE THE MATCH</button>}
-        {!spectate && <p className="pk-help"><Icon name="target" size={14} />{PHONE ? "Tap Fold, Check / Call or Raise; drag the slider or pick ½ pot, pot or all-in." : "Keys: F fold · C check or call · R raise · A all-in · ← → one big blind · ↑ ↓ the sizes · Enter raises."}</p>}
       </aside>
     </main>}
 
     {inGame && match?.done && !review && <div className="pk-overlay pk-end" role="dialog" aria-modal="true" aria-labelledby="pk-end"><div className="pk-dialog">
       <span className="pk-kicker">{mode === "practice" ? "PRACTICE COMPLETE" : "FINAL RESULT · SERVER VERIFIED"}</span>
-      <h2 id="pk-end">{match.winner === null ? (match.reason === "void" ? "VOID" : "NO RESULT") : spectate ? `${match.players[match.winner]?.name ?? ""} WINS` : match.winnerIsYou ? "VICTORY" : "DEFEAT"}</h2>
+      <h2 id="pk-end">{match.winner === null ? (match.reason === "void" ? "Void" : "No result") : spectate ? `${match.players[match.winner]?.name ?? ""} wins` : match.winnerIsYou ? "Victory" : "Defeat"}</h2>
       <p>{REASONS[match.reason ?? ""] ?? ""}</p>
       <div className="pk-final">{match.players.map((p) => <span key={p.seat} className={match.winner === p.seat ? "won" : ""}><img src={p.avatar ?? "/games/pinball/frog-0.webp"} alt="" width="40" height="40" /><b>{p.you ? "You" : p.name}</b><small>{p.rating && !match.practice && !match.house ? `${p.rating} ELO` : p.bot ? "HOUSE" : ""}</small></span>)}</div>
       {match.escrow && <StakeResult matchId={match.escrow} address={address} />}
@@ -284,7 +282,7 @@ export function PokerPage() {
       <div className="pk-result-actions">
         {spectate ? <><button type="button" className="pk-btn" onClick={() => go("/games/live")}><Icon name="radar" size={16} />WATCH ANOTHER</button><button type="button" className="pk-btn ghost" onClick={() => { lobby(); void start(true); }}>PRACTICE VS FROG #7</button></>
           : mode === "practice" ? <><button type="button" className="pk-btn" onClick={() => void start(true)}><Icon name="swap" size={16} />PLAY FROG #7 AGAIN</button><button type="button" className="pk-btn ghost" onClick={lobby}>BACK TO THE LOBBY</button></>
-          : <>{!match.escrow && <button type="button" className="pk-btn" disabled={match.rematchRequested} onClick={() => void post<MatchView>("rematch").then(receive).catch((e) => setErr((e as Error).message))}><Icon name={match.rematchRequested ? "radar" : "swap"} size={16} />{match.rematchRequested ? "AWAITING RIVAL" : "REMATCH"}</button>}<button type="button" className="pk-btn ghost" onClick={lobby}>BACK TO THE LOBBY</button></>}
+          : <>{!match.escrow && <button type="button" className="pk-btn" disabled={match.rematchRequested} onClick={() => void post<MatchView>("rematch").then(receive).catch((e) => setErr((e as Error).message))}><Icon name={match.rematchRequested ? "radar" : "swap"} size={16} />{match.rematchRequested ? "WAITING FOR YOUR RIVAL" : "REMATCH"}</button>}<button type="button" className="pk-btn ghost" onClick={lobby}>BACK TO THE LOBBY</button></>}
       </div>
       <button type="button" className="pk-btn ghost small" onClick={() => setReview(true)}><Icon name="shield" size={14} />REVIEW THE HANDS AND THEIR SEEDS</button>
       <p className="pk-note">Every server seed of this match is now in the hand history: open a hand and verify its deck.</p>

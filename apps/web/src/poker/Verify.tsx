@@ -39,7 +39,7 @@ export function VerifyDeck() {
   return <main className="pk-verify">
     <section className="pk-panel">
       <span className="pk-kicker"><Icon name="shield" size={13} />PROVABLY FAIR DECK</span>
-      <h1>Verify a <em>hand.</em></h1>
+      <h1>Verify a hand</h1>
       <p>Before each hand the table shows SHA-256 of a secret server seed. Each player's browser adds a seed of its own. The deck is shuffled from both; when the match is over the server seed is revealed, and this page rebuilds the deck here, in your browser.</p>
       <form className="pk-verify-form" onSubmit={(e) => { e.preventDefault(); void run(); }}>
         <label><span>Server seed</span><input value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="64 hex characters" spellCheck={false} autoComplete="off" /></label>

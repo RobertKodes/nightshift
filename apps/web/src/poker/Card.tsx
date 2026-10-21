@@ -20,10 +20,11 @@ export function CardDefs() {
       <symbol id="pk-d" viewBox="0 0 100 100"><path d="M50 3Q68 30 88 50 68 70 50 97 32 70 12 50 32 30 50 3Z" /></symbol>
       <symbol id="pk-s" viewBox="0 0 100 100"><path d="M50 4C62 24 95 41 95 62c0 13-10 22-22 22-9 0-16-5-19-12 1 10 5 17 12 23H34c7-6 11-13 12-23-3 7-10 12-19 12C15 84 5 75 5 62 5 41 38 24 50 4Z" /></symbol>
       <symbol id="pk-c" viewBox="0 0 100 100"><circle cx="50" cy="29" r="20" /><circle cx="27" cy="60" r="20" /><circle cx="73" cy="60" r="20" /><circle cx="50" cy="55" r="11" /><path d="M46 58c-1 17-5 28-13 37h34c-8-9-12-20-13-37Z" /></symbol>
-      <pattern id="pk-lattice" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-        <rect width="18" height="18" fill="#140b33" />
-        <path d="M0 9h18M9 0v18" stroke="#7c5cff" strokeOpacity=".32" strokeWidth="1.4" />
-        <circle cx="9" cy="9" r="1.6" fill="#b8ff4a" fillOpacity=".5" />
+      {/* the back: a fine diamond lattice on night violet; wide enough to stay crisp on a 26 px card */}
+      <pattern id="pk-lattice" width="30" height="30" patternUnits="userSpaceOnUse" patternTransform="rotate(45 125 175)">
+        <rect width="30" height="30" fill="#1a1040" />
+        <path d="M0 0h30v30H0Z" fill="none" stroke="#8f74ff" strokeOpacity=".38" strokeWidth="2" />
+        <path d="M15 9l6 6-6 6-6-6Z" fill="#8f74ff" fillOpacity=".22" />
       </pattern>
     </defs>
   </svg>;
@@ -44,10 +45,13 @@ const COURT = ["J", "Q", "K"];
 export function PlayingCard({ card, size = 64, className = "", glow = false, dim = false }: { card: number | null; size?: number; className?: string; glow?: boolean; dim?: boolean }) {
   const h = Math.round(size * 1.4);
   if (card === null) return <svg className={`pk-card back ${className}`} width={size} height={h} viewBox="0 0 250 350" role="img" aria-label="A face-down card">
-    <rect x="2" y="2" width="246" height="346" rx="20" fill="#0d0722" stroke="#a48bff" strokeOpacity=".55" strokeWidth="3" />
-    <rect x="16" y="16" width="218" height="318" rx="12" fill="url(#pk-lattice)" stroke="#7c5cff" strokeOpacity=".6" strokeWidth="2" />
-    <circle cx="125" cy="175" r="44" fill="#0d0722" stroke="#b8ff4a" strokeOpacity=".7" strokeWidth="3" />
-    <path transform="translate(89 139) scale(3)" d="M5 10a3.5 3.5 0 1 1 7-1 3.5 3.5 0 1 1 7 1c1.3 1 2 2.5 2 4 0 4-4 6.5-9 6.5S3 18 3 14c0-1.5.7-3 2-4Zm3.5-2v1m7-1v1M8 14.5c1.8 2 6.2 2 8 0" fill="none" stroke="#b8ff4a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    <rect x="2" y="2" width="246" height="346" rx="20" fill="#f4f0e6" />
+    <rect x="12" y="12" width="226" height="326" rx="12" fill="url(#pk-lattice)" />
+    <rect x="22" y="22" width="206" height="306" rx="7" fill="none" stroke="#f4f0e6" strokeOpacity=".55" strokeWidth="3" />
+    {/* NIGHTSHIFT's crescent in a medallion */}
+    <ellipse cx="125" cy="175" rx="54" ry="62" fill="#1a1040" stroke="#f4f0e6" strokeOpacity=".7" strokeWidth="3" />
+    <path transform="translate(66 116) scale(4.9)" d="M16.5 3a9.2 9.2 0 1 0 4.7 14.7A8 8 0 0 1 16.5 3Z" fill="#e9e2ff" />
+    <circle cx="148" cy="150" r="6" fill="#b8ff4a" />
   </svg>;
   const r = card >> 2, s = SUITS[card & 3]!, ink = red(card) ? "#c8203f" : "#17132a", sym = `#pk-${s}`, rank = rankText(card);
   const compact = size < 46;
