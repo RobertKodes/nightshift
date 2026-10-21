@@ -4,7 +4,8 @@ import { Icon } from "../Icon";
 import { LITE, PHONE, pixelRatio } from "../lite";
 import { go } from "../router";
 import { useSession } from "../session";
-import { type Seat, StakeLobby, StakeResult, tokenLabel, useEscrow } from "../stakes";
+import { erc20Abi, formatUnits } from "viem";
+import { STAKE_TOKENS, type Seat, StakeLobby, StakeResult, rpc, tokenLabel, useEscrow } from "../stakes";
 import { SEAT_KEY, doneWaiting, keepWaiting, Lounge, primeAlerts, alertJoined, useLounge, waitText } from "../games/lounge";
 import "../chess/chess.css";
 import "../games/live.css";
@@ -22,7 +23,8 @@ function Showcase() {
   useEffect(() => {
     if (!host.current) return;
     const s = new PoolScene(host.current, { lite: LITE, pixelRatio: pixelRatio(1.5) });
-    s.setLook({ cloth: "cloth-frog", table: "table-uv", balls: "balls-classic", cue: "cue-frog" });
+    s.setLook({ cloth: "cloth-night", table: "table-shift", balls: "balls-classic", cue: "cue-crew" });
+    s.setView("tilt");
     let alive = true, seed = 3;
     const loop = async () => {
       while (alive) {
@@ -41,6 +43,24 @@ function Showcase() {
     return () => { alive = false; s.cancelReplay(); s.dispose(); };
   }, []);
   return <div className="np-showcase" ref={host} aria-hidden="true" />;
+}
+
+/** A handle of the player's own, kept on this device: never one name shared by everyone. */
+const HANDLES = ["Shark", "Hustler", "Banker", "Kicker", "Railbird", "Breaker", "Cutter", "Stroker", "Masse", "Bankshot"];
+function handle(): string {
+  try { const n = localStorage.getItem("np-name")?.trim(); if (n && n !== "Night crew") return n; } catch { /* private window */ }
+  const h = `${HANDLES[Math.floor(Math.random() * HANDLES.length)]}-${100 + Math.floor(Math.random() * 900)}`;
+  try { localStorage.setItem("np-name", h); } catch { /* private window */ }
+  return h;
+}
+const shortAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+/** The player's name, edited in place: a click (or Enter on it) opens it, Enter or leaving keeps it, Escape drops the change. */
+function NameEdit({ value, disabled, onChange }: { value: string; disabled?: boolean; onChange: (v: string) => void }) {
+  const [edit, setEdit] = useState(false), [draft, setDraft] = useState(value);
+  const keep = () => { const v = draft.trim().slice(0, 18); if (v) onChange(v); setEdit(false); };
+  return edit
+    ? <input className="np-name-input" autoFocus value={draft} maxLength={18} autoComplete="nickname" aria-label="Your player name" onChange={(e) => setDraft(e.target.value)} onBlur={keep} onKeyDown={(e) => { if (e.key === "Enter") keep(); if (e.key === "Escape") setEdit(false); }} />
+    : <button type="button" className="np-name-btn" disabled={disabled} onClick={() => { setDraft(value); setEdit(true); }} aria-label={`Your player name: ${value}. Change it`}><b>{value}</b><Icon name="edit" size={14} /></button>;
 }
 
 function Wordmark() {
@@ -63,7 +83,7 @@ const haptic = (kind: "light" | "medium" | "heavy" | "success" | "error" | "sele
 export function PoolPage() {
   const { address, signIn, busy: signing } = useSession();
   const params = new URLSearchParams(location.search);
-  const [name, setName] = useState(() => { try { return localStorage.getItem("np-name") ?? ""; } catch { return ""; } });
+  const [name, setName] = useState(handle);
   const [rules, setRules] = useState<"wpa" | "quick">(() => { try { return localStorage.getItem("np-rules") === "quick" ? "quick" : "wpa"; } catch { return "wpa"; } });
   const [money, setMoney] = useState<"FREE" | "IMD" | "SHIFT">(() => { const t = params.get("token"); return t === "IMD" || t === "SHIFT" ? t : "FREE"; });
   const escrow = useEscrow();
@@ -80,6 +100,23 @@ export function PoolPage() {
   const before = useRef<SelfProfile | null>(null);
   const source = useRef<EventSource | null>(null), token = useRef(""), current = useRef<MatchView | null>(null), practice = useRef<Practice | null>(null), mounted = useRef(true);
   const watchId = params.get("watch");
+  // a staked duel: what the signed-in wallet holds of the token, and the link to send a rival
+  const [balance, setBalance] = useState<string | null>(null), [copied, setCopied] = useState(false);
+  useEffect(() => {
+    setBalance(null);
+    if (!address || money === "FREE") return;
+    let alive = true;
+    void rpc.readContract({ address: STAKE_TOKENS[money], abi: erc20Abi, functionName: "balanceOf", args: [address as `0x${string}`] })
+      .then((b) => { if (alive) setBalance(Number(formatUnits(b, 18)).toLocaleString(undefined, { maximumFractionDigits: 2 })); }).catch(() => { if (alive) setBalance("?"); });
+    return () => { alive = false; };
+  }, [address, money]);
+  const share = async () => {
+    const url = `${location.origin}/games/pool?token=${money}`;
+    try {
+      if (PHONE && navigator.share) await navigator.share({ title: "A NIGHT POOL duel", url });
+      else { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2_000); }
+    } catch { /* the share sheet was closed */ }
+  };
 
   // the frames of a shot arrive once: a later frame of the same shot keeps them
   const receive = useCallback((v: MatchView) => {
@@ -182,6 +219,8 @@ export function PoolPage() {
   const inGame = !!match?.startedAt || mode === "practice" || (mode === "watch" && !!match);
   const waiting = !!match && !match.startedAt && mode === "online";
   const now = Date.now() + skew;
+  // the table opens at the top of the page: the whole table and its controls on the screen
+  useEffect(() => { if (inGame) window.scrollTo(0, 0); }, [inGame, match?.id]);
 
   if (showLocker) return <div className="np np-page">
     <header className="np-top"><a href="/games/pool" className="np-back" onClick={(e) => { e.preventDefault(); setShowLocker(false); history.replaceState(null, "", "/games/pool"); }}><Icon name="arrow" size={16} /><span>NIGHT POOL</span></a><Wordmark /><span /></header>
@@ -199,32 +238,36 @@ export function PoolPage() {
     </header>
 
     {!inGame && <main className="np-lobby">
-      <section className="np-hero" aria-labelledby="np-title">
-        <span className="np-kicker"><i className="np-live" /> NIGHTSHIFT GAME ROOM / 04</span>
-        <h1 id="np-title">Rack them up.<br /><em>Call your pocket.</em></h1>
-        <p>3D 8-ball on WPA rules. Every shot is simulated by the server and replayed for both players and the stands, ball by ball.</p>
-        <div className="np-cabinet"><Showcase /><div className="np-cabinet-bar"><span><Icon name="pool" size={14} /> NIGHT POOL · 7-FOOT TABLE</span><span>WPA 8-BALL</span></div></div>
+      <section className="np-front" aria-labelledby="np-title">
+        <h1 id="np-title">Rack them up. <em>Call your pocket.</em></h1>
+        <div className="np-cabinet"><Showcase /></div>
       </section>
-      <section className="np-panel-card" aria-label="Set up your game">
-        <div className="np-panel-head"><span className="np-kicker">CLOCK IN, NIGHT CREW</span><span className="np-free">{money === "FREE" ? "FREE · RATED" : "STAKED · 18+"}</span></div>
-        <label className="np-label" htmlFor="np-name">YOUR PLAYER NAME</label>
-        <div className="np-name"><input id="np-name" value={name} maxLength={18} placeholder="Night crew" autoComplete="nickname" disabled={busy || waiting} onChange={(e) => setName(e.target.value)} /><Icon name="edit" size={17} /></div>
-        <div className="np-section"><span>01 / THE RULES</span><Icon name="book" size={14} /></div>
-        <div className="np-choice" role="group" aria-label="Rules">{(["wpa", "quick"] as const).map((k) => <button type="button" key={k} className={rules === k ? "on" : ""} aria-pressed={rules === k} disabled={waiting} onClick={() => setRules(k)}><b>{k === "wpa" ? "WPA" : "QUICK"}</b><small>{k === "wpa" ? "Call ball and pocket, or a safety. The world rules." : "Call the 8 only. Any ball of yours keeps you shooting."}</small></button>)}</div>
-        <div className="np-section"><span>02 / PLAY FOR</span><Icon name="diamond" size={14} /></div>
-        <div className="np-choice three" role="group" aria-label="Stake">{(["FREE", "IMD", "SHIFT"] as const).map((k) => <button type="button" key={k} className={money === k ? "on" : ""} aria-pressed={money === k} disabled={waiting} onClick={() => setMoney(k)}><b>{k === "FREE" ? "FREE" : tokenLabel(k)}</b><small>{k === "FREE" ? "Rated · no stake" : escrow?.live ? "Winner takes 95%" : "Opens with the signer"}</small></button>)}</div>
-        {money === "FREE" ? <button type="button" className="np-btn primary" disabled={busy || waiting} onClick={() => void start()}><Icon name="swords" size={18} /><span>{busy ? "OPENING YOUR TABLE" : "FIND A RIVAL"}</span><Icon name="arrow" size={17} /></button>
-          : <StakeLobby game="pool" token={money} name={name} address={address} signIn={signIn} onSeat={seat} theme="nc" />}
-        <button type="button" className="np-btn ghost" disabled={busy || waiting} onClick={() => void start(true)}><img className="np-frog" src="/games/pinball/frog-3.webp" alt="" width={26} height={26} />PRACTICE WITH FROG #7<span className="np-muted">OFFLINE</span></button>
+      <section className="np-panel-card np-play" aria-label="Play">
+        <div className="np-who"><span className="np-label">PLAYING AS</span><NameEdit value={name} disabled={busy || waiting} onChange={(n) => { setName(n); try { localStorage.setItem("np-name", n); } catch { /* private window */ } }} /></div>
+        <div className="np-money" role="group" aria-label="Play for">{(["FREE", "SHIFT", "IMD"] as const).map((k) => <button type="button" key={k} className={money === k ? "on" : ""} aria-pressed={money === k} disabled={waiting} onClick={() => setMoney(k)}>{k === "FREE" ? "FREE" : tokenLabel(k)}</button>)}</div>
+        {money === "FREE" ? <>
+          <div className="np-choice" role="group" aria-label="Rules">{(["wpa", "quick"] as const).map((k) => <button type="button" key={k} className={rules === k ? "on" : ""} aria-pressed={rules === k} disabled={waiting} onClick={() => setRules(k)}><b>{k === "wpa" ? "WPA RULES" : "QUICK RULES"}</b><small>{k === "wpa" ? "Call ball and pocket every shot." : "Call the 8 only."}</small></button>)}</div>
+          <button type="button" className="np-btn primary" disabled={busy || waiting} onClick={() => void start()}><Icon name="swords" size={18} /><span>{busy ? "OPENING YOUR TABLE" : "FIND A RIVAL · RATED"}</span><Icon name="arrow" size={17} /></button>
+          <button type="button" className="np-btn ghost" disabled={busy || waiting} onClick={() => void start(true)}><Icon name="frog" size={17} /><span>PRACTICE WITH FROG #7 · NOT RATED</span></button>
+        </> : <>
+          <ol className="np-steps">
+            <li className="done"><i>1</i><div><b>Rules: WPA</b><small>Staked duels are played on the world rules, every shot called.</small></div></li>
+            <li className={address ? "done" : "on"}><i>2</i><div><b>Wallet</b><small>{address ? <>{shortAddr(address)} holds <strong>{balance ?? "…"} {tokenLabel(money)}</strong></> : "Sign in with the wallet that stakes."}</small></div>{!address && <button type="button" className="np-btn small" disabled={signing} onClick={() => void signIn()}>{signing ? "SIGNING IN" : "SIGN IN"}</button>}</li>
+            <li className={address ? "on" : ""}><i>3</i><div><b>Amount, one confirmation</b><small>Both stake the same; the winner takes 95%. Check the summary, then confirm in your wallet.</small></div></li>
+            <li><i>4</i><div><b>Waiting room</b><small>Send a rival the link; the break starts when they accept.</small></div><button type="button" className="np-btn ghost small" onClick={() => void share()}><Icon name={copied ? "check" : "external"} size={14} />{copied ? "COPIED" : "SHARE LINK"}</button></li>
+          </ol>
+          <StakeLobby game="pool" token={money} name={name} address={address} signIn={signIn} onSeat={seat} theme="nc" />
+        </>}
         {closedNote && <p className="np-error" role="status"><Icon name="clock" size={15} />{closedNote}</p>}
         {err && <p className="np-error" role="alert"><Icon name="alert" size={15} />{err}</p>}
+      </section>
+      <section className="np-more" aria-label="Open tables and the leaderboard">
         {money === "FREE" && <Lounge game="pool" onSeat={loungeSeat} />}
-        <div className="np-section"><span>03 / HOW IT PLAYS</span></div>
-        <div className="np-how">{[["target", "Aim", "Move the mouse, or drag round the cue ball. Fine-tune on the strip or the arrow keys."], ["bolt", "Power", "Pull the bar down and let go. Space works too."], ["orbit", "Spin", "Tap SPIN: follow, draw, english, and the cue's elevation for a masse."], ["shield", "Fair", "The server simulates every shot: the same physics for both players and the stands."]].map(([i, t, c]) => <div key={t}><Icon name={i!} size={20} /><b>{t}</b><p>{c}</p></div>)}</div>
-        <div className="np-leaders"><div className="np-section"><span><Icon name="trophy" size={14} /> THE NIGHT CREW</span><span>ELO</span></div>
+        <div className="np-leaders"><div className="np-section"><span><Icon name="trophy" size={14} /> LEADERBOARD</span><span>ELO</span></div>
           <div className="np-tabs" role="group" aria-label="Leaderboard period">{([["board", "Tonight"], ["best", "All time"]] as const).map(([k, l]) => <button type="button" key={k} aria-pressed={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
-          {board[tab].length ? <ol>{board[tab].map((p, i) => <li key={`${p.name}-${i}`}><span className="np-rank">{String(i + 1).padStart(2, "0")}</span><div><b>{p.name}</b><small>{p.wins} W / {p.games} G</small></div><strong>{p.rating}</strong></li>)}</ol> : <p className="np-empty">No rated racks {tab === "board" ? "in the last 24 hours" : "yet"}. Break the first.</p>}
+          {board[tab].length ? <ol>{board[tab].map((p, i) => <li key={`${p.name}-${i}`}><span className="np-rank">{String(i + 1).padStart(2, "0")}</span><div><b>{p.name}</b><small>{p.wins} W / {p.games} G</small></div><strong>{p.rating}</strong></li>)}</ol> : <p className="np-empty">No rated racks {tab === "board" ? "in the last 24 hours" : "yet"}.</p>}
         </div>
+        <p className="np-controls"><Icon name="target" size={14} /><span>{PHONE ? "Drag on the table to aim · pull the bar on the left down and let go · tap the cue ball for spin." : "Move the mouse to aim, click to lock · pull the bar on the left down and let go · click the cue ball for spin."}</span></p>
         <p className="np-legal"><Icon name="lock" size={14} /><span>Free tables need no wallet. Staked duels in IMD and $SHIFT are for adults 18+ only, where allowed. Cosmetics never change how a shot plays.</span></p>
       </section>
     </main>}
@@ -239,7 +282,7 @@ export function PoolPage() {
     </div></div>}
 
     {inGame && match && <main className="np-game">
-      <PoolGame view={match} spectate={mode === "watch"} practice={mode === "practice"} soundOn={soundOn} skew={skew} reward={reward} haptic={mode === "watch" ? undefined : haptic}
+      <PoolGame view={match} spectate={mode === "watch"} practice={mode === "practice"} soundOn={soundOn} onSound={() => setSoundOn(!soundOn)} skew={skew} reward={reward} haptic={mode === "watch" ? undefined : haptic}
         onShoot={onShoot} onAim={onAim} onDecide={onDecide} onEmote={mode === "online" ? onEmote : undefined}
         onResign={mode !== "watch" ? () => { if (confirm("Resign this rack?")) { if (practice.current) lobby(); else void act<MatchView>("resign", {}).then(receive).catch((e) => setErr((e as Error).message)); } } : undefined}
         onRematch={mode === "online" && !match.escrow ? () => void act<MatchView>("rematch", {}).then(receive).catch((e) => setErr((e as Error).message)) : mode === "practice" ? () => void start(true) : undefined}
@@ -249,7 +292,7 @@ export function PoolPage() {
         <ol className="np-log">{[...match.log].reverse().map((l) => <li key={`${l.n}-${l.at}`} className={l.foul ? "foul" : ""}><span>{match.players[l.seat]?.name}</span>{l.text}</li>)}{!match.log.length && <li>The break is next.</li>}</ol>
         {match.escrow && match.done && <StakeResult matchId={match.escrow} address={address} />}
         {mode === "watch" && <BetPanel game="pool" id={match.id} theme="nc" />}
-        <p className="np-help"><Icon name="target" size={14} />Mouse or drag to aim · pull the bar to shoot · tap the call to change it.</p>
+        <p className="np-help"><Icon name="target" size={14} />{PHONE ? "Drag anywhere to turn the cue · the wheel on the right fine-tunes · pull the bar on the left down and let go · tap a pocket to call it." : "The cue follows the mouse; click to lock it · the wheel, the strip or the arrows fine-tune · pull the bar on the left down and let go (or drag back, or hold Space) · click a pocket to call it."}</p>
       </aside>
     </main>}
     {mode === "watch" && !match && <div className="np-overlay"><div className="np-dialog"><span className="np-kicker">SPECTATOR MODE</span><h2>{err ? "No table to watch." : "Finding the table…"}</h2><button type="button" className="np-btn" onClick={() => go("/games/live")}>WATCH ANOTHER</button></div></div>}

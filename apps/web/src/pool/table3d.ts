@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { type BallsDesign, type ClothDesign, type CueDesign, ITEMS, type TableDesign } from "./catalog";
-import { type Aim, type Ball, CONTACT, EV, type Frame, HEAD_Y, JAWS, L, LINES, POCKETED, POCKETS, R, Replay, W, aimAt, duration, sincos } from "./physics";
+import { type Aim, type Ball, CONTACT, EV, type Frame, HEAD_Y, JAWS, L, LINES, POCKETED, POCKETS, R, Replay, STILL, W, aimAt, duration, simulate, sincos } from "./physics";
 import { CUE_LENGTH, ballMaterial, canvas, clothTexture, cueModel, woodTexture } from "./art";
 
 /**
@@ -14,7 +14,11 @@ export const CW = 0.0508, FW = 0.11, RAIL_H = 0.64 * 2 * R;
 const TOP = RAIL_H + 0.006;
 const sx = (x: number) => x - W / 2, sz = (y: number) => L / 2 - y;
 export type Look = { cloth: string; table: string; balls: string; cue: string };
-export type Guide = { aim: number; cue: { x: number; y: number }; length: number; targets: number[] } | null;
+/** The guide to draw: the aim, the cue ball, the guide's length (a share of the standard one), the shooter's balls, and the stroke (spin, elevation and power bend the cue ball's path). */
+export type Guide = { aim: number; cue: { x: number; y: number }; length: number; targets: number[]; stroke?: { power: number; spinX: number; spinY: number; elevation: number } } | null;
+/** The camera: straight down (8 Ball Pool's view), tilted (3D), behind the cue, or on the cue itself (the locker). */
+export type View = "top" | "tilt" | "aim" | "cue";
+type Bent = { pre: THREE.Vector3[]; post: THREE.Vector3[]; obj: THREE.Vector3[]; ghost: { x: number; y: number } | null; hit: boolean };
 type BallMesh = { mesh: THREE.Mesh; shadow: THREE.Mesh | null; id: number; sunk: number | null; drop: { from: THREE.Vector3; to: THREE.Vector3; at: number } | null };
 export type ShotEvent = { kind: number; a: number; b: number; speed: number };
 
@@ -42,7 +46,7 @@ export class PoolScene {
   private replay: { rp: Replay; frames: Frame[]; next: number; t: number; rate: number; end: number; onEvent: (e: ShotEvent) => void; done: () => void; last: number } | null = null;
   private observer: ResizeObserver;
   private disposed = false;
-  private view: "top" | "aim" | "cue" = "top";
+  private view: View = "top";
   private aimCam = { aim: 90000, cue: { x: W / 2, y: L / 4 } };
   private kitchen: THREE.Mesh;
   private pulse: THREE.Mesh[] = [];
@@ -281,7 +285,8 @@ export class PoolScene {
   get replaying() { return !!this.replay; }
   private stepReplay(now: number) {
     const r = this.replay!;
-    const dt = Math.min(0.05, (now - r.last) / 1000);
+    // the replay keeps to the clock on a slow device too (the next turn starts by the server's clock), only a long stall is cut
+    const dt = Math.min(0.25, (now - r.last) / 1000);
     r.last = now;
     r.t = Math.min(r.end, r.t + dt * r.rate);
     while (r.next < r.frames.length && r.frames[r.next]!.t <= r.t) {
@@ -333,15 +338,21 @@ export class PoolScene {
     c.visible = true;
     this.dirty = true;
   }
-  private ribbon(from: THREE.Vector3, to: THREE.Vector3, width: number, color: number, opacity: number) {
-    const len = from.distanceTo(to);
-    if (len < 1e-4) return;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(width, len), new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
-    m.rotation.x = -Math.PI / 2;
-    const mid = from.clone().add(to).multiplyScalar(0.5);
-    m.position.set(mid.x, 0.0025, mid.z);
-    // the strip lies along the plane's y, turned in its plane, then laid on the cloth: (−sin θ, 0, −cos θ) is the direction
-    m.rotation.z = Math.atan2(-(to.x - from.x), -(to.z - from.z));
+  private ribbon(from: THREE.Vector3, to: THREE.Vector3, width: number, color: number, opacity: number) { this.strip([from, to], width, color, opacity); }
+  /** A flat line on the cloth through these points (scene coordinates), as one triangle strip. */
+  private strip(pts: THREE.Vector3[], width: number, color: number, opacity: number) {
+    if (pts.length < 2) return;
+    const pos: number[] = [], idx: number[] = [], h = width / 2;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[Math.max(0, i - 1)]!, b = pts[Math.min(pts.length - 1, i + 1)]!, p = pts[i]!;
+      let dx = b.x - a.x, dz = b.z - a.z;
+      const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
+      pos.push(p.x - dz * h, 0.0025, p.z + dx * h, p.x + dz * h, 0.0025, p.z - dx * h);
+      if (i) { const k = 2 * i; idx.push(k - 2, k - 1, k, k - 1, k + 1, k); }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx);
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide }));
     m.renderOrder = 3;
     this.guide.add(m);
   }
@@ -350,9 +361,61 @@ export class PoolScene {
     m.rotation.x = -Math.PI / 2; m.position.set(sx(x), h, sz(y)); m.renderOrder = 3;
     return m;
   }
+  private bent: { key: string; out: Bent | null } = { key: "", out: null };
+  /**
+   * The paths the stroke really gives, from the physics the server plays, with only the cue ball
+   * and the first ball on its line on the table and every path cut short: the cue ball to the
+   * contact (squirt and swerve from english and elevation), then the object ball (throw) and the
+   * cue ball after it (follow and draw bend it), or the cue ball off the first cushion (english
+   * widens or narrows the bounce). Before the bar is pulled, the stroke is a medium one.
+   */
+  private bend(balls: readonly Ball[], g: NonNullable<Guide>, a: Aim, objLen: number, cueLen: number): Bent | null {
+    const st = g.stroke!, ob = a.hit?.kind === "ball" ? balls.find((b) => b.id === (a.hit as { id: number }).id) : undefined;
+    const key = [g.aim, g.cue.x, g.cue.y, st.power, st.spinX, st.spinY, st.elevation, ob?.id ?? -1, ob?.x, ob?.y, objLen, cueLen, g.length].join("|");
+    if (this.bent.key === key) return this.bent.out;
+    let out: Bent | null = null;
+    try {
+      const rest = (b: Ball, x: number, y: number): Ball => ({ ...b, x, y, vx: 0, vy: 0, wx: 0, wy: 0, wz: 0, s: STILL });
+      const cue = rest({ id: 0 } as Ball, g.cue.x, g.cue.y), start = ob ? [cue, rest(ob, ob.x, ob.y)] : [cue];
+      const res = simulate(start, { aim: g.aim, power: Math.max(st.power, 450), spinX: st.spinX, spinY: st.spinY, elevation: st.elevation });
+      const hit = res.frames.find((f) => f.k === EV.BALL), bounce = res.frames.find((f) => (f.k === EV.RAIL || f.k === EV.JAW) && f.a === 0);
+      const turn = hit?.t ?? bounce?.t ?? Infinity, end = res.duration, rp = new Replay(start, res.frames);
+      const preMax = hit || bounce ? Infinity : 0.9 * g.length, postMax = hit ? cueLen : 0.16 * g.length;
+      const v = (b: Ball) => new THREE.Vector3(sx(b.x), 0, sz(b.y));
+      const pre = [v(cue)], post: THREE.Vector3[] = [], obj: THREE.Vector3[] = [];
+      let t = 0, preLen = 0, cueAfter = 0, objAfter = 0, pc = cue, po = start[1], ghost: { x: number; y: number } | null = null;
+      if (Number.isFinite(turn)) {
+        const at = rp.at(turn), c = at.find((b) => b.id === 0)!, o = ob ? at.find((b) => b.id === ob.id) : undefined;
+        if (hit) ghost = { x: c.x, y: c.y };
+        post.push(v(c)); if (o && hit) obj.push(v(o));
+      }
+      for (let i = 0; t < end && i < 3000; i++) {
+        const next = Math.min(end, t + 0.004), crossing = t < turn && next > turn;
+        t = next;
+        const now = rp.at(t), c = now.find((b) => b.id === 0)!, o = ob ? now.find((b) => b.id === ob.id) : undefined;
+        if (crossing) { const at = rp.at(turn); pc = at.find((b) => b.id === 0)!; po = ob ? at.find((b) => b.id === ob.id) : undefined; }
+        if (c.s !== POCKETED) {
+          const d = Math.hypot(c.x - pc.x, c.y - pc.y);
+          if (t <= turn) { preLen += d; if (preLen <= preMax) pre.push(v(c)); }
+          else if (cueAfter < postMax) { cueAfter += d; post.push(v(c)); }
+          pc = c;
+        }
+        if (o && hit && t > turn && o.s !== POCKETED && objAfter < objLen) { objAfter += Math.hypot(o.x - po!.x, o.y - po!.y); obj.push(v(o)); }
+        if (o) po = o;
+        const cueDone = c.s === POCKETED || (t > turn && cueAfter >= postMax) || (!Number.isFinite(turn) && preLen > preMax);
+        if (cueDone && (!hit || !o || o.s === POCKETED || objAfter >= objLen)) break;
+      }
+      if (ghost) pre.push(new THREE.Vector3(sx(ghost.x), 0, sz(ghost.y)));
+      else if (bounce && post.length) pre.push(post[0]!.clone());
+      out = { pre, post, obj, ghost, hit: !!hit };
+    } catch { out = null; }
+    this.bent = { key, out };
+    return out;
+  }
   /**
    * The aim guide, 8 Ball Pool style: a line to the ghost ball, the ghost ball, and short lines for
    * where the object ball and the cue ball head (their length a share of the standard one: `length`).
+   * With the stroke, the lines are the physics' own: english, follow, draw and elevation bend them.
    */
   showGuide(balls: readonly Ball[], g: Guide): Aim | null {
     this.clear(this.guide);
@@ -362,26 +425,39 @@ export class PoolScene {
     const a = aimAt(balls.map((b) => (b.id === 0 ? { ...b, x: g.cue.x, y: g.cue.y, s: 0 } : b)), g.aim);
     const from = new THREE.Vector3(sx(g.cue.x), 0, sz(g.cue.y)), ghost = new THREE.Vector3(sx(a.ghost.x), 0, sz(a.ghost.y));
     const dir = ghost.clone().sub(from).normalize(), start = from.clone().addScaledVector(dir, R);
+    const target = a.hit?.kind === "ball" ? balls.find((b) => b.id === (a.hit as { id: number }).id) : undefined;
+    const ok = !!target && g.targets.includes(target.id);
+    const cut = a.object ? Math.abs(a.object.x * dir.x - a.object.y * dir.z) : 0;
+    const objLen = (0.07 + 0.25 * cut) * g.length, cueLen = (0.05 + 0.2 * Math.sqrt(Math.max(0, 1 - cut * cut))) * g.length;
+    if (target && !ok) this.guide.add(this.ring(target.x, target.y, R + 0.002, R + 0.006, 0xff5c7a, 0.85));
+    const bent = g.stroke ? this.bend(balls, g, a, objLen, cueLen) : null;
+    if (bent && bent.pre.length > 1) {
+      // the line leaves the cue ball's edge and stops at the ghost ball's
+      const pre = bent.pre.filter((p) => p.distanceTo(from) > R);
+      if (bent.ghost && pre.length > 1) { const tip = pre[pre.length - 1]!, back = pre[pre.length - 2]!.clone().sub(tip).normalize(); pre[pre.length - 1] = tip.clone().addScaledVector(back, R); }
+      this.strip([start, ...pre], 0.0022, 0xffffff, bent.ghost ? 0.85 : 0.6);
+      if (bent.ghost) this.guide.add(this.ring(bent.ghost.x, bent.ghost.y, R - 0.0016, R, 0xffffff, 0.9));
+      if (bent.obj.length > 1) this.strip(bent.obj, 0.0028, ok ? 0xb8ff4a : 0xff5c7a, 0.9);
+      if (bent.post.length > 1) this.strip(bent.post, 0.002, 0xa48bff, 0.8);
+      return a;
+    }
     if (!a.hit) { this.ribbon(start, start.clone().addScaledVector(dir, 0.9 * g.length), 0.0022, 0xffffff, 0.55); return a; }
     this.ribbon(start, ghost.clone().addScaledVector(dir, -R), 0.0022, 0xffffff, 0.85);
     this.guide.add(this.ring(a.ghost.x, a.ghost.y, R - 0.0016, R, 0xffffff, 0.9));
-    if (a.hit.kind === "ball" && a.object && a.cue) {
-      const ok = g.targets.includes(a.hit.id);
-      const cut = Math.abs(a.object.x * dir.x - a.object.y * dir.z);
-      const target = balls.find((b) => b.id === (a.hit as { id: number }).id)!;
+    if (target && a.object && a.cue) {
       const ob = new THREE.Vector3(sx(target.x), 0, sz(target.y));
-      const objLen = (0.07 + 0.25 * cut) * g.length, cueLen = (0.05 + 0.2 * Math.sqrt(Math.max(0, 1 - cut * cut))) * g.length;
       this.ribbon(ob, ob.clone().add(new THREE.Vector3(a.object.x, 0, -a.object.y).multiplyScalar(objLen)), 0.0028, ok ? 0xb8ff4a : 0xff5c7a, 0.9);
       this.ribbon(ghost, ghost.clone().add(new THREE.Vector3(a.cue.x, 0, -a.cue.y).multiplyScalar(cueLen)), 0.002, 0xa48bff, 0.8);
-      if (!ok) this.guide.add(this.ring(target.x, target.y, R + 0.002, R + 0.006, 0xff5c7a, 0.85));
     } else if (a.cue) this.ribbon(ghost, ghost.clone().add(new THREE.Vector3(a.cue.x, 0, -a.cue.y).multiplyScalar(0.16 * g.length)), 0.002, 0xa48bff, 0.7);
     return a;
   }
   /** Marks on the cloth: the called ball and pocket, the shooter's balls, the kitchen. */
-  showMarks(o: { call: { ball: number; pocket: number } | null; targets: number[]; balls: readonly Ball[]; kitchen: boolean; pockets?: boolean }) {
+  showMarks(o: { call: { ball: number; pocket: number } | null; targets: number[]; balls: readonly Ball[]; kitchen: boolean; pockets?: boolean; hand?: { x: number; y: number; ok: boolean } | null }) {
     this.clear(this.marks);
     this.pulse = [];
     this.kitchen.visible = o.kitchen;
+    // the cue ball in hand: a lime ring where it may go, a red one where it may not
+    if (o.hand) { const q = this.ring(o.hand.x, o.hand.y, R + 0.004, R + 0.009, o.hand.ok ? 0xb8ff4a : 0xff5c7a, 0.9, 0.0018); this.marks.add(q); this.pulse.push(q); }
     for (const id of o.targets) { const b = o.balls.find((x) => x.id === id && x.s !== POCKETED); if (b) this.marks.add(this.ring(b.x, b.y, R + 0.0015, R + 0.0045, 0xb8ff4a, 0.55, 0.0015)); }
     if (o.pockets) POCKETS.forEach((_, k) => { const m = mouth(k); this.marks.add(this.ring(m.x, m.y, 0.022, 0.026, 0xe9e2ff, 0.4, 0.003)); });
     if (o.call) {
@@ -395,7 +471,41 @@ export class PoolScene {
 
   // ---- camera and pointer
 
-  setView(v: "top" | "aim" | "cue", aim?: number, cue?: { x: number; y: number }) { this.view = v; if (aim !== undefined) this.aimCam.aim = aim; if (cue) this.aimCam.cue = cue; this.frame(); }
+  private insets: [number, number] = [0, 0];
+  /** Screen pixels covered by controls at the left and the right of the table (a phone held upright). */
+  setInsets(left: number, right: number) { if (left !== this.insets[0] || right !== this.insets[1]) { this.insets = [left, right]; this.frame(); } }
+  setView(v: View, aim?: number, cue?: { x: number; y: number }) {
+    const same = v === this.view && (v === "top" || v === "tilt");
+    this.view = v; if (aim !== undefined) this.aimCam.aim = aim; if (cue) this.aimCam.cue = cue;
+    if (!same) this.frame();
+  }
+  /**
+   * The camera over the whole table, as close as it fits: straight down with a long lens (8 Ball
+   * Pool's flat view) or tilted toward the player (3D). The long side of the table runs along the
+   * long side of the screen; every corner of the rails is kept on the screen.
+   */
+  private overhead(aspect: number, tilt: number) {
+    const portrait = aspect < 1, o = CW + FW + 0.012, fov = tilt ? 30 : 16;
+    this.camera.fov = fov; this.camera.aspect = aspect;
+    // landscape: the head rail (the break) on the left, as players expect; portrait: at the bottom
+    const up = portrait ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(-1, 0, 0);
+    const toward = portrait ? new THREE.Vector3(0, Math.cos(tilt), Math.sin(tilt)) : new THREE.Vector3(Math.sin(tilt), Math.cos(tilt), 0);
+    const corners: THREE.Vector3[] = [], cloth: THREE.Vector3[] = [], m = 0.075;
+    for (const x of [-W / 2 - o, W / 2 + o]) for (const z of [-L / 2 - o, L / 2 + o]) for (const y of [TOP, -0.05]) corners.push(new THREE.Vector3(x, y, z));
+    for (const x of [-W / 2 - m, W / 2 + m]) for (const z of [-L / 2 - m, L / 2 + m]) cloth.push(new THREE.Vector3(x, TOP, z));
+    // controls laid over the sides of the screen may cover the rails, never the cloth or its pockets
+    const w = this.host.clientWidth || 1, inL = -1 + 2 * (this.insets[0] + 4) / w, inR = 1 - 2 * (this.insets[1] + 4) / w;
+    const fits = (d: number) => {
+      this.camera.up.copy(up); this.camera.position.copy(toward).multiplyScalar(d); this.camera.lookAt(0, 0, 0);
+      this.camera.updateProjectionMatrix(); this.camera.updateMatrixWorld();
+      return corners.every((c) => { const p = c.clone().project(this.camera); return Math.abs(p.x) <= 0.985 && Math.abs(p.y) <= 0.975; })
+        && cloth.every((c) => { const p = c.clone().project(this.camera); return p.x >= inL && p.x <= inR; });
+    };
+    let lo = 0.5, hi = 60;
+    for (let i = 0; i < 28; i++) { const mid = (lo + hi) / 2; if (fits(mid)) hi = mid; else lo = mid; }
+    fits(hi);
+    this.camera.far = hi + 6; this.camera.near = Math.max(0.05, hi - 3);
+  }
   private frame() {
     const w = this.host.clientWidth || 1, h = this.host.clientHeight || 1, aspect = w / h;
     this.camera.aspect = aspect;
@@ -411,19 +521,8 @@ export class PoolScene {
       this.camera.fov = 45; this.camera.up.set(0, 1, 0);
       this.camera.position.copy(at).addScaledVector(dir, -0.85).add(new THREE.Vector3(0, 0.38, 0));
       this.camera.lookAt(at.clone().addScaledVector(dir, 0.6));
-    } else {
-      const portrait = aspect < 1, o = CW + FW + 0.02;
-      const halfLong = L / 2 + o, halfShort = W / 2 + o, fov = 30, t = Math.tan((fov * Math.PI) / 360);
-      // the long side of the table along the long side of the screen
-      const [halfV, halfH] = portrait ? [halfLong, halfShort] : [halfShort, halfLong];
-      const d = Math.max(halfV / t, halfH / (t * aspect)) * 1.09 + 0.12;
-      const tilt = 0.2;
-      this.camera.fov = fov;
-      if (portrait) { this.camera.up.set(0, 0, -1); this.camera.position.set(0, d * Math.cos(tilt), d * Math.sin(tilt)); }
-      // landscape: the head rail (the break) on the left, as players expect
-      else { this.camera.up.set(-1, 0, 0); this.camera.position.set(d * Math.sin(tilt), d * Math.cos(tilt), 0); }
-      this.camera.lookAt(0, 0, 0);
-    }
+    } else { this.overhead(aspect, this.view === "tilt" ? 0.5 : 0); return void (this.dirty = true); }
+    this.camera.near = 0.05; this.camera.far = 40;
     this.camera.updateProjectionMatrix();
     this.dirty = true;
   }
