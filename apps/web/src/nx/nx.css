@@ -27,6 +27,8 @@
 .nx-btn:hover { background: color-mix(in srgb, var(--c) 22%, transparent); }
 .nx-btn:active { transform: translateY(1px); }
 .nx-btn-acc { background: var(--c); color: #05040c; box-shadow: none; }
+/* a filled button that is a link: the page's link colour must not win over its dark text */
+a.nx-btn-acc, a.nx-btn-acc:visited, a.nx-btn-acc:hover, .nx-btn-acc .nx-ic { color: #05040c !important; }
 .nx-btn-acc:hover { background: color-mix(in srgb, var(--c) 86%, white); }
 
 /* ------------------------------------------------------------ the header: station bar + room bar */
