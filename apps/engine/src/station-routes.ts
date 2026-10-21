@@ -74,7 +74,7 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   const reply = (status: number, v: unknown) => { json(res, status, v); return true; };
   const reads = () => req.method === "GET" && limited(req, "station-read", 240, 60_000);
   if (p === "/api/station") { if (reads()) return reply(429, { error: "slow down" }); return reply(200, await rooms(ctx)); }
-  if (p === "/api/crew") { if (reads()) return reply(429, { error: "slow down" }); return reply(200, (await crew()) ?? { error: "IMD did not answer; try again in a minute." }); }
+  if (p === "/api/crew") { if (reads()) return reply(429, { error: "slow down" }); return reply(200, await crew()); }
   if (p === "/api/swarm/pulse") { if (reads()) return reply(429, { error: "slow down" }); return reply(200, await swarmPulse()); }
 
   if (p.startsWith("/api/missions")) {

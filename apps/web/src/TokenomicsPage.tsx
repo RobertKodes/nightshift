@@ -88,7 +88,7 @@ export function TokenomicsPage() {
       <h2 id="rewards" className="guide-h2">Staking and NIGHT FROGS</h2>
       <div className="tkn-util two">
         <div className="tkn-u"><span>01</span><b>Stake ${sym}</b><p>Half of all rewards stream to stakers over 7 days, in ETH and ${sym}, split by how much you stake and for how long. Unstake any time, or lock up to two years. Locked stake cannot be withdrawn early.</p></div>
-        <div className="tkn-u"><span>02</span><b>Hold NIGHT FROGS</b><p>The other half goes to frog holders each week, by shift hours. NIGHTSHIFT publishes the list, the dev wallet posts its proof on chain, and each holder claims their part. Unclaimed amounts return to the pot after 30 days.</p></div>
+        <div className="tkn-u"><span>02</span><b>Hold NIGHT FROGS</b><p>The other half goes to frog holders each week, by shift hours: a wallet's total is cumulative and never resets, and each epoch (Mondays, 00:00 UTC) pays by the hours added since the last paid epoch. NIGHTSHIFT publishes the list, the dev wallet posts its proof on chain, and each holder claims their part. Unclaimed amounts return to the pot after 30 days.</p></div>
       </div>
       <table className="plain"><thead><tr><th>NIGHT FROGS</th><th>Shift hours per hour</th></tr></thead>
         <tbody>{FROG_TIERS.map(([a, b]) => <tr key={a}><td>{a}</td><td><b>{b}</b></td></tr>)}</tbody></table>

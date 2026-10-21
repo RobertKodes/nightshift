@@ -2,14 +2,22 @@ import { useEffect, useState } from "react";
 import { Icon } from "./Icon";
 import { inUsd, useImdUsd } from "./price";
 
-type Impact = { at: number; imdPaid: number; jobs: { title: string; jobId: string; state: string; imd: number; seats: string[]; at: number; by: string }[]; seats: number; burned: number; frogsMinted: number; frogsImd: number; demoCompanies: number; liveCompanies: number };
+type Impact = {
+  at: number; ok: boolean; error: string | null; imdAt: number; imdPaid: number; jobs: { title: string; jobId: string; state: string; imd: number; seats: string[]; at: number; by: string }[]; seats: number;
+  burned: number | null; frogsMinted: number | null; frogsImd: number | null; demoCompanies: number; liveCompanies: number;
+};
+const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
 
 /** IMD Impact: what NIGHTSHIFT has given the IMD network, with a link behind every number. */
 export function ImpactPage() {
-  const [d, setD] = useState<Impact | null>(null);
+  // undefined: still asking; null: NIGHTSHIFT's server did not answer
+  const [d, setD] = useState<Impact | null | undefined>(undefined);
   const usd = useImdUsd();
-  useEffect(() => { const go = () => fetch("/api/impact").then((r) => r.json()).then(setD).catch(() => {}); go(); const t = setInterval(go, 60_000); return () => clearInterval(t); }, []);
+  useEffect(() => { const go = () => fetch("/api/impact", { signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.json() : null)).then((x: Impact | null) => setD(x && Array.isArray(x.jobs) ? x : null)).catch(() => setD((v) => v ?? null)); go(); const t = setInterval(go, 60_000); return () => clearInterval(t); }, []);
   const n = (x: number) => x.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  // the IMD figures are known once the crew ledger has read IMD at least once
+  const imd = d && d.imdAt > 0 ? d : null;
+  const v = (x: number | null | undefined, f = (y: number) => n(y)) => (d === undefined ? "…" : x == null ? "—" : f(x));
   return (
     <div className="docs token-page impact-page">
       <span className="eyebrow">IMD IMPACT</span>
@@ -17,18 +25,20 @@ export function ImpactPage() {
       <p className="lead">NIGHTSHIFT is built on the IMD swarm, not around it. Every product our companies sell, every contract and every frog was ordered from IMD agents and paid in IMD. This page counts it, live, with a link behind every figure.</p>
 
       <div className="impact-nums">
-        <div><b>{d ? n(d.imdPaid) : "…"} IMD</b><span>paid to the IMD swarm {d && usd ? inUsd(d.imdPaid, usd) : ""}</span></div>
-        <div><b>{d ? d.jobs.length : "…"}</b><span>swarm jobs ordered</span></div>
-        <div><b>{d ? d.seats : "…"}</b><span>IMD agents (seats) hired</span></div>
-        <div><b><Icon name="flame" size={20} /> {d ? n(d.burned) : "…"} IMD</b><span>burned by NIGHT FROGS mints</span></div>
-        <div><b>{d ? d.frogsMinted : "…"}</b><span>frogs minted · {d ? n(d.frogsImd) : "…"} IMD of demand</span></div>
-        <div><b>{d ? d.liveCompanies : "…"}</b><span>live companies buying from IMD{d?.demoCompanies ? ` · ${d.demoCompanies} in the demo` : ""}</span></div>
+        <div><b>{v(imd?.imdPaid)} IMD</b><span>paid to the IMD swarm {imd && usd ? inUsd(imd.imdPaid, usd) : ""}</span></div>
+        <div><b>{v(imd?.jobs.length)}</b><span>swarm jobs ordered</span></div>
+        <div><b>{v(imd?.seats)}</b><span>IMD agents (seats) hired</span></div>
+        <div><b><Icon name="flame" size={20} /> {v(d?.burned)} IMD</b><span>burned by NIGHT FROGS mints</span></div>
+        <div><b>{v(d?.frogsMinted)}</b><span>frogs minted · {v(d?.frogsImd)} IMD of demand</span></div>
+        <div><b>{v(d?.liveCompanies)}</b><span>live companies buying from IMD{d?.demoCompanies ? ` · ${d.demoCompanies} in the demo` : ""}</span></div>
       </div>
+      {d === null && <p className="impact-warn">NIGHTSHIFT's server did not answer just now, so these figures cannot be shown. The page asks again every minute; nothing here is ever estimated.</p>}
+      {d && !d.ok && <p className="impact-warn">{d.error}{imd ? ` Last known IMD figures, read ${ago(imd.imdAt)}.` : " No earlier copy yet, so the IMD figures stay blank until it answers."}</p>}
 
       <h2>Every job, with its agents</h2>
-      {d?.jobs.length ? (
+      {imd?.jobs.length ? (
         <div className="frogs-traits">
-          {d.jobs.map((j) => (
+          {imd.jobs.map((j) => (
             <div key={j.jobId}>
               <b>{j.imd} IMD</b>
               <span>
@@ -38,7 +48,7 @@ export function ImpactPage() {
             </div>
           ))}
         </div>
-      ) : <p className="faint">Loading the jobs…</p>}
+      ) : <p className="faint">{d === undefined ? "Reading the jobs from IMD…" : imd ? "No paid jobs yet." : "The job list fills in once IMD's API answers. Every order is also on explorer.imd.fun."}</p>}
 
       <h2>How NIGHTSHIFT sends value to IMD</h2>
       <ul className="frogs-util">

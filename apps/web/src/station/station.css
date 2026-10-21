@@ -75,6 +75,8 @@ main > .st-room { width: 100vw; margin: -28px calc(50% - 50vw) -80px; }
 .st-note a, .st-panel a, .st-empty a, .st-table a { color: #cdbfff; }
 .st-note a:hover, .st-panel a:hover, .st-table a:hover { text-decoration: underline; }
 .st-empty { margin: 0; color: var(--dim); font-size: 15px; }
+.st-warn { margin: 0; max-width: 780px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255, 200, 97, .35); background: rgba(255, 200, 97, .08); color: #ffe0a1; font-size: 14px; line-height: 1.55; }
+.st-warn a { color: #ffe0a1; text-decoration: underline; }
 .st-msg { margin: 0; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(184, 255, 74, .3); background: rgba(184, 255, 74, .07); color: #dfffb0; font-size: 14px; }
 .mono { font-family: var(--mono); }
 .dim { color: var(--dim); }

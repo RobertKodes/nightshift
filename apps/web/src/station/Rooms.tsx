@@ -3,12 +3,24 @@ import { Link } from "../router";
 import { SHIFT } from "../shift";
 import { RoomHero, Stat, Tiles, useStation } from "./Station";
 
-const j = <T,>(u: string): Promise<T | null> => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+const j = <T,>(u: string): Promise<T | null> => fetch(u, { signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 function useJson<T>(url: string, every = 0): T | null {
   const [d, setD] = useState<T | null>(null);
   useEffect(() => {
     let on = true;
     const load = () => j<T>(url).then((x) => { if (on && x) setD(x); });
+    load();
+    const t = every ? setInterval(load, every) : 0;
+    return () => { on = false; if (t) clearInterval(t); };
+  }, [url, every]);
+  return d;
+}
+/** Like useJson, but undefined while asking and null once a read failed with nothing to show yet. */
+function useRead<T>(url: string, every = 0): T | null | undefined {
+  const [d, setD] = useState<T | null | undefined>(undefined);
+  useEffect(() => {
+    let on = true;
+    const load = () => j<T>(url).then((x) => { if (on) setD((v) => x ?? (v === undefined ? null : v)); });
     load();
     const t = every ? setInterval(load, every) : 0;
     return () => { on = false; if (t) clearInterval(t); };
@@ -126,7 +138,7 @@ export function GeekPage() {
 }
 
 // ------------------------------------------------------------------ Info Room
-type Overview = { symbol: string; market: { priceUsd: number; mcap: number; liquidity: number } | null; staked: number | null; stakedPct: number | null; burnedShift: number; burnedImd: number; frogs: { minted: number; max: number } | null };
+type Overview = { symbol: string; address?: string | null; market: { priceUsd: number; mcap: number; liquidity: number } | null; staked: number | null; stakedPct: number | null; burnedShift: number; burnedImd: number; frogs: { minted: number; max: number } | null };
 const CONTRACTS: [string, string, string][] = [
   ["$SHIFT token", SHIFT.token, "IMD launch #2124, 1B supply"],
   ["NightshiftHook", SHIFT.hook, "Uniswap v4 hook on SHIFT/ETH"],
@@ -137,18 +149,21 @@ const CONTRACTS: [string, string, string][] = [
   ["BetPool", "0x76decb1958a1e04549e2e7f451cc22cd832d0fc3", "Live betting on matches"],
 ];
 export function InfoPage() {
-  const o = useJson<Overview>("/api/token/overview", 60_000);
+  const o = useRead<Overview>("/api/token/overview", 60_000);
+  // "…" while asking; "—" when a source did not answer (never a made-up zero)
+  const dash = o === undefined ? "…" : "—";
   return (
     <div className="st-room">
       <RoomHero id="info">
         <div className="st-stats">
-          <Stat label="$SHIFT price" value={o?.market ? money(o.market.priceUsd) : "…"} note="DexScreener" />
-          <Stat label="Market cap" value={o?.market ? money(o.market.mcap) : "…"} />
-          <Stat label="Staked" value={o?.stakedPct != null ? `${o.stakedPct.toFixed(2)}%` : "…"} note="of supply, on chain" />
-          <Stat label="NIGHT FROGS minted" value={o?.frogs ? `${o.frogs.minted}/${o.frogs.max}` : "…"} />
+          <Stat label="$SHIFT price" value={o?.market ? money(o.market.priceUsd) : dash} note={o && !o.market && o.address ? "DexScreener is not answering" : "DexScreener"} />
+          <Stat label="Market cap" value={o?.market ? money(o.market.mcap) : dash} />
+          <Stat label="Staked" value={o?.stakedPct != null ? `${o.stakedPct.toFixed(2)}%` : dash} note={o && o.stakedPct == null && o.address ? "Ethereum is not answering" : "of supply, on chain"} />
+          <Stat label="NIGHT FROGS minted" value={o?.frogs ? `${o.frogs.minted}/${o.frogs.max}` : dash} />
         </div>
       </RoomHero>
       <div className="st-body">
+        {o === null && <p className="st-warn">NIGHTSHIFT's server did not answer just now, so the live figures are not shown. The page asks again every minute; the contracts below never change.</p>}
         <h2>The briefing</h2>
         <Tiles items={[
           { to: "/whitepaper", title: "Whitepaper", note: "How all of NIGHTSHIFT works, what is live, and the risks. Save it as a PDF.", icon: "file", tag: "NEW" },
@@ -170,8 +185,8 @@ export function InfoPage() {
         </div>
         <h2>Burned so far</h2>
         <div className="st-stats wide">
-          <Stat label="$SHIFT burned" value={o ? Math.round(o.burnedShift).toLocaleString("en-US") : "…"} note="sent to 0x…dEaD" />
-          <Stat label="IMD burned" value={o ? o.burnedImd.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "…"} note="by NIGHTSHIFT's fees and mints" />
+          <Stat label="$SHIFT burned" value={o ? Math.round(o.burnedShift).toLocaleString("en-US") : dash} note="sent to 0x…dEaD" />
+          <Stat label="IMD burned by fees" value={o ? o.burnedImd.toLocaleString("en-US", { maximumFractionDigits: 2 }) : dash} note="at IMD's BurnExecutor; frog mint burns are on IMD impact" />
         </div>
       </div>
     </div>

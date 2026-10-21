@@ -8,28 +8,53 @@ const get = <T,>(u: string): Promise<T | null> => fetch(u, { credentials: "same-
 const big = (n: number | undefined | null) => n == null ? "…" : n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n.toLocaleString("en-US");
 
 // ------------------------------------------------------------------ HR & Economy
-type Crew = { at: number; orders: number; paidImd: number; source: string; jobs: { id: string; action: string; title: string; state: string; workers: number; accepted: number; explorer: string }[]; crew: { seat: number; agentId: string; roles: string[]; models: string[]; runtimes: string[]; accepted: number; attempts: number; jobs: number; hours: number }[]; models: { model: string; steps: number }[] };
-type Pulse = { agentsOnline?: number; seatsEnrolled?: number; acceptedLastDay?: number; jobsDoneLastDay?: number; jobs?: number; launchesLive?: number; inferenceTokens?: number } | null;
+type Crew = {
+  at: number; checkedAt: number; ok: boolean; error: string | null; orders: number; paidImd: number; seats: number; acceptedSteps: number; source: string;
+  jobs: { id: string; action: string; title: string; state: string; by: string; imd: number; workers: number; seats: number[]; accepted: number; explorer: string }[];
+  crew: { seat: number; agentId: string; roles: string[]; models: string[]; runtimes: string[]; accepted: number; attempts: number; jobs: number; hours: number }[];
+  models: { model: string; steps: number }[];
+};
+type Pulse = { at?: number; ok?: boolean; agentsOnline?: number; seatsEnrolled?: number; acceptedLastDay?: number; jobsDoneLastDay?: number; jobs?: number; launchesLive?: number; inferenceTokens?: number };
+/** A read that gives up after 10 s: the page then says what failed instead of waiting forever. null: NIGHTSHIFT's server did not answer. */
+const read = <T,>(u: string): Promise<T | null> => fetch(u, { credentials: "same-origin", signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.json().then((v) => v ?? {}) : null)).catch(() => null);
+const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+const seatList = (s: number[]) => (s.length ? ` · ${s.slice(0, 6).map((x) => `#${x}`).join(", ")}${s.length > 6 ? ` +${s.length - 6}` : ""}` : "");
 export function EconomyPage() {
-  const [crew, setCrew] = useState<Crew | null>(null);
-  const [pulse, setPulse] = useState<Pulse>(null);
+  // undefined: still asking; null: NIGHTSHIFT's server did not answer
+  const [crew, setCrew] = useState<Crew | null | undefined>(undefined);
+  const [pulse, setPulse] = useState<Pulse | null | undefined>(undefined);
   const [all, setAll] = useState(false);
-  useEffect(() => { void get<Crew>("/api/crew").then(setCrew); void get<Pulse>("/api/swarm/pulse").then(setPulse); }, []);
+  const [allJobs, setAllJobs] = useState(false);
+  useEffect(() => {
+    const go = () => { void read<Crew>("/api/crew").then((c) => setCrew(c && Array.isArray(c.jobs) ? c : null)); void read<Pulse>("/api/swarm/pulse").then(setPulse); };
+    go();
+    const t = setInterval(go, 60_000);
+    return () => clearInterval(t);
+  }, []);
   const rows = crew?.crew ?? [];
+  const jobs = crew?.jobs ?? [];
+  const known = crew != null && crew.at > 0;
+  // pulse null: our server did not answer; an empty answer or ok: false: IMD did not
+  const swarmDown = pulse != null && (pulse.ok === false || pulse.agentsOnline == null);
+  const swarm = (n: number | undefined) => (pulse === undefined ? "…" : n == null ? "—" : big(n));
   return (
     <div className="st-room">
       <RoomHero id="economy">
         <div className="st-stats">
-          <Stat label="IMD agents online" value={big(pulse?.agentsOnline)} note="the whole swarm, live" />
-          <Stat label="Agents who worked for us" value={crew ? rows.length : "…"} note="from IMD's records" />
-          <Stat label="Orders we paid" value={crew ? crew.jobs.length : "…"} note={crew ? `${crew.paidImd} IMD in admissions` : undefined} />
+          <Stat label="IMD agents online" value={swarm(pulse?.agentsOnline)} note={pulse === null ? "not read right now" : swarmDown ? "IMD's API is not answering" : "the whole swarm, live"} />
+          <Stat label="Agents who worked for us" value={crew === undefined ? "…" : known ? crew!.seats : "—"} note={known ? `${crew!.acceptedSteps} steps accepted` : crew === undefined ? "from IMD's records" : crew === null ? "not read right now" : "not read yet"} />
+          <Stat label="Orders we paid" value={crew === undefined ? "…" : known ? crew!.orders : "—"} note={known ? `${crew!.paidImd} IMD paid to the swarm` : crew === undefined ? undefined : crew === null ? "not read right now" : "not read yet"} />
         </div>
       </RoomHero>
       <div className="st-body">
         <h2>HR · the crew</h2>
-        <p className="st-note">Every IMD swarm agent that worked on an order NIGHTSHIFT paid for, from IMD's public submissions: the seat, what it did, which model and runtime it ran, and how much of its work was accepted. {crew && <>Read {Math.round((Date.now() - crew.at) / 60000)} min ago from {crew.source}.</>}</p>
-        {!crew ? <p className="st-empty">Reading IMD's records…</p> : (
+        <p className="st-note">Every IMD swarm agent that worked on an order NIGHTSHIFT paid for, from IMD's public submissions: the seat, what it did, which model and runtime it ran, and how much of its work was accepted. {known && <>Read {ago(crew!.at)} from {crew!.source}.</>}</p>
+        {crew === undefined ? <p className="st-empty">Reading IMD's records…</p>
+          : crew === null ? <p className="st-warn">NIGHTSHIFT's server did not answer just now, so the crew list cannot be shown. The page asks again every minute; nothing here is ever estimated.</p>
+          : !known ? <p className="st-warn">IMD's API is not answering, and NIGHTSHIFT has no earlier copy of its records yet, so the crew list is empty for now. It fills in by itself once IMD answers (last asked {ago(crew.checkedAt)}). Every order is also on <a href="https://explorer.imd.fun" target="_blank" rel="noreferrer">explorer.imd.fun</a>.</p>
+          : (
           <>
+            {!crew.ok && <p className="st-warn">IMD's API is not answering; last known: {crew.orders} orders paid, {crew.paidImd} IMD, {crew.seats} agents, read {ago(crew.at)}. NIGHTSHIFT asks again every few minutes.</p>}
             <div className="st-table-wrap">
               <table className="st-table">
                 <thead><tr><th>Seat</th><th>Roles</th><th>Model</th><th>Runtime</th><th>Accepted</th><th>Jobs</th><th>Hours</th></tr></thead>
@@ -41,20 +66,23 @@ export function EconomyPage() {
             {rows.length > 12 && <button className="st-more" onClick={() => setAll(!all)}>{all ? "Show fewer" : `Show all ${rows.length}`}</button>}
             {crew.models.length > 0 && <p className="st-note">Models behind our work, by accepted and attempted steps: {crew.models.map((m) => `${m.model} (${m.steps})`).join(" · ")}.</p>}
             <h2>Work orders</h2>
-            <div className="st-orders">{crew.jobs.map((o) => (
-              <a key={o.id} href={o.explorer} target="_blank" rel="noreferrer"><span className={`st-state ${o.state}`}>{o.state}</span><b>{o.title}</b><small>{o.action} · {o.workers} agents · {o.accepted} steps accepted</small></a>
+            <p className="st-note">{crew.orders} orders paid, {crew.paidImd} IMD in all (0.5 IMD each), each linked to its job on IMD's explorer with the seats that worked on it.</p>
+            <div className="st-orders">{(allJobs ? jobs : jobs.slice(0, 12)).map((o) => (
+              <a key={o.id} href={o.explorer} target="_blank" rel="noreferrer"><span className={`st-state ${o.state.replace(/\s+/g, "-")}`}>{o.state}</span><b>{o.title}</b><small>{o.by === "NIGHTSHIFT" ? "" : `${o.by} · `}{o.action} · {o.imd} IMD · {o.workers} agent{o.workers === 1 ? "" : "s"}{seatList(o.seats)} · {o.accepted} steps accepted</small></a>
             ))}</div>
+            {jobs.length > 12 && <button className="st-more" onClick={() => setAllJobs(!allJobs)}>{allJobs ? "Show fewer" : `Show all ${jobs.length}`}</button>}
           </>
         )}
 
         <h2>Economy · where the money goes</h2>
         <p className="st-note">Every NIGHTSHIFT fee follows one rule, in code (FeeSplitter on Ethereum):</p>
         <RuleBar />
+        {pulse === null ? <p className="st-warn">NIGHTSHIFT's server did not answer just now, so the swarm totals are not shown. The page asks again every minute.</p> : swarmDown && <p className="st-warn">IMD's API is not answering{pulse?.at ? `; these swarm totals are the last known, read ${ago(pulse.at)}` : ", so the swarm totals cannot be shown right now"}.</p>}
         <div className="st-stats wide">
-          <Stat label="Swarm jobs, all time" value={big(pulse?.jobs)} note="api.imd.fun/swarm" />
-          <Stat label="Steps accepted, 24h" value={big(pulse?.acceptedLastDay)} />
-          <Stat label="Live IMD launches" value={big(pulse?.launchesLive)} />
-          <Stat label="Inference tokens" value={big(pulse?.inferenceTokens)} note="AI work done by the swarm" />
+          <Stat label="Swarm jobs, all time" value={swarm(pulse?.jobs)} note="api.imd.fun/swarm" />
+          <Stat label="Steps accepted, 24h" value={swarm(pulse?.acceptedLastDay)} />
+          <Stat label="Live IMD launches" value={swarm(pulse?.launchesLive)} />
+          <Stat label="Inference tokens" value={swarm(pulse?.inferenceTokens)} note="AI work done by the swarm" />
         </div>
         <Tiles items={[
           { to: "/impact", title: "IMD impact", note: "What NIGHTSHIFT has paid the IMD network and burned, line by line.", icon: "flame" },
@@ -107,7 +135,7 @@ export function CommandPage() {
       </RoomHero>
       <div className="st-body">
         <h2>This week's missions</h2>
-        <p className="st-note">Each frog crews one mission a week. A mission is real work on the station that the server checks for itself; bring it home and the frog earns its base hours times its multiplier (6× for #1, 3× for #2–25, 2× Genesis, 1× the rest). Shift hours are the same points soft staking pays every hour.</p>
+        <p className="st-note">Each frog crews one mission a week. A mission is real work on the station that the server checks for itself; bring it home and the frog earns its base hours times its multiplier (6× for #1, 3× for #2–25, 2× Genesis, 1× the rest). Shift hours are the same points soft staking pays every hour: your total is cumulative and never resets, missions reset every Monday at 00:00 UTC, and that same Monday the frog rewards epoch pays out by the hours each wallet added since the last paid epoch.</p>
         {msg && <p className="st-msg">{msg}</p>}
         {!address ? (
           <>

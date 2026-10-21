@@ -121,7 +121,7 @@ NIGHT FROGS are 500 fully onchain ERC-721 frogs, minted through IMD at 2 IMD eac
 What a frog does:
 
 - **Rewards.** The frogs' half of the rewards is paid each week by shift hours. NIGHTSHIFT publishes the list, the dev wallet posts its Merkle root on chain, and each holder claims their part. Unclaimed amounts return to the pot after 30 days.
-- **Shift hours.** Every frog earns shift hours while held: frog #1 six an hour, #2 to #25 three, #26 to #77 two, the rest one. A wallet that also holds an IMD seat earns double on everything.
+- **Shift hours.** Every frog earns shift hours while held: frog #1 six an hour, #2 to #25 three, #26 to #77 two, the rest one. A wallet that also holds an IMD seat earns double on everything. A wallet's total is cumulative and never resets; each weekly epoch (Mondays, 00:00 UTC) pays the frog pot by the hours added since the last paid epoch, and a week with no pot carries them into the next.
 - **Missions.** Each week, in the Command Room, a holder sends frogs on missions tied to real activity (trading in the Night League, beating the IMD Holder benchmark, playing a rated chess game). The server checks the outcome; a completed mission pays its base hours times the frog's multiplier.
 - **More companies, no fee.** A frog holder can run two more companies, and a wallet that has held $SHIFT above the threshold or a NIGHT FROG for seven days without a gap pays no platform fee on withdrawals.
 

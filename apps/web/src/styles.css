@@ -319,6 +319,7 @@ td.r, th.r { text-align: right; font-family: var(--mono); }
 .impact-nums b { display: block; font: 600 22px var(--mono); color: var(--ink); }
 .impact-nums span { font: 500 11px var(--mono); letter-spacing: .1em; color: var(--faint); text-transform: uppercase; }
 @media (max-width: 760px) { .impact-nums { grid-template-columns: 1fr; } }
+.impact-warn { margin: 10px 0; padding: 12px 14px; border: 1px solid rgba(255, 200, 97, .35); background: rgba(255, 200, 97, .08); color: #ffe0a1; font-size: 14px; line-height: 1.55; }
 .frogs-countdown { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 14px 16px; border: 1px solid rgba(184, 255, 74, .35); background: radial-gradient(400px 120px at 0% 50%, rgba(184, 255, 74, .12), transparent 70%), rgba(3, 2, 10, .55); }
 .frogs-countdown b { font: 700 44px/1 var(--mono); color: #b8ff4a; text-shadow: 0 0 24px rgba(184, 255, 74, .45); }
 .frogs-countdown span { font: 500 12px/1.5 var(--mono); letter-spacing: .08em; color: var(--dim); max-width: 520px; }
