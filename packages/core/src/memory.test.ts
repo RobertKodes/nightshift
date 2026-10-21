@@ -160,6 +160,18 @@ describe("the CEO's memory", () => {
     expect(again).toMatch(/failed 2 times/);
   });
 
+  it("spaces posts out whoever decides them: no second post within 20 hours, never the same title twice", () => {
+    const at = Date.parse("2026-10-21T12:25:00Z");
+    const c = company({ site: { url: "http://sites/acme", at: 0 } as Company["site"], marketing: [{ at, channel: "x", text: "Missed calls are lost jobs.", status: "drafted" }],
+      tasks: [{ id: "t7", cycle: 7, kind: "marketing", title: "Contractor post: missed calls", why: "", status: "done", createdAt: at, updatedAt: at } as Task] });
+    const post = { kind: "marketing" as const, title: "Contractor post: missed calls", why: "no visits", brief: "", post: "Every missed call is a job lost to a rival." };
+    // the live case: the model asked for another post a minute later
+    expect(repeatOf(c, post, null, at + 60_000)).toMatch(/drafted 1 h ago|next one waits about 20 hours/);
+    // a day later the spacing allows a post, but not one with the same title
+    expect(repeatOf(c, post, null, at + 21 * HOUR)).toMatch(/same title went out in shift 7/);
+    expect(repeatOf(c, { ...post, title: "Weekend jobs you can still win" }, null, at + 21 * HOUR)).toBeNull();
+  });
+
   it("reads the move out of an answer that thinks out loud around it", async () => {
     const say = (content: string) => ({ chat: async () => ({ message: { role: "assistant", content }, costUsd: 0, servedModel: "m", finishReason: "stop" }) }) as unknown as LlmClient;
     const c = shop();

@@ -26,6 +26,8 @@ function records() {
     products: [{ id: "p1", name: "Fee Map", kind: "dataset", status: "live" } as never, { id: "p2", name: "Draft", kind: "report", status: "building" } as never],
     tasks: [task("build_product", NOW - 2 * H, { productId: "p1" }), task("build_product", NOW - 3 * H, { productId: "p2" }), task("build_site", NOW - 4 * H, { result: { siteUrl: "https://alpha.example" } }), task("build_product", NOW - 26 * H, { productId: "p1" })],
   });
+  // each task belongs to the shift that made it: shift 4 built Fee Map, shift 3 the rest
+  a.tasks.forEach((t, i) => { t.cycle = i === 0 ? 4 : 3; });
   const b = company("beta", { journal: [{ at: NOW - 3 * H, cycle: 1, kind: "decision", text: "Shift 1: Put the company on the web." }] });
   const sim = company("simco", { sim: true, journal: [{ at: NOW - H, cycle: 1, kind: "decision", text: "Shift 1: x" }], products: [{ id: "s1", name: "Sim thing", kind: "tool", status: "live" } as never], tasks: [task("build_product", NOW - H, { productId: "s1" })] });
   const house = company("house", { house: true });
@@ -49,6 +51,13 @@ function records() {
 
 describe("the daily company digest", () => {
   afterEach(() => setTelegramTransport(null));
+
+  it("counts shifts that left only their task (a model's or the owner's move with no journal line), each once", () => {
+    const c = company("gamma", { tasks: [7, 8, 9].map((n) => ({ ...(task("marketing", NOW - n * 60_000) as object), cycle: n })) as never });
+    const f = digestFacts([c], [], NOW, base);
+    expect(f.shifts).toBe(3);
+    expect(f.companiesWorking).toBe(1);
+  });
 
   it("is built from the live companies' records and the ledger only", () => {
     const { companies, txs } = records();

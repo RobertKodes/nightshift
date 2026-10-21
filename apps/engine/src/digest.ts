@@ -47,7 +47,9 @@ export function digestFacts(all: Iterable<Company>, txs: LedgerTx[], now: number
   const row = (id: string) => { let r = per.get(id); if (!r) per.set(id, r = { shifts: 0, built: 0, usd: 0, sales: 0 }); return r; };
   const f: DigestFacts = { from, to: now, shifts: 0, companiesWorking: 0, products: [], sites: [], sales: { count: 0, usd: 0 }, b2b: { count: 0, usd: 0 }, imd: { count: 0, imd: 0 }, top: null };
   for (const c of live) {
-    const shifts = c.journal.filter((j) => j.kind === "decision" && inDay(j.at) && /^Shift \d+/.test(j.text)).length;
+    // a shift is in the journal ("Shift N: …") and leaves its task, whoever decided it: each cycle counted once
+    const cycles = new Set<number>([...c.journal.filter((j) => j.kind === "decision" && inDay(j.at) && /^Shift \d+/.test(j.text)).map((j) => j.cycle), ...c.tasks.filter((t) => inDay(t.createdAt)).map((t) => t.cycle)]);
+    const shifts = cycles.size;
     if (shifts) { row(c.id).shifts += shifts; f.shifts += shifts; f.companiesWorking++; }
     for (const t of c.tasks) {
       if (t.status !== "done" || !inDay(t.updatedAt)) continue;

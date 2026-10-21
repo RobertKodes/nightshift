@@ -18,6 +18,8 @@ const HOLDS = 0.85;
 /** Work that failed this many times is not tried that way again. */
 export const MAX_FAILS = 2;
 const DAY = 24 * 60 * 60 * 1000;
+/** One drafted post in this long at most, whoever decides it: the playbook keeps the same spacing. */
+const POST_GAP = 20 * 60 * 60 * 1000;
 const PAID = new Set<TaskKind>(["research", "build_product", "build_site", "improve_site"]);
 const LABEL: Record<TaskKind, string> = {
   research: "research", build_product: "product", build_site: "site", improve_site: "site change", marketing: "post", reprice: "price change", retire_product: "retirement", post: "post",
@@ -127,6 +129,11 @@ export function repeatOf(c: Company, d: Decision, order?: { action: string; inpu
   if (d.kind === "marketing") {
     const text = (d.post || d.brief || "").slice(0, 280).trim();
     if (text && c.marketing.some((m) => m.text.trim() === text)) return "the same post was already drafted";
+    // three posts in four minutes are noise, not reach: the model's posts wait as long as the playbook's
+    const last = c.marketing.at(-1);
+    if (last && now - last.at < POST_GAP) return `a post was drafted ${Math.max(1, Math.round((now - last.at) / 3_600_000))} h ago; the next one waits about 20 hours`;
+    const titled = [...c.tasks].reverse().find((t) => t.kind === "marketing" && t.status === "done" && sameName(t.title, d.title));
+    if (titled) return `a post with the same title went out in shift ${titled.cycle}`;
   }
   if (d.kind === "reprice" || d.kind === "retire_product") {
     const p = c.products.find((x) => x.id === d.productId);
