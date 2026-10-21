@@ -2,10 +2,22 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-21 · The daily company post and this changelog
+- Every day at 18:00 UTC the bot posts what the companies did in the last 24 hours, built only from their records: shifts, products shipped, sites launched, sales and IMD orders. A quiet day gets no post.
+- This changelog is on the site at /changelog, and every Monday at 09:00 UTC the bot posts the past week's entries in the community chat and pins them.
+
+## 2026-10-21 · Weekly game prizes in shift hours
+- Each week the top 3 in NIGHT CHESS and NIGHT POOL (most rated wins) and Space Pinball (best verified solo score) win +24, +12 and +6 shift hours.
+- Only wallet-signed players and rated games between different wallets count, at most 3 against the same rival, never house games. Hours land 48 hours after the week ends.
+
+## 2026-10-21 · House games in the Breakroom
+- The house frogs play NIGHT CHESS around the clock as exhibition games you can watch live, never rated, staked or bet on.
+- Challenge the winner starts your own practice game against Frog #7. House games step aside when the tables are busy.
+
 ## 2026-10-21 · Rewards hub, IMD burn bar, leaner keeper
-- The front page now has a rewards hub that shows what holders and stakers can claim.
-- A new IMD burn bar shows how much IMD has been burned through the fee split.
-- The keeper that splits fees and burns IMD now only sends a transaction when it is worth its gas.
+- The front page shows everything a wallet can claim (staking rewards, NIGHT FROGS rewards, staked-game winnings, company balances), with one Claim all.
+- A Next IMD burn bar shows the burn reserve, the last burn with its link and the total IMD burned. Burns now start from 0.002 ETH instead of 0.01.
+- The keeper splits fees once a day and only sends a transaction when it moves far more than its gas.
 
 ## 2026-10-21 · Companies stop repeating work
 - Companies remember what they already built and skip moves that repeat earlier work, and the flight recorder shows each skipped move with the reason.
@@ -14,17 +26,17 @@ What shipped, newest first: one entry per update, with its date and a few plain 
 
 ## 2026-10-21 · HR & Economy real numbers, shift hours explained
 - The HR and Economy pages show the crew and the work ledger from IMD's public records, each row linking to the job on IMD's explorer.
-- Shift hours are now explained on the page: how they accrue per frog and how they turn into rewards.
+- Shift hours are explained on the frogs page: they are cumulative and never reset, and each Monday's frog pot is split by the hours each wallet added since the last paid week.
 - IMD Kit is pinned for npm so installs get the same version every time.
 
 ## 2026-10-21 · NIGHT POOL plays like 8 Ball Pool
-- Aim with the mouse, lock with a click, or drag on a touch screen. A power bar sits on the left and a spin wheel on the right.
+- The cue follows the mouse, a click locks it, and on phones you drag anywhere to turn it. Pull the power bar on the left and let go to shoot; fine-tune with the wheel on the right, and set spin from the cue-ball button.
 - Call a pocket with one click or play a safety. Banners show the turn, ball in hand and fouls.
 - The table shows from straight above, with a 3D tilt toggle. The pool lobby is cleaner.
 
 ## 2026-10-21 · Staked games: seating, absence, claims
 - Your staked games are found on every page. A reload, another tab or a trip to the wallet app no longer loses your seat, and you get a notification when it is ready.
-- A player who never showed up voids the match and both stakes go back. Time away on your own turns is counted for the whole game.
+- The clock starts only when both players are at the table. A staked player gets 2 minutes in all to reconnect, and a player who never made a move cannot lose the stake: the game is void and both stakes go back.
 - Winnings can be claimed from the games pages. The games are off the Telegram Mini App, and the bot links to the website. Chess, pool and pinball pages put the game first.
 
 ## 2026-10-21 · Email and social sign-in
@@ -105,7 +117,7 @@ What shipped, newest first: one entry per update, with its date and a few plain 
 - An assistant answers questions about NIGHTSHIFT from live facts only and says it does not know when it does not.
 
 ## 2026-10-18 · Fee split, burns and NIGHT FROGS rewards
-- A keeper splits fees and burns IMD on a schedule, swapping through a private route with a cap of 3% price loss.
+- A keeper splits fees and burns IMD on a schedule, swapping through a private route with a price guard.
 - Frog holders claim weekly rewards with a proof, shared by the shift hours each wallet earned.
 - Live holdings show where every $SHIFT is, read from Ethereum in your browser.
 
