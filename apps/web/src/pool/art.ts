@@ -70,6 +70,10 @@ export function clothTexture(d: ClothDesign, px = 1024): { map: THREE.CanvasText
   if (d.pattern === "lily") { g.globalAlpha = 0.16; for (let i = 0; i < 26; i++) lily(g, r() * wpx, r() * px, 14 + r() * 26, d.patternColor, r() * 6.28); }
   if (d.pattern === "frog") { g.globalAlpha = 0.13; frog(g, X(W / 2), Y(L / 2), wpx * 0.42, d.patternColor, d.color); g.globalAlpha = 0.07; g.strokeStyle = d.patternColor; g.lineWidth = 3; g.beginPath(); g.arc(X(W / 2), Y(L / 2), wpx * 0.3, 0, Math.PI * 2); g.stroke(); }
   g.restore();
+  // $SHIFT × IMD printed in the middle of the bed, faint as a table maker's mark, pressed into the nap too
+  const mark = Math.min(wpx, px) * 0.62;
+  brandMark(g, X(W / 2), Y(L / 2), mark, "rgba(255,255,255,.15)");
+  brandMark(bg, X(W / 2), Y(L / 2), mark, "rgba(255,255,255,.35)");
   // the spots and a faint head string, as on a real cloth
   g.fillStyle = "rgba(255,255,255,.55)";
   for (const [x, y] of [[FOOT_X, FOOT_Y], [W / 2, HEAD_Y]] as const) { g.beginPath(); g.arc(X(x), Y(y), 3, 0, Math.PI * 2); g.fill(); }
@@ -77,6 +81,25 @@ export function clothTexture(d: ClothDesign, px = 1024): { map: THREE.CanvasText
   g.beginPath(); g.moveTo(X(0), Y(HEAD_Y)); g.lineTo(X(W), Y(HEAD_Y)); g.stroke();
   const map = texture(c), bump = texture(b, false);
   return { map, bump };
+}
+
+/**
+ * The table's mark: "$SHIFT × IMD" in a thin ring, set along the long side so it reads across the table
+ * on a screen in landscape. `size` is the ring's width in pixels; `color` carries its own faintness.
+ */
+export function brandMark(g: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string): void {
+  const font = '"Space Grotesk", Inter, system-ui, sans-serif';
+  g.save();
+  g.translate(cx, cy); g.rotate(-Math.PI / 2);
+  g.strokeStyle = color; g.fillStyle = color; g.textAlign = "center"; g.textBaseline = "middle";
+  g.lineWidth = Math.max(1.5, size * 0.006);
+  g.beginPath(); g.ellipse(0, 0, size * 0.62, size * 0.34, 0, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.ellipse(0, 0, size * 0.58, size * 0.30, 0, 0, Math.PI * 2); g.stroke();
+  g.font = `700 ${Math.round(size * 0.15)}px ${font}`;
+  g.fillText("$SHIFT × IMD", 0, -size * 0.03);
+  g.font = `600 ${Math.round(size * 0.045)}px ${font}`;
+  g.fillText("N I G H T   P O O L   ·   B U I L T   O N   I M D", 0, size * 0.13);
+  g.restore();
 }
 
 // ---- rail wood
