@@ -129,7 +129,7 @@ Tests (Foundry): full flows for both tokens with several bettors on both sides a
   FORGE_ORDER,
 ];
 
-type Placed = { tx: string; at: number; posted?: boolean; earlier?: string[]; job?: string };
+type Placed = { tx: string; at: number; posted?: boolean; earlier?: string[]; job?: string; milestones?: string[] };
 const file = () => join(config.dataDir, "swarm-orders.json");
 const load = (): Record<string, Placed> => { try { return existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : {}; } catch { return {}; } };
 
@@ -164,6 +164,31 @@ export function placeOrder(key: string, tx: string): Record<string, Placed> {
 
 type Job = { state?: string; launch?: { status?: string | null; id?: string | null } };
 const DONE = new Set(["done", "completed", "complete", "delivered", "succeeded", "success"]);
+
+/** The steps of a contracts job the community hears about, each once, in order (IMD's node keys). */
+export const MILESTONES = [
+  { key: "built", says: "contracts", node: (k: string) => k.startsWith("build_") },
+  { key: "tested", says: "tests", node: (k: string) => k.includes("test") },
+  { key: "audited", says: "audit", node: (k: string) => k.includes("judge") },
+] as const;
+export type JobNode = { key: string; state: string };
+type Launch = { status?: string | null; id?: string | null } | null | undefined;
+const LIVE = new Set(["live", "deployed", "complete", "completed"]);
+/** The milestones a job has reached: a step counts once every node of it is accepted; deployed once its launch is live. */
+export function reached(nodes: JobNode[], launch?: Launch): string[] {
+  const out: string[] = [];
+  for (const m of MILESTONES) { const ns = nodes.filter((n) => m.node(n.key)); if (ns.length && ns.every((n) => n.state === "accepted")) out.push(m.key); }
+  if (launch?.status && LIVE.has(launch.status.toLowerCase())) out.push("deployed");
+  return out;
+}
+/** One line per job: done ✅, being worked on 🔨, waiting ⏳, for each step and the deploy. */
+export function marks(nodes: JobNode[], launch?: Launch): string {
+  const got = new Set(reached(nodes, launch));
+  const step = MILESTONES.map((m) => `${got.has(m.key) ? "✅" : nodes.some((n) => m.node(n.key) && n.state === "working") ? "🔨" : "⏳"} ${m.says}`);
+  const deploy = got.has("deployed") ? "✅ deployed" : got.has("audited") ? "🔨 deploying" : "⏳ deploy";
+  return [...step, deploy].join(" · ");
+}
+const SAYS: Record<string, string> = { built: "its contracts are written and compile", tested: "a second agent's Foundry tests pass", audited: "the audit panel (4 specialists and a judge) signed off", deployed: "it is deployed on Ethereum" };
 
 /**
  * Every 10 minutes: an order the swarm has finished is announced to the community once, with its
@@ -205,8 +230,35 @@ export function followSwarm(say: (text: string, buttons: { text: string; url: st
       }
     }
   };
-  setInterval(() => void tick().catch((e) => console.error("swarm follow", e)), 10 * 60_000);
-  void tick().catch(() => {});
+  // the Night Watchers' three contracts: every step each one passes is told to the community, once, in one message
+  const forge = async () => {
+    const all = load(), rows: { title: string; line: string; page: string; fresh: string[] }[] = [];
+    for (const key of FORGE_KEYS) {
+      const o = ORDERS.find((x) => x.key === key), p = all[key];
+      if (!o || !p) continue;
+      const jobId = await admittedJob(p).catch(() => undefined);
+      if (!jobId) continue;
+      const job = await fetch(`https://api.imd.fun/jobs/${jobId}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as { job?: { nodes?: JobNode[]; launch?: Launch }; nodes?: JobNode[]; launch?: Launch } | null;
+      const j = job?.job ?? job;
+      if (!j?.nodes?.length) continue;
+      const told = new Set(p.milestones ?? []), fresh = reached(j.nodes, j.launch).filter((m) => !told.has(m));
+      if (fresh.length) p.milestones = [...told, ...fresh];
+      rows.push({ title: o.title.replace(/^NIGHT WATCHERS\s*/i, ""), line: marks(j.nodes, j.launch), page: `https://explorer.imd.fun/jobs/${jobId}`, fresh });
+    }
+    const news = rows.filter((r) => r.fresh.length);
+    if (!news.length) return;
+    writeAtomic(file(), JSON.stringify(all, null, 2));
+    const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+    await say([
+      "🐸 <b>NIGHT WATCHERS · BUILD UPDATE</b>",
+      "The IMD swarm is building the Night Watchers' three contracts. Every step is public on IMD's explorer.", "",
+      ...rows.map((r) => `<b>${cap(r.title)}</b>\n${r.line}`), "",
+      ...news.map((r) => `Just now: <b>${cap(r.title)}</b>: ${r.fresh.map((m) => SAYS[m]).join(", ")}.`), "",
+      "The Forge opens once all three are deployed and checked.",
+    ].join("\n"), [[{ text: "🐸 The Forge", url: "https://getnightshift.tech/forge" }], ...rows.map((r) => [{ text: `🐝 ${cap(r.title)} on IMD`, url: r.page }])]);
+  };
+  setInterval(() => void tick().then(forge).catch((e) => console.error("swarm follow", e)), 10 * 60_000);
+  void tick().then(forge).catch(() => {});
 }
 
 const FORGE_KEYS = ["frog-forge-art", "frog-forge-skin", "frog-forge"];
