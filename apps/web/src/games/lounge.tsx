@@ -2,8 +2,9 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Icon } from "../Icon";
 import { go, Link, useRoute } from "../router";
 import { useSession } from "../session";
-import { type ChallengeView, tokenLabel } from "../stakes";
+import { type ChallengeView, StakeResult, tokenLabel } from "../stakes";
 import { type LiveGame, LiveRow } from "./live";
+import { seatPath, useMyStakes } from "./staked";
 import "./lounge.css";
 
 /**
@@ -205,6 +206,7 @@ export function Lounge({ game, create = false, onSeat }: { game?: Game; create?:
   });
   const open = (l?.open ?? []).filter((g) => !game || g.game === game);
   const challenges = (l?.challenges ?? []).filter((c) => !game || c.game === game);
+  const stakes = useMyStakes().filter((c) => !game || c.game === game);
   const live = (l?.live ?? []).filter((g) => !game || g.game === game);
   const waiting = l ? (game === "pinball" ? l.waiting.pinball : game === "pool" ? l.waiting.pool ?? 0 : game === "chess" ? Object.values(l.waiting.chess).reduce((a, b) => a + b, 0) : open.length) : 0;
   const createFor = create ? pick : game;
@@ -231,6 +233,15 @@ export function Lounge({ game, create = false, onSeat }: { game?: Game; create?:
     <div className="lg-label"><span>OPEN GAMES</span><span>{open.length}</span></div>
     {l === null ? <p className="lv-empty" role="status">Looking for open tables…</p> : open.length ? <ul className="lv-list" aria-live="polite">{open.slice(0, 12).map((g) => <OpenRow key={`${g.game}-${g.id}`} g={g} now={now} skew={skew} mine={isMine(g)} busy={busy} onJoin={() => void join(g)} onCancel={() => void run(() => cancelGame(g.game, g.id))} />)}</ul>
       : <p className="lv-empty">Nobody is waiting right now. Open a game and the next player joins you.</p>}
+
+    {stakes.length > 0 && <><div className="lg-label"><span>YOUR STAKED GAMES</span><span>{stakes.length}</span></div>
+      <ul className="lv-list">{stakes.map((c) => <li className={`lg-row ${c.seat ? "mine" : ""}`} key={c.matchId}>
+        <span className={`lv-game ${c.game}`} aria-hidden="true"><Icon name={GAME_ICON[c.game]} size={20} /></span>
+        <div className="lg-who"><span className="lv-kind">{GAME_NAME[c.game]}{c.tc ? ` · ${c.tc}` : ""} · STAKED</span><b><span className="lv-name">{c.you === "A" ? c.nameB ?? "Waiting for a rival" : c.name}</span></b><span className="lg-since">{c.status === "finished" ? "Played: the payout waits for you" : c.seat ? "Ready: both stakes are in" : c.status === "joined" ? "Both stakes are in: setting up the table" : c.joining ? "Your join is confirming on Ethereum" : c.status === "pending" ? "Your stake is confirming on Ethereum" : "Open: waiting for a rival"}</span></div>
+        <span className="lv-stake on">{Number(c.amount).toLocaleString()} {tokenLabel(c.token)}</span>
+        {c.status === "finished" ? null : c.seat ? <Link to={seatPath(c)} className="lg-btn"><Icon name="swords" size={15} /><span>TAKE YOUR SEAT</span></Link> : <Link to={`/games/${c.game}?token=${c.token}`} className="lg-btn ghost"><span>OPEN</span></Link>}
+        {c.status === "finished" && <div className="lg-claim"><StakeResult matchId={c.matchId} address={address} /></div>}
+      </li>)}</ul></>}
 
     {challenges.length > 0 && <><div className="lg-label"><span>STAKED CHALLENGES</span><span>{challenges.length}</span></div>
       <ul className="lv-list">{challenges.slice(0, 6).map((c) => <li className="lg-row" key={c.matchId}>

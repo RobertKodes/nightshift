@@ -10,12 +10,23 @@ import { publicName } from "./names.js";
  * are free; a game for IMD or $SHIFT is made by the challenge lobby once both stakes are in
  * GameEscrow (createStaked), and its result goes to the escrow.
  */
-/** A staked game starts once both players are connected, or this long after it was made. */
-export const STAKED_SHOW_MS = 5 * 60_000;
+/**
+ * A staked game starts only once both players are connected (both see the countdown). If they have
+ * not both been at the table within this long after it was made, it is void: both stakes go back.
+ */
+export const STAKED_SHOW_MS = 15 * 60_000;
+/** A staked game's countdown, from both players at the table to the first move's clock. */
+export const STAKED_COUNTDOWN_MS = 10_000;
+/** A free game: a player away (no open stream) this long on their own turn loses by abandonment. */
+export const AWAY_MS = 45_000;
+/**
+ * A staked game: each player's reconnection time on their own turns, for the whole game (a phone
+ * switching to the wallet app, a tab asleep). Past it they lose by abandonment, unless they never
+ * made a move: then the game is void and both stakes go back.
+ */
+export const STAKED_GRACE_MS = 2 * 60_000;
 export const CONTROLS = { "3+2": { time: 180_000, increment: 2_000 }, "5+0": { time: 300_000, increment: 0 }, "10+0": { time: 600_000, increment: 0 } };
 export type TimeControl = keyof typeof CONTROLS;
-/** A free game for two invited players (a Telegram challenge) starts once both are here; it closes unplayed if one never comes within this. */
-export const INVITE_SHOW_MS = 5 * 60_000;
 /** An open free game stays in the lounge this long after its host's last stream closed (a phone asleep, a tab switch)… */
 export const LOUNGE_GRACE_MS = 90_000;
 /** …and at most this long in all, waiting for a rival. */
@@ -29,8 +40,10 @@ export class OwnGameError extends Error {
 }
 /** A lounge request that cannot be met (gone, taken, host away): a clear reason with an HTTP status. */
 export class LoungeError extends Error { constructor(readonly status: number, message: string) { super(message); } }
-export type Reason = "checkmate" | "stalemate" | "repetition" | "insufficient material" | "50-move rule" | "resignation" | "agreement" | "abandonment" | "timeout";
-type Player = { id: string; name: string; wallet: string | null; color: Color; rating: number; moves: number; streams: number; offlineAt: number | null; agent?: boolean; times?: number[] };
+/** "void": a staked game nobody can fairly lose (the players were never both there, or the loser never made a move): a draw, both stakes go back. */
+export type Reason = "checkmate" | "stalemate" | "repetition" | "insufficient material" | "50-move rule" | "resignation" | "agreement" | "abandonment" | "timeout" | "void";
+/** `graceUsed`: the reconnection time a staked game's player has used on their own turns. */
+type Player = { id: string; name: string; wallet: string | null; color: Color; rating: number; moves: number; streams: number; offlineAt: number | null; agent?: boolean; times?: number[]; graceUsed?: number };
 type Match = {
   id: string; tc: TimeControl; currency: "FREE" | "IMD" | "SHIFT"; createdAt: number; startedAt: number | null; turnAt: number;
   game: Chess; players: Player[]; clocks: Record<Color, number>; moves: Move[]; version: number;
@@ -48,8 +61,6 @@ type Match = {
   expired?: Expired;
   /** An open game folded into an older one in the same time control: its host's stream follows there. */
   movedTo?: string;
-  /** A free game for two invited players: no clock until both are connected (showBy is its deadline). */
-  held?: boolean;
 };
 /** An open free game as the lounge lists it: the host's public name and rating only, never a seat or a wallet. */
 export type OpenChess = { id: string; tc: TimeControl; any: boolean; host: { name: string; rating: number; agent?: boolean }; since: number; away: boolean; awayUntil: number | null };
@@ -104,18 +115,19 @@ export class ChessGames {
   }
   private match(id: string) { const m = this.matches.get(id); if (!m) throw new Error("No such match"); return m; }
   private rating(p: Pick<Player, "name" | "wallet">) { return this.boards.ratings.find((r) => r.key === keyOf(p))?.rating ?? 1200; }
-  private create(tc: TimeControl, players: Player[], staked?: Pick<Match, "currency" | "escrow" | "stake" | "showBy" | "onResult" | "held">): Match {
+  private create(tc: TimeControl, players: Player[], staked?: Pick<Match, "currency" | "escrow" | "stake" | "showBy" | "onResult">): Match {
     const now = this.now();
     const m: Match = { ...staked, id: randomBytes(10).toString("hex"), tc, currency: staked?.currency ?? "FREE", createdAt: now, startedAt: null, turnAt: now, game: new Chess(), players,
       clocks: { w: CONTROLS[tc].time, b: CONTROLS[tc].time }, moves: [], version: 0, done: false, winner: null, reason: null, drawOffer: null, rematch: new Set(), rematchId: null, endedAt: null };
     this.matches.set(m.id, m);
-    if (players.length === 2 && !m.escrow && !m.held) this.start(m);
+    if (players.length === 2 && !m.escrow) this.start(m);
     return m;
   }
   /**
    * A game for a stake held in GameEscrow, for exactly these two wallets. Each attaches with the
-   * seat the lobby gives only to that wallet's signed-in session. A player who never comes loses by
-   * abandonment on their turn; if neither comes, it is a draw (both stakes go back).
+   * seat the lobby gives only to that wallet's signed-in session. The clock starts once both are at
+   * the table (after a countdown); if they are not both there within STAKED_SHOW_MS, the game is
+   * void (both stakes go back). Away on one's turn, a player has STAKED_GRACE_MS in all to come back.
    */
   createStaked(o: { escrow: string; tc: TimeControl; currency: "IMD" | "SHIFT"; stake: string; a: { wallet: string; name: string; agent?: boolean }; b: { wallet: string; name: string; agent?: boolean }; onResult: (r: { draw: boolean; winner: string | null }) => void }): { id: string; seats: Record<string, string> } {
     if (!Object.hasOwn(CONTROLS, o.tc)) throw new Error("Choose 3+2, 5+0 or 10+0");
@@ -128,20 +140,17 @@ export class ChessGames {
     const m = this.create(o.tc, [a, b], { currency: o.currency, escrow: o.escrow, stake: o.stake, showBy: this.now() + STAKED_SHOW_MS, onResult: o.onResult });
     return { id: m.id, seats: { [a.wallet!]: a.id, [b.wallet!]: b.id } };
   }
-  /**
-   * A free game for exactly two invited players (a challenge accepted in Telegram): both seats made
-   * now, each given only to its own player. The clock starts once both are connected; if one never
-   * comes within INVITE_SHOW_MS the game closes unplayed (no result, no rating).
-   */
-  invite(tc: TimeControl, a: { name: string; wallet: string | null }, b: { name: string; wallet: string | null }): { id: string; seats: [string, string] } {
-    if (!Object.hasOwn(CONTROLS, tc)) throw new Error("Choose 3+2, 5+0 or 10+0");
-    if (this.matches.size >= 10_000) throw new Error("The arcade is full. Try again shortly.");
-    const pa = this.newPlayer(a.name, a.wallet, false), pb = this.newPlayer(b.name, b.wallet, false);
-    pb.color = opposite(pa.color);
-    const m = this.create(tc, [pa, pb], { currency: "FREE", held: true, showBy: this.now() + INVITE_SHOW_MS });
-    return { id: m.id, seats: [pa.id, pb.id] };
+  private start(m: Match) { m.startedAt = this.now() + (m.escrow ? STAKED_COUNTDOWN_MS : 5_000); m.turnAt = m.startedAt; this.emit(m); }
+  /** How long the player whose turn it is has been away on it (0: here, not their turn, or not playing yet). */
+  private away(m: Match, p: Player) {
+    const now = this.now();
+    if (m.done || !m.startedAt || now < m.startedAt || p.offlineAt === null || m.game.turn() !== p.color) return 0;
+    return Math.max(0, now - Math.max(p.offlineAt, m.turnAt));
   }
-  private start(m: Match) { m.startedAt = this.now() + 5_000; m.turnAt = m.startedAt; this.emit(m); }
+  /** How long a player may be away on their turn: what is left of a staked game's grace, else the free game's limit. */
+  private allowance(m: Match, p: Player) { return m.escrow ? Math.max(0, STAKED_GRACE_MS - (p.graceUsed ?? 0)) : AWAY_MS; }
+  /** A staked game: time away on one's own turn is booked against the grace when the player is back, or when the turn passes. */
+  private book(m: Match, p: Player) { if (m.escrow) p.graceUsed = (p.graceUsed ?? 0) + this.away(m, p); }
   /** A free game waiting for its second player. */
   private isOpen(m: Match) { return !m.done && !m.startedAt && !m.escrow && m.players.length === 1; }
   /** Its host is here (an open stream) and it has not waited too long: a rival may sit down now. */
@@ -267,15 +276,22 @@ export class ChessGames {
       you: m.players.find((p) => p.id === me)?.color ?? null, winnerIsYou: m.winner === me,
       drawOffer: m.drawOffer ? m.drawOffer === me ? "you" as const : "rival" as const : null,
       rematchRequested: m.rematch.has(me), rivalWantsRematch: m.players.some((p) => p.id !== me && m.rematch.has(p.id)), rematchId: m.rematchId,
-      waitingSince: m.createdAt, any: !!m.any, expired: m.expired ?? null, movedTo: m.movedTo ?? null,
-      players: m.players.map((p) => ({ name: p.name, color: p.color, rating: p.rating, you: p.id === me, connected: p.streams > 0 })) };
+      waitingSince: m.createdAt, any: !!m.any, expired: m.expired ?? null, movedTo: m.movedTo ?? null, showBy: m.showBy ?? null,
+      // a player away on their own turn: when they lose by abandonment, for both to see; a staked game's grace left
+      players: m.players.map((p) => {
+        const away = this.away(m, p), out = p.offlineAt !== null && !!m.startedAt && now >= m.startedAt && !m.done && m.game.turn() === p.color;
+        return { name: p.name, color: p.color, rating: p.rating, you: p.id === me, connected: p.streams > 0,
+          awayUntil: out ? now - away + this.allowance(m, p) : null, grace: m.escrow ? Math.max(0, this.allowance(m, p) - away) : null };
+      }) };
   }
   get(id: string, me: string, compact = false) { const m = this.match(id); this.player(m, me); this.check(m); return this.view(m, me, compact); }
   listen(id: string, me: string, f: () => void): () => void {
     const m = this.match(id), p = this.player(m, me);
     const set = this.listeners.get(id) ?? new Set(); set.add(f); this.listeners.set(id, set);
+    this.check(m);
+    if (!p.streams) this.book(m, p);
     p.streams++; p.offlineAt = null;
-    if ((m.escrow || m.held) && !m.startedAt && !m.done && m.players.every((x) => x.streams > 0)) this.start(m); else this.emit(m);
+    if (m.escrow && !m.startedAt && !m.done && m.players.every((x) => x.streams > 0)) this.start(m); else this.emit(m);
     let closed = false;
     return () => { if (closed) return; closed = true; set.delete(f); p.streams = Math.max(0, p.streams - 1); if (!p.streams) p.offlineAt = this.now(); this.emit(m); };
   }
@@ -313,7 +329,7 @@ export class ChessGames {
   }
   leave(id: string, me: string) {
     const m = this.match(id); this.player(m, me);
-    if (m.escrow) throw new Error("A staked game starts once both players are here, or within 5 minutes. Stay at the table.");
+    if (m.escrow) throw new Error("A staked game starts once both players are at the table; if you are not both here within 15 minutes it is void and both stakes go back. Stay at the table.");
     if (m.startedAt) throw new Error("The rival joined. Resign to leave this game.");
     m.done = true; m.endedAt = this.now(); this.unlist(m); this.emit(m);
   }
@@ -321,7 +337,7 @@ export class ChessGames {
     if (m.done || !m.startedAt || this.now() < m.startedAt) return;
     const turn = m.game.turn(), p = m.players.find((p) => p.color === turn)!;
     if (this.clocks(m)[turn] <= 0) { this.end(m, opposite(turn), "timeout"); return; }
-    if (p.offlineAt !== null && this.now() - Math.max(p.offlineAt, m.turnAt) > 45_000) this.end(m, opposite(turn), "abandonment");
+    if (p.offlineAt !== null && this.away(m, p) > this.allowance(m, p)) this.end(m, opposite(turn), "abandonment");
   }
   move(id: string, me: string, from: string, to: string, promotion?: string) {
     const m = this.match(id), p = this.player(m, me); this.check(m);
@@ -332,6 +348,7 @@ export class ChessGames {
     let move: Move;
     try { move = m.game.move({ from, to, promotion }); } catch { throw new Error("Illegal move"); }
     const took = this.now() - m.turnAt;
+    this.book(m, p);
     m.clocks[p.color] = Math.max(0, m.clocks[p.color] - took) + CONTROLS[m.tc].increment;
     m.turnAt = this.now(); m.moves.push(move); p.moves++; if (m.drawOffer !== p.id) m.drawOffer = null;
     if (m.escrow) this.time(m, p, took);
@@ -386,6 +403,8 @@ export class ChessGames {
   }
   private end(m: Match, winner: Color | null, reason: Reason) {
     if (m.done) return;
+    // a staked game is never lost by a player who never made a move (away from the start, or out of time on it): void, both stakes go back
+    if (m.escrow && winner !== null && (reason === "abandonment" || reason === "timeout") && m.players.find((p) => p.color !== winner)?.moves === 0) { winner = null; reason = "void"; }
     m.clocks = this.clocks(m); m.done = true; m.reason = reason; m.endedAt = this.now(); m.drawOffer = null;
     m.winner = m.players.find((p) => p.color === winner)?.id ?? null;
     const rated = m.players.every((p) => p.moves >= 2);
@@ -421,13 +440,8 @@ export class ChessGames {
   }
   tick() {
     for (const m of this.matches.values()) {
-      // an invited game whose second player never came: closed unplayed, kept an hour so both are told
-      if (m.held && !m.startedAt && !m.done && m.showBy !== undefined && this.now() >= m.showBy) { m.done = true; m.expired = "away"; m.endedAt = this.now(); this.emit(m); }
-      // a staked game not started by its deadline: played by whoever came, a draw if nobody did
-      if (m.escrow && !m.startedAt && !m.done && m.showBy !== undefined && this.now() >= m.showBy) {
-        if (m.players.some((p) => p.streams > 0)) this.start(m);
-        else { m.startedAt = this.now(); this.end(m, null, "abandonment"); }
-      }
+      // a staked game whose players were never both at the table by its deadline: void, both stakes go back
+      if (m.escrow && !m.startedAt && !m.done && m.showBy !== undefined && this.now() >= m.showBy) { m.startedAt = this.now(); this.end(m, null, "void"); }
       this.check(m);
       if (!m.done && m.startedAt) this.emit(m);
       // an open game whose host is gone past the grace period, or that waited too long: closed, and kept

@@ -291,17 +291,28 @@ describe("space pinball server", () => {
     await s.escrow.sync();
     expect(s.f.s.relayed).toHaveLength(1);
   });
-  it("a staked duel starts without a player who never comes, who scores 0 and loses", async () => {
+  it("a staked duel never starts with one player: if both are not there in 15 minutes it is void, both stakes back", async () => {
     const s = await staked();
     const offA = pb.listen(s.sa.id, s.sa.player, () => {});
-    vi.advanceTimersByTime(pb.STAKED_SHOW_MS + 6_000);
-    expect(pb.get(s.sa.id, s.sa.player)!.seed).not.toBeNull();
+    vi.advanceTimersByTime(pb.STAKED_SHOW_MS - 1_000);
+    expect(pb.get(s.sa.id, s.sa.player)).toMatchObject({ startedAt: null, seed: null, done: false, showBy: expect.any(Number) });
+    vi.advanceTimersByTime(2_000);
+    expect(pb.get(s.sa.id, s.sa.player)).toMatchObject({ startedAt: null, done: true, draw: true, void: pb.STAKED_VOID });
+    offA();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.escrow.challenges.get(s.id)!.result).toMatchObject({ winner: s.wa, draw: true });
+    expect(s.f.s.relayed).toHaveLength(1);
+  });
+  it("a staked player who sat down but never played a ball loses no stake: the duel is void", async () => {
+    const s = await staked();
+    const offA = pb.listen(s.sa.id, s.sa.player, () => {}), offB = pb.listen(s.sb.id, s.sb.player, () => {});
+    vi.advanceTimersByTime(6_000);
+    offB(); // B's phone went to the wallet app and never came back
     const d = play(s.sa.id, s.sa.player, s.sb.player, { absent: true });
     offA();
-    expect(d.m.winnerIsYou).toBe(true);
-    expect(d.vb.score).toBe(0);
+    expect(d.m).toMatchObject({ done: true, draw: true });
     await vi.advanceTimersByTimeAsync(0);
-    expect(s.escrow.challenges.get(s.id)!.result).toMatchObject({ winner: s.wa, draw: false });
+    expect(s.escrow.challenges.get(s.id)!.result).toMatchObject({ winner: s.wa, draw: true });
     expect(s.f.s.relayed).toHaveLength(1);
   });
   it("refuses staked duels through the free queue", async () => {

@@ -5,6 +5,7 @@ import { Icon } from "./Icon";
 import { api as session, authHeaders } from "./api";
 import { chooseWallet } from "./wallet";
 import { type Step, canBatch, sendSteps } from "./batch";
+import { useMyStakes } from "./games/staked";
 import "./stakes.css";
 
 /**
@@ -42,7 +43,9 @@ type Escrow = { address: string; live: boolean; signer: string | null; serverSig
 export type ChallengeView = {
   matchId: Hex; game: StakeGame; token: StakeToken; tokenAddress: string; stake: string; amount: string; tc: string | null; creator: string; name: string;
   playerB: string | null; nameB: string | null; status: string; openedAt: number | null; joinBy: number | null; joinedAt: number | null; refundAt: number | null;
-  outcome: { draw: boolean; winner: string | null } | null; signed: boolean; refused: string | null; relay: { state: string; tx: string | null } | null;
+  outcome: { draw: boolean; winner: string | null } | null; signed: boolean; refused: string | null; relay: { state: string; tx: string | null; at?: number } | null;
+  /** The server's relay never sent the payout, failed, or is slow: the players may submit the signed result themselves. */
+  claimable?: boolean;
   closed: { kind: string; tx: string; winner?: string; draw?: boolean } | null; you: "A" | "B" | null; remaining?: number;
 };
 export type Seat = { game: StakeGame; id: string; player: string; matchId: Hex };
@@ -75,9 +78,10 @@ export async function mainnetOnly(w: ReturnType<typeof createWalletClient>) {
 }
 
 type Ask = { title: string; lines: [string, string][]; resolve: (ok: boolean) => void };
+// the challenge this browser opened or joined, for every tab (the server also knows it by wallet: games/staked.tsx)
 const SAVED = "ns-stake";
-const saved = (game: StakeGame): Hex | null => { try { const s = JSON.parse(sessionStorage.getItem(SAVED) ?? "null"); return s?.game === game ? s.matchId : null; } catch { return null; } };
-const keep = (game: StakeGame, matchId: Hex | null) => { try { if (matchId) sessionStorage.setItem(SAVED, JSON.stringify({ game, matchId })); else sessionStorage.removeItem(SAVED); } catch { /* private window */ } };
+const saved = (game: StakeGame): Hex | null => { try { const s = JSON.parse(localStorage.getItem(SAVED) ?? "null"); return s?.game === game ? s.matchId : null; } catch { return null; } };
+const keep = (game: StakeGame, matchId: Hex | null) => { try { if (matchId) localStorage.setItem(SAVED, JSON.stringify({ game, matchId })); else if (saved(game)) localStorage.removeItem(SAVED); } catch { /* private window */ } };
 
 /**
  * The staked lobby for one game: type a stake, create a challenge (approve exactly the stake, then
@@ -91,7 +95,7 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
   const [amount, setAmount] = useState("");
   const [list, setList] = useState<ChallengeView[]>([]);
   const [mine, setMine] = useState<ChallengeView | null>(null);
-  const [mineId, setMineId] = useState<Hex | null>(() => saved(game));
+  const [mineId, setMineId] = useState<Hex | null>(() => saved(game) ?? (new URLSearchParams(location.search).get("seat") as Hex | null));
   const [step, setStep] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [ask, setAsk] = useState<Ask | null>(null);
@@ -110,6 +114,13 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     return me;
   };
   const track = (id: Hex | null) => { setMineId(id); keep(game, id); if (!id) setMine(null); seated.current = false; };
+  // a challenge of this wallet the server knows (opened in another tab, joined before a reload): this lobby follows it
+  const known = useMyStakes();
+  useEffect(() => {
+    if (mineId) return;
+    const c = known.find((x) => x.game === game && !x.seat && (x.you === "A" || x.joining) && (x.status === "pending" || x.status === "open"));
+    if (c) track(c.matchId);
+  }, [known, mineId, game]);
 
   // the open challenges, and the one this player is in, every few seconds
   useEffect(() => {
@@ -130,8 +141,12 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
       }
     };
     void load();
-    const t = setInterval(() => { if (!document.hidden) void load(); }, 3_000);
-    return () => { alive = false; clearInterval(t); };
+    // hidden (the wallet app in front, a sleeping tab) it still looks, less often, and at once when the page is back
+    let ticks = 0;
+    const t = setInterval(() => { if (!document.hidden || ++ticks % 5 === 0) void load(); }, 3_000);
+    const back = () => { if (!document.hidden) void load(); };
+    document.addEventListener("visibilitychange", back);
+    return () => { alive = false; clearInterval(t); document.removeEventListener("visibilitychange", back); };
   }, [game, mineId]);
 
   const run = async (label: string, f: () => Promise<void>) => {
@@ -203,7 +218,10 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     track(null);
   });
 
+  // the creator waits for a rival; a joiner (not player A) waits for the chain to confirm the join; then both for the table
   const waiting = mineId && mine && !mine.playerB && !["cancelled", "refunded", "settled"].includes(mine.status);
+  const joining = waiting && mine.you !== "A";
+  const dealing = mineId && mine && mine.playerB && !mine.outcome && !mine.closed && !seated.current;
   const joinLeft = mine?.joinBy ? Math.max(0, Math.floor(mine.joinBy - now)) : null;
   const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -235,7 +253,16 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     </li>)}</ul> : <p className="sk-note">No open {game === "chess" ? "chess" : game === "pool" ? "pool" : "pinball"} challenges. Create one; it stays open for an hour.</p>}
     <p className="sk-note sk-fine">Contract <a href={`https://etherscan.io/address/${ESCROW}`} target="_blank" rel="noreferrer">{short(ESCROW)} ↗</a> · results signed by the server, paid by the contract.</p>
 
-    {waiting && <div className={`sk-overlay ${theme}-overlay`} role="dialog" aria-modal="true" aria-labelledby="sk-wait">
+    {(joining || dealing) && <div className={`sk-overlay ${theme}-overlay`} role="dialog" aria-modal="true" aria-labelledby="sk-joining">
+      <div className="sk-dialog">
+        <div className="sk-radar"><Icon name="radar" size={30} /></div>
+        <span className="sk-kicker">{dealing ? "BOTH STAKES ARE IN" : "JOINING ON CHAIN"} · {mine.amount} {tokenLabel(mine.token)}</span>
+        <h2 id="sk-joining">{dealing ? <>Setting up<br />your table</> : <>Your stake is<br />on its way</>}</h2>
+        <p>{dealing ? "The game opens here in a moment. The clock starts only once you are both at the table." : `Ethereum is confirming your join. The game against ${mine.name} opens here as soon as it lands; if you leave this page, a "Take your seat" banner brings you back from any page.`}</p>
+        {err && <p className="sk-err" role="alert">{err}</p>}
+      </div>
+    </div>}
+    {waiting && !joining && <div className={`sk-overlay ${theme}-overlay`} role="dialog" aria-modal="true" aria-labelledby="sk-wait">
       <div className="sk-dialog">
         <div className="sk-radar"><Icon name="radar" size={30} /></div>
         <span className="sk-kicker">{mine.status === "pending" ? "CONFIRMING ON CHAIN" : "CHALLENGE OPEN"} · {mine.amount} {tokenLabel(mine.token)}</span>
@@ -282,11 +309,19 @@ export function StakeResult({ matchId, address }: { matchId: string; address: st
       await mainnetOnly(w);
       let h: Hex;
       if (kind === "settle") {
-        const s = await games<{ escrow: string; matchId: Hex; winner: Address; draw: boolean; deadline: string; signature: Hex }>(`challenge/${matchId}/signature`, {});
+        const s = await games<{ escrow: string; matchId: Hex; winner: Address; draw: boolean; deadline: string; signature: Hex }>(`escrow/${matchId}/result`);
         if (s.escrow.toLowerCase() !== ESCROW || s.matchId !== matchId) throw new Error("The signed result is not for this match. Nothing was sent.");
-        setStep("Confirm in your wallet…");
-        h = await w.writeContract({ account: a, chain: mainnet, address: ESCROW, abi: ABI, functionName: "settle", args: [s.matchId, s.winner, s.draw, BigInt(s.deadline), s.signature] });
-      } else h = await w.writeContract({ account: a, chain: mainnet, address: ESCROW, abi: ABI, functionName: "refund", args: [matchId as Hex] });
+        // simulated first: a payout the relay already landed (or a wrong result) is said here, before the wallet asks anything
+        setStep("Checking the payout…");
+        const args = [s.matchId, s.winner, s.draw, BigInt(s.deadline), s.signature] as const;
+        await rpc.simulateContract({ account: a, address: ESCROW, abi: ABI, functionName: "settle", args }).catch((e) => { throw new Error(/settled/i.test(errText(e)) ? "This match is already paid out." : `The payout would fail: ${errText(e)}`); });
+        setStep("Confirm once in your wallet…");
+        h = await w.writeContract({ account: a, chain: mainnet, address: ESCROW, abi: ABI, functionName: "settle", args });
+      } else {
+        await rpc.simulateContract({ account: a, address: ESCROW, abi: ABI, functionName: "refund", args: [matchId as Hex] }).catch((e) => { throw new Error(`The refund would fail: ${errText(e)}`); });
+        setStep("Confirm once in your wallet…");
+        h = await w.writeContract({ account: a, chain: mainnet, address: ESCROW, abi: ABI, functionName: "refund", args: [matchId as Hex] });
+      }
       setSent(h);
       setStep("Waiting for the transaction…");
       if ((await rpc.waitForTransactionReceipt({ hash: h })).status !== "success") throw new Error("The transaction failed.");
@@ -294,14 +329,16 @@ export function StakeResult({ matchId, address }: { matchId: string; address: st
     } catch (e) { setErr(errText(e)); } finally { setStep(null); }
   };
   const relayTx = c.relay?.tx;
+  // the server says so, or this page sees the relay stuck for over two minutes
+  const claimable = !!c.claimable || !c.relay || c.relay.state === "failed" || (c.relay.state !== "mined" && !!c.relay.at && Date.now() - c.relay.at > 120_000);
   return <div className="sk-result" role="status">
     <span className="sk-kicker">STAKE · {c.amount} {label} EACH · ESCROW {short(ESCROW)}</span>
     {c.closed ? <p>{c.closed.kind === "settled" ? c.closed.draw ? `Draw: both stakes went back (${c.amount} ${label} each).` : `Paid out: ${fmt(payoutOf(stake))} ${label} to ${short(c.closed.winner)}${c.closed.winner === address?.toLowerCase() ? " (you)" : ""}.` : `Stakes ${c.closed.kind}.`} <a href={tx(c.closed.tx)} target="_blank" rel="noreferrer">Etherscan ↗</a></p>
       : c.refused ? <p className="sk-bad">No result can be signed for this match ({c.refused}). Both stakes can be refunded from {new Date((c.refundAt ?? 0) * 1000).toLocaleString()}.</p>
       : !c.outcome ? <p>Waiting for the verified result…</p>
-      : relayTx && c.relay?.state !== "failed" ? <p>{c.outcome.draw ? "Draw: refunding both stakes." : youWon ? `You won ${fmt(payoutOf(stake))} ${label}.` : "Paying the winner."} Payout sent: <a href={tx(relayTx)} target="_blank" rel="noreferrer">{short(relayTx)} ↗</a></p>
-      : <p>{c.outcome.draw ? "Draw: both stakes go back." : youWon ? `You won ${fmt(payoutOf(stake))} ${label}.` : "Your rival won this one."} {c.signed ? c.relay?.state === "failed" || !c.relay ? "The server could not send the payout; you can submit the signed result yourself." : "Sending the payout…" : "Signing the result…"}</p>}
-    {!c.closed && c.signed && (c.relay?.state === "failed" || !c.relay) && c.you && (youWon || c.outcome?.draw) && <button type="button" className="sk-btn primary" disabled={!!step} onClick={() => void claim("settle")}>{step ?? (youWon ? "CLAIM WINNINGS" : "REFUND BOTH STAKES")}</button>}
+      : relayTx && !claimable ? <p>{c.outcome.draw ? "Draw: refunding both stakes." : youWon ? `You won ${fmt(payoutOf(stake))} ${label}.` : "Paying the winner."} Payout sent: <a href={tx(relayTx)} target="_blank" rel="noreferrer">{short(relayTx)} ↗</a></p>
+      : <p>{c.outcome.draw ? "Draw: both stakes go back." : youWon ? `You won ${fmt(payoutOf(stake))} ${label}.` : "Your rival won this one."} {c.signed ? claimable ? "The server's payout did not go through (or is slow): send the signed result from your own wallet, one confirmation." : "Sending the payout…" : "Signing the result…"}</p>}
+    {!c.closed && c.signed && claimable && c.you && (youWon || c.outcome?.draw) && <button type="button" className="sk-btn primary" disabled={!!step} onClick={() => void claim("settle")}>{step ?? (youWon ? "CLAIM WINNINGS" : "REFUND BOTH STAKES")}</button>}
     {!c.closed && c.you && c.refundAt && now >= c.refundAt && <button type="button" className="sk-btn" disabled={!!step} onClick={() => void claim("refund")}>{step ?? "REFUND THE STAKES"}</button>}
     {sent && <p className="sk-note">Your transaction: <a href={tx(sent)} target="_blank" rel="noreferrer">{short(sent)} ↗</a></p>}
     {err && <p className="sk-err" role="alert">{err}</p>}

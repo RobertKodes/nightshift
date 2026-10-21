@@ -64,8 +64,13 @@ export type OpenPinball = { id: string; host: { name: string; avatar: string | n
 
 const matches = new Map<string, Match>();
 const listeners = new Map<string, Set<() => void>>();
-/** A staked duel starts once both players are connected, or this long after it was made, whoever is there. */
-export const STAKED_SHOW_MS = 5 * 60_000;
+/**
+ * A staked duel starts only once both players are connected (both see the countdown). If they have
+ * not both been at the table within this long after it was made, it is void: both stakes go back.
+ */
+export const STAKED_SHOW_MS = 15 * 60_000;
+/** Why a staked duel was void before it started. */
+export const STAKED_VOID = "You were not both at the table within 15 minutes: the duel is void and both stakes go back.";
 
 /** Ticks per second. */
 const TPS = 240;
@@ -208,13 +213,13 @@ const dealt = (m: Match) => m.go && !m.void && !!m.startedAt && Date.now() >= m.
 const view = (m: Match, me?: string, faces = true) => ({
   id: m.id, escrow: m.escrow ?? null, seed: dealt(m) ? m.deal.hash : null, luck: luckOf(m, m.players.find((p) => p.id === me)), currency: m.currency, stake: m.stake, startedAt: m.startedAt, now: Date.now(),
   done: m.done, draw: m.draw, void: m.void, winner: m.players.find((p) => p.id === m.winner)?.name ?? null, winnerIsYou: !!me && m.winner === me,
-  waitingSince: m.createdAt, expired: m.expired ?? null, movedTo: m.movedTo ?? null,
+  waitingSince: m.createdAt, expired: m.expired ?? null, movedTo: m.movedTo ?? null, showBy: m.showBy ?? null,
   players: m.players.map((p) => {
     const mine = p.id === me, open = mine || m.done;
     return {
       key: p.key, name: p.name, ...(faces ? { avatar: p.avatar } : {}), live: p.s.table.score, x: p.x, y: p.y,
       attacks: mine ? [] : p.sent.map((a, n) => ({ n, kind: a.kind, tick: a.tick, at: a.tick + ATTACK_DELAY })),
-      score: open ? p.score : null, solo: open ? p.solo : null, stats: open ? p.stats ?? null : null, you: mine, finished: open && p.inputs !== null,
+      score: open ? p.score : null, solo: open ? p.solo : null, stats: open ? p.stats ?? null : null, you: mine, finished: open && p.inputs !== null, connected: p.watching > 0,
       ...(mine && p.broken ? { error: p.broken } : {}),
     };
   }),
@@ -304,7 +309,9 @@ function countdown(m: Match): void {
 /**
  * A duel for a stake held in GameEscrow, for exactly these two wallets (the escrow's player A and
  * B). Each attaches with the seat the lobby gives only to that wallet's signed-in session. The luck
- * stays hidden until the start, as in every duel. A player who never streams a game scores 0.
+ * stays hidden until the start, as in every duel. It starts once both are connected; if they are not
+ * both there within STAKED_SHOW_MS it is void. A player who never plays a ball loses no stake: the
+ * duel is void (a draw, both stakes back); one who played and stopped scores what the log shows.
  */
 export function createStaked(o: { escrow: string; currency: "IMD" | "SHIFT"; stake: number; a: { wallet: string; name: string; agent?: boolean }; b: { wallet: string; name: string; agent?: boolean }; onResult: (r: { draw: boolean; winner: string | null }) => void }): { id: string; seats: Record<string, string> } {
   const id = randomBytes(5).toString("hex"), d = deal(id), pa = randomUUID(), pb = randomUUID();
@@ -314,7 +321,12 @@ export function createStaked(o: { escrow: string; currency: "IMD" | "SHIFT"; sta
     escrow: o.escrow, showBy: Date.now() + STAKED_SHOW_MS, onResult: o.onResult,
   };
   matches.set(id, m);
-  setTimeout(() => { if (!m.startedAt && !m.done) countdown(m); }, STAKED_SHOW_MS).unref?.();
+  setTimeout(() => {
+    if (m.startedAt || m.done) return;
+    m.done = true; m.draw = true; m.void = STAKED_VOID;
+    try { m.onResult?.({ draw: true, winner: null }); } catch (e) { console.error("pinball stake result", e); }
+    emit(m);
+  }, STAKED_SHOW_MS).unref?.();
   return { id, seats: { [o.a.wallet.toLowerCase()]: pa, [o.b.wallet.toLowerCase()]: pb } };
 }
 
@@ -642,7 +654,9 @@ function settle(m: Match): void {
   a.score = a.inputs ? r[0]!.score : 0; b.score = b.inputs ? r[1]!.score : 0;
   a.stats = r[0]!.stats; b.stats = r[1]!.stats;
   m.done = true;
-  m.draw = a.score === b.score;
+  // a staked duel where a player never played a ball (never streamed an input) is void: nobody loses a stake by not being there
+  const never = (p: Player) => !p.inputs && p.s.log.length === 0;
+  m.draw = a.score === b.score || (!!m.escrow && (never(a) || never(b)));
   m.winner = m.draw ? null : a.score > b.score ? a.id : b.id;
   // a match with one log is no duel: no board, no announcement
   if (a.inputs && b.inputs) {

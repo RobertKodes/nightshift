@@ -9,6 +9,7 @@ import { NxTabs as AppTabsNx } from "./nx/Shell";
 const AppTabs = (_: { active: string }) => <AppTabsNx room="breakroom" />;
 import { type Seat, StakeLobby, StakeResult, useEscrow } from "./stakes";
 import { alertJoined, doneWaiting, keepSeat, keepWaiting, Lounge, primeAlerts, waitText } from "./games/lounge";
+import { useStakedSeat } from "./games/staked";
 import "./pinball/arcade.css";
 import { LITE, onHidden } from "./lite";
 
@@ -18,11 +19,11 @@ const PinballWatch = lazy(() => import("./pinball/Watch").then((x) => ({ default
 type Currency = "FREE" | "IMD" | "SHIFT";
 type Mode = "PRACTICE" | Currency;
 /** A player as the server shows them; the rival's verified score, stats and finish only once the match is settled. Faces come in the first frame. */
-type PlayerView = { key: string; name: string; avatar?: string | null; live: number; x: number; y: number; attacks: Shot[]; score: number | null; solo: number | null; stats: Record<string, number> | null; you: boolean; finished: boolean; error?: string };
+type PlayerView = { key: string; name: string; avatar?: string | null; live: number; x: number; y: number; attacks: Shot[]; score: number | null; solo: number | null; stats: Record<string, number> | null; you: boolean; finished: boolean; connected?: boolean; error?: string };
 /** Salts the server hands out, from the number this page said it holds. */
 type LuckPart = { from: number; salts: number[] };
 /** `seed` is the deal's commitment (the sha256 of all its salts), shown at the start; the salts come in `luck` as the stream reaches them. */
-type MatchView = { id: string; escrow: string | null; seed: string | null; luck?: LuckPart | null; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; void: string | null; winner: string | null; winnerIsYou: boolean; players: PlayerView[]; waitingSince?: number; movedTo?: string | null };
+type MatchView = { id: string; escrow: string | null; seed: string | null; luck?: LuckPart | null; currency: Currency; stake: number; startedAt: number | null; now?: number; done: boolean; draw: boolean; void: string | null; winner: string | null; winnerIsYou: boolean; players: PlayerView[]; waitingSince?: number; movedTo?: string | null; showBy?: number | null };
 /** What is on the table (it stays mounted under the result) and what is shown over it. A board run runs on the server's clock. */
 type Play = { kind: "practice"; seed: number; run: number; id?: string; deal?: string; startAt?: number; offset?: number } | { kind: "duel"; match: MatchView; player: string };
 type SoloStart = { id: string; seed: string; luck: LuckPart; startedAt: number; now: number };
@@ -221,6 +222,9 @@ export function PinballPage() {
     : play?.kind === "practice" && play.id ? (s: Live) => stream(`solo/${play.id}/progress`, s, setErr, (l) => take(play.deal, l)) : undefined;
   /** Both stakes are in: take the seat the lobby gave this wallet, as any duel. */
   const seat = (s: Seat) => { setErr(null); setOver(null); clock.current = 0; follow(s.id, s.player); };
+  // a staked seat found by the wallet (any tab, after a reload, from the banner's ?seat=): taken here unless another game is on
+  const following = waiting?.match.escrow ? waiting.match.id : play?.kind === "duel" && play.match.escrow ? play.match.id : null;
+  useStakedSeat("pinball", seat, { busy: (play?.kind === "duel" && !play.match.done && !play.match.escrow) || (play?.kind === "practice" && !over), following, open: (s) => { if (!new URLSearchParams(location.search).get("token")) setMode((m) => (m === "FREE" ? s.token : m)); } });
   /** A seat from the lounge on this page: the same as a seat from the queue. */
   const loungeSeat = (_game: string, id: string, player: string) => { setErr(null); setOver(null); clock.current = 0; try { localStorage.setItem("pb-name", name); } catch { /* private window */ } follow(id, player); };
   const toLobby = () => { es.current?.close(); setPlay(null); setOver(null); setWaiting(null); };
@@ -267,13 +271,13 @@ export function PinballPage() {
       <div className="arc-vs">
         <div><div className="arc-face"><img src={avatar ?? "/games/pinball/frog-0.webp"} alt="" /></div><span>{me}</span></div>
         <i>VS</i>
-        <div><div className="arc-face arc-face-pending"><Icon name="user" size={28} /></div><span>Awaiting player</span></div>
+        {(() => { const r = waiting.match.escrow ? waiting.match.players.find((p) => !p.you) : null; return r ? <div><div className={`arc-face ${r.connected ? "" : "arc-face-pending"}`}>{r.avatar ? <img src={r.avatar} alt="" /> : <Icon name="user" size={28} />}</div><span>{r.name}{r.connected ? "" : " · not here yet"}</span></div> : <div><div className="arc-face arc-face-pending"><Icon name="user" size={28} /></div><span>Awaiting player</span></div>; })()}
       </div>
       <div className="arc-stats">
-        <div><b>1 / 2</b><span>players</span></div><div><b>{waiting.match.currency === "FREE" ? "Free" : waiting.match.currency === "SHIFT" ? "$SHIFT" : "IMD"}</b><span>duel</span></div>
+        <div><b>{waiting.match.escrow ? `${waiting.match.players.filter((p) => p.connected).length} / 2` : "1 / 2"}</b><span>{waiting.match.escrow ? "at the table" : "players"}</span></div><div><b>{waiting.match.currency === "FREE" ? "Free" : waiting.match.currency === "SHIFT" ? "$SHIFT" : "IMD"}</b><span>duel</span></div>
         <div><b>{waiting.match.stake.toLocaleString()}</b><span>stake</span></div><div><b>3 s</b><span>attack delay</span></div>
       </div>
-      {waiting.match.escrow ? <p>The duel starts as soon as your rival connects, or within 5 minutes. A player who never plays scores 0. Keep this page open.</p> : <>
+      {waiting.match.escrow ? <p>Both stakes are in. The duel starts only once you are both at the table: your rival sees a "Take your seat" banner on any page of the site.{waiting.match.showBy ? <> If you are not both here in <b className="lg-clock">{waitText(waiting.match.showBy - now - clock.current)}</b>, the duel is void and both stakes go back.</> : null}</p> : <>
         <p>Your duel is open in the lounge, waiting {waitText(now - (waiting.match.waitingSince ?? now))}. The next player to find a rival joins your table. Browse the site meanwhile: you hear it when someone joins.</p>
         <div className="arc-actions"><button type="button" autoFocus className="arc-btn" onClick={() => go("/games")}><Icon name="radar" size={17} />BROWSE WHILE YOU WAIT</button>
         <button type="button" className="arc-btn ghost" onClick={() => { es.current?.close(); void api(`match/${waiting.match.id}/leave`, { player: waiting.player }).catch(() => {}); doneWaiting("pinball", waiting.match.id); keepSeat("pinball", null); setWaiting(null); }}>CANCEL SEARCH</button></div>

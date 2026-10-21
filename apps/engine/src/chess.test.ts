@@ -94,7 +94,7 @@ describe("night chess", () => {
       const t = games.createStaked({ escrow: `0x${"ab".repeat(32)}`, tc: "10+0", currency: "IMD", stake: "1", a: { wallet: "0x1111111111111111111111111111111111111111", name: "Pearl" }, b: { wallet: "0x2222222222222222222222222222222222222222", name: "Onyx" }, onResult: () => {} });
       const [pa, pb] = Object.values(t.seats) as [string, string];
       games.listen(t.id, pa, () => {}); games.listen(t.id, pb, () => {});
-      now += 5_000;
+      now += 10_000; // the staked countdown
       for (let i = 0; i < 44; i++) {
         const v = games.get(t.id, pa), me = v.turn === v.you ? pa : pb;
         const moves = new Chess(v.fen).moves({ verbose: true }), m = moves[(i * 7) % moves.length]!;

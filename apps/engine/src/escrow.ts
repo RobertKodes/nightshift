@@ -29,6 +29,8 @@ export const JOIN_TIMEOUT = 3_600;
 export const SETTLE_TIMEOUT = 86_400;
 /** A challenge the creator has not opened on chain within this long is forgotten. */
 export const PENDING_MS = 15 * 60_000;
+/** A relay that has not landed after this long: the players are offered to submit the result themselves. */
+export const RELAY_SLOW_MS = 2 * 60_000;
 /** A signed result is good for this long, and never past the settlement cutoff. */
 const RESULT_TTL = 12 * 3_600;
 
@@ -208,6 +210,12 @@ export class Escrow {
     return c;
   }
 
+  /** The open challenges this wallet said it is joining (its join may not be confirmed yet). */
+  joining(wallet: string): string[] {
+    const me = lc(wallet);
+    return [...this.#intents].filter(([, m]) => m.has(me)).map(([id]) => id);
+  }
+
   status(c: Challenge): Status {
     if (c.closed) return c.closed.kind;
     if (c.refused) return "refused";
@@ -223,9 +231,18 @@ export class Escrow {
       creator: c.creator, name: c.name || "Night crew", playerB: c.playerB ?? null, nameB: c.playerB ? c.nameB || "Night crew" : null, status: this.status(c),
       openedAt: c.openedAt ?? null, joinBy: c.openedAt ? c.openedAt + JOIN_TIMEOUT : null, joinedAt: c.joinedAt ?? null, refundAt: c.joinedAt ? c.joinedAt + SETTLE_TIMEOUT : c.openedAt ? c.openedAt + JOIN_TIMEOUT : null,
       outcome: c.outcome ? { draw: c.outcome.draw, winner: c.outcome.winner, reason: c.outcome.reason ?? null } : null, signed: !!c.result, refused: c.refused ?? null,
-      relay: c.relay ? { state: c.relay.state, tx: c.relay.tx ?? null } : null, closed: c.closed ?? null,
+      relay: c.relay ? { state: c.relay.state, tx: c.relay.tx ?? null, at: c.relay.at } : null, closed: c.closed ?? null,
+      claimable: this.claimable(c),
       you: me && me === c.creator ? "A" as const : me && me === c.playerB ? "B" as const : null,
     };
+  }
+  /**
+   * The players may submit the signed result themselves (settle() is open to anyone holding it): the
+   * server's relay never sent it, failed (no gas, a revert), or has not landed after RELAY_SLOW_MS.
+   */
+  claimable(c: Challenge): boolean {
+    if (!c.result || c.closed || c.refused) return false;
+    return !c.relay || c.relay.state === "failed" || (c.relay.state !== "mined" && this.#now() - c.relay.at > RELAY_SLOW_MS);
   }
   /** Challenges anyone may accept: opened by their creator with exactly the recorded terms, unjoined, inside the join window. */
   open(game?: string, viewer: string | null = null) {

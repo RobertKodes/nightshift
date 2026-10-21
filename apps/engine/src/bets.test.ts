@@ -171,7 +171,7 @@ function setup(o: { live?: boolean; address?: string; watch?: boolean } = {}) {
       id = t.id; pa = t.seats[P1.toLowerCase()]!; pb = t.seats[P2.toLowerCase()]!;
       games.listen(id, pa, () => {}); games.listen(id, pb, () => {});
     }
-    now += 6_000;
+    now += free ? 6_000 : 11_000; // past the countdown (a staked game's is 10 s)
     const white = games.get(id, pa).you === "w" ? pa : pb, black = white === pa ? pb : pa;
     const move = (uci: string) => games.move(id, games.get(id, white).turn === "w" ? white : black, uci.slice(0, 2), uci.slice(2, 4));
     return { id, white, black, move };
@@ -220,7 +220,7 @@ describe("tickets", () => {
     // a second into the game, level: almost the full weight
     expect(r.ticket.weightBps).toBeGreaterThan(9_900);
     expect(r.weightBps).toBe(r.ticket.weightBps);
-    expect(r.ticket.expiry - Math.floor(Date.UTC(2026, 9, 19, 12, 0, 6) / 1000)).toBe(B.TICKET_TTL);
+    expect(r.ticket.expiry - Math.floor(Date.UTC(2026, 9, 19, 12, 0, 11) / 1000)).toBe(B.TICKET_TTL);
     expect(B.TICKET_TTL).toBeLessThanOrEqual(120);
     expect(r.ticket.marketId).toBe(B.marketIdOf("chess", g.id, "IMD"));
     const message = { ...r.ticket, amount: BigInt(r.ticket.amount), expiry: BigInt(r.ticket.expiry) };

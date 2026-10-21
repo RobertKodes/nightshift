@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { formatUnits } from "viem";
 import { isAdmin } from "./admin.js";
-import { chess, type TimeControl } from "./chess.js";
+import { chess, STAKED_SHOW_MS, type TimeControl } from "./chess.js";
 import { createStaked as pinballStaked } from "./pinball.js";
 import { pool } from "./pool.js";
 import { type Challenge, ESCROW, Escrow, GameError, liveEscrow } from "./escrow.js";
@@ -67,6 +67,25 @@ export class Lobby {
     if (!t) { if (c.outcome || c.closed) throw new GameError(409, "This game is over."); return { waiting: true }; }
     return { game: t.game, id: t.id, player: t.seats[me]! };
   }
+  /**
+   * Every staked match of this wallet still to be played, for any page it is on (a reload, another
+   * tab, the creator who left, the joiner whose wallet batched approve and join): its open or pending
+   * challenges, the ones it just joined (the chain has not confirmed it yet), and the joined ones
+   * with its own seat once the game is dealt, and when the game is void if both are not there.
+   */
+  mine(wallet: string | null) {
+    if (!wallet) return [];
+    const me = wallet.toLowerCase(), joining = new Set(this.escrow.joining(me));
+    return [...this.escrow.challenges.values()].flatMap((c) => {
+      const status = this.escrow.status(c);
+      const ours = c.creator === me || c.playerB === me || (status === "open" && joining.has(c.matchId));
+      // and a decided one whose payout the player may have to send themselves (the relay failed or is slow)
+      const claim = status === "finished" && this.escrow.claimable(c) && (c.outcome?.draw || c.outcome?.winner === me);
+      if (!ours || (!claim && !["pending", "open", "joined"].includes(status))) return [];
+      const t = status === "joined" ? this.tables.get(c.matchId) : undefined;
+      return [{ ...this.escrow.view(c, me), joining: status === "open" && c.creator !== me, seat: t?.seats[me] ? { game: t.game, id: t.id, player: t.seats[me]! } : null, startBy: c.dealtAt ? c.dealtAt + STAKED_SHOW_MS : null }];
+    }).sort((a, b) => (b.joinedAt ?? b.openedAt ?? 0) - (a.joinedAt ?? a.openedAt ?? 0)).slice(0, 10);
+  }
 }
 
 let lobby: Lobby | null = null;
@@ -78,6 +97,8 @@ export function live(vault: Vault): Lobby {
   }
   return lobby;
 }
+/** Tests and local runs: another lobby (an escrow on a fake chain, escrow.fake.ts) in place of the live one. */
+export function setLobby(l: Lobby | null): void { lobby = l; }
 const MATCH_ID = /^0x[0-9a-f]{64}$/;
 
 /** /api/games/*: the escrow, the challenge lobby, seats and signatures. Call before the API fallback. */
@@ -107,9 +128,20 @@ export async function gamesRoutes(req: IncomingMessage, res: ServerResponse, p: 
       const game = url.searchParams.get("game") ?? undefined;
       return reply(200, { challenges: escrow.open(game, owner) });
     }
+    // the signed-in wallet's staked matches still to be played, with its seat once dealt: every page polls this
+    if (p === "/api/games/mine" && req.method === "GET") {
+      if (owner) escrow.poke();
+      return reply(200, { matches: l.mine(owner), now: Date.now() });
+    }
     if (p === "/api/games/challenge" && req.method === "POST") {
       if (limited(req, "games-challenge", 20, 600_000)) return reply(429, { error: "Too many challenges. Try again shortly." });
       return reply(200, await escrow.create(owner, await body(req, 2_000)));
+    }
+    // the signed result, for one of the two players to submit with settle() from their own wallet
+    const result = /^\/api\/games\/escrow\/(0x[0-9a-fA-F]{64})\/result$/.exec(p);
+    if (result && req.method === "GET") {
+      if (limited(req, "games-action", 60, 60_000)) return reply(429, { error: "Slow down" });
+      return reply(200, await escrow.signature(result[1]!.toLowerCase(), owner));
     }
     const route = /^\/api\/games\/challenge\/(0x[0-9a-fA-F]{64})(?:\/(accept|seat|signature))?$/.exec(p);
     if (!route) return reply(404, { error: "No such games route" });

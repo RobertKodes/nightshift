@@ -22,12 +22,17 @@ describe("a wallet's staked games on the rewards card", () => {
   it("never offers a loss, a payout already on its way, or a settled match; shows them as history", () => {
     const g = gamesOf([
       duel({ result: signed(RIVAL), outcome: { draw: false, winner: RIVAL, at: 3 } }),
-      duel({ result: signed(ME), outcome: { draw: false, winner: ME, at: 4 }, relay: { state: "sent", tx: "0xabc", at: 4 } }),
+      duel({ result: signed(ME), outcome: { draw: false, winner: ME, at: 4 }, relay: { state: "sent", tx: "0xabc", at: (now - 30) * 1000 } }),
       duel({ closed: { kind: "settled", tx: "0xdef", winner: ME, draw: false, payout: (19n * E18).toString() }, outcome: { draw: false, winner: ME, at: 5 } }),
       duel({ creator: RIVAL, playerB: "0x00000000000000000000000000000000000000cc" }),
     ], ME, now);
     expect(g.claimable).toEqual([]);
     expect(g.recent.map((r) => r.result)).toEqual(["won", "paying"]);
+  });
+
+  it("offers the claim when the relay was sent but has not landed in 2 minutes (a keeper low on gas, a stuck transaction)", () => {
+    const g = gamesOf([duel({ result: signed(ME), outcome: { draw: false, winner: ME, at: 6 }, relay: { state: "sent", tx: "0xabc", at: (now - 121) * 1000 } })], ME, now);
+    expect(g.claimable.map((c) => c.kind)).toEqual(["settle"]);
   });
 
   it("offers a refund once the contract allows it: an unjoined match after the hour, a joined one after a day", () => {

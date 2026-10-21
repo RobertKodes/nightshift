@@ -2,7 +2,7 @@ import type { Color, Move } from "chess.js";
 
 export type TimeControl = "3+2" | "5+0" | "10+0";
 export const CONTROLS = { "3+2": { time: 180_000, increment: 2_000, label: "Blitz", note: "2 seconds back per move" }, "5+0": { time: 300_000, increment: 0, label: "Blitz", note: "Five minutes. Trust yourself." }, "10+0": { time: 600_000, increment: 0, label: "Rapid", note: "A little room to think" } };
-export type PlayerView = { name: string; color: Color; rating: number; you: boolean; connected: boolean };
+export type PlayerView = { name: string; color: Color; rating: number; you: boolean; connected: boolean; awayUntil?: number | null; grace?: number | null };
 export type MatchView = {
   id: string; tc: TimeControl; currency: "FREE" | "IMD" | "SHIFT"; stake: string | null; escrow: string | null; version: number; now: number; startedAt: number | null;
   status: "waiting" | "countdown" | "playing" | "finished"; fen: string; turn: Color; check: boolean;
@@ -11,6 +11,8 @@ export type MatchView = {
   rematchRequested: boolean; rivalWantsRematch: boolean; rematchId: string | null; players: PlayerView[];
   /** An open game in the lounge: since when it waits, whether its host takes any clock, why it closed unplayed, or the table it moved to. */
   waitingSince?: number; any?: boolean; expired?: "away" | "timeout" | null; movedTo?: string | null;
+  /** A staked game: when it is void if both players have not been at the table (server clock). */
+  showBy?: number | null;
 };
 export type BoardEntry = { name: string; rating: number; games: number; wins: number };
 export type Leaderboard = { board: BoardEntry[]; best: BoardEntry[] };

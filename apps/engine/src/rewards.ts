@@ -2,7 +2,7 @@ import { type Address, type Hex, parseAbi } from "viem";
 import { eth } from "./chain.js";
 import { marketSnapshot } from "./community.js";
 import { config } from "./config.js";
-import { type Challenge, JOIN_TIMEOUT, SETTLE_TIMEOUT, TOKENS } from "./escrow.js";
+import { type Challenge, JOIN_TIMEOUT, RELAY_SLOW_MS, SETTLE_TIMEOUT, TOKENS } from "./escrow.js";
 import { claimsOf, epochs } from "./frogpot.js";
 import { launchState } from "./token.js";
 
@@ -51,7 +51,8 @@ export function gamesOf(list: Iterable<Challenge>, wallet: string, nowSec = Math
       continue;
     }
     const mine = c.result && (c.result.draw || lc(c.result.winner) === me);
-    const relaying = c.relay && c.relay.state !== "failed";
+    // the relay is on its way, unless it failed or has not landed after RELAY_SLOW_MS: then the player may send the result
+    const relaying = c.relay && c.relay.state !== "failed" && (c.relay.state === "mined" || nowSec * 1000 - c.relay.at <= RELAY_SLOW_MS);
     // the signed result, while the contract still takes it (the server signs again up to 10 minutes before the cutoff)
     if (c.result && mine && !relaying && c.joinedAt && nowSec < c.joinedAt + SETTLE_TIMEOUT - 600) {
       claimable.push({ ...base, tokenAddress: TOKENS[c.token], kind: "settle", amount: (c.result.draw ? stake : payoutOf(stake)).toString(), draw: c.result.draw, at });

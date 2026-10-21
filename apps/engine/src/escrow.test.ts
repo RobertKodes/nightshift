@@ -174,7 +174,7 @@ describe("staked NIGHT CHESS", () => {
     const v = d.games.get(sa.id, sa.player);
     expect(v).toMatchObject({ currency: "IMD", stake: "5", escrow: d.id });
     expect(v.players.map((p) => p.name).sort()).toEqual(["Obsidian", "Pearl"]);
-    d.step(5_000);
+    d.step(10_000); // the staked countdown
     const white = v.you === "w" ? sa.player : sb.player, black = white === sa.player ? sb.player : sa.player, whiteWallet = white === sa.player ? A : B;
     for (const [i, [from, to]] of [["e2", "e4"], ["e7", "e5"], ["f1", "c4"], ["b8", "c6"], ["d1", "h5"], ["g8", "f6"], ["h5", "f7"]].entries()) d.games.move(sa.id, i % 2 ? black : white, from!, to!);
     expect(d.games.get(sa.id, white)).toMatchObject({ done: true, reason: "checkmate", winnerIsYou: true });
@@ -200,25 +200,112 @@ describe("staked NIGHT CHESS", () => {
     await expect(d.escrow.signature(d.id, A)).rejects.toThrow(/already settled/);
     offA(); offB();
   });
-  it("a player who never shows loses by abandonment; nobody showing is a draw", async () => {
+  it("never starts the clock with one player: if both are not at the table in 15 minutes it is void, both stakes back", async () => {
     const d = await chessDuel();
     const sa = d.lobby.seat(d.id, A) as { id: string; player: string };
     const off = d.games.listen(sa.id, sa.player, () => {});
-    d.step(5 * 60_000); // the show-up deadline: A alone at the table
-    d.step(5_000);
-    const mine = d.games.get(sa.id, sa.player);
-    if (mine.you === "w") d.games.move(sa.id, sa.player, "e2", "e4");
-    d.step(46_000);
-    expect(d.games.get(sa.id, sa.player)).toMatchObject({ done: true, reason: "abandonment", winnerIsYou: true });
-    await new Promise((r) => setTimeout(r, 10));
-    expect(d.escrow.challenges.get(d.id)!.result).toMatchObject({ winner: A.toLowerCase(), draw: false });
-    off();
-    const e = await chessDuel();
-    e.step(5 * 60_000 + 1);
+    d.step(14 * 60_000);
+    // A alone: still waiting, the deadline shown, no clock running
+    expect(d.games.get(sa.id, sa.player)).toMatchObject({ status: "waiting", startedAt: null, done: false, showBy: expect.any(Number) });
+    expect(d.games.get(sa.id, sa.player).players.find((p) => !p.you)).toMatchObject({ connected: false });
+    d.step(60_000 + 1);
+    expect(d.games.get(sa.id, sa.player)).toMatchObject({ done: true, reason: "void", winner: null });
     await new Promise((r) => setTimeout(r, 10));
     // a draw names player A in the ignored winner field
-    expect(e.escrow.challenges.get(e.id)!.result).toMatchObject({ winner: A.toLowerCase(), draw: true });
-    expect(e.f.s.relayed[0]).toMatchObject({ draw: true, winner: A });
+    expect(d.escrow.challenges.get(d.id)!.result).toMatchObject({ winner: A.toLowerCase(), draw: true });
+    expect(d.f.s.relayed[0]).toMatchObject({ draw: true, winner: A });
+    off();
+  });
+  it("starts with a countdown once both are at the table, however late the second one comes", async () => {
+    const d = await chessDuel();
+    const sa = d.lobby.seat(d.id, A) as { id: string; player: string }, sb = d.lobby.seat(d.id, B) as typeof sa;
+    const offA = d.games.listen(sa.id, sa.player, () => {});
+    d.step(12 * 60_000);
+    const offB = d.games.listen(sb.id, sb.player, () => {});
+    expect(d.games.get(sa.id, sa.player)).toMatchObject({ status: "countdown" });
+    d.step(10_000);
+    expect(d.games.get(sa.id, sa.player)).toMatchObject({ status: "playing", done: false });
+    d.step(60_000); // long past the old 5-minute deadline: the game goes on
+    expect(d.games.get(sa.id, sa.player).done).toBe(false);
+    offA(); offB();
+  });
+  it("a player who never made a move loses no stake: away from the start, the game is void", async () => {
+    const d = await chessDuel();
+    const sa = d.lobby.seat(d.id, A) as { id: string; player: string }, sb = d.lobby.seat(d.id, B) as typeof sa;
+    const offA = d.games.listen(sa.id, sa.player, () => {}), offB = d.games.listen(sb.id, sb.player, () => {});
+    d.step(10_000);
+    const white = d.games.get(sa.id, sa.player).you === "w" ? sa : sb;
+    // white's phone goes to the wallet app before the first move: both see the reconnection clock count down
+    (white === sa ? offA : offB)();
+    d.step(30_000);
+    const seen = d.games.get(sa.id, white === sa ? sb.player : sa.player).players.find((p) => !p.you)!;
+    expect(seen).toMatchObject({ connected: false, grace: 90_000 });
+    expect(seen.awayUntil).toBe(d.now() + 90_000);
+    d.step(45_000); // the free game's limit is no limit here
+    expect(d.games.get(sa.id, sa.player).done).toBe(false);
+    d.step(46_000);
+    expect(d.games.get(sa.id, sa.player)).toMatchObject({ done: true, reason: "void", winner: null });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(d.escrow.challenges.get(d.id)!.outcome).toMatchObject({ draw: true, winner: null });
+    (white === sa ? offB : offA)();
+  });
+  it("gives each player 2 minutes in all to reconnect on their turns; past that, a player who moved loses", async () => {
+    const d = await chessDuel();
+    const sa = d.lobby.seat(d.id, A) as { id: string; player: string }, sb = d.lobby.seat(d.id, B) as typeof sa;
+    let offA = d.games.listen(sa.id, sa.player, () => {});
+    const offB = d.games.listen(sb.id, sb.player, () => {});
+    d.step(10_000);
+    const aWhite = d.games.get(sa.id, sa.player).you === "w";
+    const w = aWhite ? sa : sb, b = aWhite ? sb : sa;
+    d.games.move(sa.id, w.player, "e2", "e4"); d.games.move(sa.id, b.player, "e7", "e5");
+    d.games.move(sa.id, w.player, "g1", "f3"); d.games.move(sa.id, b.player, "b8", "c6");
+    // A drops on their turn for 70 s and comes back: 50 s of grace left
+    if (!aWhite) d.games.move(sa.id, w.player, "f1", "c4");
+    offA(); d.step(70_000);
+    offA = d.games.listen(sa.id, sa.player, () => {});
+    expect(d.games.get(sa.id, sb.player).players.find((p) => !p.you)).toMatchObject({ connected: true, grace: 50_000 });
+    // A moves, B answers, A drops again: past the 50 s left, A (who moved) loses by abandonment
+    const [a1, a2] = aWhite ? ["f1", "c4"] : ["g8", "f6"], [b1, b2] = aWhite ? ["g8", "f6"] : ["d2", "d3"];
+    d.games.move(sa.id, sa.player, a1!, a2!);
+    d.games.move(sa.id, sb.player, b1!, b2!);
+    offA(); d.step(49_000);
+    expect(d.games.get(sa.id, sb.player).done).toBe(false);
+    d.step(2_000);
+    expect(d.games.get(sa.id, sb.player)).toMatchObject({ done: true, reason: "abandonment", winnerIsYou: true });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(d.escrow.challenges.get(d.id)!.outcome).toMatchObject({ draw: false, winner: B.toLowerCase() });
+    offB();
+  });
+  it("finds each wallet's staked games for any page: the open challenge, the join on its way, the seat once dealt", async () => {
+    const t = setup();
+    let clock = t.now();
+    const games = new ChessGames(null, () => clock);
+    const lobby = new Lobby(t.escrow, { pinball: () => { throw new Error("no pinball here"); }, pool: () => { throw new Error("no pool here"); }, chess: (x) => games.createStaked(x) });
+    const r = await t.escrow.create(A, { game: "chess", token: "SHIFT", amount: "100000", tc: "3+2", name: "SOLDIER" }), id = r.matchId as Hex;
+    expect(lobby.mine(A)).toEqual([expect.objectContaining({ matchId: id, status: "pending", you: "A", seat: null })]);
+    t.f.open(id, E.TOKENS.SHIFT, 100_000n * IMD, E.GAMES.chess, A, t.sec());
+    await t.escrow.sync();
+    expect(lobby.mine(A)).toEqual([expect.objectContaining({ matchId: id, status: "open", seat: null })]);
+    expect(lobby.mine(B)).toEqual([]);
+    // B (an EIP-7702 account: its own address on chain) says it joins, sends approve + join in one batch: the page may reload meanwhile
+    t.escrow.intend(id, B, "");
+    t.f.join(id, B, t.sec());
+    expect(lobby.mine(B)).toEqual([expect.objectContaining({ matchId: id, status: "open", joining: true, seat: null })]);
+    await t.escrow.sync();
+    const a = lobby.mine(A)[0]!, b = lobby.mine(B)[0]!;
+    expect(a).toMatchObject({ status: "joined", you: "A", seat: { game: "chess" } });
+    expect(b).toMatchObject({ status: "joined", you: "B", seat: { game: "chess" } });
+    expect(a.seat!.id).toBe(b.seat!.id); expect(a.seat!.player).not.toBe(b.seat!.player);
+    expect(a.startBy).toBe(t.escrow.challenges.get(id)!.dealtAt! + 15 * 60_000);
+    expect(lobby.mine(C)).toEqual([]); expect(lobby.mine(null)).toEqual([]);
+    // both pages sit down from what they found: the game starts
+    const offA = games.listen(a.seat!.id, a.seat!.player, () => {}), offB = games.listen(b.seat!.id, b.seat!.player, () => {});
+    expect(games.get(a.seat!.id, a.seat!.player).status).toBe("countdown");
+    offA(); offB();
+    // decided: no longer to be played
+    await t.escrow.finish(id, { draw: true, winner: null });
+    clock += 1;
+    expect(lobby.mine(A)).toEqual([]);
   });
   it("signs nothing when the match on chain does not match what the game recorded", async () => {
     for (const change of ["stake", "playerB", "settled", "token", "game"] as const) {
@@ -251,6 +338,43 @@ describe("staked NIGHT CHESS", () => {
     expect(s).toMatchObject({ winner: B, draw: false, escrow: E.ESCROW });
     await failing.sync();
     expect(t.f.s.relayed).toHaveLength(1);
+  });
+  it("lets the players send the signed result themselves when the relay fails or is slow", async () => {
+    const t = setup();
+    let fail = true;
+    const relay = async (r: Parameters<typeof t.f.relay>[0]) => { if (fail) throw new Error("the keeper has no ETH for gas"); return t.f.relay(r); };
+    const esc = new E.Escrow({ file: null, client: t.f.client, signer: t.signer, now: t.now, relay });
+    const games = new ChessGames(null, t.now);
+    const lobby = new Lobby(esc, { pinball: () => { throw new Error("no pinball here"); }, pool: () => { throw new Error("no pool here"); }, chess: (x) => games.createStaked(x) });
+    const open = async () => {
+      const r = await esc.create(A, { game: "chess", token: "SHIFT", amount: "100000", tc: "3+2" }), id = r.matchId as Hex;
+      t.f.open(id, E.TOKENS.SHIFT, 100_000n * IMD, E.GAMES.chess, A, t.sec()); t.f.join(id, B, t.sec());
+      await esc.sync();
+      return id;
+    };
+    // the keeper is out of gas: the winner (only) is offered the claim, with the signed result
+    const id = await open();
+    await esc.finish(id, { draw: false, winner: B });
+    expect(esc.view(esc.challenges.get(id)!, B)).toMatchObject({ status: "finished", signed: true, claimable: true, relay: { state: "failed" } });
+    expect(lobby.mine(B)).toEqual([expect.objectContaining({ matchId: id, status: "finished", claimable: true })]);
+    expect(lobby.mine(A)).toEqual([]);
+    const s = await esc.signature(id, B);
+    expect(await recoverTypedDataAddress({ domain: E.DOMAIN, types: E.RESULT_TYPES, primaryType: "Result", message: { matchId: id, winner: B, draw: false, deadline: BigInt(s.deadline) }, signature: s.signature })).toBe(t.signer.address);
+    await expect(esc.signature(id, C)).rejects.toThrow(/No such match/);
+    // settled by the player: closed, nothing left to claim
+    t.f.log("Settled", { matchId: id, winner: B, draw: false, payout: 190_000n * IMD, fee: 10_000n * IMD }); await esc.sync();
+    expect(esc.view(esc.challenges.get(id)!, B).claimable).toBe(false);
+    expect(lobby.mine(B)).toEqual([]);
+    // a draw (void): both players may send it; a relay that was sent but has not landed in 2 minutes too
+    fail = false;
+    const id2 = await open();
+    await esc.finish(id2, { draw: true, winner: null });
+    expect(esc.challenges.get(id2)!.relay).toMatchObject({ state: "sent" });
+    expect(esc.view(esc.challenges.get(id2)!).claimable).toBe(false);
+    t.advance(E.RELAY_SLOW_MS + 1);
+    expect(esc.view(esc.challenges.get(id2)!).claimable).toBe(true);
+    expect(lobby.mine(A).map((m) => m.matchId)).toEqual([id2]);
+    expect(lobby.mine(B).map((m) => m.matchId)).toEqual([id2]);
   });
   it("re-signs the same result with a fresh deadline once the first has passed", async () => {
     const d = await chessDuel();

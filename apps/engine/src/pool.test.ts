@@ -210,7 +210,7 @@ describe("staked NIGHT POOL through GameEscrow", () => {
     const offB = s.games.listen(sb.id, sb.player, () => {});
     expect(s.games.get(sa.id, sa.player)).toMatchObject({ currency: "IMD", stake: "5", escrow: s.id, rules: "wpa" });
     expect(() => s.games.rematch(sa.id, sa.player)).toThrow(/Finish this game first/);
-    s.step(5_100);
+    s.step(10_100); // the staked countdown
     const seats = [sa.player, sb.player] as const;
     const d = { games: s.games, id: sa.id, seats, now: s.now, advance: s.step } as unknown as Duel;
     const v = playOut(d);
@@ -223,12 +223,34 @@ describe("staked NIGHT POOL through GameEscrow", () => {
     expect(() => s.games.rematch(sa.id, sa.player)).toThrow(/no rematch/);
     offA(); offB();
   });
-  it("nobody comes: a draw, both stakes back", async () => {
+  it("never starts with one player: if both are not at the table in 15 minutes it is void, both stakes back", async () => {
     const s = await stakedDuel();
-    s.lobby.seat(s.id, A);
-    s.step(5 * 60_000 + 1_000);
+    const sa = s.lobby.seat(s.id, A) as { id: string; player: string };
+    const off = s.games.listen(sa.id, sa.player, () => {});
+    s.step(14 * 60_000);
+    expect(s.games.get(sa.id, sa.player)).toMatchObject({ status: "waiting", done: false, showBy: expect.any(Number) });
+    s.step(60_000 + 1_000);
+    expect(s.games.get(sa.id, sa.player)).toMatchObject({ done: true, reason: "void", winner: null });
     await new Promise((r) => setTimeout(r, 10));
     expect(s.escrow.challenges.get(s.id)!.outcome).toMatchObject({ draw: true, winner: null });
+    off();
+  });
+  it("a player away before their first shot has 2 minutes, then the game is void: nobody loses a stake by not being there", async () => {
+    const s = await stakedDuel();
+    const sa = s.lobby.seat(s.id, A) as { id: string; player: string }, sb = s.lobby.seat(s.id, B) as typeof sa;
+    const offA = s.games.listen(sa.id, sa.player, () => {}), offB = s.games.listen(sb.id, sb.player, () => {});
+    s.step(10_100);
+    const v = s.games.get(sa.id, sa.player), breaker = v.turn === v.you ? sa : sb, other = breaker === sa ? sb : sa;
+    (breaker === sa ? offA : offB)();
+    s.step(46_000); // a free game would be over by now
+    const seen = s.games.get(sa.id, other.player).players.find((p) => !p.you)!;
+    expect(seen).toMatchObject({ connected: false });
+    expect(s.games.get(sa.id, other.player).done).toBe(false);
+    s.step(2 * 60_000);
+    expect(s.games.get(sa.id, other.player)).toMatchObject({ done: true, reason: "void", winner: null });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(s.escrow.challenges.get(s.id)!.outcome).toMatchObject({ draw: true, winner: null });
+    (breaker === sa ? offB : offA)();
   });
   it("the escrow labels a pool match as pool", () => { expect(E.GAMES.pool).toBe("0x706f6f6c00000000000000000000000000000000000000000000000000000000"); });
 });

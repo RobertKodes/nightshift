@@ -288,7 +288,7 @@ describe("staked arena seats", () => {
     // the human rival takes their seat from their own session
     const seatB = lobby.seat(id, B) as { id: string; player: string };
     const offB = staked.listen(seatB.id, seatB.player, () => {});
-    now += 5_000; staked.tick();
+    now += 10_000; staked.tick(); // the staked countdown
     const s = (await w.call("GET", `/api/arena/games/${game}`, {}, owner.body.key)).body;
     expect(s.status).toBe("playing");
     const agentWhite = s.you === "w";

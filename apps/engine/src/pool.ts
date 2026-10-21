@@ -24,13 +24,21 @@ const OPTIONS: Record<Rules, Options> = { wpa: WPA, quick: QUICK };
 export const SHOT_MS = 40_000, IN_HAND_MS = 50_000, BREAK_MS = 50_000, DECIDE_MS = 25_000;
 /** How long the server lets a shot's replay run before the next shot's clock starts (a long tail is played faster). */
 export const REPLAY_MS = 12_000;
-/** A player away (no open stream) this long on their own turn loses by abandonment. */
+/** A free game: a player away (no open stream) this long on their own turn loses by abandonment. */
 export const AWAY_MS = 45_000;
-/** A staked game starts once both players are connected, or this long after it was made. */
-export const STAKED_SHOW_MS = 5 * 60_000;
+/**
+ * A staked game starts only once both players are connected (both see the countdown). If they have
+ * not both been at the table within this long after it was made, it is void: both stakes go back.
+ */
+export const STAKED_SHOW_MS = 15 * 60_000;
+/** A staked game's countdown, from both players at the table to the break's clock. */
+export const STAKED_COUNTDOWN_MS = 10_000;
+/** A staked game: each player's reconnection time on their own turns, for the whole game; past it they lose by abandonment (void if they never shot). */
+export const STAKED_GRACE_MS = 2 * 60_000;
 /** Emotes a player may send: one every few seconds; each is shown this long. */
 export const EMOTE_GAP_MS = 2_500, EMOTE_SHOW_MS = 5_000;
-export type Reason = "rack" | "resignation" | "abandonment" | "fouls";
+/** "void": a staked game nobody can fairly lose (the players were never both there, or the loser never took a shot): a draw, both stakes go back. */
+export type Reason = "rack" | "resignation" | "abandonment" | "fouls" | "void";
 /** What a player brings to the table (locker.ts): item ids and serials, and what their profile shows. Cosmetic only. */
 export type Look = {
   cue: string; cloth: string; table: string; balls: string; frame: string; banner: string; title: string; effect: string; emotes: string[];
@@ -42,6 +50,8 @@ export const PLAIN_LOOK: Look = { cue: "cue-crew", cloth: "cloth-night", table: 
 type Player = {
   id: string; name: string; wallet: string | null; rating: number; streams: number; offlineAt: number | null; seen: boolean;
   shots: number; potted: number; look: Look; agent?: boolean;
+  /** The reconnection time a staked game's player has used on their own turns. */
+  graceUsed?: number;
 };
 type ShotRecord = { n: number; seat: Seat; at: number; shot: Shot; call: Call; start: Ball[]; frames: Frame[]; duration: number; verdict: Verdict; replayMs: number };
 type Match = {
@@ -130,7 +140,17 @@ export class PoolGames {
     return m;
   }
   /** The lag (1.2) decided by lot: a short countdown, then the breaker's clock. */
-  private start(m: Match) { m.startedAt = this.now() + 5_000; m.turnAt = m.startedAt; m.clockMs = BREAK_MS; this.emit(m); }
+  private start(m: Match) { m.startedAt = this.now() + (m.escrow ? STAKED_COUNTDOWN_MS : 5_000); m.turnAt = m.startedAt; m.clockMs = BREAK_MS; this.emit(m); }
+  /** How long a player has been away on their own turn (0: here, not their turn, or the turn's clock has not started). */
+  private away(m: Match, p: Player) {
+    const now = this.now(), r = m.rack;
+    if (m.done || !m.startedAt || now < m.startedAt || now < m.turnAt || p.offlineAt === null || m.players[r.decision ? r.decision.by : r.turn] !== p) return 0;
+    return Math.max(0, now - Math.max(p.offlineAt, m.turnAt));
+  }
+  /** How long a player may be away on their turn: what is left of a staked game's grace, else the free game's limit. */
+  private allowance(m: Match, p: Player) { return m.escrow ? Math.max(0, STAKED_GRACE_MS - (p.graceUsed ?? 0)) : AWAY_MS; }
+  /** A staked game: time away on one's own turn is booked against the grace when the player is back, or when the turn passes. */
+  private book(m: Match, p: Player | undefined) { if (m.escrow && p) p.graceUsed = (p.graceUsed ?? 0) + this.away(m, p); }
   private isOpen(m: Match) { return !m.done && !m.startedAt && !m.escrow && m.players.length === 1; }
   private joinable(m: Match) { return this.isOpen(m) && m.players[0]!.streams > 0 && this.now() - m.createdAt <= LOUNGE_WAIT_MS; }
   private sameWallet(m: Match, wallet: string | null) { const w = m.players[0]?.wallet; return !!wallet && !!w && w.toLowerCase() === wallet.toLowerCase(); }
@@ -190,8 +210,9 @@ export class PoolGames {
   }
   /**
    * A game for a stake held in GameEscrow, for exactly these two wallets: WPA rules, the lot
-   * decides the break. It starts once both are connected, or STAKED_SHOW_MS after it was made; a
-   * player who never comes loses by abandonment on their turn, and if neither comes it is a draw.
+   * decides the break. It starts once both are connected (after a countdown); if they are not both
+   * there within STAKED_SHOW_MS it is void (both stakes go back). Away on one's turn, a player has
+   * STAKED_GRACE_MS in all to come back; one who never took a shot never loses a stake that way.
    */
   createStaked(o: { escrow: string; currency: "IMD" | "SHIFT"; stake: string; a: { wallet: string; name: string; agent?: boolean }; b: { wallet: string; name: string; agent?: boolean }; onResult: (r: { draw: boolean; winner: string | null }) => void }): { id: string; seats: Record<string, string> } {
     const a = this.newPlayer(o.a.name, o.a.wallet, o.a.agent, true), b = this.newPlayer(o.b.name, o.b.wallet, o.b.agent, true);
@@ -224,8 +245,13 @@ export class PoolGames {
       done: m.done, reason: m.reason, rackReason: r.reason,
       winner: m.winner ? this.seatOf(m, this.player(m, m.winner)) : null, winnerIsYou: !!me && m.winner === me,
       you, rematchRequested: m.rematch.has(me), rivalWantsRematch: m.players.some((p) => p.id !== me && m.rematch.has(p.id)), rematchId: m.rematchId,
-      waitingSince: m.createdAt, expired: m.expired ?? null, movedTo: m.movedTo ?? null,
-      players: m.players.map((p, i) => ({ name: p.name, seat: i as Seat, rating: p.rating, you: p.id === me, connected: p.streams > 0, group: r.groups[i as Seat], shots: p.shots, potted: p.potted, look: p.look, ...(p.agent ? { agent: true } : {}) })),
+      waitingSince: m.createdAt, expired: m.expired ?? null, movedTo: m.movedTo ?? null, showBy: m.showBy ?? null,
+      players: m.players.map((p, i) => {
+        // away on their own turn: when they lose by abandonment, for both to see; a staked game's grace left
+        const away = this.away(m, p), out = p.offlineAt !== null && !m.done && !!m.startedAt && now >= m.startedAt && now >= m.turnAt && m.players[r.decision ? r.decision.by : r.turn] === p;
+        return { name: p.name, seat: i as Seat, rating: p.rating, you: p.id === me, connected: p.streams > 0, group: r.groups[i as Seat], shots: p.shots, potted: p.potted, look: p.look, ...(p.agent ? { agent: true } : {}),
+          awayUntil: out ? now - away + this.allowance(m, p) : null, grace: m.escrow ? Math.max(0, this.allowance(m, p) - away) : null };
+      }),
     };
   }
   get(id: string, me: string, since = -1) { const m = this.match(id); this.player(m, me); this.check(m); return this.view(m, me, since); }
@@ -238,6 +264,8 @@ export class PoolGames {
   listen(id: string, me: string, f: () => void): () => void {
     const m = this.match(id), p = this.player(m, me);
     const set = this.listeners.get(id) ?? new Set(); set.add(f); this.listeners.set(id, set);
+    this.check(m);
+    if (!p.streams) this.book(m, p);
     p.streams++; p.offlineAt = null; p.seen = true;
     if (m.escrow && !m.startedAt && !m.done && m.players.every((x) => x.streams > 0)) this.start(m); else this.emit(m);
     let closed = false;
@@ -307,6 +335,7 @@ export class PoolGames {
     m.last = { n: m.shotN, seat, at: this.now(), shot, call, start, frames: result.frames, duration: result.duration, verdict, replayMs };
     m.log.push({ n: m.shotN, seat, text: verdict.text, foul: verdict.foul, at: this.now() });
     if (m.log.length > 40) m.log.shift();
+    this.book(m, p);
     p.shots++; p.potted += verdict.pocketed.filter((id) => id !== 8 && (rack.groups[seat] === null || this.groupHas(rack.groups[seat]!, id))).length;
     if (verdict.foul || verdict.pocketed.length) m.swingAt = this.now();
     if (rack.decision?.kind === "eight-break" || rack.decision?.kind === "eight-break-foul") m.eightBreak.add(seat);
@@ -340,6 +369,7 @@ export class PoolGames {
   }
   private choose(m: Match, choice: Choice) {
     const d = m.rack.decision!, racks = m.rack.racks;
+    this.book(m, m.players[d.by]);
     m.rack = rulesDecide(m.rack, d.by, choice);
     const what = choice === "accept" ? "accepts the table" : choice === "spot" ? "spots the 8-ball" : choice === "rebreak" ? "re-racks and breaks" : "re-racks; the breaker breaks again";
     m.log.push({ n: m.shotN, seat: d.by, text: `${m.players[d.by]?.name ?? "Player"} ${what}.`, foul: null, at: this.now() });
@@ -355,7 +385,7 @@ export class PoolGames {
   }
   leave(id: string, me: string) {
     const m = this.match(id); this.player(m, me);
-    if (m.escrow) throw new LoungeError(409, "A staked game starts once both players are here, or within 5 minutes. Stay at the table.");
+    if (m.escrow) throw new LoungeError(409, "A staked game starts once both players are at the table; if you are not both here within 15 minutes it is void and both stakes go back. Stay at the table.");
     if (m.startedAt) throw new LoungeError(409, "The rival joined. Resign to leave this game.");
     m.done = true; m.endedAt = this.now(); this.emit(m);
   }
@@ -391,9 +421,10 @@ export class PoolGames {
   private check(m: Match) {
     if (m.done || !m.startedAt || this.now() < m.startedAt || this.now() < m.turnAt) return;
     const r = m.rack, seat = r.decision ? r.decision.by : r.turn, p = m.players[seat]!;
-    if (p.streams === 0 && p.offlineAt !== null && this.now() - Math.max(p.offlineAt, m.turnAt) > AWAY_MS) { this.end(m, other(seat), "abandonment"); return; }
+    if (p.streams === 0 && p.offlineAt !== null && this.away(m, p) > this.allowance(m, p)) { this.end(m, other(seat), "abandonment"); return; }
     if (this.now() < m.turnAt + m.clockMs) return;
     if (r.decision) { this.choose(m, defaultChoice(r.decision)); return; }
+    this.book(m, p);
     // the shot clock ran out: a standard foul (3.14), the cue ball in hand to the opponent
     const { rack, verdict } = timeFoul(r, OPTIONS[m.rules]);
     m.log.push({ n: m.shotN, seat, text: verdict.text, foul: "time", at: this.now() });
@@ -403,6 +434,8 @@ export class PoolGames {
   }
   private end(m: Match, winner: Seat | null, reason: Reason) {
     if (m.done) return;
+    // a staked game is never lost by a player who never took a shot (away from the start, or only out of time): void, both stakes go back
+    if (m.escrow && winner !== null && (reason === "abandonment" || reason === "fouls") && m.players[other(winner)]?.shots === 0) { winner = null; reason = "void"; }
     m.done = true; m.reason = reason; m.endedAt = this.now(); m.aim = null;
     m.winner = winner === null ? null : m.players[winner]?.id ?? null;
     if (reason === "rack" && m.rack.reason?.startsWith("Three fouls")) m.reason = "fouls";
@@ -461,11 +494,8 @@ export class PoolGames {
   }
   tick() {
     for (const m of this.matches.values()) {
-      // a staked game not started by its deadline: played by whoever came, a draw if nobody did
-      if (m.escrow && !m.startedAt && !m.done && m.showBy !== undefined && this.now() >= m.showBy) {
-        if (m.players.some((p) => p.streams > 0)) this.start(m);
-        else { m.startedAt = this.now(); this.end(m, null, "abandonment"); }
-      }
+      // a staked game whose players were never both at the table by its deadline: void, both stakes go back
+      if (m.escrow && !m.startedAt && !m.done && m.showBy !== undefined && this.now() >= m.showBy) { m.startedAt = this.now(); this.end(m, null, "void"); }
       this.check(m);
       if (this.isOpen(m)) {
         const host = m.players[0]!;
