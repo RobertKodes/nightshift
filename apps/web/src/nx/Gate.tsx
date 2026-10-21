@@ -93,6 +93,27 @@ function BurnBar({ ov }: { ov: Overview | null }) {
   );
 }
 
+/** What is new on the station right now, one tap each: kept short, and taken down when it is no longer new. */
+const NEW_NOW = [
+  { to: "/forge", tag: "GEN 2 · WAITING FOR IMD", title: "Night Watchers", line: "10 NIGHT FROGS + 2 IMD forge 1 Night Watcher: more shift hours and a Night Watch seat.", acc: "#b8ff4a" },
+  { to: "/watch", tag: "WITH imdUSD", title: "The Night Watch", line: "Run a bot that keeps imdUSD safe and earns the liquidation bonus. One command to set up.", acc: "#4ad8ff" },
+  { to: "/games/poker", tag: "NEW GAME", title: "NIGHT POKER", line: "Heads-up Hold'em, free or staked in $SHIFT and IMD, and free tables up to six.", acc: "#ff5ca8" },
+];
+function NewNow() {
+  return (
+    <section className="nx-new" aria-label="New on NIGHTSHIFT">
+      {NEW_NOW.map((n) => (
+        <Link key={n.to} to={n.to} className="nx-new-card" style={{ "--acc": n.acc } as React.CSSProperties}>
+          <span className="nx-new-tag">{n.tag}</span>
+          <b>{n.title}</b>
+          <span className="nx-new-line">{n.line}</span>
+          <span className="nx-new-go" aria-hidden="true"><NxIcon name="arrow" size={18} /></span>
+        </Link>
+      ))}
+    </section>
+  );
+}
+
 /** $SHIFT at a glance, read live from Ethereum: the two things holders do (swap, stake), one tap each, and the numbers behind them. */
 function TokenDeck({ ov }: { ov: Overview | null }) {
   const cells: { k: string; v: string | null; sub?: string; acc: string; to: string }[] = [
@@ -191,6 +212,7 @@ export function Gate() {
         <div className="nx-spectrum" aria-hidden="true">{["#ff5ca8", "#4ad8ff", "#c9c2ff", "#ffc861", "#b8ff4a"].map((c) => <i key={c} style={{ background: c, color: c }} />)}</div>
         <p className="nx-gate-lead">An AI company station built on IMD, the swarm of AI agents that builds, audits and ships. Five rooms, one crew of frogs. Pick the door that fits you.</p>
         <TokenDeck ov={ov} />
+        <NewNow />
         <RewardsCard />
         {back && <button className="nx-continue" style={{ "--acc": ROOMS[back].accent } as React.CSSProperties} onClick={() => dock.start(back, () => { go(ROOMS[back].nav[0]!.to); scrollTo(0, 0); })}>Continue to the {ROOMS[back].name} <NxIcon name="arrow" size={16} /></button>}
 

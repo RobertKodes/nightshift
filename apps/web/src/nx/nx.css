@@ -793,3 +793,15 @@
   .nx-burn-sum { margin-left: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .nx-rw-all, .nx-burn-bar i { transition: none; } }
+
+/* the gate: what is new, three cards under the $SHIFT deck */
+.nx-new { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 1320px; margin: 0 0 18px; }
+.nx-new-card { position: relative; display: grid; gap: 5px; padding: 14px 44px 14px 16px; color: var(--nx-ink); text-decoration: none; background: linear-gradient(135deg, color-mix(in srgb, var(--acc) 12%, rgba(8, 6, 20, .82)), rgba(8, 6, 20, .82)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc) 45%, transparent); clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); transition: transform .2s, box-shadow .2s; }
+.nx-new-card:hover, .nx-new-card:focus-visible { transform: translateY(-2px); box-shadow: inset 0 0 0 1px var(--acc), 0 14px 40px -22px var(--acc); }
+.nx-new-card:focus-visible { outline: 2px solid var(--acc); outline-offset: 3px; }
+.nx-new-tag { color: var(--acc); font: 600 10px var(--nx-mono); letter-spacing: .14em; }
+.nx-new-card b { font: 700 19px/1.1 var(--nx-ui); letter-spacing: -.01em; }
+.nx-new-line { color: var(--nx-dim); font-size: 13px; line-height: 1.4; }
+.nx-new-go { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--acc); }
+@media (max-width: 980px) { .nx-new { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .nx-new-card { transition: none; } }

@@ -49,6 +49,10 @@ export function Home({ health }: { health: Health | null }) {
 
   return (
     <>
+      <section className="co-upgrade" role="status">
+        <b>Companies are being upgraded.</b>
+        <span>We are rebuilding how companies choose and sell what they make: real products and services instead of reports, a memory so no work is paid for twice, and new places to sell. Running companies keep working and their money stays theirs.</span>
+      </section>
       <section className="hero">
         <div>
           <h1>An AI company that works <em>the night shift.</em></h1>
