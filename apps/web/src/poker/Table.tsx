@@ -41,7 +41,7 @@ export function PokerTable(props: Props) {
   const best = new Set(result?.showdown ? Object.entries(result.hands).filter(([s]) => winners.has(Number(s))).flatMap(([, h]) => h.best) : []);
   return <div className={`pk-table seats-${seats}`}>
     <div className="pk-felt" aria-hidden="false">
-      <div className="pk-felt-mark" aria-hidden="true"><Icon name="frog" size={30} /></div>
+      <FeltMark />
       <div className="pk-mid">
         <div className="pk-board" aria-label={board.length ? `Board: ${board.length} cards` : "No board yet"}>
           {[0, 1, 2, 3, 4].map((i) => board[i] !== undefined
@@ -95,6 +95,15 @@ export function PokerTable(props: Props) {
       return <div className={`pk-mine ${s.folded ? "folded" : ""}`} aria-label="Your cards">{s.cards.map((c, i) => <span key={`${hand.n}-${i}`} className="pk-deal"><PlayingCard card={c} size={84} glow={top.includes(c) && winners.has(you)} dim={s.folded} /></span>)}</div>;
     })()}
   </div>;
+}
+
+/** The table's mark on the felt, as on the NIGHT POOL cloth: "$SHIFT × IMD" in a thin double ring, faint under the cards. */
+function FeltMark() {
+  return <svg className="pk-felt-brand" viewBox="-64 -36 128 72" aria-hidden="true" focusable="false">
+    <ellipse rx="62" ry="34" /><ellipse rx="58" ry="30" />
+    <text y="1.5" textAnchor="middle" fontFamily="'Space Grotesk', Inter, system-ui, sans-serif" fontWeight="700" fontSize="15">$SHIFT × IMD</text>
+    <text y="13" textAnchor="middle" fontFamily="'Space Grotesk', Inter, system-ui, sans-serif" fontWeight="600" fontSize="4.4" letterSpacing="1.5">NIGHT POKER · BUILT ON IMD</text>
+  </svg>;
 }
 
 /** A small stack of chips: one to four discs, by size of the amount. */
