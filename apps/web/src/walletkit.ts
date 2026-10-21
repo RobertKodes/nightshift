@@ -81,6 +81,7 @@ async function init(): Promise<Kit> {
   const icon = `${url}/brand/shift-icon-512.png`;
   const networks: [AppKitNetwork, ...AppKitNetwork[]] = cfg.salesChainId === 84532 ? [mainnet, base, baseSepolia] : [mainnet, base];
   noThirdParty();
+  pinDashboard();
   const adapter = new WagmiAdapter({
     projectId, networks,
     transports: {
@@ -127,8 +128,36 @@ async function init(): Promise<Kit> {
   // a login with no wallet behind it (the adapter set its connectors from `features` above).
   modal.updateRemoteFeatures({ ...modal.getRemoteFeatures(), reownAuthentication: false, swaps: false, onramp: false, activity: false, payWithExchange: false, payments: false, emailCapture: false, ...(social ? {} : { email: false, socials: false }) });
   modal.updateOptions({ siwx: undefined });
+  // and should Reown's sign-in still be set (a config answer we could not read), it is taken off again
+  const watch = setInterval(() => { if (modal.getSIWX()) modal.updateOptions({ siwx: undefined }); }, 500);
+  setTimeout(() => clearInterval(watch), 60_000);
   if (inAppBrowser()) inAppTip(modal);
   return k;
+}
+
+/** The dashboard switches NIGHTSHIFT never uses: Reown's own sign-in (a second signature before ours), swaps, on-ramp, activity, payments. */
+const DASHBOARD_OFF = new Set(["reown_authentication", "swap", "swaps", "onramp", "activity", "fund_from_exchange", "pay_with_exchange", "payments", "event_tracking", "email_capture"]);
+/**
+ * Reown's dashboard switches arrive from its config API (/appkit/v1/config) while AppKit starts and win
+ * over our options; on a slow phone they land after the overrides below, and Reown Authentication then
+ * asked every wallet to "Sign In" to Reown before our own sign-in. Its answer is read here first, with
+ * those switches off, so the order no longer matters.
+ */
+function pinDashboard(): void {
+  const w = window as Window & { __nsDashboardPinned?: boolean };
+  if (w.__nsDashboardPinned) return;
+  w.__nsDashboardPinned = true;
+  const real = window.fetch.bind(window);
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const res = await real(input, init);
+    const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (!res.ok || !new URL(href, location.href).pathname.endsWith("/appkit/v1/config")) return res;
+    try {
+      const body = (await res.clone().json()) as { features?: { id?: string; isEnabled?: boolean }[] };
+      for (const f of body.features ?? []) if (f.id && DASHBOARD_OFF.has(f.id)) f.isEnabled = false;
+      return new Response(JSON.stringify(body), { status: res.status, statusText: res.statusText, headers: res.headers });
+    } catch { return res; }
+  };
 }
 
 /**
@@ -145,7 +174,9 @@ function inAppTip(modal: Kit["modal"]): void {
     tip.className = "nsw-tip";
     tip.setAttribute("role", "note");
     const text = document.createElement("p");
-    text.textContent = `Wallet app not opening from ${telegram ? "Telegram" : "this app"}? Sign in with email, scan the QR code under Search Wallet, or open this page in Safari or Chrome${telegram ? " (⋯ menu, Open in browser)" : ""}.`;
+    // email sign-in only where it is on: the dashboard can switch it off whatever /setup says
+    const email = modal.getRemoteFeatures()?.email ? "Sign in with email, scan" : "Scan";
+    text.textContent = `Wallet app not opening from ${telegram ? "Telegram" : "this app"}? ${email} the QR code under Search Wallet, or open this page in Safari or Chrome${telegram ? " (⋯ menu, Open in browser)" : ""}.`;
     const copy = document.createElement("button");
     copy.type = "button";
     copy.textContent = "Copy page link";
