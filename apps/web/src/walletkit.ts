@@ -3,8 +3,8 @@
  * with its wagmi adapter. Browser extensions (EIP-6963), wallet apps on a phone (WalletConnect deep
  * links, a QR code and a copyable link as fallbacks), a wallet app's own browser, Coinbase's smart
  * wallet and email or social sign-in (Reown's embedded wallet, for an in-app browser with no wallet)
- * all end in one EIP-1193 provider that every page signs and sends with through viem. Never inside
- * Telegram's Mini App, where Telegram allows TON Connect only (wallet.ts refuses before this loads).
+ * all end in one EIP-1193 provider that every page signs and sends with through viem. Never inside a
+ * Telegram Mini App webview, where Telegram allows TON Connect only (wallet.ts refuses before this loads).
  */
 import { createAppKit } from "@reown/appkit";
 import { type AppKitNetwork, base, baseSepolia, mainnet } from "@reown/appkit/networks";

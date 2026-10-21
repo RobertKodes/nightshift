@@ -21,10 +21,10 @@ export const WALLET_BROWSER = (() => {
 })();
 const nav = (typeof navigator === "undefined" ? {} : navigator) as Nav;
 /**
- * Inside Telegram (the Mini App at /tg, or any page it opened): Telegram's in-app webview is a
- * phone browser inside a messenger, so the games always run lite there.
+ * Inside Telegram's in-app browser (a link the bot sent opens the site there): a phone browser
+ * inside a messenger, so the games always run lite there.
  */
-export const TELEGRAM = typeof window !== "undefined" && (location.pathname === "/tg" || location.pathname.startsWith("/tg/") || /tgWebApp(Data|Version)=/.test(location.hash) || "TelegramWebviewProxy" in window || /Telegram-Android/i.test(ua));
+export const TELEGRAM = typeof window !== "undefined" && ("TelegramWebviewProxy" in window || /Telegram-Android/i.test(ua));
 /** Few cores, little memory or data saver on. */
 export const WEAK = (nav.hardwareConcurrency ?? 8) <= (PHONE ? 4 : 2) || (nav.deviceMemory ?? 8) <= (PHONE ? 3 : 2) || Boolean(nav.connection?.saveData);
 

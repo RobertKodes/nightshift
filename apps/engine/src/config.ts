@@ -63,15 +63,8 @@ export const config = {
   telegramChat: env.TELEGRAM_CHAT_ID ?? "",
   /** Telegram user ids allowed to run admin commands (/status, /stop…). */
   telegramAdmins: (env.TELEGRAM_ADMIN_IDS ?? "").split(",").map((x) => x.trim()).filter(Boolean),
-  /** The bot's @username, for t.me links (the Mini App's deep links, challenge cards). */
+  /** The bot's @username, for t.me links (an owner's alert link, the channel check). */
   telegramBotName: (env.TELEGRAM_BOT_USERNAME || "nightshiftimdbot").replace(/^@/, ""),
-  /**
-   * The Mini App's short name from BotFather's /newapp (t.me/<bot>/<app>?startapp=…). Empty: links
-   * open the bot's Main Mini App instead (t.me/<bot>?startapp=…, set in BotFather's Mini App settings).
-   */
-  telegramAppName: env.TELEGRAM_APP_NAME ?? "",
-  /** The Mini App's initData is refused once older than this many seconds. */
-  telegramInitMaxAge: Math.max(60, num(env.TELEGRAM_INITDATA_MAX_AGE, 24 * 3600)),
   // TELEGRAM_OFFLINE=1 (read in social.ts): no call ever reaches Telegram, the bot does not start (local runs with a made-up token)
   /**
    * The platform token (an ERC-20 on Ethereum, e.g. one launched through IMD). Holding at least

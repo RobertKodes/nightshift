@@ -404,14 +404,6 @@ describe("space pinball server", () => {
       expect(v.luck.slice(0, h.salts.length)).toEqual(h.salts);
       expect(commitment(v.luck)).toBe(r.seed);
       expect(replay(v.luck, c.inputs).score).toBe(v.score);
-      // the replayed score is handed out once, to the Telegram profile of whoever holds the run id
-      expect(pb.soloClaim(r.id)).toEqual({ score: v.score, name: "Solo" });
-      expect(pb.soloClaim(r.id)).toBeNull();
-    });
-    it("hands out no score for a run that is open, unknown or never finished", () => {
-      const r = pb.soloStart("x", "ip:11");
-      expect(pb.soloClaim(r.id)).toBeNull();
-      expect(pb.soloClaim("abcdef123456")).toBeNull();
     });
     it("reveals no luck for a segment before the stream is committed to within 0.75 s of it (botting, finding 1)", () => {
       const r = pb.soloStart("x", "ip:9");

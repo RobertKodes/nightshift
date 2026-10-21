@@ -256,11 +256,3 @@ describe("live betting on NIGHT POOL", () => {
     expect(fromPool(d.id, d.games.betInfo(d.id), d.now()).result).toBe(0);
   });
 });
-
-describe("NIGHT POOL stays on the website", () => {
-  it("is never listed in the Telegram Mini App or by its bot", async () => {
-    const { telegramGames } = await import("./spectate.js");
-    const g = (game: "chess" | "pool" | "pinball") => ({ game, id: "x", players: [], stake: { currency: "FREE" as const, amount: 0 }, startedAt: 0, watch: "", viewers: 0 });
-    expect(telegramGames([g("chess"), g("pool"), g("pinball")]).map((x) => x.game)).toEqual(["chess", "pinball"]);
-  });
-});

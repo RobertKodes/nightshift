@@ -52,10 +52,8 @@ By default everything runs in **simulation**: the swarm, the buyers and a 20 IMD
 | `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` | — | A CDP secret API key (Ed25519): x402 payments settle through Coinbase's facilitator and products are listed in the CDP Bazaar |
 | `X402_FACILITATOR` | `cdp` with a key, else `self` | `self`: every company settles its own payments |
 | `WALLETCONNECT_PROJECT_ID` | — | Enables phone wallets through WalletConnect |
-| `TELEGRAM_BOT_TOKEN` | — | Buy alerts, burn proofs, the community assistant, and the Game Room Mini App (`/tg`) with its bot commands |
-| `TELEGRAM_BOT_USERNAME` | `nightshiftimdbot` | The bot's username in the Mini App's t.me links |
-| `TELEGRAM_APP_NAME` | — | The Mini App's short name from BotFather `/newapp` (`t.me/<bot>/<app>`); empty: the Main Mini App (`t.me/<bot>?startapp`) |
-| `TELEGRAM_INITDATA_MAX_AGE` | `86400` | Seconds a Mini App's signed initData stays valid |
+| `TELEGRAM_BOT_TOKEN` | — | Buy alerts, burn proofs, announcements, the community assistant, company alerts, and the game commands (`/play`, `/live`, `/challenge`, `/profile`, inline `@bot chess`), which link to the games on the website. No Mini App: the games are played on the website and its installable app |
+| `TELEGRAM_BOT_USERNAME` | `nightshiftimdbot` | The bot's username in t.me links (an owner's alert link) |
 | `TELEGRAM_OFFLINE` | — | `1`: nothing is ever sent to Telegram and the bot does not start (local runs with a made-up token) |
 
 Every setting can also be changed from the `/setup` dashboard (admin token in `data/admin-token`). See [DEPLOY.md](DEPLOY.md) for a production setup.

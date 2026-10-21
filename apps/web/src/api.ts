@@ -140,8 +140,8 @@ export interface Desk {
 }
 
 /**
- * A session token the page holds itself, only where no cookie can reach: the Telegram Mini App
- * framed inside Telegram Web. Everywhere else the session stays in the HttpOnly cookie.
+ * A session token the page holds itself, only where no cookie can reach (a framed page). Nothing sets
+ * one since the Telegram Mini App was removed: the session stays in the HttpOnly cookie.
  */
 let bearer: string | null = null;
 export function setBearer(token: string | null): void { bearer = token; }

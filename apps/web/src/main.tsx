@@ -44,7 +44,7 @@ const InfoPage = lazy(() => import("./station/Rooms").then((x) => ({ default: x.
 const EconomyPage = lazy(() => import("./station/EconomyCommand").then((x) => ({ default: x.EconomyPage })));
 const CommandPage = lazy(() => import("./station/EconomyCommand").then((x) => ({ default: x.CommandPage })));
 const LivePage = lazy(() => import("./LivePage").then((x) => ({ default: x.LivePage })));
-const TgApp = lazy(() => import("./tg/TgApp").then((x) => ({ default: x.TgApp })));
+const TgMoved = lazy(() => import("./TgMoved").then((x) => ({ default: x.TgMoved })));
 const ServicesPage = lazy(() => import("./station/Services").then((x) => ({ default: x.ServicesPage })));
 const VerdictPage = lazy(() => import("./station/Services").then((x) => ({ default: x.VerdictPage })));
 const HookPage = lazy(() => import("./station/Services").then((x) => ({ default: x.HookPage })));
@@ -58,8 +58,9 @@ function App() {
   // The gate: choose your way. The cinematic landing is now the story; every other page lives in a room.
   if (seg.length === 0) return <Gate />;
   if (seg[0] === "story") return <Landing />;
-  // The Telegram Mini App: its own shell (Telegram's header, back button and tabs), no station rooms.
-  if (seg[0] === "tg") { document.title = "NIGHTSHIFT Game Room"; return <Suspense fallback={<div style={{ minHeight: "100dvh", background: "#03020a" }} />}><TgApp /></Suspense>; }
+  // Where the Telegram Mini App was: the games are on the website and its app now. Outside Telegram
+  // this sends the visitor to the same place on the site; inside a Mini App it says the Game Room moved.
+  if (seg[0] === "tg") { document.title = "NIGHTSHIFT Game Room"; return <Suspense fallback={<div style={{ minHeight: "100dvh", background: "#03020a" }} />}><TgMoved /></Suspense>; }
   // Space Pinball is a full-screen arcade with its own bar, like the landing.
   if (seg[0] === "games" && seg[1] === "pinball") return <PinballPage />;
   // NIGHT CHESS brings three.js: its own chunk, loaded only on this page.

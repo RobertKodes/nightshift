@@ -677,7 +677,7 @@ export function board(): { board: Score[]; best: Score[]; solo: Score[]; soloBes
  * stream has reached; at the end the whole log must be what was streamed and arrive when the game
  * ends: only the replayed score counts, and all the salts come back to check it by.
  */
-type Run = { deal: Deal; name: string; who: string; startedAt: number; s: Stream; done: boolean; score?: number; claimed?: boolean };
+type Run = { deal: Deal; name: string; who: string; startedAt: number; s: Stream; done: boolean; score?: number };
 const runs = new Map<string, Run>();
 const openRun = new Map<string, string>(); // who → run id
 /** A run is open for the longest game and a little more. */
@@ -725,13 +725,6 @@ export function soloFinish(id: string, inputs: unknown): { score: number; rank: 
   if (g.score > 0) tell({ kind: "solo", run: { name: r.name, score: g.score, at: Date.now() }, ...flags });
   const i = boards.solo.findIndex((s) => s.score === g.score && s.name === r.name);
   return { score: g.score, rank: i >= 0 ? i + 1 : null, luck: r.deal.salts };
-}
-/** A finished run's replayed score, handed out once: the run id is known only to whoever started it (the Telegram Mini App books it on the profile). */
-export function soloClaim(id: string): { score: number; name: string } | null {
-  const r = runs.get(id);
-  if (!r || !r.done || r.score === undefined || r.claimed) return null;
-  r.claimed = true;
-  return { score: r.score, name: r.name };
 }
 /** Free duels here; staked duels have their own lobby (GET /api/games/escrow for the limits). */
 export const stakes = () => ({ free: true, staked: "/api/games/escrow" });

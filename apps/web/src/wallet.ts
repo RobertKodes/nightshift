@@ -1,7 +1,7 @@
 /**
  * Every website page's way to a wallet. The wallet layer itself (Reown AppKit, walletkit.ts) is a
  * separate download, fetched the first time someone signs in, stakes, swaps or buys: a visit that
- * never touches a wallet never loads it. Inside Telegram's Mini App it is never loaded at all.
+ * never touches a wallet never loads it. Inside a Telegram Mini App webview it is never loaded at all.
  */
 export type Eip1193 = {
   request(a: { method: string; params?: unknown }): Promise<unknown>;
@@ -10,10 +10,11 @@ export type Eip1193 = {
 };
 
 /**
- * A Telegram Mini App (/tg, or a page Telegram opened as one: it carries signed initData): Telegram's
- * rules for Mini Apps allow wallets through TON Connect only, so no EVM wallet is offered there.
- * Telegram's in-app browser, where the bot's plain links open, is not a Mini App (no initData): the
- * wallet modal works there like in any phone browser.
+ * A Telegram Mini App webview (/tg, where the old Mini App was, or a page Telegram opened as one: it
+ * carries signed initData): Telegram's rules for Mini Apps allow wallets through TON Connect only, so
+ * no EVM wallet is offered there. The games are on the website and its app; Telegram's in-app
+ * browser, where the bot's plain links open, is not a Mini App (no initData): the wallet modal works
+ * there like in any phone browser.
  */
 export function inTelegramApp(): boolean {
   if (typeof window === "undefined") return false;

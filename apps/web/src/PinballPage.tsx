@@ -98,23 +98,16 @@ function Confetti() {
   return <canvas ref={ref} width={600} height={900} className="arc-confetti" />;
 }
 
-/**
- * `embedded`: the arcade inside another shell (the Telegram Mini App): its lobby is that shell's,
- * so once a duel is over, closed or left, the page hands back (onLobby) instead of showing its own.
- * There it is free play only: no wallet, no NIGHT FROG avatar, no staked modes. `solo` starts a solo run
- * at once, and `onSolo` gets each run the server verified (the shell books it on the player's profile).
- */
-export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: () => void; solo?: boolean; onSolo?: (id: string, score: number) => void } } = {}) {
+export function PinballPage() {
   const { address, signIn, busy } = useSession();
-  const frog = useFrogAvatar(embedded ? null : address ?? null);
+  const frog = useFrogAvatar(address ?? null);
   const avatar = frog?.src ?? null;
-  const modes = embedded ? MODES.filter((x) => x.k === "PRACTICE" || x.k === "FREE").map((x) => (x.k === "FREE" ? { ...x, sub: "1 vs 1 · rated" } : x)) : MODES;
   const [play, setPlay] = useState<Play | null>(null);
   const [waiting, setWaiting] = useState<{ match: MatchView; player: string } | null>(null);
   const [over, setOver] = useState<Over | null>(null);
   const [name, setName] = useState(() => { try { return localStorage.getItem("pb-name") ?? ""; } catch { return ""; } });
   // ?accept=<match>&token=IMD (from the lounge): the stake lobby, where that challenge is accepted
-  const [mode, setMode] = useState<Mode>(() => { const t = new URLSearchParams(location.search).get("token"); return !embedded && (t === "IMD" || t === "SHIFT") ? t : "FREE"; });
+  const [mode, setMode] = useState<Mode>(() => { const t = new URLSearchParams(location.search).get("token"); return t === "IMD" || t === "SHIFT" ? t : "FREE"; });
   const [now, setNow] = useState(Date.now());
   const escrow = useEscrow();
   const [err, setErr] = useState<string | null>(null);
@@ -125,8 +118,6 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
   const es = useRef<EventSource | null>(null);
   /** The open duel this page waits in: someone sitting down there is announced once. */
   const openId = useRef<string | null>(null);
-  /** The duel whose verdict was announced (ns:game-over), so it is announced once. */
-  const told = useRef<string | null>(null);
   // server time minus ours; the smallest delivery delay gives the best estimate, so keep the largest sample
   const clock = useRef(0);
   const sync = (m: MatchView) => { if (m.now) clock.current = Math.max(clock.current === 0 ? -Infinity : clock.current, m.now - Date.now()); };
@@ -156,7 +147,7 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
   useEffect(() => { if (!waiting) return; const t = setInterval(() => setNow(Date.now()), 1_000); return () => clearInterval(t); }, [!!waiting]);
   // a seat from the lounge, or a duel left waiting while browsing: taken up again here
   useEffect(() => {
-    if (watchId || embedded?.solo) return;
+    if (watchId) return;
     try { const saved = JSON.parse(sessionStorage.getItem("pb-match") ?? "null") as { id: string; player: string } | null; if (saved) follow(saved.id, saved.player); } catch { /* no saved seat */ }
   }, [watchId]);
 
@@ -164,7 +155,6 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
     es.current?.close();
     const s = new EventSource(`/api/pinball/match/${id}/events?player=${player}`);
     s.onmessage = (m) => {
-      seen.current = true;
       const match = withFaces(JSON.parse(m.data) as MatchView);
       sync(match);
       take(match.seed, match.luck);
@@ -181,8 +171,6 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
         if (openId.current === match.id) { openId.current = null; alertJoined("pinball", "/games/pinball"); }
         setWaiting(null);
         setPlay((p) => (p?.kind === "duel" && p.match.id === match.id ? { ...p, match } : { kind: "duel", match, player }));
-        // the verified verdict, once per duel: the Telegram Mini App plays a haptic on it
-        if (match.done && !match.void && told.current !== match.id) { told.current = match.id; dispatchEvent(new CustomEvent("ns:game-over", { detail: { game: "pinball", id: match.id, result: match.draw ? "draw" : match.winnerIsYou ? "win" : "loss" } })); }
       }
       else {
         setPlay((p) => (p?.kind === "duel" && p.match.id === match.id ? null : p)); setWaiting({ match, player });
@@ -219,15 +207,12 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
     } catch (e) { setErr((e as Error).message); }
   };
 
-  // the Mini App's Play solo: onto a solo run at once, on the solo board
-  const soloOnce = useRef(false);
-  useEffect(() => { if (!embedded?.solo || soloOnce.current) return; soloOnce.current = true; setMode("PRACTICE"); void start("PRACTICE"); }, []);
   const finished = async (r: { score: number; inputs: Input[]; stats: Record<string, number>; landed: Landed[]; tick: number }) => {
     setOver({ score: r.score, stats: r.stats });
     if (play?.kind === "practice" && play.id) {
       const id = play.id;
       const v = await api<{ score: number; rank: number | null }>(`solo/${id}/finish`, { inputs: r.inputs }).catch((e) => { setErr((e as Error).message); return null; });
-      if (v) { setOver({ score: v.score, stats: r.stats, rank: v.rank }); void api<Leaderboard>("board").then(setLeaderboard).catch(() => {}); embedded?.onSolo?.(id, v.score); }
+      if (v) { setOver({ score: v.score, stats: r.stats, rank: v.rank }); void api<Leaderboard>("board").then(setLeaderboard).catch(() => {}); }
     }
     if (play?.kind === "duel") await api(`match/${play.match.id}/finish`, { player: play.player, inputs: r.inputs, landed: r.landed, tick: r.tick }).catch((e) => setErr((e as Error).message));
   };
@@ -239,10 +224,6 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
   /** A seat from the lounge on this page: the same as a seat from the queue. */
   const loungeSeat = (_game: string, id: string, player: string) => { setErr(null); setOver(null); clock.current = 0; try { localStorage.setItem("pb-name", name); } catch { /* private window */ } follow(id, player); };
   const toLobby = () => { es.current?.close(); setPlay(null); setOver(null); setWaiting(null); };
-  // embedded: the seat's first frame has come (or never will); from then on an empty table hands back to the shell
-  const seen = useRef(false);
-  useEffect(() => { if (embedded && seen.current && !play && !waiting && !watchId) embedded.onLobby(); }, [play, waiting, watchId]);
-  useEffect(() => { if (!embedded) return; const t = setTimeout(() => { seen.current = true; if (!play && !waiting && !watchId) embedded.onLobby(); }, 6_000); return () => clearTimeout(t); }, []);
 
   const opp = play?.kind === "duel" ? play.match.players.find((p) => !p.you) : null;
   const rival: Rival | null = opp ? { name: opp.name, avatar: opp.avatar, live: opp.score ?? opp.live, x: opp.x, y: opp.y, attacks: opp.attacks } : null;
@@ -290,11 +271,11 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
       </div>
       <div className="arc-stats">
         <div><b>1 / 2</b><span>players</span></div><div><b>{waiting.match.currency === "FREE" ? "Free" : waiting.match.currency === "SHIFT" ? "$SHIFT" : "IMD"}</b><span>duel</span></div>
-        {embedded ? <div><b>Elo</b><span>rated</span></div> : <div><b>{waiting.match.stake.toLocaleString()}</b><span>stake</span></div>}<div><b>3 s</b><span>attack delay</span></div>
+        <div><b>{waiting.match.stake.toLocaleString()}</b><span>stake</span></div><div><b>3 s</b><span>attack delay</span></div>
       </div>
       {waiting.match.escrow ? <p>The duel starts as soon as your rival connects, or within 5 minutes. A player who never plays scores 0. Keep this page open.</p> : <>
         <p>Your duel is open in the lounge, waiting {waitText(now - (waiting.match.waitingSince ?? now))}. The next player to find a rival joins your table. Browse the site meanwhile: you hear it when someone joins.</p>
-        <div className="arc-actions"><button type="button" autoFocus className="arc-btn" onClick={() => go(embedded?.home ?? "/games")}><Icon name="radar" size={17} />BROWSE WHILE YOU WAIT</button>
+        <div className="arc-actions"><button type="button" autoFocus className="arc-btn" onClick={() => go("/games")}><Icon name="radar" size={17} />BROWSE WHILE YOU WAIT</button>
         <button type="button" className="arc-btn ghost" onClick={() => { es.current?.close(); void api(`match/${waiting.match.id}/leave`, { player: waiting.player }).catch(() => {}); doneWaiting("pinball", waiting.match.id); keepSeat("pinball", null); setWaiting(null); }}>CANCEL SEARCH</button></div>
       </>}
     </div>
@@ -322,7 +303,7 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
       <header className="arc-top">
         <Link to="/games" className="arc-back"><Icon name="arrow" size={17} /><span>GAME ROOM</span></Link>
         <Link to="/games/pinball" className="arc-logo" aria-label="Space Pinball by NIGHTSHIFT"><img src="/brand/space-pinball-logo.svg" alt="Space Pinball by NIGHTSHIFT" width={410} height={156} /></Link>
-        {!embedded && <div className="arc-who"><InstallButton />{address ? <span className="arc-addr" title={address}>{avatar ? <img src={avatar} alt="" /> : <Icon name="user" size={16} />}{address.slice(0, 6)}…{address.slice(-4)}</span> : <button type="button" className="arc-btn sm ghost" disabled={busy} onClick={() => void signIn()}><Icon name="user" size={15} /><span>{busy ? "SIGNING IN" : "SIGN IN"}</span></button>}</div>}
+        <div className="arc-who"><InstallButton />{address ? <span className="arc-addr" title={address}>{avatar ? <img src={avatar} alt="" /> : <Icon name="user" size={16} />}{address.slice(0, 6)}…{address.slice(-4)}</span> : <button type="button" className="arc-btn sm ghost" disabled={busy} onClick={() => void signIn()}><Icon name="user" size={15} /><span>{busy ? "SIGNING IN" : "SIGN IN"}</span></button>}</div>
       </header>
 
       {!play && <main className="arc-lobby">
@@ -349,13 +330,13 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
                 <input id="arc-name" className="arc-name" maxLength={18} autoComplete="nickname" placeholder="Type your name" value={name} onChange={(e) => setName(e.target.value)} />
                 <Icon name="edit" size={16} />
               </label>
-              <span className="arc-player-note">{embedded ? "Your seat at the table." : avatar ? "Your NIGHT FROG. Your seat at the table." : address ? "No NIGHT FROG in this wallet" : "Sign in to bring your NIGHT FROG"}</span>
+              <span className="arc-player-note">{avatar ? "Your NIGHT FROG. Your seat at the table." : address ? "No NIGHT FROG in this wallet" : "Sign in to bring your NIGHT FROG"}</span>
             </div>
           </div>
 
           <div className="arc-section-head"><span className="arc-kicker">01 / CHOOSE YOUR MODE</span><span>Solo or head-to-head</span></div>
           <div className="arc-modes" aria-label="Game mode">
-            {modes.map((x) => {
+            {MODES.map((x) => {
               const lk = (x.k === "IMD" || x.k === "SHIFT") && !escrow?.live;
               return <button type="button" key={x.k} aria-pressed={mode === x.k} className={`arc-mode ${mode === x.k ? "on" : ""} ${lk ? "locked" : ""}`} onClick={() => setMode(x.k)}>
                 <i className="arc-mode-icon"><Icon name={x.icon} size={23} /></i><b>{x.title}</b><span>{lk ? "Opens with the signer" : x.sub}</span>
@@ -367,7 +348,7 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
           {staked ? <StakeLobby game="pinball" token={mode} name={me} address={address ?? null} signIn={signIn} onSeat={seat} theme="arc" />
             : <button type="button" className="arc-btn play" disabled={!!waiting} onClick={() => void start()}><Icon name={waiting ? "radar" : mode === "PRACTICE" ? "play" : "swords"} size={20} /><span>{waiting ? "FINDING YOUR RIVAL" : mode === "PRACTICE" ? "PLAY PRACTICE" : "FIND A RIVAL"}</span>{!waiting && <Icon name="arrow" size={18} />}</button>}
           {err && <p className="arc-err" role="alert">{err}</p>}
-          {mode === "FREE" && <Lounge game="pinball" onSeat={loungeSeat} free={!!embedded} />}
+          {mode === "FREE" && <Lounge game="pinball" onSeat={loungeSeat} />}
 
           <div className="arc-section-head"><span className="arc-kicker">02 / HOW IT PLAYS</span><span>Same table. Same seed.</span></div>
           <div className="arc-how">
@@ -400,7 +381,7 @@ export function PinballPage({ embedded }: { embedded?: { home: string; onLobby: 
               {board.length > 0 ? <ol>{board.map((b, i) => <li className={i<3 ? `ns-place-${i+1}` : undefined} key={`${b.name}-${b.at}-${i}`}><span className={`ns-rank ${i<3 ? "ns-medal" : ""}`} aria-label={`Place ${i+1}`}>{i<3 && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true"><path d="m8 14-2 8 6-3 6 3-2-8"/><circle cx="12" cy="9" r="7"/></svg>}<span aria-hidden="true">{i<3 ? i+1 : String(i+1).padStart(2,"0")}</span></span><span>{b.name}</span><b>{b.score.toLocaleString()}</b></li>)}</ol> : <p className="arc-board-empty">{`No verified ${boardKind === "duel" ? "duels" : "solo runs"} yet${boardTab === "board" ? " tonight" : ""}. Be the first on the board.`}</p>}
             </div>
           </div>
-          {!embedded && <p className="arc-legal">18+ for staked play. Money games may be gambling, including in Romania. Staked duels open only where allowed.</p>}
+          <p className="arc-legal">18+ for staked play. Money games may be gambling, including in Romania. Staked duels open only where allowed.</p>
         </section>
       </main>}
 

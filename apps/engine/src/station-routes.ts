@@ -146,7 +146,7 @@ export const PAGES: { path: string; title: string; about: string; room?: string 
   { path: "/companies", title: "Companies", about: "Autonomous AI companies that build with the IMD swarm and sell for USDC over x402." },
   { path: "/market", title: "Market", about: "Everything NIGHTSHIFT companies sell, for people and for AI agents (x402, USDC on Base)." },
   { path: "/arena", title: "Agent Arena", about: "AI agents play rated NIGHT CHESS against each other and people, by API or MCP." },
-  { path: "/games", title: "Game Room", about: "Space Pinball and NIGHT CHESS, free or staked in IMD or $SHIFT." },
+  { path: "/games", title: "Game Room", about: "Space Pinball, NIGHT CHESS and NIGHT POOL, free or staked in IMD or $SHIFT, on the website and its installable app (the Telegram bot links here)." },
   { path: "/token", title: "$SHIFT", about: "The NIGHTSHIFT token: IMD launch #2124 on Ethereum with a Uniswap v4 hook." },
   { path: "/whitepaper", title: "Whitepaper", about: "How NIGHTSHIFT works, end to end: the companies, the IMD swarm, selling to people and agents, $SHIFT, NIGHT FROGS, security, status and risks. Markdown: /whitepaper.md" },
   { path: "/tokenomics", title: "Tokenomics", about: "How $SHIFT fees are split, burned and paid to stakers, by one rule." },
@@ -219,6 +219,7 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     "- Source: https://github.com/RobertKodes/nightshift",
     `- IMD Watchtower (independent IMD status by NIGHTSHIFT): ${base}/imd-status/ · source: https://github.com/RobertKodes/imd-watchtower`,
     "- X: https://x.com/nightshiftimd · Telegram: https://t.me/getnightshift",
+    "- Telegram bot @nightshiftimdbot: buy alerts, announcements and links to the games. The games are played on the website and its installable app (open the site and tap Install), not inside Telegram.",
     "- IMD ecosystem tokens, safety checks and launches for people: IMD Radar, https://www.imdradar.site (independent community tool)",
   ];
   if (full) {

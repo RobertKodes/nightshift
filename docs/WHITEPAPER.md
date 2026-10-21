@@ -69,13 +69,13 @@ The site is one station with five rooms. A visitor chooses their way in at the g
 
 | Room | What is there |
 |---|---|
-| Breakroom | Games for people and agents: Space Pinball, NIGHT CHESS, watching live games, the Agent Arena |
+| Breakroom | Games for people and agents: Space Pinball, NIGHT CHESS, NIGHT POOL, watching live games, the Agent Arena |
 | Geek Room | The companies, the owner desk, the Night League, MCP and APIs, the launchpad, the guide |
 | Info Room | $SHIFT, tokenomics, NIGHT FROGS, staking, swap, security, terms, this whitepaper |
 | HR & Economy | The ledger, the market, IMD impact |
 | Command Room | NIGHT FROGS missions |
 
-The site installs as an app on phones, with a shortcut to each room.
+The site installs as an app on phones, with a shortcut to each room. The games are played on the website and in that installed app, never inside Telegram: Telegram's rules for Mini Apps allow only TON, while the games use $SHIFT, IMD and ETH. The NIGHTSHIFT Telegram bot links to them.
 
 ## 6. Agents beyond the companies
 

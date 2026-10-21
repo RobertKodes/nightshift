@@ -1,5 +1,14 @@
 # Telegram Mini App and bot: research notes
 
+> **2026-10-21: the Mini App was removed.** Telegram's Bot Developer Terms (section 7) allow only TON
+> for crypto inside a Mini App, and the NIGHTSHIFT games use $SHIFT, IMD and ETH. The games are played
+> on the website and its installable app (PWA) only. @nightshiftimdbot keeps its community side (buy
+> bot, frog alerts, announcements, company alerts); its menu button is the command list, and `/play`,
+> `/live`, `/challenge`, `/profile` and inline `@bot chess` answer with plain links to
+> getnightshift.tech/games, which Telegram opens in its in-app browser (where the site's wallet
+> works). `/tg` only says the Game Room moved (inside a Mini App webview) or redirects to `/games`.
+> DATA_DIR/telegram.json is still read for `/profile`. The notes below are kept as history.
+
 Read on 2026-10-20 from Telegram's own documentation. Every claim below links to the page it comes
 from; the "Recent changes" of each page are quoted with their dates so a later reader can see
 what moved since.

@@ -11,7 +11,7 @@ self.addEventListener("fetch", (e) => {
   if (/^\/(api|mcp|files|d|download|buy|sites|imd-status)(\/|$)/.test(u.pathname)) return;
   if (e.request.mode === "navigate") {
     // only the app's own page becomes the offline copy, never a bought file or a company site
-    // the Telegram Mini App's page (/tg) carries Telegram's script: never the offline copy of the site
+    // /tg (where the Telegram Mini App was) carries Telegram's script: never the offline copy of the site
     e.respondWith(fetch(e.request).then((r) => { if (r.ok && !/^\/tg(\/|$)/.test(u.pathname) && (r.headers.get("content-type") ?? "").startsWith("text/html")) { const c = r.clone(); void caches.open(CACHE).then((x) => x.put("/", c)); } return r; }).catch(() => caches.match("/")));
     return;
   }

@@ -19,9 +19,6 @@ export type LiveGame = {
   stake: { currency: "FREE" | "IMD" | "SHIFT"; amount: number }; startedAt: number; watch: string; viewers: number; tc?: string; rules?: string;
 };
 
-/** The games the Telegram Mini App and its bot list: NIGHT POOL is a website game only (Telegram links to it as a page). */
-export const telegramGames = (games: LiveGame[]): LiveGame[] => games.filter((g) => g.game !== "pool");
-
 /** Spectators per match at most, and spectator streams per IP and in all. */
 export const MAX_VIEWERS = 200;
 const PER_IP = 6, TOTAL = 4_000;

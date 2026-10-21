@@ -73,8 +73,7 @@ import { safeFetch } from "./net.js";
 import { IMD_TOKEN, completeContracts, followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { writeSettings } from "./settings.js";
-import { Profiles, appUrl } from "./tg.js";
-import { type TgPlay, tgPlay } from "./tg-play.js";
+import { Profiles } from "./tg.js";
 import { GameBot } from "./tg-bot.js";
 
 /** A NIGHT FROG market card with the frog's own picture on top; the plain card if the photo can't be sent. */
@@ -114,14 +113,10 @@ export class Engine {
   readonly checkout: Checkout;
   /** Coinbase's CDP facilitator, when x402 payments settle through it (a CDP key is set); null otherwise. */
   readonly facilitator: CdpFacilitator | null = config.x402Facilitator === "cdp" ? new CdpFacilitator({ id: config.cdpApiKeyId, secret: config.cdpApiKeySecret }) : null;
-  /** Telegram players (the Mini App and the bot's game commands), their games, and the bot side that talks to them. */
-  readonly tgProfiles = new Profiles();
-  readonly tgPlay: TgPlay = tgPlay(this.tgProfiles);
-  readonly gameBot = new GameBot({ profiles: this.tgProfiles, play: this.tgPlay });
+  /** The bot's game commands: links to the games on the website, and the records Telegram players kept from the old Mini App (read only). */
+  readonly gameBot = new GameBot({ profiles: new Profiles() });
 
   constructor() {
-    // a result booked in the last half second is not lost to a restart
-    process.once("exit", () => this.tgProfiles.flushPending());
     this.auth = new Auth(this.vault.material, this.store.apiKeys, () => this.store.markDirty());
     const usdcAddr = () => USDC[config.salesChainId]!.address;
     const from = (id: string) => this.vault.account(id).address;
@@ -244,13 +239,10 @@ export class Engine {
         adminText: async () => null,
         joined: (chat, names) => { const w = welcome(names); void sendCard(chat, "welcome", w.text, w.buttons); },
         link: (chat, code) => this.#linkAlerts(chat, code),
-        // the games: the Mini App's button, /play /live /profile /challenge, "@bot chess", DMs after Start
-        started: (u) => this.gameBot.started(u),
+        // the games: /play /live /profile /challenge and "@bot chess", each a link to the website
         games: (cmd, args, ctx) => this.gameBot.command(cmd, args, ctx),
         inline: (q) => this.gameBot.inline(q),
-        menu: { text: "Play", url: appUrl() },
       });
-      this.tgPlay.onNote((p, n) => void this.gameBot.note(p, n).catch(() => {}));
       startCommunity();
     }
     setInterval(() => void this.#followTokenLaunch(), 60_000);

@@ -8,6 +8,7 @@ import { housePost } from "./house.js";
 import { DEAD, DEV_WALLET, IMD_BURN_EXECUTOR } from "./shift-launch.js";
 import { IMD_TOKEN, launchState } from "./token.js";
 import { type Button, esc, telegram, telegramMedia, tgCall } from "./social.js";
+import { INSTALL } from "./tg-bot.js";
 
 /**
  * The public side of the bot, for the community chat: a buy bot for the platform token, X post
@@ -286,19 +287,19 @@ export async function publicCommand(cmd: string): Promise<{ text: string; button
   if (cmd === "pinball") {
     const b = (() => { try { return pinballBoard() as { board?: { name: string; score: number }[]; best?: { name: string; score: number }[] }; } catch { return {}; } })();
     const rows = (b.best ?? []).slice(0, 5).map((s, i) => `${["🥇", "🥈", "🥉", "4.", "5."][i]} ${esc(s.name)} · ${s.score.toLocaleString("en-US")}`);
-    return { text: ["🎱 <b>SPACE PINBALL</b>", "PvP duels on the same table and seed: black holes throw meteors at your rival, the frog crew sends heavy gravity. Every score is replayed and verified by the server.", "", rows.length ? "<b>All-time best</b>" : "The board is open: be the first.", ...rows].join("\n"), buttons: [[{ text: "🎱 Play Space Pinball", url: `${config.publicUrl}/games/pinball` }]] };
+    return { text: ["🎱 <b>SPACE PINBALL</b>", "PvP duels on the same table and seed: black holes throw meteors at your rival, the frog crew sends heavy gravity. Every score is replayed and verified by the server.", "", rows.length ? "<b>All-time best</b>" : "The board is open: be the first.", ...rows, "", INSTALL].join("\n"), buttons: [[{ text: "🎱 Play Space Pinball", url: `${config.publicUrl}/games/pinball` }]] };
   }
   if (cmd === "chess") {
-    return { text: ["♟ <b>NIGHT CHESS</b>", "3D real-time chess on a NIGHTSHIFT board: blitz 3+2 and 5+0, rapid 10+0, rated, clocks kept by the server. No rival online? Play Frog #7, the bot.", "", "Live now, free to play. Real IMD and $SHIFT stakes open with the escrow."].join("\n"), buttons: [[{ text: "♟ Play NIGHT CHESS", url: `${config.publicUrl}/games/chess` }]] };
+    return { text: ["♟ <b>NIGHT CHESS</b>", "3D real-time chess on a NIGHTSHIFT board: blitz 3+2 and 5+0, rapid 10+0, rated, clocks kept by the server. No rival online? Play Frog #7, the bot.", "", "Live on the website: free and rated, or staked in IMD and $SHIFT through the GameEscrow contract.", "", INSTALL].join("\n"), buttons: [[{ text: "♟ Play NIGHT CHESS", url: `${config.publicUrl}/games/chess` }]] };
   }
   if (cmd === "pool" || cmd === "8ball" || cmd === "billiards") {
-    return { text: ["🎱 <b>NIGHT POOL</b>", "3D 8-ball on WPA rules: called shots, the open table, ball in hand after a foul, the 8 in the called pocket. Every shot is simulated by the server, the same for both players and every spectator.", "", "Live now, free and rated. Collect numbered cues, cloths and tables in your locker."].join("\n"), buttons: [[{ text: "🎱 Play NIGHT POOL", url: `${config.publicUrl}/games/pool` }]] };
+    return { text: ["🎱 <b>NIGHT POOL</b>", "3D 8-ball on WPA rules: called shots, the open table, ball in hand after a foul, the 8 in the called pocket. Every shot is simulated by the server, the same for both players and every spectator.", "", "Live on the website: free and rated, or staked in IMD and $SHIFT. Collect numbered cues, cloths and tables in your locker.", "", INSTALL].join("\n"), buttons: [[{ text: "🎱 Play NIGHT POOL", url: `${config.publicUrl}/games/pool` }]] };
   }
   if (cmd === "games" || cmd === "game" || cmd === "play" || cmd === "arcade") {
     // the Game Room: what is live, tonight's best, where to play
     const top = (() => { try { const b = pinballBoard() as { board?: { name: string; score: number }[] }; return b.board?.[0]; } catch { return undefined; } })();
     return { text: [
-      "🎮 <b>NIGHTSHIFT GAME ROOM</b>", "",
+      "🎮 <b>NIGHTSHIFT GAME ROOM</b> · on the website", "",
       "🎱 <b>Space Pinball</b> · live, free", "PvP duels on the same table and seed, every score verified by replay. Solo board too.",
       top ? `🥇 Tonight's best: <b>${esc(top.name)}</b> · ${top.score.toLocaleString("en-US")}` : "🥇 Tonight's board is open: be the first.", "",
       "♟ <b>NIGHT CHESS</b> · live, free", "3D real-time chess: blitz and rapid, rated, or practise against the bot.", "",
@@ -308,7 +309,8 @@ export async function publicCommand(cmd: string): Promise<{ text: string; button
       "✊ Rock, Paper, Frog · secret picks, then reveal",
       "🎲 Night Dice · highest roll takes the pot",
       "🏁 Moon Race · a short race of reflexes", "",
-      "💎 Games with real IMD and $SHIFT stakes open once the IMD swarm's escrow contract is deployed and audited.",
+      "💎 Staked duels in IMD and $SHIFT are live on the website: both stakes sit in the GameEscrow contract, the winner takes 95% and a draw refunds both.", "",
+      INSTALL,
     ].join("\n"), buttons: [[{ text: "🎱 Space Pinball", url: `${config.publicUrl}/games/pinball` }, { text: "♟ NIGHT CHESS", url: `${config.publicUrl}/games/chess` }], [{ text: "🎱 NIGHT POOL", url: `${config.publicUrl}/games/pool` }, { text: "🎮 The Game Room", url: `${config.publicUrl}/games` }]] };
   }
   if (cmd === "frogs" || cmd === "opensea" || cmd === "nft" || cmd === "nfts") return { text: "🐸 <b>NIGHT FROGS</b>\n500 onchain frogs, the crew of the 3 AM shift. Holders share half of every NIGHTSHIFT reward, by shift hours.\n\nOnly trust this collection link.", buttons: [[{ text: "🌊 NIGHT FROGS on OpenSea", url: OPENSEA_URL }], [{ text: "🐸 Rewards and the crew", url: `${config.publicUrl}/frogs` }]] };

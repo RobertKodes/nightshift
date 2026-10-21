@@ -53,10 +53,13 @@ export async function blueskyPost(handle: string, appPassword: string, text: str
   return `https://bsky.app/profile/${s.handle}/post/${r.uri.split("/").pop()}`;
 }
 
-/** A button: a callback (data), a link (url), the Mini App (web_app: private chats only), or "share in a chat" (an inline query). */
-export type Button = { text: string; data?: string; url?: string; web_app?: string; switch_inline?: string };
+/**
+ * A button: a callback (data), a link (url) or "share in a chat" (an inline query). Never a Mini App:
+ * the games are on the website and its installable app, and a link opens them in Telegram's browser.
+ */
+export type Button = { text: string; data?: string; url?: string; switch_inline?: string };
 export type Reply = { text: string; buttons?: Button[][] };
-export const kb = (b?: Button[][]) => (b?.length ? { inline_keyboard: b.map((row) => row.map((x) => (x.url ? { text: x.text, url: x.url } : x.web_app ? { text: x.text, web_app: { url: x.web_app } } : x.switch_inline !== undefined ? { text: x.text, switch_inline_query: x.switch_inline } : { text: x.text, callback_data: x.data ?? x.text }))) } : undefined);
+export const kb = (b?: Button[][]) => (b?.length ? { inline_keyboard: b.map((row) => row.map((x) => (x.url ? { text: x.text, url: x.url } : x.switch_inline !== undefined ? { text: x.text, switch_inline_query: x.switch_inline } : { text: x.text, callback_data: x.data ?? x.text }))) } : undefined);
 
 /**
  * How Bot API calls go out: fetch, unless TELEGRAM_OFFLINE=1 (nothing ever reaches Telegram), or a
@@ -117,14 +120,10 @@ export type BotHandlers = {
   ask?: (m: GroupMessage) => Promise<void>;
   /** A private /start with a code: an owner linking a company's alerts to this chat (null: not a code). */
   link?: (chat: string, code: string) => Promise<Reply | null>;
-  /** Someone pressed Start in a private chat with the bot (any /start): they may be sent DMs from now on. */
-  started?: (user: TgFrom) => void;
-  /** The games (/play, /live, /profile, /challenge, a plain /start): tried before the public commands (null: not one). */
+  /** The games (/play, /live, /profile, /challenge, a plain /start): links to the website, tried before the public commands (null: not one). */
   games?: (cmd: string, args: string[], ctx: GameContext) => Promise<Reply | null>;
   /** "@bot chess" typed in any chat. */
   inline?: (q: { id: string; from: TgFrom; query: string; chatType?: string }) => Promise<void>;
-  /** The chat menu button: opens the Mini App (operators keep their command list). */
-  menu?: { text: string; url: string };
 };
 export type TgFrom = { id: number; first_name?: string; last_name?: string; username?: string; is_bot?: boolean };
 /** Who typed a game command, and where. */
@@ -143,21 +142,22 @@ export type Update = {
 
 /**
  * The bot: long-polls Telegram, answers public commands for anyone, operator commands and button
- * presses for the listed user ids only, and registers its command menus and description once.
+ * presses for the listed user ids only, and registers its command menus and description once. Its
+ * menu button is the command list: no Mini App (the games are on the website and its app).
  */
 export function telegramCommands(token: string, admins: string[], h: BotHandlers): void {
   if (offline && !transport) { console.log("telegram: TELEGRAM_OFFLINE=1, the bot is not started and nothing is sent"); return; }
   const games = [
-    { command: "play", description: "Open the Game Room in Telegram" },
-    { command: "live", description: "Live games: watch them in Telegram" },
+    { command: "play", description: "The Game Room on the website" },
+    { command: "live", description: "Live games on the website" },
     { command: "challenge", description: "Challenge this chat to NIGHT CHESS" },
-    { command: "profile", description: "Your Elo, games and wins" },
+    { command: "profile", description: "Your Telegram record, and where to play" },
   ];
   const open = [
     { command: "price", description: "Price, market cap, liquidity" },
     { command: "ca", description: "The official contract address" },
     { command: "links", description: "Website, X, Telegram, Bluesky" },
-    { command: "games", description: "The Game Room: Space Pinball and more" },
+    { command: "games", description: "The Game Room: chess, pinball and pool" },
     { command: "pinball", description: "Space Pinball and its best players" },
     { command: "chess", description: "NIGHT CHESS" },
     { command: "pool", description: "NIGHT POOL: 3D 8-ball on the website" },
@@ -186,11 +186,8 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
   for (const id of admins.filter((x) => Number(x) < 0)) void tg(token, "deleteMyCommands", { scope: { type: "chat", chat_id: Number(id) } });
   // an operator's own /live stays the site's visitor count, listed once
   for (const id of admins.filter((x) => Number(x) > 0)) void tg(token, "setMyCommands", { scope: { type: "chat", chat_id: Number(id) }, commands: [...adminCommands, ...open.filter((c) => !adminCommands.some((a) => a.command === c.command))] });
-  // the chat menu button opens the Mini App; operators keep the command list there
-  if (h.menu?.url.startsWith("https://")) {
-    void tg(token, "setChatMenuButton", { menu_button: { type: "web_app", text: h.menu.text, web_app: { url: h.menu.url } } });
-    for (const id of admins.filter((x) => Number(x) > 0)) void tg(token, "setChatMenuButton", { chat_id: Number(id), menu_button: { type: "commands" } });
-  }
+  // the chat menu button is the command list for everyone (this also takes down the old Mini App "Play" button)
+  void tg(token, "setChatMenuButton", { menu_button: { type: "commands" } });
   void tg(token, "setMyDescription", { description: "NIGHTSHIFT: autonomous AI companies built by the IMD swarm. Buy alerts, price and the official links." });
   void tg(token, "setMyShortDescription", { short_description: "NIGHTSHIFT · buys, price, official links" });
   let offset = 0;
@@ -237,8 +234,6 @@ export async function handleUpdate(token: string, admins: string[], h: BotHandle
   if (q) void tg(token, "answerCallbackQuery", { callback_query_id: q.id });
   const [raw, ...args] = text.trim().split(/\s+/);
   const cmd = raw!.slice(1).split("@")[0]!.toLowerCase();
-  // pressing Start in a private chat is what allows DMs (game notifications)
-  if (cmd === "start" && m?.chat.type === "private" && m.from && !m.from.is_bot && h.started) { try { h.started(m.from); } catch { /* a profile store error never stops the bot */ } }
   if (cmd === "start" && args[0] && m?.chat.type === "private" && h.link) {
     const linked = await h.link(chat, args[0]).catch(() => null);
     if (linked) { await telegram(token, chat, linked.text, linked.buttons); return; }

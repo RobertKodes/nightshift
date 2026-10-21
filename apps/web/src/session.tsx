@@ -59,7 +59,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { if (returningFromWalletLogin()) void api.me().then((m) => { if (!m.address) void signIn(); }).catch(() => void signIn()); }, [signIn]);
   // signing out also disconnects the wallet here, so the next sign-in can pick another one
   const signOut = useCallback(async () => { await api.logout().catch(() => {}); setAddress(null); await forgetWallet(); }, []);
-  /** Reads the session again (a sign-in made elsewhere on the page, e.g. the Telegram Mini App's wallet link). */
+  /** Reads the session again (a sign-in made elsewhere on the page). */
   const refresh = useCallback(async () => { const m = await api.me().catch(() => null); setAddress(m?.address ?? null); }, []);
   /** Every session of this wallet, on every device, stops working (a lost phone, a shared computer). */
   const signOutEverywhere = useCallback(async () => { await api.logoutAll().catch(() => {}); await api.logout().catch(() => {}); setAddress(null); await forgetWallet(); }, []);
