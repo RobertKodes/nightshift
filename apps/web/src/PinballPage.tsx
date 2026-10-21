@@ -10,6 +10,7 @@ const AppTabs = (_: { active: string }) => <AppTabsNx room="breakroom" />;
 import { type Seat, StakeLobby, StakeResult, useEscrow } from "./stakes";
 import { alertJoined, doneWaiting, keepSeat, keepWaiting, Lounge, primeAlerts, waitText } from "./games/lounge";
 import { useStakedSeat } from "./games/staked";
+import { WeeklyPrizes } from "./games/prizes";
 import { handleFor, nameOr } from "./games/handle";
 import "./pinball/arcade.css";
 import { LITE, onHidden } from "./lite";
@@ -356,6 +357,7 @@ export function PinballPage() {
             : <button type="button" className="arc-btn play" disabled={!!waiting} onClick={() => void start()}><Icon name={waiting ? "radar" : mode === "PRACTICE" ? "play" : "swords"} size={20} /><span>{waiting ? "FINDING YOUR RIVAL" : mode === "PRACTICE" ? "PLAY PRACTICE" : "FIND A RIVAL"}</span>{!waiting && <Icon name="arrow" size={18} />}</button>}
           {err && <p className="arc-err" role="alert">{err}</p>}
           {mode === "FREE" && <Lounge game="pinball" onSeat={loungeSeat} />}
+          <WeeklyPrizes game="pinball" />
 
           <div className="arc-section-head"><span className="arc-kicker">02 / HOW IT PLAYS</span><span>Same table. Same seed.</span></div>
           <div className="arc-how">

@@ -7,6 +7,7 @@ import { useSession } from "../session";
 import { erc20Abi, formatUnits } from "viem";
 import { STAKE_TOKENS, type Seat, StakeLobby, StakeResult, rpc, tokenLabel, useEscrow } from "../stakes";
 import { SEAT_KEY, doneWaiting, keepWaiting, Lounge, primeAlerts, alertJoined, useLounge, waitText } from "../games/lounge";
+import { WeeklyPrizes } from "../games/prizes";
 import "../chess/chess.css";
 import "../games/live.css";
 import { type Board, type CatalogItem, type MatchView, type SelfProfile, type ShotInput, locker, pool } from "./api";
@@ -263,6 +264,7 @@ export function PoolPage() {
       </section>
       <section className="np-more" aria-label="Open tables and the leaderboard">
         {money === "FREE" && <Lounge game="pool" onSeat={loungeSeat} />}
+        <WeeklyPrizes game="pool" />
         <div className="np-leaders"><div className="np-section"><span><Icon name="trophy" size={14} /> LEADERBOARD</span><span>ELO</span></div>
           <div className="np-tabs" role="group" aria-label="Leaderboard period">{([["board", "Tonight"], ["best", "All time"]] as const).map(([k, l]) => <button type="button" key={k} aria-pressed={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>)}</div>
           {board[tab].length ? <ol>{board[tab].map((p, i) => <li key={`${p.name}-${i}`}><span className="np-rank">{String(i + 1).padStart(2, "0")}</span><div><b>{p.name}</b><small>{p.wins} W / {p.games} G</small></div><strong>{p.rating}</strong></li>)}</ol> : <p className="np-empty">No rated racks {tab === "board" ? "in the last 24 hours" : "yet"}.</p>}

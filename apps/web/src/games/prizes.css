@@ -1,0 +1,36 @@
+/* This week's prizes: the Game Room's box (three games) and each game page's own (one game). Dark, on-brand, self-contained. */
+.wkp { display: grid; gap: 12px; padding: 16px; border: 1px solid rgba(255, 196, 107, .34); background: linear-gradient(170deg, rgba(36, 24, 8, .55), rgba(10, 8, 22, .9) 55%); color: var(--ink, #f2efff); box-sizing: border-box; min-width: 0; }
+.wkp *, .wkp *::before, .wkp *::after { box-sizing: border-box; }
+.wkp-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; }
+.wkp-head > div { display: grid; gap: 4px; min-width: 0; }
+.wkp-head b { display: inline-flex; align-items: center; gap: 8px; color: #ffc46b; font: 600 12px/1.2 var(--mono, "JetBrains Mono", monospace); letter-spacing: .14em; }
+.wkp-head span { color: var(--dim, #a9a3c4); font: 400 12.5px/1.45 Inter, system-ui, sans-serif; }
+.wkp-clock { display: inline-flex !important; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid rgba(255, 196, 107, .4); color: #ffd79a !important; font: 600 10.5px/1 var(--mono, "JetBrains Mono", monospace) !important; letter-spacing: .1em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wkp-games { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.wkp-one .wkp-games { grid-template-columns: minmax(0, 1fr); }
+.wkp-game { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.wkp-kind { display: flex; align-items: center; gap: 7px; color: var(--uv-hi, #a48bff); font: 600 10.5px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .12em; }
+.wkp-rows { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.wkp-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; grid-template-areas: "place name hours" "place result hours"; align-items: center; column-gap: 10px; padding: 7px 10px; border: 1px solid rgba(164, 139, 255, .18); background: rgba(10, 8, 22, .6); }
+.wkp-row.you { border-color: rgba(184, 255, 74, .5); }
+.wkp-place { grid-area: place; color: var(--faint, #8d87a8); font: 600 11px/1 var(--mono, "JetBrains Mono", monospace); }
+.wkp-row.p1 .wkp-place { color: #ffc46b; }
+.wkp-row.p2 .wkp-place { color: #d9dcef; }
+.wkp-row.p3 .wkp-place { color: #e0a074; }
+.wkp-row b { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 13.5px/1.25 Inter, system-ui, sans-serif; }
+.wkp-row b i { margin-left: 6px; padding: 1px 4px; border: 1px solid rgba(184, 255, 74, .45); color: var(--acid, #b8ff4a); font: 600 8.5px/1 var(--mono, "JetBrains Mono", monospace); font-style: normal; letter-spacing: .1em; vertical-align: 2px; }
+.wkp-row small { grid-area: result; color: var(--dim, #a9a3c4); font: 400 11.5px/1.3 var(--mono, "JetBrains Mono", monospace); }
+.wkp-row strong { grid-area: hours; color: #ffc46b; font: 600 12px/1 var(--mono, "JetBrains Mono", monospace); white-space: nowrap; }
+.wkp-empty { margin: 0; padding: 9px 10px; border: 1px dashed rgba(164, 139, 255, .25); color: var(--dim, #a9a3c4); font: 400 12.5px/1.45 Inter, system-ui, sans-serif; }
+.wkp-rules { display: grid; gap: 3px; padding-top: 10px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07); }
+.wkp-rules p, .wkp-last { margin: 0; color: var(--faint, #8d87a8); font: 400 12px/1.5 Inter, system-ui, sans-serif; }
+.wkp-last { color: var(--dim, #a9a3c4); }
+@media (max-width: 760px) { .wkp-games { grid-template-columns: minmax(0, 1fr); } .wkp { padding: 14px; } }
+/* the rewards hub: a winner's own prizes */
+.wkp-mine { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.wkp-mine li { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding: 8px 10px; border: 1px solid rgba(255, 196, 107, .3); background: rgba(255, 196, 107, .05); }
+.wkp-mine .icon { color: #ffc46b; }
+.wkp-mine b { color: #ffc46b; font: 600 13px/1.2 var(--mono, "JetBrains Mono", monospace); white-space: nowrap; }
+.wkp-mine span { min-width: 0; color: var(--ink, #f2efff); font: 400 12.5px/1.35 Inter, system-ui, sans-serif; }
+.wkp-mine small { grid-column: 2 / 4; color: var(--dim, #a9a3c4); font: 400 11px/1.3 var(--mono, "JetBrains Mono", monospace); }
+.wkp-mine a { grid-row: 1 / 3; grid-column: 4; color: var(--dim, #a9a3c4); font: 600 11px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .08em; text-transform: uppercase; }

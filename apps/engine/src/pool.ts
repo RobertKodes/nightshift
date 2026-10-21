@@ -78,7 +78,7 @@ type Boards = { ratings: Rating[]; results: { key: string; at: number; win: bool
 /** A finished game, for the profiles (XP, badges) and the community: by profile key (a wallet, or tg:<pid>). */
 export type PoolEvent = {
   id: string; rules: Rules; staked: boolean; reason: Reason; rated: boolean;
-  players: { key: string | null; name: string; result: "win" | "loss"; potted: number; shots: number; rating: number; change: number; broke: boolean; ranOut: boolean; eightOnBreak: boolean; cleanSheet: boolean }[];
+  players: { key: string | null; name: string; result: "win" | "loss"; potted: number; shots: number; rating: number; change: number; broke: boolean; ranOut: boolean; eightOnBreak: boolean; cleanSheet: boolean; agent?: boolean }[];
 };
 const ended: ((e: PoolEvent) => void)[] = [];
 export const onPool = (f: (e: PoolEvent) => void) => { ended.push(f); };
@@ -450,6 +450,7 @@ export class PoolGames {
         key: p.wallet, name: p.name, result: m.winner === p.id ? "win" : "loss", potted: p.potted, shots: p.shots, rating: p.rating, change: p.rating - before[i]!,
         broke: r.breaker === i, ranOut: ranOut && m.winner === p.id, eightOnBreak: m.eightBreak.has(i as Seat),
         cleanSheet: m.winner === p.id && reason === "rack" && standing(r).left[other(i as Seat)] === 7 && r.groups[other(i as Seat)] !== null,
+        ...(p.agent ? { agent: true } : {}),
       })) });
     } catch (e) { console.error("pool event", e); }
     // the server's verdict of a staked game, by wallet, to the escrow (signed there after its own checks)

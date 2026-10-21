@@ -8,6 +8,7 @@ import { useSession } from "../session";
 import { SHIFT } from "../shift";
 import { ESCROW, mainnetOnly, wallet } from "../stakes";
 import { NxIcon } from "./icons";
+import { PrizeLines } from "../games/prizes";
 
 /**
  * YOUR REWARDS, on the front page: everything the signed-in wallet can claim or withdraw right now,
@@ -228,6 +229,7 @@ export function RewardsCard() {
           );
         })}
       </ul>}
+      <PrizeLines wallet={me} />
       <nav className="nx-rw-foot" aria-label="Rewards pages">
         <Link to="/stake">Staking</Link>
         <Link to="/frogs">NIGHT FROGS{d?.frogsClaimed ? ` · ${d.frogsClaimed} claimed` : ""}</Link>

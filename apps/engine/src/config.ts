@@ -137,6 +137,9 @@ export const config = {
    */
   houseGames: (env.HOUSE_GAMES ?? "1") !== "0",
   houseGamesMaxReal: Math.max(0, num(env.HOUSE_GAMES_MAX_REAL, 12)),
+  /** Weekly prizes in shift hours (prizes.ts): on unless WEEKLY_PRIZES=0; PRIZE_HOURS is 1st,2nd,3rd. */
+  weeklyPrizes: (env.WEEKLY_PRIZES ?? "1") !== "0",
+  prizeHours: ((v) => { const l = v.split(",").map((x) => Number(x.trim())).filter((x) => Number.isFinite(x) && x >= 0 && x <= 1_000).slice(0, 10); return l.length ? l : [24, 12, 6]; })(env.PRIZE_HOURS ?? "24,12,6"),
   /** Companies one wallet may run at once. */
   maxCompaniesPerOwner: num(env.MAX_COMPANIES_PER_OWNER, 5),
   /**

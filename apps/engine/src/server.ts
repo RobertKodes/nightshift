@@ -33,6 +33,7 @@ import { leagueRoutes } from "./league-routes.js";
 import { stationRoutes, withPageHead } from "./station-routes.js";
 import { card, catalog, detail, offerFor, productIdOf, search } from "./agentmarket.js";
 import { spectateRoutes } from "./spectate.js";
+import { PrizeError, livePrizes, prizesRoutes } from "./prizes.js";
 import { poolRoutes } from "./pool-routes.js";
 import { lockerRoutes } from "./locker-routes.js";
 import { betsRoutes } from "./bets-routes.js";
@@ -386,6 +387,13 @@ export function serve(engine: Engine) {
         if (limited(req, "admin", 60, 60_000)) return json(res, 429, { error: "slow down" });
         if (!isAdmin(req)) return json(res, 401, { error: "wrong admin token" });
         if (p === "/api/admin/setup" && req.method === "GET") return json(res, 200, await setupState(engine));
+        // the weekly prizes: boards with wallets, held awards, and voiding an entry
+        if (p === "/api/admin/prizes" && req.method === "GET") return json(res, 200, livePrizes().admin());
+        if (p === "/api/admin/prizes/void" && req.method === "POST") {
+          const b = await body(req);
+          try { livePrizes().void(String(b.game ?? "") as never, String(b.wallet ?? ""), String(b.reason ?? "voided by the admin"), b.week === undefined ? undefined : Number(b.week)); return json(res, 200, livePrizes().admin()); }
+          catch (e) { return json(res, e instanceof PrizeError ? e.status : 400, { error: (e as Error).message }); }
+        }
         if (p === "/api/admin/setup" && req.method === "POST") {
           const patch = await body(req);
           const err = checkSetup(patch);
@@ -519,6 +527,7 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/pool/") && await poolRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/locker/") && await lockerRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/bets/") && await betsRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
+      if (prizesRoutes(req, res, p, { json, limited, owner, url })) return;
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
       if ((p.startsWith("/api/league") || p === "/league/agents.md") && await leagueRoutes(req, res, p, { json, body, limited, url, vault: engine.vault })) return;

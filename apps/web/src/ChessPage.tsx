@@ -15,6 +15,7 @@ import "./games/live.css";
 import { type Seat, StakeLobby, StakeResult, tokenLabel, useEscrow } from "./stakes";
 import { alertJoined, doneWaiting, keepWaiting, Lounge, primeAlerts, useLounge, waitingOn, waitText } from "./games/lounge";
 import { useStakedSeat } from "./games/staked";
+import { WeeklyPrizes } from "./games/prizes";
 import { handleFor, nameOr, typedName } from "./games/handle";
 
 const OPENING = new Chess().fen();
@@ -269,6 +270,7 @@ export function ChessPage() {
         {closedNote && <div className="nc-error" role="status"><Icon name="clock" size={16}/><span>{closedNote}</span><button type="button" onClick={()=>setClosedNote(null)} aria-label="Dismiss"><Icon name="close" size={16}/></button></div>}
         {error}
         {money==="FREE" && <Lounge game="chess" onSeat={loungeSeat}/>}
+        <WeeklyPrizes game="chess"/>
         <div className="nc-section-label"><span>How it plays</span></div>
         <div className="nc-how">{[["swords","A real rival","Find a rival on the same clock, or join a table in the lounge."],["target","Your move","Tap a piece, then a glowing square. Drag to turn the board."],["shield","A fair table","The server checks every move and keeps both clocks."],["trophy","Your rating","Everyone starts at 1200. Two moves each and the game counts."]].map(([icon,title,copy])=><div key={title}><Icon name={icon!} size={22}/><b>{title}</b><p>{copy}</p></div>)}</div>
         <div className="nc-leaderboard"><div className="nc-section-label"><span><Icon name="trophy" size={15}/> Leaderboard</span><span>ELO</span></div>

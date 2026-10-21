@@ -48,6 +48,35 @@ function FairPlay({ token }: { token: string }) {
   );
 }
 
+type PrizeRow = { wallet: string; name: string; wins?: number; opponents?: number; score?: number };
+type PrizeAward = { week: number; game: string; place: number; wallet: string; name: string; hours: number; result: string; payAt: number; paidAt?: number; voided?: { at: number; reason: string } };
+type PrizeAdmin = { week: { startedAt: number; endsAt: number }; hours: number[]; boards: Record<string, PrizeRow[]>; awards: PrizeAward[]; voids: { game: string; wallet: string }[] };
+/** The weekly prizes: this week's boards and the awards in their 48-hour hold, each with Void (a paid prize stays paid). */
+function PrizesAdmin({ token }: { token: string }) {
+  const [d, setD] = useState<PrizeAdmin | null>(null);
+  const [msg, setMsg] = useState("");
+  useEffect(() => { void call(token, "prizes").then(setD).catch((e) => setMsg((e as Error).message)); }, [token]);
+  const voidOne = async (game: string, wallet: string, week?: number) => {
+    const reason = prompt(`Void ${game} for ${wallet}? Reason (shown to nobody but you):`, "voided by the admin");
+    if (reason === null) return;
+    try { setD(await call(token, "prizes/void", { game, wallet, week, reason })); setMsg(`Voided ${game} · ${wallet.slice(0, 6)}…${wallet.slice(-4)}`); } catch (e) { setMsg((e as Error).message); }
+  };
+  if (!d) return msg ? <div className="card-b"><p className="faint" style={{ fontSize: 12, margin: 0 }}>{msg}</p></div> : null;
+  const held = d.awards.filter((a) => !a.paidAt && !a.voided);
+  const short = (w: string) => `${w.slice(0, 6)}…${w.slice(-4)}`;
+  return (
+    <div className="card-b">
+      <p className="faint" style={{ fontSize: 12, margin: 0 }}>Week of {new Date(d.week.startedAt).toUTCString().slice(0, 16)} · prizes {d.hours.join(" / ")} h · {held.length ? `${held.length} award${held.length > 1 ? "s" : ""} in the 48 h hold` : "nothing in the hold"}{msg ? ` · ${msg}` : ""}</p>
+      {held.length > 0 && <table><tbody>{held.map((a) => (
+        <tr key={`${a.week}-${a.game}-${a.wallet}`}><td>{a.game} #{a.place}</td><td>{a.name}</td><td className="mono">{short(a.wallet)}</td><td className="dim">+{a.hours} h · {a.result} · lands {new Date(a.payAt).toUTCString().slice(5, 22)}</td><td><button className="btn" onClick={() => void voidOne(a.game, a.wallet, a.week)}>Void</button></td></tr>
+      ))}</tbody></table>}
+      <table><tbody>{Object.entries(d.boards).flatMap(([game, rows]) => rows.slice(0, 5).map((r, i) => (
+        <tr key={`${game}-${r.wallet}`}><td>{game} now #{i + 1}</td><td>{r.name}</td><td className="mono">{short(r.wallet)}</td><td className="dim">{r.score !== undefined ? `${r.score.toLocaleString()} pts` : `${r.wins} wins · ${r.opponents} rivals`}</td><td><button className="btn" onClick={() => void voidOne(game, r.wallet)}>Void</button></td></tr>
+      )))}</tbody></table>
+    </div>
+  );
+}
+
 /** Fields of the form, in the order an operator goes live. */
 const GROUPS: { title: string; note?: string; fields: { k: string; label: string; hint?: string; options?: [string, string][]; secret?: boolean }[] }[] = [
   { title: "Mode", note: "Simulation is safe: nothing leaves the server. Live places real IMD orders and sells for real USDC.", fields: [
@@ -116,6 +145,12 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
   { title: "House services", note: "Token Verdict, Hook Inspector and the IMD Data Feed, sold by the NIGHTSHIFT Services house company. Its wallet settles each x402 payment on Base, so keep a little ETH there (its address is payTo in /api/v1/services). Without an Etherscan key the services read Sourcify only.", fields: [
     { k: "ETHERSCAN_API_KEY", label: "Etherscan API key (v2, free tier)", secret: true },
     { k: "WATCHTOWER_URL", label: "IMD Watchtower status URL", hint: "http://imd-watchtower:8787/status" },
+  ] },
+  { title: "Game Room", note: "The house exhibition: one NIGHT CHESS game between house bots, never rated or staked, stepping aside while more than the limit of real games are on. Weekly prizes: shift hours to the top 3 of each game (1st,2nd,3rd), added 48 hours after the week ends. Applies after a restart.", fields: [
+    { k: "HOUSE_GAMES", label: "House exhibition", options: [["", "Default (on)"], ["1", "On"], ["0", "Off"]] },
+    { k: "HOUSE_GAMES_MAX_REAL", label: "Pause it past this many real games", hint: "12" },
+    { k: "WEEKLY_PRIZES", label: "Weekly prizes", options: [["", "Default (on)"], ["1", "On"], ["0", "Off"]] },
+    { k: "PRIZE_HOURS", label: "Prize hours, 1st,2nd,3rd", hint: "24,12,6" },
   ] },
   { title: "Simulation pacing", fields: [
     { k: "SIM_SHIFT_MINUTES", label: "Minutes between shifts", hint: "2" },
@@ -215,6 +250,11 @@ export function SetupPage() {
         <div className="card-h"><h3>Game stakes</h3><span className="faint" style={{ fontSize: 12 }}>GameEscrow v2 · real IMD and $SHIFT duels</span></div>
         <GameStakes token={token} />
         <FairPlay token={token} />
+      </section>
+
+      <section className="card">
+        <div className="card-h"><h3>Weekly game prizes</h3><span className="faint" style={{ fontSize: 12 }}>shift hours to the top 3 · 48 h hold · void an entry</span></div>
+        <PrizesAdmin token={token} />
       </section>
 
       <section className="card">

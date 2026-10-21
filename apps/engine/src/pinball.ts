@@ -117,7 +117,7 @@ const boardFile = () => join(config.dataDir, "pinball.json");
 /** What the arcade tells the community chat: every verified result, flagged when it tops a board. */
 export type ArcadeEvent =
   | { kind: "duel"; a: Score; b: Score; winner: string | null; draw: boolean; record: boolean; tonightTop: boolean; keys?: [string | null, string | null] }
-  | { kind: "solo"; run: Score; record: boolean; tonightTop: boolean };
+  | { kind: "solo"; run: Score; record: boolean; tonightTop: boolean; wallet?: string | null };
 const arcade: ((e: ArcadeEvent) => void)[] = [];
 export const onArcade = (f: (e: ArcadeEvent) => void) => { arcade.push(f); };
 const tell = (e: ArcadeEvent) => { for (const f of arcade) try { f(e); } catch (err) { console.error("arcade", err); } };
@@ -738,7 +738,8 @@ export function soloFinish(id: string, inputs: unknown): { score: number; rank: 
   r.score = g.score;
   const flags = tops("solo", g.score);
   record([{ name: r.name, score: g.score, at: Date.now() }], "solo");
-  if (g.score > 0) tell({ kind: "solo", run: { name: r.name, score: g.score, at: Date.now() }, ...flags });
+  // the signed-in wallet that played it (an IP-keyed guest run has none), for the weekly prizes
+  if (g.score > 0) tell({ kind: "solo", run: { name: r.name, score: g.score, at: Date.now() }, ...flags, wallet: /^0x[0-9a-fA-F]{40}$/.test(r.who) ? r.who.toLowerCase() : null });
   const i = boards.solo.findIndex((s) => s.score === g.score && s.name === r.name);
   return { score: g.score, rank: i >= 0 ? i + 1 : null, luck: r.deal.salts };
 }

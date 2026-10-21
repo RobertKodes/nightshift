@@ -2,6 +2,7 @@ import { Icon } from "./Icon";
 import { InstallButton } from "./landing/app";
 import { Link } from "./router";
 import { type Game, GAME_ICON, Lounge, useLounge } from "./games/lounge";
+import { WeeklyPrizes } from "./games/prizes";
 import "./games/room.css";
 
 /** Each game: its real table (captured from the game itself), what it is, where to play and practise. */
@@ -45,6 +46,8 @@ export function GameRoomPage() {
       </div>
 
       <Lounge create />
+
+      <WeeklyPrizes />
 
       <section className="gr-card" aria-labelledby="gr-stake">
         <h2 id="gr-stake">Playing for a stake</h2>
