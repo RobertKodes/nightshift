@@ -482,3 +482,14 @@ html[data-lite] *, html[data-lite] *::before, html[data-lite] *::after { backdro
 html[data-lite] .ns, html[data-lite] .nc, html[data-lite] .arc, html[data-lite] .tk { --glass: rgba(10, 8, 22, .92); }
 html[data-lite] .arc .arc-cabinet::after, html[data-lite] .ns-panel::after, html[data-lite] .ns-app::before, html[data-lite] .nc-result.won::before { animation: none !important; }
 html[data-lite] .arc .arc-stage::before { filter: none; opacity: .6; }
+
+/* staking: one card, two sides (stake, unstake), and the split of a stake */
+.stake-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 0 0 12px; }
+.stake-sides button { padding: 10px 12px; border: 1px solid var(--line); background: none; color: var(--dim); font: 600 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.stake-sides button.on { color: var(--text); border-color: var(--text); background: rgba(255, 255, 255, .04); }
+.stake-sides button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.stake-split { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.stake-split div { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--line); }
+.stake-split span { color: var(--dim); font: 500 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.stake-split b { font: 600 15px var(--mono); overflow-wrap: anywhere; }
+@media (max-width: 480px) { .stake-split { grid-template-columns: 1fr 1fr; } .stake-split div:first-child { grid-column: span 2; } }

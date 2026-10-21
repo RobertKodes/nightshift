@@ -64,6 +64,8 @@ export function StakePage() {
   useEffect(() => { if (signedIn && !me) setMe(signedIn); }, [signedIn]);
   const [amount, setAmount] = useState("");
   const [out, setOut] = useState("");
+  // one card, two sides: stake, or take part of it out (/stake?unstake opens on that side)
+  const [mode, setMode] = useState<"stake" | "unstake">(() => (new URLSearchParams(location.search).has("unstake") ? "unstake" : "stake"));
   const [lock, setLock] = useState(365);
   const [bal, setBal] = useState<bigint | null>(null);
   const [h, setH] = useState<Awaited<ReturnType<typeof history>> | null>(null);
@@ -177,6 +179,10 @@ export function StakePage() {
     return h.stakes.map((x) => ({ ...x, left: left.get(x.tx) ?? x.amount }));
   })();
   const outAmt = (() => { try { return out && Number(out) > 0 ? parseEther(out) : 0n; } catch { return 0n; } })();
+  const lockedNow = staked > withdrawable ? staked - withdrawable : 0n;
+  const nextUnlock = rows.filter((x) => x.unlockAt > now && x.left > 0n).sort((a, b) => a.unlockAt - b.unlockAt)[0] ?? null;
+  // a share of what can come out now, rounded down to whole tokens below the max
+  const part = (pct: number) => setOut(formatEther(pct === 100 ? withdrawable : ((withdrawable * BigInt(pct)) / 100n / 10n ** 18n) * 10n ** 18n));
   const withdraw = (v: bigint) => run(`Confirm the withdrawal of ${fmt(v)} $${sym}…`, async ({ w, a }) => {
     // re-read the locks right before sending, so what was unlocked a minute ago is still true
     const fresh = await load(a);
@@ -199,15 +205,38 @@ export function StakePage() {
       <StakedSupply sym={sym} />
 
       <section className="tkn-card">
-        <div className="tkn-head"><div><b>STAKE</b><span>Ethereum · ShiftRewards{rewards ? ` · ${rewards.slice(0, 6)}…${rewards.slice(-4)}` : ""}</span></div><span className="tkn-state">{ready ? "LIVE" : "SOON"}</span></div>
-        <div className="swap-box">
+        <div className="tkn-head"><div><b>{mode === "stake" ? "STAKE" : "UNSTAKE"}</b><span>Ethereum · ShiftRewards{rewards ? ` · ${rewards.slice(0, 6)}…${rewards.slice(-4)}` : ""}</span></div><span className="tkn-state">{ready ? "LIVE" : "SOON"}</span></div>
+        <div className="stake-sides" role="tablist" aria-label="Stake or unstake">
+          {(["stake", "unstake"] as const).map((m) => <button key={m} type="button" role="tab" aria-selected={mode === m} className={mode === m ? "on" : ""} onClick={() => { setMode(m); setMsg(null); }}>{m === "stake" ? `Stake $${sym}` : `Unstake $${sym}`}</button>)}
+        </div>
+        {mode === "unstake" && <div className="swap-box">
+          {!me ? <>
+            <p className="dim" style={{ fontSize: 13, margin: 0 }}>Connect the wallet you staked from to see how much you can take out. You choose the amount; the rest stays staked and keeps earning.</p>
+            <button className="ns-cta sm" disabled={Boolean(step) || !ready} onClick={() => void wallet().catch((e) => setMsg({ ok: false, text: errText(e) }))}>CONNECT WALLET</button>
+          </> : !h ? <p className="dim" style={{ fontSize: 13, margin: 0 }}>{hErr ? "Could not read your stakes from Ethereum right now." : "Reading your stakes and their locks from Ethereum…"}</p> : staked <= 0n ? <p className="dim" style={{ fontSize: 13, margin: 0 }}>This wallet has nothing staked.</p> : <>
+            <div className="stake-split">
+              <div><span>Staked</span><b>{fmt(staked)}</b></div>
+              <div><span>Can come out now</span><b className="good">{fmt(withdrawable)}</b></div>
+              <div><span>Still locked</span><b>{fmt(lockedNow)}</b></div>
+            </div>
+            {withdrawable > 0n ? <>
+              <label className="swap-leg"><span>How much to unstake</span>
+                <div><input className="swap-in" inputMode="decimal" placeholder="0" value={out} onChange={(e) => setOut(e.target.value.replace(",", "."))} /><i>${sym}</i></div></label>
+              <div className="swap-slip"><span>Quick</span>{[25, 50, 75, 100].map((pct) => <button key={pct} type="button" onClick={() => part(pct)}>{pct === 100 ? "Max" : `${pct}%`}</button>)}</div>
+              <p className="dim" style={{ fontSize: 13, margin: 0 }}>{outAmt > withdrawable ? `Only ${fmt(withdrawable)} $${sym} is unlocked right now.` : outAmt > 0n ? `After this: ${fmt(staked - outAmt)} $${sym} stays staked and keeps earning${lockedNow > 0n ? ` (${fmt(lockedNow)} of it still locked)` : ""}.` : "Pick an amount, or tap a quick share. Rewards already earned stay claimable."}</p>
+              <button className="ns-cta sm" disabled={Boolean(step) || !outAmt || outAmt > withdrawable} onClick={() => void withdraw(outAmt)}>{step ?? (outAmt > withdrawable ? `ONLY ${fmt(withdrawable)} UNLOCKED` : `UNSTAKE ${outAmt ? fmt(outAmt) : ""} $${sym}`)}</button>
+            </> : <p className="dim" style={{ fontSize: 13, margin: 0 }}>All of your stake is locked right now.{nextUnlock ? ` The next ${fmt(nextUnlock.left)} $${sym} unlocks on ${new Date(nextUnlock.unlockAt * 1000).toLocaleDateString("en-GB")}.` : ""}</p>}
+          </>}
+          {msg && <p className={msg.ok ? "good" : "bad"} style={{ fontSize: 13, margin: 0 }}>{msg.text} {msg.tx && <a href={`https://etherscan.io/tx/${msg.tx}`} target="_blank" rel="noreferrer">Etherscan ↗</a>}</p>}
+        </div>}
+        {mode === "stake" && <div className="swap-box">
           <label className="swap-leg"><span>Amount {bal !== null && <button type="button" className="swap-max" onClick={() => setAmount(formatEther(bal))}>balance {fmt(bal)}</button>}</span>
             <div><input className="swap-in" inputMode="decimal" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value.replace(",", "."))} disabled={!ready} /><i>${sym}</i></div></label>
           <div className="swap-slip"><span>Lock</span>{LOCKS.map(([d, t]) => <button key={d} className={lock === d ? "on" : ""} onClick={() => setLock(d)}>{t}</button>)}</div>
           <p className="dim" style={{ fontSize: 13, margin: 0 }}>{lock === 0 ? "No lock: withdraw any time." : `Locked until ${new Date(Date.now() + lock * 86_400_000).toLocaleDateString("en-GB")}. It cannot be withdrawn early, by anyone.`} Every stake is announced in the community with its lock.</p>
           <button className="ns-cta sm" disabled={!ready || !amt || Boolean(step) || (bal !== null && amt > bal)} onClick={() => void stake()}>{step ?? (!ready ? "OPENS AT LAUNCH" : bal !== null && amt > bal ? `NOT ENOUGH $${sym}` : `STAKE $${sym}`)}</button>
           {msg && <p className={msg.ok ? "good" : "bad"} style={{ fontSize: 13, margin: 0 }}>{msg.text} {msg.tx && <a href={`https://etherscan.io/tx/${msg.tx}`} target="_blank" rel="noreferrer">Etherscan ↗</a>}</p>}
-        </div>
+        </div>}
       </section>
 
       {ready && !me && (
@@ -237,11 +266,7 @@ export function StakePage() {
                 <span className="dim">{s.unlockAt <= now ? "unlocked" : `🔒 until ${new Date(s.unlockAt * 1000).toLocaleDateString("en-GB")}`}{s.left === 0n ? " · withdrawn" : s.left < s.amount ? ` · ${fmt(s.left)} left` : ""}</span></td>
               <td>{s.unlockAt <= now && s.left > 0n && <button type="button" className="btn" disabled={Boolean(step)} onClick={() => void withdraw(s.left > withdrawable ? withdrawable : s.left)}>Withdraw</button>}</td></tr>)}
           </tbody></table>}
-          {withdrawable > 0n && <div className="swap-box" style={{ marginTop: 10 }}>
-            <label className="swap-leg"><span>Withdraw an amount <button type="button" className="swap-max" onClick={() => setOut(formatEther(withdrawable))}>max {fmt(withdrawable)}</button></span>
-              <div><input className="swap-in" inputMode="decimal" placeholder="0" value={out} onChange={(e) => setOut(e.target.value.replace(",", "."))} /><i>${sym}</i></div></label>
-            <button className="btn" disabled={Boolean(step) || !outAmt || outAmt > withdrawable} onClick={() => void withdraw(outAmt)}>{outAmt > withdrawable ? `Only ${fmt(withdrawable)} is unlocked` : `Withdraw ${outAmt ? fmt(outAmt) : ""} $${sym}`}</button>
-          </div>}
+          {withdrawable > 0n && <p className="dim" style={{ fontSize: 13, margin: "10px 0 0" }}>Want only part of it out? <button type="button" className="swap-max" onClick={() => { setMode("unstake"); scrollTo({ top: 0, behavior: "smooth" }); }}>Unstake an amount</button></p>}
           <div className="setup-tools" style={{ marginTop: 10 }}>
             <button className="btn primary" disabled={Boolean(step)} onClick={() => void run("Confirm the claim…", ({ w, a }) => w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "getReward" }))}>Claim rewards</button>
             <button className="btn" disabled={Boolean(step) || withdrawable <= 0n} onClick={() => void withdraw(withdrawable)}>Withdraw all unlocked ({fmt(withdrawable)})</button>
