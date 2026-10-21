@@ -85,6 +85,8 @@ export function flight(c: Company, t: Task, o: FlightInput) {
         by: m?.by ?? null,
         ...(o.owner && m?.model ? { model: m.model } : {}),
         ...(m?.fallback ? { fallback: m.fallback } : {}),
+        // the moves it passed over because they repeat earlier work, each with why
+        ...(m?.avoided?.length ? { avoided: m.avoided } : {}),
         ...(m ? { saw: m.saw } : {}),
         why: t.why,
       }, m?.costUsd ?? 0);
@@ -155,7 +157,7 @@ export function flight(c: Company, t: Task, o: FlightInput) {
     error: t.error ? (o.owner ? t.error : "It did not go through.") : null,
     createdAt: t.createdAt, endedAt, durationMs: (endedAt ?? Date.now()) - t.createdAt,
     activity: t.activity, recorded,
-    mind: t.mind ? { by: t.mind.by, costUsd: t.mind.costUsd ?? 0, saw: t.mind.saw, ...(t.mind.fallback ? { fallback: t.mind.fallback } : {}), ...(o.owner && t.mind.model ? { model: t.mind.model } : {}) } : null,
+    mind: t.mind ? { by: t.mind.by, costUsd: t.mind.costUsd ?? 0, saw: t.mind.saw, ...(t.mind.fallback ? { fallback: t.mind.fallback } : {}), ...(t.mind.avoided?.length ? { avoided: t.mind.avoided } : {}), ...(o.owner && t.mind.model ? { model: t.mind.model } : {}) } : null,
     plan,
     steps: { done: t.stepsDone, total: Math.max(t.stepsTotal, plan.length) },
     trace: buildTree(spans),

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { ImdAction } from "@nightshift/imd";
 import type { Decision } from "./planner.js";
 import type { Company } from "./types.js";
@@ -5,6 +6,16 @@ import type { Company } from "./types.js";
 /** IMD site labels: lowercase, digits and hyphens, 1–32 characters. */
 export function siteLabel(c: Company): string {
   return `ns-${c.slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").slice(0, 32).replace(/-$/, "");
+}
+
+/**
+ * A web tool's own IMD site label: the company's, a word of the tool's name and a short hash of it, so
+ * two tools of one company (whose names both start with the company name) never share an address.
+ */
+export function toolLabel(c: Company, name: string): string {
+  const word = name.toLowerCase().replace(c.name.toLowerCase(), "").replace(/[^a-z0-9]+/g, "-").replace(/^-+/, "").slice(0, 8).replace(/-+$/, "");
+  const h = createHash("sha256").update(name).digest("hex").slice(0, 4);
+  return [siteLabel(c).slice(0, 18).replace(/-+$/, ""), word, h].filter(Boolean).join("-");
 }
 
 /**
@@ -39,7 +50,7 @@ function order(c: Company, d: Decision, buyBase: string): { action: ImdAction; i
           input: {
             objective: `Build "${p.name}", a small self-contained web tool: ${p.pitch}. ${d.brief} Static, runs in the browser, no wallet, no backend. Clean, fast, works on a phone.`,
             skill: "build-website",
-            ipfs: `${siteLabel(c)}-${p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 12)}`.replace(/-+$/, "").slice(0, 32),
+            ipfs: toolLabel(c, p.name),
             github: false,
           },
         };

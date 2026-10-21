@@ -131,7 +131,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
             </div>
           ) : (
             <div key={c.id} className="dk-need">
-              <div><b>{c.name}</b> found nothing new worth paying for and rests until {hhmm(c.rest!.until)}.<span className="dim"> Point its CEO somewhere new, or run a shift now.</span></div>
+              <div><b>{c.name}</b> found nothing new worth paying for and rests until {hhmm(c.rest!.until)}.{c.rest!.reason ? <span className="dim"> It stopped because {c.rest!.reason}.</span> : null}<span className="dim"> Point its CEO somewhere new, or run a shift now.</span></div>
               <div className="dk-row">
                 <button className="nx-btn" onClick={() => open(c.id, "direction")}>Give a direction</button>
                 <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`run:${c.id}`, () => api.shift(c.id), "Shift started.")}>Run a shift now</button>
@@ -360,7 +360,7 @@ const ORDERS = [
 /** The owner orders one piece of work by hand: same free check, budget and books as the CEO's moves. */
 function OrderWork({ c, imdUsd, saving, setSaving, setError, onOrdered }: { c: DeskCompany; imdUsd: number; saving: boolean; setSaving: (b: boolean) => void; setError: (e: string | null) => void; onOrdered: (task: string) => void }) {
   const [kind, setKind] = useState<(typeof ORDERS)[number][0]>("build_product");
-  const [w, setW] = useState({ name: "", pitch: "", priceUsd: "9", productKind: "report", brief: "" });
+  const [w, setW] = useState({ name: "", pitch: "", priceUsd: "9", productKind: "tool", brief: "" });
   const available = ORDERS.filter(([k]) => (k === "build_site" ? !c.site && c.products.some((p) => p.status === "live") : k === "improve_site" ? Boolean(c.site) : true));
   const busy = c.working !== null;
   const send = async () => {
@@ -383,7 +383,7 @@ function OrderWork({ c, imdUsd, saving, setSaving, setError, onOrdered }: { c: D
           <label>Name<input className="field" value={w.name} maxLength={80} placeholder="e.g. The Etsy Holiday Playbook" onChange={(e) => setW({ ...w, name: e.target.value })} /></label>
           <label>Pitch<span className="dim">one line for the shop</span><input className="field" value={w.pitch} maxLength={240} placeholder="Sell more this December, with 30 listings that work" onChange={(e) => setW({ ...w, pitch: e.target.value })} /></label>
           <div className="dk-two">
-            <label>Kind<select className="field" value={w.productKind} onChange={(e) => setW({ ...w, productKind: e.target.value })}><option value="report">Report</option><option value="template">Templates</option><option value="dataset">Dataset</option></select></label>
+            <label>Kind<select className="field" value={w.productKind} onChange={(e) => setW({ ...w, productKind: e.target.value })}><option value="tool">Web tool</option><option value="template">Templates</option><option value="dataset">Dataset</option><option value="report">Report</option></select></label>
             <label>Price (USDC)<input className="field mono" type="number" min={1} max={499} step="0.5" value={w.priceUsd} onChange={(e) => setW({ ...w, priceUsd: e.target.value })} /></label>
           </div>
         </>

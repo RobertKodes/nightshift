@@ -20,7 +20,9 @@ import {
   found,
   fromUsdc,
   mark,
+  missingAddress,
   note,
+  recoverAddresses,
   reject,
   runShift,
   validatePolicy,
@@ -50,7 +52,7 @@ import { simulateTraffic } from "./market.js";
 import { SimDeliveries } from "./simdeliver.js";
 import { Store } from "./store.js";
 import { Vault } from "./vault.js";
-import { ProductFiles, fetchDelivery } from "./products.js";
+import { ProductFiles, fetchDelivery, toolAccess } from "./products.js";
 import { newFrogListings, newFrogSales, OPENSEA_SLUG } from "./frogmarket.js";
 import { fillTraits, frogCaption, sendFrogCard } from "./frogcard.js";
 import { type ArcadeEvent, onArcade } from "./pinball.js";
@@ -1097,7 +1099,7 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
       decision = { kind: "research", title: `Research: ${brief.slice(0, 70)}${brief.length > 70 ? "…" : ""}`, why: "Ordered by the owner.", brief };
     } else if (w.kind === "build_product") {
       const name = plain(w.name ?? ""), pitch = plain(w.pitch ?? ""), price = Number(w.priceUsd);
-      const kind = (["report", "template", "dataset"] as const).find((k) => k === w.productKind) ?? "report";
+      const kind = (["tool", "template", "dataset", "report"] as const).find((k) => k === w.productKind) ?? "tool";
       if (name.length < 3 || name.length > 80) throw new Error("Product name: between 3 and 80 characters.");
       if (pitch.length < 8 || pitch.length > 240) throw new Error("Pitch: between 8 and 240 characters.");
       if (!(price >= 1 && price <= 499)) throw new Error("Price: between $1 and $499.");
@@ -1563,6 +1565,8 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     const now = Date.now();
     for (const c of this.store.companies.values()) {
       if (c.tasks.some((t) => t.status === "building")) await advance(c, this.#deps(c)).catch((e) => console.error("advance", c.slug, e));
+      // a site or web tool delivered before IMD published its address: collected, never bought again
+      if (missingAddress(c).length) await recoverAddresses(c, this.#deps(c)).catch((e) => console.error("address", c.slug, e));
       // a market payment sent on chain is followed until it lands (booked by the checkout) or is dropped
       for (const t of c.tasks) {
         if (t.status !== "building" || !t.market?.pending || t.market.paid) continue;
@@ -1589,6 +1593,8 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
         const t = c.tasks.find((x) => x.id === p.taskId);
         void this.files.ensure(c, p, async () => {
           if (!t?.result) return null;
+          // a web tool is hosted by IMD: the buyer gets its address and how to use it
+          if (p.kind === "tool") return p.deliverableUrl ? toolAccess(c, p, p.deliverableUrl) : null;
           if (config.mode === "sim" && t.imd?.jobId) {
             const name = Object.keys(t.result.files ?? {})[0];
             return name ? this.sim.file(t.imd.jobId, name) : null;

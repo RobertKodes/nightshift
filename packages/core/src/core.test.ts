@@ -129,13 +129,15 @@ describe("the saver inside a company", () => {
     const t2 = await runShift(c, d2);
     expect(t2?.kind).toBe("research");
     expect(t2?.status).toBe("building");
-    const t3 = await runShift(c, d2); // same playbook move, same body
+    expect(t2?.title).not.toBe(t?.title); // the research it reused is not bought again
+    const t3 = await runShift(c, d2);
     expect(t3).toBeNull(); // still building: no second purchase
     t2!.status = "done";
-    const n = c.tasks.length;
-    expect(await runShift(c, d2)).toBeNull(); // identical order after delivery: no task, rest a day
-    expect(c.tasks.length).toBe(n);
-    expect(c.restUntil).toBeGreaterThan(now.t);
+    const t4 = await runShift(c, d2); // a new question, never the same body again
+    expect(t4?.kind).toBe("research");
+    expect(new Set(c.tasks.map((x) => x.title)).size).toBe(c.tasks.length);
+    const bodies = c.tasks.filter((x) => x.imd).map((x) => JSON.stringify(x.imd!.input));
+    expect(new Set(bodies).size).toBe(bodies.length);
   });
 });
 

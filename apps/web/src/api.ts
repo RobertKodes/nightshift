@@ -101,7 +101,7 @@ export interface FlightSpan {
 export interface Flight {
   id: string; cycle: number; kind: string; title: string; why: string; status: string; error: string | null;
   createdAt: number; endedAt: number | null; durationMs: number; activity: string | null; recorded: boolean;
-  mind: { by: "model" | "playbook" | "owner"; costUsd: number; model?: string; fallback?: string; saw: { visits7d: number; sales7d: number; revenue7dUsd: number; imdUsd: number; liveProducts: number; direction: boolean } } | null;
+  mind: { by: "model" | "playbook" | "owner"; costUsd: number; model?: string; fallback?: string; avoided?: string[]; saw: { visits7d: number; sales7d: number; revenue7dUsd: number; imdUsd: number; liveProducts: number; direction: boolean } } | null;
   plan: string[]; steps: { done: number; total: number }; trace: FlightSpan[];
   money: { costImd: number; costUsd: number; costUsdc?: number; imdUsd: number; ledger: { id: string; kind: string; memo?: string; at: number; legs: { account: string; asset: string; amount: number }[] }[] };
   /** Research: the market search before paying the swarm (candidates, scores, decision). */
@@ -119,7 +119,7 @@ export interface DeskCompany {
   id: string; slug: string; name: string; idea: string; mission: string; audience: string; direction: string;
   status: "active" | "paused"; cycle: number; createdAt: number; nextShiftAt: number | null; wallet: string; sim: boolean;
   /** Resting: the saver found nothing new worth paying for, or the day's budget is spent. A shift the owner runs ends it. */
-  rest: { until: number; why: "saver" | "budget" } | null;
+  rest: { until: number; why: "saver" | "budget"; reason?: string | null } | null;
   policy: Policy; site: string | null; alerts: boolean;
   products: { id: string; name: string; pitch: string; kind: string; status: string; priceUsd: number; priceByOwner: boolean; sales: number; revenueUsd: number; b2bSales: number; packaged: boolean }[];
   pnl: { revenueUsd: number; spentUsd: number; profitUsd: number };

@@ -140,7 +140,7 @@ async function desk(engine: Engine, owner: string | null) {
     return {
       id: c.id, slug: c.slug, name: c.name, idea: c.idea, mission: c.mission, audience: c.audience, direction: c.direction ?? "",
       status: c.status, cycle: c.cycle, createdAt: c.createdAt, nextShiftAt: c.nextShiftAt, wallet: c.wallet, sim: Boolean(c.sim),
-      rest: c.restUntil && c.restUntil > Date.now() ? { until: c.restUntil, why: resting?.text.startsWith("Saver:") ? "saver" as const : "budget" as const } : null,
+      rest: c.restUntil && c.restUntil > Date.now() ? { until: c.restUntil, why: c.restReason || resting?.text.startsWith("Saver:") ? "saver" as const : "budget" as const, reason: c.restReason ?? null } : null,
       policy: c.policy, site: c.site?.url ?? null, alerts: Boolean(c.notify?.telegram),
       products: c.products.map((x) => ({ id: x.id, name: x.name, pitch: x.pitch, kind: x.kind, status: x.status, priceUsd: fromUsdc(x.priceUsdc), priceByOwner: Boolean(x.priceByOwner), sales: x.sales, revenueUsd: fromUsdc(x.revenueUsdc), b2bSales: x.b2bSales ?? 0, packaged: engine.files.has(c, x) })),
       pnl: { revenueUsd, spentUsd, profitUsd: revenueUsd + soldUsd - spentUsd - boughtUsd },

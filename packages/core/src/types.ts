@@ -68,6 +68,8 @@ export interface Task {
   costUsdc?: bigint;
   /** Research only: the search of the NIGHTSHIFT market before paying the swarm, and what it decided. */
   market?: MarketSearch;
+  /** What the work was about, in plain words (its brief, the product, the owner's direction then): the hard rules compare it with new moves. */
+  about?: string;
 }
 
 /** Why a product on the market was or was not bought. */
@@ -150,6 +152,8 @@ export interface Mind {
   /** Why the playbook decided instead of the model, when a model is set. */
   fallback?: string;
   saw: { visits7d: number; sales7d: number; revenue7dUsd: number; imdUsd: number; liveProducts: number; direction: boolean };
+  /** Moves the CEO passed over because they repeat earlier work, each with the reason. */
+  avoided?: string[];
 }
 
 export interface Policy {
@@ -193,6 +197,8 @@ export interface Company {
   nextShiftAt: number | null;
   /** The budget is spent: no new shifts until this time (or until the owner raises the budget). */
   restUntil?: number;
+  /** Why it rests when every move it would make next repeats earlier work, for the owner desk. */
+  restReason?: string;
   site: { url: string; jobId: string } | null;
   products: Product[];
   tasks: Task[];

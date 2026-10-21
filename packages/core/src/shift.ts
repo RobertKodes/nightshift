@@ -5,7 +5,8 @@ import type { LlmClient } from "@nightshift/llm";
 import { inputHash, keywords } from "imd-mcp/lib";
 import { imdOrder } from "./catalog.js";
 import { type MarketDeps, type MarketReceipt, type Scored, RELEVANT, candidate, keywordScore, marketLimits, marketReserved, marketRule, marketSpentToday, modelScores, relevantByKeywords, terms } from "./market.js";
-import { type CompanyStats, type Decision, heuristicDecision, llmDecision } from "./planner.js";
+import { aboutOf, repeatOf, siteWithoutAddress } from "./memory.js";
+import { type CompanyStats, type Decision, llmDecision, playbook } from "./planner.js";
 import { budgetFreesAt, canSpend } from "./policy.js";
 import type { Company, JournalEntry, MarketSearch, Product, Task } from "./types.js";
 import { fromImd, fromUsdc, usdc } from "./types.js";
@@ -84,34 +85,44 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
   // Out of budget for today: rest quietly instead of picking a move it cannot pay for.
   if (c.restUntil && now(d) < c.restUntil) return null;
   delete c.restUntil;
+  delete c.restReason;
   c.cycle += 1;
   const context = d.context ? await d.context(c).catch(() => ({})) : {};
   const stats: CompanyStats = { ...d.stats(c), ...context };
   let decision: Decision | null = null;
   const saw = seen(c, stats);
   let mind: Task["mind"] = { by: "playbook", saw };
+  // The hard rules (memory.ts): a move that repeats earlier work is passed over, with the reason kept
+  // for the flight recorder, and the next move that is new is made instead.
+  const avoided: string[] = [];
+  const isNew = (x: Decision) => {
+    const why = repeatOf(c, x, imdOrder(c, x, d.buyBase(c)), now(d));
+    if (why) avoided.push(`${x.title}: ${why}`);
+    return !why;
+  };
   if (d.llm) {
     try {
       const r = await llmDecision(d.llm, d.model, c, stats);
-      if (r) { decision = r.decision; mind = { by: "model", model: r.servedModel, costUsd: r.costUsd, saw }; }
-      else mind.fallback = "the model's answer was not a usable move";
+      if (r && isNew(r.decision)) { decision = r.decision; mind = { by: "model", model: r.servedModel, costUsd: r.costUsd, saw }; }
+      else mind.fallback = r ? `the model's move repeats earlier work (${avoided[0]!.slice(r.decision.title.length + 2)})` : "the model's answer was not a usable move";
     } catch (err) {
       mind.fallback = "the model could not be reached";
       note(c, d, "warning", "The CEO could not think this shift; using the playbook.");
     }
   }
-  decision ??= heuristicDecision(c, stats);
-  const order = imdOrder(c, decision, d.buyBase(c));
-  // The saver: never buy the same body twice. An identical order is not a move, so it leaves no
-  // task behind; the company rests for a day instead of asking again every shift.
-  const twin = order && twinOf(c, order);
-  if (twin) {
+  decision ??= playbook(c, stats, now(d)).find(isNew) ?? null;
+  if (avoided.length) mind.avoided = avoided.slice(0, 8);
+  if (!decision) {
+    // Everything it would do next was done, is owned, or failed twice: no task, no spend, and the
+    // owner desk says why. It rests for a day, or until the owner gives a direction or runs a shift.
     c.cycle -= 1;
-    c.restUntil = now(d) + 24 * 60 * 60 * 1000;
-    note(c, d, "note", `Saver: "${decision.title}" was already bought in shift ${twin.cycle}. Nothing new worth paying for; resting for a day, or until you run a shift.`);
+    c.restUntil = now(d) + DAY;
+    c.restReason = avoided.length ? `everything it would do next repeats earlier work (${avoided.slice(0, 2).join("; ").slice(0, 300)})` : `the owner's direction rules out every move it knows ("${(c.direction ?? "").slice(0, 200)}")`;
+    note(c, d, "note", `Saver: nothing new worth doing: ${c.restReason}. Resting for a day; give the CEO a direction, or run a shift.`);
     return null;
   }
-  note(c, d, "decision", `Shift ${c.cycle}: ${decision.title}. ${decision.why}`);
+  const order = imdOrder(c, decision, d.buyBase(c));
+  note(c, d, "decision", `Shift ${c.cycle}: ${decision.title}. ${decision.why}${avoided.length ? ` (Passed over ${avoided.length} move${avoided.length === 1 ? "" : "s"} that would repeat earlier work.)` : ""}`);
   return start(c, d, decision, mind, order, false);
 }
 
@@ -162,6 +173,7 @@ async function start(c: Company, d: ShiftDeps, decision: Decision, mind: Task["m
     createdAt: now(d),
     updatedAt: now(d),
     mind,
+    about: aboutOf(c, decision),
   };
   mark(t, now(d));
   c.tasks.push(t);
@@ -238,6 +250,7 @@ async function buy(c: Company, t: Task, d: ShiftDeps, approved: boolean): Promis
       touch(c, t, d, { status: "failed", error: gate.reason, activity: null });
       dropProduct(c, t);
       c.restUntil = budgetFreesAt(c, costUsd, d.imdUsd(), now(d));
+      delete c.restReason;
       note(c, d, "warning", `Skipped "${t.title}": ${gate.reason}. Resting until ${new Date(c.restUntil).toUTCString().slice(17, 22)} UTC, when the budget frees up, or until you raise it.`);
     }
     return;
@@ -457,9 +470,13 @@ export function reject(c: Company, taskId: string, d: ShiftDeps): void {
 export async function advance(c: Company, d: ShiftDeps): Promise<void> {
   for (const t of c.tasks) {
     if (t.status !== "building" || !t.imd?.orderId) continue;
+    // waiting for a site's address: asked twice a minute, not on every tick
+    if (t.activity === PUBLISHING && now(d) - (polled.get(t.id) ?? 0) < 30_000) continue;
+    if (t.activity === PUBLISHING) polled.set(t.id, now(d));
     try {
       if (!t.imd.jobId) {
         const o = await d.imd.order(t.imd.orderId);
+        unanswered.delete(t.id);
         if (o.state === "refused" || o.state === "payment_failed" || o.state === "expired") {
           // No settlement transaction: IMD never took the IMD, so the budget and the books get it back.
           const charged = Boolean(o.txHash ?? t.imd.txHash);
@@ -475,6 +492,7 @@ export async function advance(c: Company, d: ShiftDeps): Promise<void> {
         await bookOrder(c, t, d);
       }
       const j = await d.imd.job(t.imd.jobId);
+      unanswered.delete(t.id);
       if (j.state === "failed" || j.state === "cancelled") {
         touch(c, t, d, { status: "failed", error: `the swarm ${j.state} the job`, activity: null, stepsDone: j.stepsDone, stepsTotal: j.stepsTotal });
         dropProduct(c, t);
@@ -486,6 +504,12 @@ export async function advance(c: Company, d: ShiftDeps): Promise<void> {
         continue;
       }
       const r = await d.imd.result(t.imd.jobId);
+      // IMD marks a website job completed a minute or two before it publishes the site's address. Taking
+      // the delivery then left the company with no site, so the CEO bought the same site again each shift.
+      if (!r.siteUrl && hosted(c, t) && !(t.activity === PUBLISHING && now(d) - t.updatedAt > ADDRESS_WAIT)) {
+        if (t.activity !== PUBLISHING) touch(c, t, d, { activity: PUBLISHING, stepsDone: j.stepsTotal, stepsTotal: j.stepsTotal });
+        continue;
+      }
       touch(c, t, d, { status: "done", activity: null, stepsDone: j.stepsTotal, stepsTotal: j.stepsTotal, result: { siteUrl: r.siteUrl, repoUrl: r.repoUrl, files: r.files, note: r.summary ?? undefined } });
       deliver(c, t, r, d);
     } catch (err) {
@@ -496,8 +520,62 @@ export async function advance(c: Company, d: ShiftDeps): Promise<void> {
         dropProduct(c, t);
         continue;
       }
-      touch(c, t, d, { activity: `retrying: ${(err as Error).message.slice(0, 80)}` });
+      const msg = (err as Error).message;
+      if (!unanswered.has(t.id)) unanswered.set(t.id, now(d));
+      // IMD cannot tell about it any more (a job it lost, or the simulator restarted): a failure the company
+      // moves on from, instead of "still in progress" every shift for ever. A paid order stays counted.
+      if ((d.imd.mode === "sim" && /^unknown (job|order)/.test(msg)) || now(d) - unanswered.get(t.id)! > UNANSWERED) {
+        unanswered.delete(t.id);
+        touch(c, t, d, { status: "failed", error: `IMD stopped answering about this order (${msg.slice(0, 80)})`, activity: null });
+        dropProduct(c, t);
+        note(c, d, "warning", `"${t.title}": IMD stopped answering about this order, so it is marked failed and the company moves on. Its order id stays on the shift.`);
+        continue;
+      }
+      touch(c, t, d, { activity: `retrying: ${msg.slice(0, 80)}` });
     }
+  }
+}
+
+const PUBLISHING = "delivered · waiting for IMD to publish the address";
+/** How long a delivered website waits for its address before it is taken without one (recoverAddresses keeps asking). */
+const ADDRESS_WAIT = 2 * 60 * 60 * 1000;
+const polled = new Map<string, number>();
+/** When IMD first failed to answer about a paid order; after this long without an answer it counts as failed. */
+const unanswered = new Map<string, number>();
+const UNANSWERED = 6 * 60 * 60 * 1000;
+
+/** Work the swarm hosts: the site, or a product that is a web tool. Its address is what the company gets. */
+function hosted(c: Company, t: Task): boolean {
+  return t.kind === "build_site" || (t.kind === "build_product" && c.products.find((p) => p.id === t.productId)?.kind === "tool");
+}
+
+/** A delivered site or web tool whose address IMD had not published when it was taken. */
+export function missingAddress(c: Company): Task[] {
+  const site = siteWithoutAddress(c);
+  const tools = c.products.filter((p) => p.kind === "tool" && p.status === "live" && !p.deliverableUrl)
+    .map((p) => c.tasks.find((t) => t.id === p.taskId && t.status === "done" && t.imd?.jobId)).filter((t): t is Task => Boolean(t));
+  return [...(site ? [site] : []), ...tools];
+}
+
+/**
+ * Collects the address of work delivered before IMD published it, asked every 10 minutes: the company's
+ * site, or a web tool it sells. A site that was built but never recorded is found here, not bought again.
+ */
+export async function recoverAddresses(c: Company, d: ShiftDeps): Promise<void> {
+  for (const t of missingAddress(c)) {
+    if (now(d) - (polled.get(t.id) ?? 0) < 10 * 60_000) continue;
+    polled.set(t.id, now(d));
+    const r = await d.imd.result(t.imd!.jobId!).catch(() => null);
+    if (!r?.siteUrl) continue;
+    t.result = { ...(t.result ?? {}), siteUrl: r.siteUrl };
+    if (t.kind === "build_site") {
+      c.site = { url: r.siteUrl, jobId: t.imd!.jobId! };
+      note(c, d, "result", `The site is live: ${r.siteUrl} (IMD published its address after the delivery).`);
+    } else {
+      const p = c.products.find((x) => x.id === t.productId);
+      if (p && !p.deliverableUrl) { p.deliverableUrl = r.siteUrl; note(c, d, "result", `${p.name} is live at ${r.siteUrl}.`); }
+    }
+    d.emit(c, "company", null);
   }
 }
 

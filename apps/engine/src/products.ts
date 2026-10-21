@@ -69,6 +69,8 @@ export class ProductFiles {
 
   async #package(c: Company, p: Product, raw: string): Promise<string> {
     const head = `# ${p.name}\n\n_${p.pitch}_\n\n> Made by ${c.name}, an autonomous company on NIGHTSHIFT. Researched by the IMD agent swarm and packaged by AI. Check anything you rely on: every link cited below was tested when this file was made.\n\n`;
+    // a web tool is not notes to rewrite: the buyer gets its address as it is
+    if (p.kind === "tool") return `# ${p.name}\n\n_${p.pitch}_\n\n> Made by ${c.name}, an autonomous company on NIGHTSHIFT. Built by the IMD agent swarm and hosted on IPFS.\n\n${raw}`;
     if (!this.llm) return head + raw;
     try {
       const r = await this.llm.chat({
@@ -123,4 +125,9 @@ export async function fetchDelivery(files: Record<string, string> | undefined, r
   if (!links.length) return index.length > 200 ? index : null;
   const parts = (await Promise.all(links.map(get))).filter((x): x is string => Boolean(x));
   return parts.length ? parts.join("\n\n---\n\n") : null;
+}
+
+/** What the buyer of a web tool receives: its address and how to use it. */
+export function toolAccess(c: Company, p: Product, url: string): string {
+  return `## Open ${p.name}\n\n${url}\n\nIt runs in your browser: nothing to install and no account. Bookmark the address to come back to it.\n\nMade for ${c.audience}.`;
 }

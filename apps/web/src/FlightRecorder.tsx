@@ -17,9 +17,12 @@ export function took(ms: number): string {
 
 /** Who chose the move: the owner by hand, the CEO's model (and what thinking cost), or the playbook (and why). */
 function By({ m }: { m: NonNullable<Flight["mind"]> }) {
+  // the moves it passed over because they would repeat earlier work, and why
+  const n = m.avoided?.length ?? 0;
+  const skipped = n ? `. Passed over ${n} move${n === 1 ? "" : "s"} that would repeat earlier work: ${m.avoided!.slice(0, 3).join("; ")}` : "";
   if (m.by === "owner") return <>Ordered by the owner, not the CEO</>;
-  if (m.by === "playbook") return <>Decided by the playbook{m.fallback ? `, because ${m.fallback}` : ""}</>;
-  return <>Decided by the CEO's model{m.model ? <> (<code>{m.model}</code>)</> : null}{m.costUsd > 0 ? `, ${usd(m.costUsd, 4)} to think` : ""}</>;
+  if (m.by === "playbook") return <>Decided by the playbook{m.fallback ? `, because ${m.fallback}` : ""}{skipped}</>;
+  return <>Decided by the CEO's model{m.model ? <> (<code>{m.model}</code>)</> : null}{m.costUsd > 0 ? `, ${usd(m.costUsd, 4)} to think` : ""}{skipped}</>;
 }
 
 const VERDICT: Record<MarketVerdict, string> = {

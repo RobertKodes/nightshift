@@ -144,7 +144,7 @@ function build(engine: Engine, owner: string | null) {
     description: "The owner orders one piece of work by hand: research, a new product (name, pitch, price, what goes inside), the site, or a change to the site. SPENDS 0.5 IMD of the company's budget after IMD's free check, with no approval wait. Requires confirm: true.",
     inputSchema: {
       id: z.string(), kind: z.enum(["research", "build_product", "build_site", "improve_site"]), brief: z.string().max(1500).optional(),
-      name: z.string().optional(), pitch: z.string().optional(), priceUsd: z.number().optional(), productKind: z.enum(["report", "template", "dataset"]).optional(),
+      name: z.string().optional(), pitch: z.string().optional(), priceUsd: z.number().optional(), productKind: z.enum(["tool", "template", "dataset", "report"]).optional(),
       confirm: z.boolean().default(false),
     },
   }, run(async ({ id, confirm, ...w }: { id: string; confirm: boolean } & Record<string, unknown>) => {
