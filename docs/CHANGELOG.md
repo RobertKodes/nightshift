@@ -2,6 +2,11 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-22 · NIGHT POKER: heads-up Hold'em in the Game Room
+- NIGHT POKER is heads-up No-Limit Texas Hold'em: 2,000 chips each (100 big blinds), blinds up every 3 minutes, 20 seconds a move plus a time bank, until one player has every chip. Free and rated like chess, practice against Frog #7, or a house exhibition to watch.
+- Every deck is provably fair: the server commits to each hand's seed before the deal, your browser adds its own seed, and when the match ends every seed is revealed so you can rebuild any hand's deck on /games/poker/verify.
+- Staked matches in IMD or $SHIFT run through GameEscrow with the same seating, reconnect and void rules as chess; the winner gets 95%. Spectators never see hole cards before a showdown, can bet on staked matches, and poker joins the weekly prizes.
+
 ## 2026-10-22 · NIGHT WATCHERS (Gen 2) and the Night Watch, waiting for IMD
 - Burn 10 NIGHT FROGS and 2 IMD to forge a Night Watcher: 10× to 40× shift hours by rarity and never less than the 10 earned, +20% to +100% on the frogs you keep, a week of hours up front, and a seat in the Night Watch. A forge with #1 also makes The Captain, a 1 of 1 at 60×.
 - The Night Watch is the bot crew that keeps imdUSD safe: each seat runs its own bot with its own wallet and liquidates unsafe loans for a 16–18% bonus. The Captain's seat (NIGHT FROG #1, now 50×) is open now; setup is one command at /watch.

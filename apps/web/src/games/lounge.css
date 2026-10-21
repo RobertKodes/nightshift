@@ -12,6 +12,7 @@
 .lg-label { display: flex; justify-content: space-between; padding-top: 6px; border-top: 1px solid rgba(164, 139, 255, .14); color: var(--faint, #6c6688); font: 600 10px/1.8 var(--mono, "JetBrains Mono", monospace); letter-spacing: .16em; }
 .lg-create { display: grid; gap: 10px; }
 .lg-tabs, .lg-tcs { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px; }
+@media (max-width: 560px) { .lg-tabs.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .lg-tabs button, .lg-tcs button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 10px; border: 1px solid rgba(164, 139, 255, .25); background: rgba(255, 255, 255, .02); color: var(--dim, #a9a3c4); font: 600 11px var(--mono, "JetBrains Mono", monospace); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
 .lg-tcs button { flex-direction: column; gap: 4px; min-height: 58px; }
 .lg-tcs button b { color: var(--ink, #f2efff); font: 500 20px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: -.04em; }

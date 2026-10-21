@@ -3,6 +3,7 @@ import { onChess } from "./chess.js";
 import { type Locker, isKey, locker as live } from "./locker.js";
 import { onArcade } from "./pinball.js";
 import { onPool, pool } from "./pool.js";
+import { onPoker, poker } from "./poker.js";
 
 type Context = {
   json(res: ServerResponse, status: number, body: unknown): void;
@@ -14,8 +15,8 @@ type Context = {
 
 let wired = false;
 /**
- * The profiles follow every game: NIGHT POOL (looks at the table, XP and badges at the end), and
- * NIGHT CHESS and Space Pinball duels (XP), each booked by the player's key (a wallet, or a
+ * The profiles follow every game: NIGHT POOL (looks at the table, XP and badges at the end), NIGHT
+ * POKER (emotes and faces at the table, XP for rated matches), and NIGHT CHESS and Space Pinball duels (XP), each booked by the player's key (a wallet, or a
  * Telegram player's tg:<pid>). Called once at startup.
  */
 export function wireGameRoom(l: Locker = live): void {
@@ -23,6 +24,11 @@ export function wireGameRoom(l: Locker = live): void {
   wired = true;
   pool.setLooks((key, staked) => l.look(key, staked));
   onPool((e) => l.poolEnded(e));
+  poker.setLooks((key, staked) => l.look(key, staked));
+  onPoker((e) => {
+    if (!e.rated) return;
+    for (const pl of e.players) if (pl.key && isKey(pl.key) && !pl.agent) l.record(pl.key, { game: "poker", result: pl.result, name: pl.name });
+  });
   onChess((e) => {
     if (!e.rated) return;
     for (const [key, name, side] of [[e.keys[0], e.white, "w"], [e.keys[1], e.black, "b"]] as const) {

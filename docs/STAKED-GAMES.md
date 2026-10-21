@@ -1,6 +1,6 @@
 # Staked games: how a joined match gets its game, and why match 0x6315… was voided
 
-How a NIGHT CHESS, NIGHT POOL or Space Pinball game for a stake in IMD or $SHIFT goes from the
+How a NIGHT CHESS, NIGHT POOL, NIGHT POKER or Space Pinball game for a stake in IMD or $SHIFT goes from the
 `Joined` event to both players at the table, what voided the 100,000 $SHIFT chess match on
 2026-10-21, and what changed so it cannot happen that way again. Written from the code
 (`apps/engine/src/escrow.ts`, `games-routes.ts`, `chess.ts`, `pool.ts`, `pinball.ts`,
@@ -96,7 +96,12 @@ view, every 15 s hidden, and at once on focus or return), and:
   draw that refunds both. Resigning stays a choice that loses. Space Pinball: a duel never starts
   with one player (void at 15 minutes), and a player who sat down but never played a ball makes
   the duel void.
-- Free games keep their rules (45 s away rule, 5 s countdown).
+- NIGHT POKER (`poker.ts`, label `poker`): the same start, countdown and 2-minute budget. A
+  player away on their turn is checked or folded by the shot clock (20 s plus the time bank) while
+  their reconnection time runs; past it they lose by abandonment. A staked player who never chose
+  an action (every action theirs was the clock's) never loses the stake, by abandonment or by losing
+  every chip: the match is void. Leaving the table is a resignation and loses.
+- Free games keep their rules (45 s away rule, 5 s countdown; poker: 45 s in all on one's turns).
 
 **The payout never depends on the server's relay alone.** `GameEscrow.settle()` is open to
 anyone holding the server's signed result. The keeper (0x0Ff1…3454) relays it once; when that

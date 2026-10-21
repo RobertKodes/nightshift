@@ -6,10 +6,12 @@ import "./live.css";
 
 /** A game being played right now, as GET /api/games/live lists it. */
 export type LiveGame = {
-  game: "chess" | "pinball" | "pool"; id: string; players: { name: string; avatar?: string; agent?: boolean }[];
+  game: "chess" | "pinball" | "pool" | "poker"; id: string; players: { name: string; avatar?: string; agent?: boolean }[];
   stake: { currency: "FREE" | "IMD" | "SHIFT"; amount: number }; startedAt: number; watch: string; viewers: number; tc?: string; rules?: string;
   /** The house exhibition: two house bots, never rated, staked or bet on. */
   house?: boolean;
+  /** A free NIGHT POKER table of up to six: its name and how many seats are taken. */
+  table?: { name: string; seats: number; taken: number };
 };
 
 /** The live list, polled while the page is visible. `null` until the first answer. */
@@ -38,10 +40,10 @@ export function LiveRow({ g, now }: { g: LiveGame; now: number }) {
   const [a, b] = g.players;
   const who = (p?: LiveGame["players"][number]) => <span className="lv-name">{p?.name ?? "Player"}{p?.agent && <i className="lv-agent" title="An AI agent plays this seat">AGENT</i>}</span>;
   return <li className="lv-row">
-    <span className={`lv-game ${g.game}`} aria-hidden="true"><Icon name={g.game === "chess" ? "chess-knight" : g.game === "pool" ? "pool" : "orbit"} size={20} /></span>
+    <span className={`lv-game ${g.game}`} aria-hidden="true"><Icon name={g.game === "chess" ? "chess-knight" : g.game === "pool" ? "pool" : g.game === "poker" ? "cards" : "orbit"} size={20} /></span>
     <div className="lv-who">
-      <span className="lv-kind">{g.game === "chess" ? `NIGHT CHESS${g.tc ? ` · ${g.tc}` : ""}` : g.game === "pool" ? `NIGHT POOL · ${g.rules === "quick" ? "QUICK" : "WPA"}` : "SPACE PINBALL"}{g.house && <i className="lv-house" title="Two house bots play an exhibition: never rated, never staked">HOUSE · exhibition, not rated</i>}</span>
-      <b>{who(a)}<em>vs</em>{who(b)}</b>
+      <span className="lv-kind">{g.game === "chess" ? `NIGHT CHESS${g.tc ? ` · ${g.tc}` : ""}` : g.game === "pool" ? `NIGHT POOL · ${g.rules === "quick" ? "QUICK" : "WPA"}` : g.game === "poker" ? (g.table ? `NIGHT POKER · ${g.table.name} · ${g.table.taken}/${g.table.seats} SEATS` : "NIGHT POKER · HEADS-UP") : "SPACE PINBALL"}{g.house && <i className="lv-house" title="Two house bots play an exhibition: never rated, never staked">HOUSE · exhibition, not rated</i>}</span>
+      <b>{g.table ? <span className="lv-name">{g.players.map((p) => p.name).join(", ")}</span> : <>{who(a)}<em>vs</em>{who(b)}</>}</b>
     </div>
     <span className={`lv-stake ${g.stake.currency === "FREE" ? "" : "on"}`}>{g.house ? "EXHIBITION" : stakeText(g.stake)}</span>
     <span className="lv-meta"><span title="Spectators"><Icon name="user" size={13} />{g.viewers}</span><span title="Playing for"><Icon name="clock" size={13} />{since(g.startedAt, now)}</span></span>
@@ -53,7 +55,7 @@ export function LiveRow({ g, now }: { g: LiveGame; now: number }) {
 export function LiveList({ games, limit }: { games: LiveGame[] | null; limit?: number }) {
   const now = useNow();
   if (games === null) return <p className="lv-empty" role="status">Looking for live games…</p>;
-  if (!games.length) return <p className="lv-empty">No games right now. Start one: <Link to="/games/pool">Night Pool</Link>, <Link to="/games/chess">Night Chess</Link> or <Link to="/games/pinball">Space Pinball</Link>.</p>;
+  if (!games.length) return <p className="lv-empty">No games right now. Start one: <Link to="/games/pool">Night Pool</Link>, <Link to="/games/poker">Night Poker</Link>, <Link to="/games/chess">Night Chess</Link> or <Link to="/games/pinball">Space Pinball</Link>.</p>;
   return <ul className="lv-list" aria-live="polite">{games.slice(0, limit).map((g) => <LiveRow key={`${g.game}-${g.id}`} g={g} now={now} />)}</ul>;
 }
 

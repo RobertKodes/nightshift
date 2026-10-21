@@ -4,6 +4,7 @@ import { isAdmin } from "./admin.js";
 import { chess, STAKED_SHOW_MS, type TimeControl } from "./chess.js";
 import { createStaked as pinballStaked } from "./pinball.js";
 import { pool } from "./pool.js";
+import { poker } from "./poker.js";
 import { type Challenge, ESCROW, Escrow, GameError, liveEscrow } from "./escrow.js";
 import { keeperAccount } from "./keeper.js";
 import { eth } from "./chain.js";
@@ -23,11 +24,13 @@ export type StakedGames = {
   pinball: (o: { escrow: string; currency: "IMD" | "SHIFT"; stake: number; a: Seat; b: Seat; onResult: (r: Result) => void }) => { id: string; seats: Record<string, string> };
   chess: (o: { escrow: string; tc: TimeControl; currency: "IMD" | "SHIFT"; stake: string; a: Seat; b: Seat; onResult: (r: Result) => void }) => { id: string; seats: Record<string, string> };
   pool: (o: { escrow: string; currency: "IMD" | "SHIFT"; stake: string; a: Seat; b: Seat; onResult: (r: Result) => void }) => { id: string; seats: Record<string, string> };
+  /** NIGHT POKER heads-up (optional: a lobby made without it deals no poker). */
+  poker?: (o: { escrow: string; currency: "IMD" | "SHIFT"; stake: string; a: Seat; b: Seat; onResult: (r: Result) => void }) => { id: string; seats: Record<string, string> };
 };
 export type StakedGame = keyof StakedGames;
 
 /**
- * The challenge lobby shared by Space Pinball, NIGHT CHESS and NIGHT POOL. When the escrow sees a Joined event
+ * The challenge lobby shared by Space Pinball, NIGHT CHESS, NIGHT POOL and NIGHT POKER. When the escrow sees a Joined event
  * that matches a challenge exactly, the game is made for those two wallets; each player then takes
  * their seat (a private player token) with their signed-in session, and the game's verdict goes back
  * to the escrow to be checked against the chain, signed and relayed.
@@ -54,10 +57,13 @@ export class Lobby {
       ? this.games.pinball({ escrow: c.matchId, currency: c.token, stake: Number(formatUnits(BigInt(c.stake), 18)), a, b, onResult })
       : c.game === "pool"
         ? this.games.pool({ escrow: c.matchId, currency: c.token, stake: formatUnits(BigInt(c.stake), 18), a, b, onResult })
+        : c.game === "poker"
+        ? this.#poker()({ escrow: c.matchId, currency: c.token, stake: formatUnits(BigInt(c.stake), 18), a, b, onResult })
         : this.games.chess({ escrow: c.matchId, tc: (c.tc ?? "3+2") as TimeControl, currency: c.token, stake: formatUnits(BigInt(c.stake), 18), a, b, onResult });
     this.tables.set(c.matchId, { game: c.game, ...t });
     this.escrow.dealt(c.matchId);
   }
+  #poker() { if (!this.games.poker) throw new Error("this lobby deals no poker"); return this.games.poker; }
   /** A player's seat at their staked game: only for the wallet that deposited as player A or B. */
   seat(matchId: string, wallet: string | null): { game: StakedGame; id: string; player: string } | { waiting: true } {
     if (!wallet) throw new GameError(401, "Sign in with your wallet to take your seat.");
@@ -92,7 +98,7 @@ let lobby: Lobby | null = null;
 /** The live lobby, made on the first request (the vault holds the signer). */
 export function live(vault: Vault): Lobby {
   if (!lobby) {
-    lobby = new Lobby(liveEscrow(vault), { pinball: pinballStaked, chess: (o) => chess.createStaked(o), pool: (o) => pool.createStaked(o) });
+    lobby = new Lobby(liveEscrow(vault), { pinball: pinballStaked, chess: (o) => chess.createStaked(o), pool: (o) => pool.createStaked(o), poker: (o) => poker.createStaked(o) });
     lobby.escrow.start();
   }
   return lobby;

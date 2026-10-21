@@ -32,7 +32,7 @@ const TC_LABEL: Record<TimeControl, string> = { "3+2": "3+2 blitz", "5+0": "5+0 
 const tcOf = (s: string | undefined): TimeControl => (s && Object.hasOwn(CONTROLS, s) ? s as TimeControl : "3+2");
 /** A page of the website (the games live there and in the installed app). */
 export const site = (path = "", base = config.publicUrl) => `${base}${path}`;
-const GAME = { chess: { icon: "♟", name: "NIGHT CHESS", path: "/games/chess" }, pinball: { icon: "🎱", name: "Space Pinball", path: "/games/pinball" }, pool: { icon: "🎱", name: "NIGHT POOL", path: "/games/pool" } } as const;
+const GAME = { chess: { icon: "♟", name: "NIGHT CHESS", path: "/games/chess" }, pinball: { icon: "🎱", name: "Space Pinball", path: "/games/pinball" }, pool: { icon: "🎱", name: "NIGHT POOL", path: "/games/pool" }, poker: { icon: "🃏", name: "NIGHT POKER", path: "/games/poker" } } as const;
 /** The three games, the live games and the Game Room, as link buttons. */
 const room = (): Button[][] => [
   [{ text: "♟ NIGHT CHESS", url: site(GAME.chess.path) }, { text: "🎱 Space Pinball", url: site(GAME.pinball.path) }],
@@ -64,7 +64,7 @@ function liveCard(games: LiveGame[]): Reply {
   const shown = games.slice(0, 8);
   const vs = (g: LiveGame) => `${esc(g.players[0]?.name ?? "Player")} vs ${esc(g.players[1]?.name ?? "Player")}`;
   const stake = (g: LiveGame) => (g.house ? "HOUSE · exhibition, not rated" : g.stake.currency === "FREE" ? "free" : `💎 ${g.stake.amount.toLocaleString("en-US")} ${g.stake.currency === "SHIFT" ? "$SHIFT" : "IMD"}`);
-  const kind = (g: LiveGame) => (g.game === "chess" ? g.tc ?? "chess" : g.game === "pool" ? "pool" : "pinball");
+  const kind = (g: LiveGame) => (g.game === "chess" ? g.tc ?? "chess" : g.game === "pool" ? "pool" : g.game === "poker" ? (g.table ? "poker table" : "poker heads-up") : "pinball");
   const lines = shown.map((g) => `${GAME[g.game].icon} <b>${vs(g)}</b> · ${kind(g)} · ${stake(g)}${g.viewers ? ` · 👁 ${g.viewers}` : ""}`);
   return {
     text: [`👀 <b>LIVE NOW</b> · ${games.length} game${games.length === 1 ? "" : "s"}`, "", ...lines, ...(games.length > shown.length ? ["", `…and ${games.length - shown.length} more on the website.`] : []), "", "Watch any of them on the website.", INSTALL].join("\n"),

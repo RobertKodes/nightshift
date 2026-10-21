@@ -197,7 +197,7 @@ describe("tickets", () => {
     const { bets, game } = setup();
     const g = game();
     const ask = (x: Record<string, unknown>) => bets.ticket(A, { game: "chess", matchId: g.id, side: "A", token: "IMD", amount: "1", ...x });
-    await expect(ask({ game: "poker" })).rejects.toThrow(/Unknown game/);
+    await expect(ask({ game: "darts" })).rejects.toThrow(/Unknown game/);
     await expect(ask({ side: "C" })).rejects.toThrow(/side A or side B/);
     await expect(ask({ token: "ETH" })).rejects.toThrow(/IMD or SHIFT/);
     for (const bad of ["", "1e3", "-1", "0x10", "01"]) await expect(ask({ amount: bad })).rejects.toThrow(/number/);

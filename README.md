@@ -95,4 +95,4 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Please re
 
 $SHIFT is a utility token, not an investment; its price can go to zero. Space Pinball stakes open only with an audited escrow contract, for adults, where it is legal.
 
-Built by [@probert_mihai](https://x.com/probert_mihai). MIT licensed; `@x402/*` dependencies are Apache-2.0.
+Built by [@probert_mihai](https://x.com/probert_mihai). MIT licensed; `@x402/*` dependencies are Apache-2.0. NIGHT POKER's hand evaluator is our own, checked in tests against [pokersolver](https://github.com/goldfire/pokersolver) 2.1.4 (MIT, © 2016 James Simpson and GoldFire Studios, Inc.), a test-only dependency that is never shipped.

@@ -5,19 +5,19 @@ import { Link } from "../router";
 import "./prizes.css";
 
 /**
- * This week's prizes in shift hours (GET /api/games/prizes): the top three of NIGHT CHESS, NIGHT POOL
- * and Space Pinball, a countdown to Monday 00:00 UTC, and the rules in two plain lines. Names only;
+ * This week's prizes in shift hours (GET /api/games/prizes): the top three of NIGHT CHESS, NIGHT POOL,
+ * NIGHT POKER and Space Pinball, a countdown to Monday 00:00 UTC, and the rules in two plain lines. Names only;
  * the signed-in wallet's own row is marked. PrizeLines lists a winner's own prizes for the rewards hub.
  */
-export type PrizeGame = "chess" | "pool" | "pinball";
+export type PrizeGame = "chess" | "pool" | "poker" | "pinball";
 type Row = { place: number; name: string; hours: number; wins?: number; opponents?: number; score?: number; you?: true };
 type Mine = { game: PrizeGame; place: number; hours: number; result: string; week: number; payAt: number; paidAt: number | null; voided: boolean };
 export type Prizes = {
   on: boolean; week: { startedAt: number; endsAt: number }; now: number; hours: number[]; rules: string[];
   games: Record<PrizeGame, Row[]>; last: { game: PrizeGame; place: number; name: string; hours: number; result: string; payAt: number; paid: boolean; voided: boolean }[]; mine: Mine[];
 };
-const NAME: Record<PrizeGame, string> = { chess: "NIGHT CHESS", pool: "NIGHT POOL", pinball: "SPACE PINBALL" };
-const ICON: Record<PrizeGame, string> = { chess: "chess-knight", pool: "pool", pinball: "orbit" };
+const NAME: Record<PrizeGame, string> = { chess: "NIGHT CHESS", pool: "NIGHT POOL", poker: "NIGHT POKER", pinball: "SPACE PINBALL" };
+const ICON: Record<PrizeGame, string> = { chess: "chess-knight", pool: "pool", poker: "cards", pinball: "orbit" };
 const PLACE = ["1st", "2nd", "3rd"];
 
 /** The prizes, read every minute while the page is visible (null until the first answer). */
@@ -45,7 +45,8 @@ export function WeeklyPrizes({ game }: { game?: PrizeGame }) {
   const { p, skew } = usePrizes();
   const now = useNow() + skew;
   if (!p?.on) return null;
-  const games: PrizeGame[] = game ? [game] : ["chess", "pool", "pinball"];
+  // a server from before NIGHT POKER joined the prizes has no poker board
+  const games: PrizeGame[] = (game ? [game] : (["chess", "pool", "poker", "pinball"] as PrizeGame[])).filter((g) => p.games[g]);
   return <section className={`wkp ${game ? "wkp-one" : ""}`} aria-labelledby={`wkp-title-${game ?? "all"}`}>
     <div className="wkp-head">
       <div><b id={`wkp-title-${game ?? "all"}`}><Icon name="trophy" size={15} />THIS WEEK'S PRIZES</b><span>{p.hours.slice(0, 3).map((h, i) => `${PLACE[i]} +${h} h`).join(" · ")} in shift hours{game ? "" : ", per game"}</span></div>

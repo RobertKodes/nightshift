@@ -3,6 +3,7 @@ import { clientIp } from "./auth.js";
 import { chess } from "./chess.js";
 import { getWatch as pinWatchView, live as pinLive, watch as pinWatch } from "./pinball.js";
 import { pool } from "./pool.js";
+import { poker } from "./poker.js";
 
 /**
  * Spectator mode: anyone can watch any game being played right now. The list of live games and a
@@ -13,10 +14,12 @@ type Context = {
   json(res: ServerResponse, status: number, body: unknown): void;
   limited(req: IncomingMessage, key: string, n: number, ms: number): boolean;
 };
-export type Game = "chess" | "pinball" | "pool";
+export type Game = "chess" | "pinball" | "pool" | "poker";
 export type LiveGame = {
   game: Game; id: string; players: { name: string; avatar?: string; agent?: boolean }[];
   stake: { currency: "FREE" | "IMD" | "SHIFT"; amount: number }; startedAt: number; watch: string; viewers: number; tc?: string; rules?: string;
+  /** A free NIGHT POKER table of up to six: its name and how many seats are taken. */
+  table?: { name: string; seats: number; taken: number };
   /** A house exhibition between two house bots: shown as HOUSE, never rated, staked or bet on. */
   house?: boolean;
 };
@@ -43,6 +46,8 @@ export function liveGames(): LiveGame[] {
       stake: { currency: m.currency, amount: m.stake }, startedAt: m.startedAt, watch: `/games/pinball?watch=${m.id}`, viewers: viewersOf("pinball", m.id) })),
     ...pool.live().map((m) => ({ game: "pool" as const, id: m.id, rules: m.rules, players: m.players.map((p) => ({ name: p.name, ...(p.agent ? { agent: true } : {}) })),
       stake: { currency: m.currency, amount: Number(m.stake ?? 0) || 0 }, startedAt: m.startedAt, watch: `/games/pool?watch=${m.id}`, viewers: viewersOf("pool", m.id) })),
+    ...poker.live().map((m) => ({ game: "poker" as const, id: m.id, rules: "heads-up", ...(m.house ? { house: true } : {}), players: m.players.map((p) => ({ name: p.name, ...(p.agent ? { agent: true } : {}) })),
+      stake: { currency: m.currency, amount: Number(m.stake ?? 0) || 0 }, startedAt: m.startedAt, watch: `/games/poker?watch=${m.id}`, viewers: viewersOf("poker", m.id) })),
   ];
   return games.sort((a, b) => b.startedAt - a.startedAt);
 }
@@ -109,7 +114,7 @@ export async function spectateRoutes(req: IncomingMessage, res: ServerResponse, 
     ctx.json(res, 200, { games: liveGames() });
     return true;
   }
-  const route = /^\/api\/(chess|pinball|pool)\/match\/([a-f0-9]{1,40})\/watch$/.exec(p);
+  const route = /^\/api\/(chess|pinball|pool|poker)\/match\/([a-f0-9]{1,40})\/watch$/.exec(p);
   if (!route) return false;
   // a spectator only ever reads
   if (req.method !== "GET") { ctx.json(res, 405, { error: "Spectators cannot play" }); return true; }
@@ -118,6 +123,10 @@ export async function spectateRoutes(req: IncomingMessage, res: ServerResponse, 
   if (game === "chess") {
     // the first frame carries the whole move list; then compact frames, as for the players
     return stream(req, res, ctx, game, id, (first) => ({ ...chess.watchView(id, !first), spectating: true, viewers: viewersOf(game, id) }), (f) => chess.watch(id, f));
+  }
+  if (game === "poker") {
+    // never a hole card until it is shown: a spectator's view is nobody's seat
+    return stream(req, res, ctx, game, id, () => ({ ...poker.watchView(id), spectating: true, viewers: viewersOf(game, id) }), (f) => poker.watch(id, f));
   }
   if (game === "pool") {
     // a shot's keyframes go to each spectator once, the frame after the shot

@@ -8,47 +8,53 @@ import { creditHours } from "./frogs.js";
 import { seasonStartOf } from "./league.js";
 import { type ArcadeEvent, onArcade } from "./pinball.js";
 import { type PoolEvent, onPool } from "./pool.js";
+import { type PokerEvent, onPoker } from "./poker.js";
 
 /**
  * Weekly prizes in shift hours, the same hours soft staking and the Command Room pay (frogs.ts) and
  * the weekly frog pot shares out (frogpot.ts). Each week (Monday 00:00 UTC, the missions' and the
- * league's epoch) the top three of each game get bonus hours: NIGHT CHESS and NIGHT POOL by rated
- * wins, Space Pinball by the best verified solo score. 24, 12 and 6 hours by default (PRIZE_HOURS).
+ * league's epoch) the top three of each game get bonus hours: NIGHT CHESS, NIGHT POOL and NIGHT
+ * POKER by rated wins (a poker win is a heads-up match won), Space Pinball by the best verified
+ * solo score. 24, 12 and 6 hours by default (PRIZE_HOURS).
  *
  * Anti-abuse: only wallet-signed players count; only rated games between two different wallets;
  * at most the first 3 games against the same opponent in a week count (their wins included); a
- * house exhibition never reaches here (chess.ts keeps it from the arcade). A week's winners are held
+ * house exhibition or a practice match never reaches here (chess.ts and poker.ts keep them from
+ * the arcade; free poker tables are never rated). A week's winners are held
  * 48 hours before their hours are added, and the admin can void an entry from /setup in that time
  * (or during the week, which takes the wallet off that week's board).
  */
-export type PrizeGame = "chess" | "pool" | "pinball";
-export const PRIZE_GAMES: PrizeGame[] = ["chess", "pool", "pinball"];
+export type PrizeGame = "chess" | "pool" | "poker" | "pinball";
+export const PRIZE_GAMES: PrizeGame[] = ["chess", "pool", "poker", "pinball"];
+type DuelGame = Exclude<PrizeGame, "pinball">;
 export const PER_OPPONENT = 3;
 export const HOLD_MS = 48 * 3_600_000;
 const WEEK_MS = 7 * 86_400_000;
 export const RULES = [
-  "Each week (Monday 00:00 UTC) the top 3 in NIGHT CHESS and NIGHT POOL (most rated wins) and Space Pinball (best verified solo score) win bonus shift hours.",
+  "Each week (Monday 00:00 UTC) the top 3 in NIGHT CHESS, NIGHT POOL and NIGHT POKER (most rated wins; a poker win is a heads-up match won) and Space Pinball (best verified solo score) win bonus shift hours.",
   "Sign in with your wallet to count. Only rated games between different wallets count, at most 3 against the same rival, never house games; hours land 48 hours after the week ends.",
 ];
 
 type Duel = { at: number; a: string; b: string; winner: string | null };
 type Best = { score: number; at: number };
 export type Award = { week: number; game: PrizeGame; place: number; wallet: string; name: string; hours: number; result: string; payAt: number; paidAt?: number; voided?: { at: number; reason: string } };
-type State = { week: number; duels: { chess: Duel[]; pool: Duel[] }; solo: Record<string, Best>; names: Record<string, string>; voids: { week: number; game: PrizeGame; wallet: string }[]; awards: Award[] };
+type State = { week: number; duels: Record<DuelGame, Duel[]>; solo: Record<string, Best>; names: Record<string, string>; voids: { week: number; game: PrizeGame; wallet: string }[]; awards: Award[] };
 export type Standing = { wallet: string; name: string; wins?: number; opponents?: number; score?: number; at: number };
 export class PrizeError extends Error { constructor(public status: number, message: string) { super(message); } }
 
 const isWallet = (w: unknown): w is string => typeof w === "string" && /^0x[0-9a-fA-F]{40}$/.test(w);
 const PLACE = ["1st", "2nd", "3rd"];
 export const placeText = (n: number) => PLACE[n - 1] ?? `${n}th`;
-const GAME_NAME: Record<PrizeGame, string> = { chess: "NIGHT CHESS", pool: "NIGHT POOL", pinball: "Space Pinball" };
+const GAME_NAME: Record<PrizeGame, string> = { chess: "NIGHT CHESS", pool: "NIGHT POOL", poker: "NIGHT POKER", pinball: "Space Pinball" };
 
 export class Prizes {
   private s: State;
   constructor(private file: string | null, private o: { now?: () => number; hours?: () => number[]; credit?: (wallet: string, hours: number) => void } = {}) {
-    const fresh: State = { week: seasonStartOf(this.now()), duels: { chess: [], pool: [] }, solo: {}, names: {}, voids: [], awards: [] };
+    const fresh: State = { week: seasonStartOf(this.now()), duels: { chess: [], pool: [], poker: [] }, solo: {}, names: {}, voids: [], awards: [] };
     let s = fresh;
     try { if (file && existsSync(file)) s = { ...fresh, ...JSON.parse(readFileSync(file, "utf8")) }; } catch { s = fresh; }
+    // a file kept before a game joined the prizes has no board for it yet
+    s.duels = { ...fresh.duels, ...s.duels };
     this.s = s;
   }
   private now() { return (this.o.now ?? Date.now)(); }
@@ -57,7 +63,7 @@ export class Prizes {
   get week() { this.roll(); return { startedAt: this.s.week, endsAt: this.s.week + WEEK_MS }; }
 
   /** A finished duel: counted only when rated, between two different signed-in wallets. */
-  duel(game: "chess" | "pool", a: { wallet: string | null; name: string }, b: { wallet: string | null; name: string }, winner: "a" | "b" | null, rated: boolean): boolean {
+  duel(game: DuelGame, a: { wallet: string | null; name: string }, b: { wallet: string | null; name: string }, winner: "a" | "b" | null, rated: boolean): boolean {
     if (!rated || !isWallet(a.wallet) || !isWallet(b.wallet)) return false;
     const wa = a.wallet.toLowerCase(), wb = b.wallet.toLowerCase();
     if (wa === wb) return false;
@@ -118,7 +124,7 @@ export class Prizes {
     this.s.awards.push(...made);
     this.s.awards = this.s.awards.filter((a) => a.week > start - 26 * WEEK_MS);
     this.s.week = start;
-    this.s.duels = { chess: [], pool: [] };
+    this.s.duels = { chess: [], pool: [], poker: [] };
     this.s.solo = {};
     this.s.voids = this.s.voids.filter((v) => v.week >= start);
     this.save();
@@ -142,7 +148,7 @@ export class Prizes {
   /** The admin voids an entry: an award still in its hold, or a wallet on this week's board. */
   void(game: PrizeGame, wallet: string, reason = "voided by the admin", week?: number): { award: Award | null; week: number } {
     this.roll();
-    if (!PRIZE_GAMES.includes(game) || !isWallet(wallet)) throw new PrizeError(400, "Give the game (chess, pool or pinball) and the wallet.");
+    if (!PRIZE_GAMES.includes(game) || !isWallet(wallet)) throw new PrizeError(400, "Give the game (chess, pool, poker or pinball) and the wallet.");
     const w = wallet.toLowerCase(), wk = week ?? this.s.week;
     const award = this.s.awards.find((a) => a.week === wk && a.game === game && a.wallet === w) ?? (week === undefined ? this.s.awards.filter((a) => a.game === game && a.wallet === w && !a.paidAt && !a.voided).at(-1) : undefined);
     if (award) {
@@ -164,7 +170,7 @@ export class Prizes {
     const lastWeek = this.s.awards.length ? Math.max(...this.s.awards.map((a) => a.week)) : null;
     const last = lastWeek === null ? [] : this.s.awards.filter((a) => a.week === lastWeek).map((a) => ({ game: a.game, place: a.place, name: a.name, hours: a.hours, result: a.result, payAt: a.payAt, paid: !!a.paidAt, voided: !!a.voided }));
     const mine = wallet ? this.s.awards.filter((a) => a.wallet === wallet.toLowerCase()).map((a) => ({ game: a.game, place: a.place, hours: a.hours, result: a.result, week: a.week, payAt: a.payAt, paidAt: a.paidAt ?? null, voided: !!a.voided })).reverse() : [];
-    return { on: config.weeklyPrizes, week, now: this.now(), hours, perOpponent: PER_OPPONENT, holdHours: HOLD_MS / 3_600_000, rules: RULES, games: { chess: top("chess"), pool: top("pool"), pinball: top("pinball") }, last, mine };
+    return { on: config.weeklyPrizes, week, now: this.now(), hours, perOpponent: PER_OPPONENT, holdHours: HOLD_MS / 3_600_000, rules: RULES, games: { chess: top("chess"), pool: top("pool"), poker: top("poker"), pinball: top("pinball") }, last, mine };
   }
   /** /setup: the boards with wallets, the awards of the last weeks, what is voided. */
   admin() {
@@ -187,6 +193,12 @@ export function wirePrizes(p: Prizes = livePrizes()): void {
     if (!a || !b || e.players.length !== 2) return;
     // an AI agent plays under its owner's wallet: never a prize seat
     p.duel("pool", { wallet: a.agent ? null : a.key, name: a.name }, { wallet: b.agent ? null : b.key, name: b.name }, a.result === "win" ? "a" : b.result === "win" ? "b" : null, e.rated);
+  });
+  onPoker((e: PokerEvent) => {
+    const [a, b] = e.players;
+    if (!a || !b || e.players.length !== 2) return;
+    // an AI agent plays under its owner's wallet: never a prize seat
+    p.duel("poker", { wallet: a.agent ? null : a.key, name: a.name }, { wallet: b.agent ? null : b.key, name: b.name }, a.result === "win" ? "a" : b.result === "win" ? "b" : null, e.rated);
   });
   onArcade((e: ArcadeEvent) => { if (e.kind === "solo") p.solo(e.wallet ?? null, e.run.name, e.run.score); });
   const tick = () => { try { for (const a of p.payDue()) console.log(`weekly prize: +${a.hours} shift hours to ${a.wallet} (${GAME_NAME[a.game]}, ${placeText(a.place)})`); } catch (err) { console.error("prizes", (err as Error).message); } };

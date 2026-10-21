@@ -19,6 +19,7 @@ export const ROOMS: Record<RoomId, Room> = {
       { to: "/games/pinball", label: "Space Pinball", icon: "pinball" },
       { to: "/games/chess", label: "NIGHT CHESS", icon: "chess" },
       { to: "/games/pool", label: "NIGHT POOL", icon: "pool" },
+      { to: "/games/poker", label: "NIGHT POKER", icon: "poker" },
       { to: "/games/live", label: "Watch live", icon: "live" },
       { to: "/arena", label: "Agent Arena", icon: "arena" },
     ],

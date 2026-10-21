@@ -17,7 +17,7 @@ import { ASSETS, type Asset, BADGES, type BadgeId, CATALOG, ITEMS, type Item, KI
  * the item, and a copy belongs to one profile. Standard issue is everyone's, unnumbered. Items come
  * from levels and badges now; the vault shop (purchase()) opens later.
  */
-export type Game = "pool" | "chess" | "pinball";
+export type Game = "pool" | "chess" | "pinball" | "poker";
 export type GameStats = { played: number; wins: number; losses: number; draws: number; streak: number; best: number };
 export type Owned = { id: string; serial: number | null; at: number; via: "reward" | "purchase" | "grant" };
 export type Profile = {
@@ -31,7 +31,7 @@ export type Profile = {
 };
 const fresh = (): GameStats => ({ played: 0, wins: 0, losses: 0, draws: 0, streak: 0, best: 0 });
 /** XP for a finished game: more for a win, a little for every ball of yours you dropped. */
-export const XP = { pool: { win: 100, loss: 40, ball: 5 }, chess: { win: 80, loss: 30, draw: 50 }, pinball: { win: 60, loss: 25, draw: 40 } } as const;
+export const XP = { pool: { win: 100, loss: 40, ball: 5 }, chess: { win: 80, loss: 30, draw: 50 }, pinball: { win: 60, loss: 25, draw: 40 }, poker: { win: 90, loss: 35, draw: 45 } } as const;
 const KEY = /^(0x[0-9a-f]{40}|tg:[0-9a-f]{16})$/;
 export const isKey = (k: unknown): k is string => typeof k === "string" && KEY.test(k);
 const MAX_PROFILES = 300_000;
@@ -53,7 +53,7 @@ export class Locker {
   }
   /** A profile from an older file: every game's stats present, equipped items that still exist. */
   #heal(p: Profile): Profile {
-    p.stats = Object.assign({ pool: fresh(), chess: fresh(), pinball: fresh() }, p.stats ?? {});
+    p.stats = Object.assign({ pool: fresh(), chess: fresh(), pinball: fresh(), poker: fresh() }, p.stats ?? {});
     p.items = (p.items ?? []).filter((o) => ITEMS.has(o.id));
     p.equip = { ...STARTER, ...(p.equip ?? {}) };
     for (const k of KINDS) if (k !== "emote" && !this.#owns(p, (p.equip as Record<string, string>)[k]!)) (p.equip as Record<string, string>)[k] = (STARTER as Record<string, string>)[k]!;
@@ -81,7 +81,7 @@ export class Locker {
     if (!p) {
       if (this.#profiles.size >= MAX_PROFILES) throw new Error("Too many players right now. Try again later.");
       p = { key: k, name: publicName(name ?? "", { max: 18 }) ?? "Night crew", joinedAt: this.now(), seenAt: this.now(), avatar: parseInt(k.slice(-2), 16) % 5,
-        xp: 0, badges: [], stats: { pool: fresh(), chess: fresh(), pinball: fresh() }, potted: 0, items: [], equip: { ...STARTER, emote: [...STARTER.emote] } };
+        xp: 0, badges: [], stats: { pool: fresh(), chess: fresh(), pinball: fresh(), poker: fresh() }, potted: 0, items: [], equip: { ...STARTER, emote: [...STARTER.emote] } };
       this.#profiles.set(k, p);
       this.save();
     } else if (name) { const n = publicName(name, { max: 18 }); if (n && n !== p.name) { p.name = n; this.save(); } }

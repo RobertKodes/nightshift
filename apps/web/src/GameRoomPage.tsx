@@ -9,21 +9,22 @@ import "./games/room.css";
 const TILES: { game: Game; name: string; line: string; img: string; w: number; h: number; practice: string; practiceLabel: string }[] = [
   { game: "chess", name: "NIGHT CHESS", line: "Real-time chess on a 3D board: blitz or rapid, rated. Practice against Frog #7.", img: "/games/tiles/chess.webp", w: 880, h: 693, practice: "/games/chess?practice=1", practiceLabel: "Practice" },
   { game: "pool", name: "NIGHT POOL", line: "8-ball on WPA rules, every shot simulated by the server. Practice against Frog #7.", img: "/games/tiles/pool.webp", w: 880, h: 518, practice: "/games/pool", practiceLabel: "Practice" },
+  { game: "poker", name: "NIGHT POKER", line: "Heads-up No-Limit Hold'em on a provably fair deck, rated or staked. Practice against Frog #7.", img: "/games/tiles/poker.webp", w: 880, h: 550, practice: "/games/poker?practice=1", practiceLabel: "Practice" },
   { game: "pinball", name: "SPACE PINBALL", line: "Duels on the same table and seed, scores verified by replay. Practice solo.", img: "/games/tiles/pinball.webp", w: 640, h: 693, practice: "/games/pinball?practice=1", practiceLabel: "Practice" },
 ];
 
-/** The Game Room: the three games, the lounge, and how a staked game works, in plain words. */
+/** The Game Room: the four games, the lounge, and how a staked game works, in plain words. */
 export function GameRoomPage() {
   const l = useLounge();
   const live = (g: Game) => l?.live.filter((x) => x.game === g && !x.house).length ?? 0;
   const house = (g: Game) => l?.live.filter((x) => x.game === g && x.house).length ?? 0;
-  const waiting = (g: Game) => (l ? g === "chess" ? Object.values(l.waiting.chess).reduce((a, b) => a + b, 0) : g === "pool" ? l.waiting.pool ?? 0 : l.waiting.pinball : 0);
+  const waiting = (g: Game) => (l ? g === "chess" ? Object.values(l.waiting.chess).reduce((a, b) => a + b, 0) : g === "pool" ? l.waiting.pool ?? 0 : g === "poker" ? l.waiting.poker ?? 0 : l.waiting.pinball : 0);
   return (
     <div className="gr">
       <header className="gr-head">
         <div>
           <h1>Game Room</h1>
-          <p>Chess, pool and pinball against real people, here or in the app. Play free, or put the same amount of $SHIFT or IMD in; winner gets 95%.</p>
+          <p>Chess, pool, poker and pinball against real people, here or in the app. Play free, or put the same amount of $SHIFT or IMD in; winner gets 95%.</p>
         </div>
         <div className="gr-head-actions"><Link to="/games/live" className="gr-btn ghost"><Icon name="radar" size={16} />Watch live</Link><InstallButton /></div>
       </header>

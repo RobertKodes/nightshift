@@ -269,7 +269,7 @@
 .np-xp i { width:min(260px,52vw); height:8px; border:1px solid var(--edge); background:rgba(255,255,255,.04); }
 .np-xp em { display:block; height:100%; background:linear-gradient(90deg,var(--uv),var(--lime)); box-shadow:0 0 12px #b8ff4a66; }
 .np-xp small { color:var(--dim); font-size:9px; }
-.np-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; padding:16px 18px 0; }
+.np-stats { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; padding:16px 18px 0; }
 .np-stats div { padding:10px; border:1px solid var(--edge); background:rgba(255,255,255,.02); }
 .np-stats span { display:block; font:500 8px var(--mono); letter-spacing:.13em; color:var(--dim); }
 .np-stats b { display:block; font:600 20px var(--grot); } .np-stats b small { font-size:10px; color:var(--dim); margin-right:6px; }

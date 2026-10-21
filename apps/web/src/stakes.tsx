@@ -9,7 +9,7 @@ import { useMyStakes } from "./games/staked";
 import "./stakes.css";
 
 /**
- * Real-money duels in IMD or $SHIFT through GameEscrow v2, shared by Space Pinball, NIGHT CHESS and NIGHT POOL.
+ * Real-money duels in IMD or $SHIFT through GameEscrow v2, shared by Space Pinball, NIGHT CHESS, NIGHT POOL and NIGHT POKER.
  * The contract, the tokens and the game labels are pinned here in the page: every transaction the
  * browser builds goes to these and checks what the server says against them, so a compromised
  * server cannot redirect a stake. Approvals are for the exact stake only.
@@ -17,9 +17,9 @@ import "./stakes.css";
 export const ESCROW: Address = "0xf460fd9ad76f18414f54a2431870e8a116193489";
 export const STAKE_TOKENS = { IMD: "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7", SHIFT: "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac" } as const satisfies Record<string, Address>;
 export type StakeToken = keyof typeof STAKE_TOKENS;
-export type StakeGame = "pinball" | "chess" | "pool";
-const LABELS: Record<StakeGame, Hex> = { pinball: stringToHex("pinball", { size: 32 }), chess: stringToHex("chess", { size: 32 }), pool: stringToHex("pool", { size: 32 }) };
-const GAME_LABEL: Record<StakeGame, string> = { pinball: "Space Pinball", chess: "NIGHT CHESS", pool: "NIGHT POOL (8-ball, WPA rules)" };
+export type StakeGame = "pinball" | "chess" | "pool" | "poker";
+const LABELS: Record<StakeGame, Hex> = { pinball: stringToHex("pinball", { size: 32 }), chess: stringToHex("chess", { size: 32 }), pool: stringToHex("pool", { size: 32 }), poker: stringToHex("poker", { size: 32 }) };
+const GAME_LABEL: Record<StakeGame, string> = { pinball: "Space Pinball", chess: "NIGHT CHESS", pool: "NIGHT POOL (8-ball, WPA rules)", poker: "NIGHT POKER (heads-up No-Limit Hold'em, 100 big blinds)" };
 const ABI = parseAbi([
   "function open(bytes32 matchId, address token, uint256 stake, bytes32 game)",
   "function join(bytes32 matchId)",
@@ -279,7 +279,7 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
       <span><b>{c.name}</b><small>{short(c.creator)}{c.tc ? ` · ${c.tc}` : ""} · {clock(Math.max(0, Math.floor((c.joinBy ?? 0) - now)))} left</small></span>
       <strong>{Number(c.amount).toLocaleString()} {tokenLabel(c.token)}</strong>
       {c.you === "A" ? <em>YOURS</em> : <button type="button" className="sk-btn small" disabled={!live || !!step || !!waiting} onClick={() => void accept(c)}>ACCEPT</button>}
-    </li>)}</ul> : <p className="sk-note">{invited ? "The challenge you were sent is no longer open (taken, cancelled or expired)." : `No open ${game === "chess" ? "chess" : game === "pool" ? "pool" : "pinball"} challenges. Open one; it stays open for an hour.`}</p>}
+    </li>)}</ul> : <p className="sk-note">{invited ? "The challenge you were sent is no longer open (taken, cancelled or expired)." : `No open ${game === "chess" ? "chess" : game === "pool" ? "pool" : game === "poker" ? "poker" : "pinball"} challenges. Open one; it stays open for an hour.`}</p>}
     <p className="sk-note sk-fine">Contract <a href={`https://etherscan.io/address/${ESCROW}`} target="_blank" rel="noreferrer">{short(ESCROW)} ↗</a> · results signed by the server, paid by the contract.</p>
 
     {(joining || dealing) && <div className={`sk-overlay ${theme}-overlay`} role="dialog" aria-modal="true" aria-labelledby="sk-joining">

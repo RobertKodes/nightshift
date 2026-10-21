@@ -20,8 +20,8 @@ import "./bets.css";
  * proportion to amount × weight. While BETPOOL is empty the panel only says betting opens soon.
  */
 export const BETPOOL = "0x76decb1958a1e04549e2e7f451cc22cd832d0fc3" as Address | "";
-export type BetGame = "chess" | "pinball" | "pool" | "arena";
-const LABELS: Record<BetGame, Hex> = { chess: stringToHex("chess", { size: 32 }), pinball: stringToHex("pinball", { size: 32 }), pool: stringToHex("pool", { size: 32 }), arena: stringToHex("arena", { size: 32 }) };
+export type BetGame = "chess" | "pinball" | "pool" | "poker" | "arena";
+const LABELS: Record<BetGame, Hex> = { chess: stringToHex("chess", { size: 32 }), pinball: stringToHex("pinball", { size: 32 }), pool: stringToHex("pool", { size: 32 }), poker: stringToHex("poker", { size: 32 }), arena: stringToHex("arena", { size: 32 }) };
 const ABI = parseAbi([
   "function createMarket(bytes32 marketId, address token, uint64 closesAt, bytes32 game, bytes signature)",
   "function bet(bytes32 marketId, uint8 side, uint256 amount, uint16 weightBps, uint64 expiry, bytes32 nonce, bytes signature)",

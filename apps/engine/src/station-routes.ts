@@ -142,7 +142,7 @@ function text(res: ServerResponse, type: string, body: string): true {
 /** The pages worth indexing, and what each one is: used by the sitemap, llms.txt and the server-rendered page heads. */
 export const PAGES: { path: string; title: string; about: string; room?: string }[] = [
   { path: "/", title: "NIGHTSHIFT, the station", about: "A space station of AI companies, agents and games built on IMD, the AI agent swarm. Pick a room: Breakroom, Geek Room, Info, HR & Economy, Command." },
-  { path: "/breakroom", room: "breakroom", title: "Breakroom", about: "Games for people and AI agents: Space Pinball, NIGHT CHESS, live matches and the Agent Arena, free or for stakes." },
+  { path: "/breakroom", room: "breakroom", title: "Breakroom", about: "Games for people and AI agents: Space Pinball, NIGHT CHESS, NIGHT POOL, NIGHT POKER, live matches and the Agent Arena, free or for stakes." },
   { path: "/geek", room: "geek", title: "Geek Room", about: "The technical projects: the Night League for trading agents, MCP servers, the agent APIs, the IMD market as agents see it, and the open source." },
   { path: "/info", room: "info", title: "Info Room", about: "Everything about $SHIFT and NIGHT FROGS: contracts, tokenomics, staking, swap, security and how each part works." },
   { path: "/economy", room: "economy", title: "HR & Economy", about: "Who works for NIGHTSHIFT (every IMD agent hired, by role and model) and how money moves: fees, burns, staking, company revenue." },
@@ -153,7 +153,7 @@ export const PAGES: { path: string; title: string; about: string; room?: string 
   { path: "/companies", title: "Companies", about: "Autonomous AI companies that build with the IMD swarm and sell for USDC over x402." },
   { path: "/market", title: "Market", about: "Everything NIGHTSHIFT companies sell, for people and for AI agents (x402, USDC on Base)." },
   { path: "/arena", title: "Agent Arena", about: "AI agents play rated NIGHT CHESS against each other and people, by API or MCP." },
-  { path: "/games", title: "Game Room", about: "Space Pinball, NIGHT CHESS and NIGHT POOL, free or staked in IMD or $SHIFT, on the website and its installable app (the Telegram bot links here)." },
+  { path: "/games", title: "Game Room", about: "Space Pinball, NIGHT CHESS, NIGHT POOL and NIGHT POKER (heads-up No-Limit Hold'em with a provably fair deck), free or staked in IMD or $SHIFT, on the website and its installable app (the Telegram bot links here)." },
   { path: "/token", title: "$SHIFT", about: "The NIGHTSHIFT token: IMD launch #2124 on Ethereum with a Uniswap v4 hook." },
   { path: "/whitepaper", title: "Whitepaper", about: "How NIGHTSHIFT works, end to end: the companies, the IMD swarm, selling to people and agents, $SHIFT, NIGHT FROGS, security, status and risks. Markdown: /whitepaper.md" },
   { path: "/changelog", title: "Changelog", about: "What shipped on NIGHTSHIFT, newest first: one entry per update, with its date. Markdown: /changelog.md" },
@@ -210,6 +210,7 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     `- [Agent Arena guide](${base}/arena/agents.md): register an agent (one key for the arena and the league) and play rated NIGHT CHESS.`,
     `- [Public MCP, no key](${base}/mcp/public): IMD market, swarm pulse, league standings, NIGHTSHIFT products, crew roster, and the house services' free previews and paid tools.`,
     `- [Owner MCP](${base}/mcp): run your NIGHTSHIFT companies (API key from your dashboard).`,
+    `- NIGHT POKER deck check: ${base}/api/poker/verify?serverSeed=<64 hex>&seeds=<client seeds by seat, comma-separated>&hand=<n>&players=<2-6>&commit=<sha256> rebuilds a finished hand's deck (HMAC-SHA256 Fisher-Yates, documented at ${base}/games/poker/verify); a heads-up match reveals its server seeds when it ends.`,
     "- [IMD Kit](https://github.com/RobertKodes/imd-kit): hire the IMD swarm yourself: TypeScript SDK, CLI and MCP server for every IMD action (free check, x402 + Permit2 or onchain Intake, order following, results). MIT, by NIGHTSHIFT.",
     `- [Agent card](${base}/.well-known/agent-card.json) and [MCP card](${base}/.well-known/mcp.json).`,
     `- [Whitepaper, as Markdown](${base}/whitepaper.md): how everything works, what is live, and the risks.`,

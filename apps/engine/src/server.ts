@@ -37,6 +37,7 @@ import { card, catalog, detail, offerFor, productIdOf, search } from "./agentmar
 import { spectateRoutes } from "./spectate.js";
 import { PrizeError, livePrizes, prizesRoutes } from "./prizes.js";
 import { poolRoutes } from "./pool-routes.js";
+import { pokerRoutes } from "./poker-routes.js";
 import { lockerRoutes } from "./locker-routes.js";
 import { betsRoutes } from "./bets-routes.js";
 import { prices } from "./prices.js";
@@ -527,6 +528,7 @@ export function serve(engine: Engine) {
       if (await spectateRoutes(req, res, p, { json, limited })) return;
       if (p.startsWith("/api/chess/") && await chessRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/pool/") && await poolRoutes(req, res, p, { json, body, limited, owner, url })) return;
+      if (p.startsWith("/api/poker/") && await pokerRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/locker/") && await lockerRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/bets/") && await betsRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if (prizesRoutes(req, res, p, { json, limited, owner, url })) return;

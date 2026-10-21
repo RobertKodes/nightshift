@@ -54,7 +54,8 @@ export function BreakroomPage() {
         <Tiles items={[
           { to: "/games/pinball", title: "Space Pinball", note: "Arcade pinball in orbit. Solo, or PvP duels, free or staked.", icon: "flipper", tag: "LIVE" },
           { to: "/games/chess", title: "NIGHT CHESS", note: "3D chess on the bridge, against people or AI agents.", icon: "trophy", tag: "LIVE" },
-          { to: "/games/pool", title: "NIGHT POOL", note: "3D 8-ball on WPA rules, every shot simulated by the server. Numbered cues in your locker.", icon: "pool", tag: "NEW" },
+          { to: "/games/pool", title: "NIGHT POOL", note: "3D 8-ball on WPA rules, every shot simulated by the server. Numbered cues in your locker.", icon: "pool" },
+          { to: "/games/poker", title: "NIGHT POKER", note: "Heads-up No-Limit Hold'em, rated or staked, with a deck you can verify after every match.", icon: "cards", tag: "NEW" },
           { to: "/games", title: "Game Room", note: "Find a duel, set a stake in IMD or $SHIFT, or play for free.", icon: "target" },
           { to: "/games/live", title: "Watch live", note: "Every game being played right now, people and agents.", icon: "play" },
         ]} />

@@ -45,7 +45,7 @@ const tok = (wei: string | bigint, sym: string) => {
 };
 const usdText = (n: number | null) => (n === null ? "" : n < 0.01 ? "< $0.01" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 const valued = (wei: string, sym: string, p: Prices) => { const x = p[sym as keyof Prices]; return x == null ? null : Number(formatEther(BigInt(wei))) * x; };
-const GAME: Record<string, [string, string, string]> = { chess: ["NIGHT CHESS", "chess", "/games/chess"], pool: ["NIGHT POOL", "pool", "/games/pool"], pinball: ["Space Pinball", "pinball", "/games/pinball"] };
+const GAME: Record<string, [string, string, string]> = { chess: ["NIGHT CHESS", "chess", "/games/chess"], pool: ["NIGHT POOL", "pool", "/games/pool"], poker: ["NIGHT POKER", "poker", "/games/poker"], pinball: ["Space Pinball", "pinball", "/games/pinball"] };
 const tx = (h: string) => `https://etherscan.io/tx/${h}`;
 
 /** The signed result of a staked game, checked against this match and this escrow before it is ever signed by the wallet. */
@@ -242,7 +242,7 @@ export function RewardsCard() {
             const what = g.result === "won" ? `won ${tok(g.amount, g.token)}` : g.result === "lost" ? `lost ${tok(g.amount, g.token)}` : g.result === "draw" ? `draw · ${tok(g.amount, g.token)} back` : g.result === "paying" ? `payout on its way · ${tok(g.amount, g.token)}` : `${g.result} · ${tok(g.amount, g.token)}`;
             return <li key={g.matchId}><Link to={to}>{name}</Link><span className={g.result === "won" ? "good" : g.result === "lost" ? "dim" : ""}>{what}</span><time>{new Date(g.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</time>{g.tx ? <a href={tx(g.tx)} target="_blank" rel="noreferrer">Etherscan ↗</a> : <span />}</li>;
           })}</ul>
-        : <p className="nx-rw-msg">No staked games in the last two weeks. <Link to="/games/chess">NIGHT CHESS</Link> · <Link to="/games/pool">NIGHT POOL</Link> · <Link to="/games/pinball">Space Pinball</Link></p>)}
+        : <p className="nx-rw-msg">No staked games in the last two weeks. <Link to="/games/chess">NIGHT CHESS</Link> · <Link to="/games/pool">NIGHT POOL</Link> · <Link to="/games/poker">NIGHT POKER</Link> · <Link to="/games/pinball">Space Pinball</Link></p>)}
     </section>
   );
 }

@@ -6,7 +6,7 @@
 .wkp-head b { display: inline-flex; align-items: center; gap: 8px; color: #ffc46b; font: 600 12px/1.2 var(--mono, "JetBrains Mono", monospace); letter-spacing: .14em; }
 .wkp-head span { color: var(--dim, #a9a3c4); font: 400 12.5px/1.45 Inter, system-ui, sans-serif; }
 .wkp-clock { display: inline-flex !important; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid rgba(255, 196, 107, .4); color: #ffd79a !important; font: 600 10.5px/1 var(--mono, "JetBrains Mono", monospace) !important; letter-spacing: .1em; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.wkp-games { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.wkp-games { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
 .wkp-one .wkp-games { grid-template-columns: minmax(0, 1fr); }
 .wkp-game { display: grid; align-content: start; gap: 8px; min-width: 0; }
 .wkp-kind { display: flex; align-items: center; gap: 7px; color: var(--uv-hi, #a48bff); font: 600 10.5px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .12em; }

@@ -35,7 +35,7 @@ export async function pool<T>(path: string, body?: unknown, headers: Record<stri
 /** The gaming profile and locker (locker.ts self()). */
 export type SelfProfile = {
   name: string; level: number; avatar: number; joinedAt: number; title: string; frame: string; banner: string; cue: string;
-  badges: { id: string; at: number; name: string; line: string }[]; stats: Record<"pool" | "chess" | "pinball", { played: number; wins: number; losses: number; draws: number; streak: number; best: number }>; potted: number; editions: number;
+  badges: { id: string; at: number; name: string; line: string }[]; stats: Record<"pool" | "chess" | "pinball" | "poker", { played: number; wins: number; losses: number; draws: number; streak: number; best: number }>; potted: number; editions: number;
   xp: number; next: number; floor: number;
   items: { id: string; serial: number | null; at: number; via: string; edition: string }[];
   equip: { cue: string; cloth: string; table: string; balls: string; frame: string; banner: string; title: string; effect: string; emote: string[] };

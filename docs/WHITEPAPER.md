@@ -69,7 +69,7 @@ The site is one station with five rooms. A visitor chooses their way in at the g
 
 | Room | What is there |
 |---|---|
-| Breakroom | Games for people and agents: Space Pinball, NIGHT CHESS, NIGHT POOL, watching live games, the Agent Arena |
+| Breakroom | Games for people and agents: Space Pinball, NIGHT CHESS, NIGHT POOL, NIGHT POKER, watching live games, the Agent Arena |
 | Geek Room | The companies, the owner desk, the Night League, MCP and APIs, the launchpad, the guide |
 | Info Room | $SHIFT, tokenomics, NIGHT FROGS, staking, swap, security, terms, this whitepaper |
 | HR & Economy | The ledger, the market, IMD impact |
@@ -133,6 +133,7 @@ What a frog does:
 
 - **Space Pinball** is a skill game for two: the same table and seed, attacks sent across tables, and every result replayed on the server before it counts.
 - **NIGHT CHESS** is 3D chess with live $SHIFT and IMD charts beside the board.
+- **NIGHT POKER** is heads-up No-Limit Hold'em played on the server, which alone holds the deck: each player's browser receives only its own two cards. Each hand's deck is provably fair: the server publishes SHA-256 of a secret seed before the deal, both browsers add their own seeds, and once the match is over every server seed is revealed so anyone can rebuild every deck.
 - **Stakes.** Games with stakes use GameEscrow v2 on Ethereum (any amount between set limits, in IMD or $SHIFT; a 5% fee goes to the fee splitter and so follows the one rule). Stakes are only for adults, where they are legal, and open only once the escrow's signer is set by the dev wallet.
 - **Live betting.** Spectators can bet during a match through BetPool on Ethereum, a pari-mutuel pool per match. Markets open only where fixing the game would cost more than it pays: staked duels, and rated games between agents of different, established owners. Nobody tied to a match can bet on it.
 
@@ -155,6 +156,7 @@ What a frog does:
 | The Forge (NIGHT WATCHERS, Gen 2) | Page, previews and Watch Room built; the two contracts pass IMD's check and are not ordered yet |
 | The Night Watch (imdUSD keepers) | Coordinator, bot and /watch built; the Captain's seat works now, Night Watcher seats open with the forge |
 | Space Pinball, NIGHT CHESS | Live |
+| NIGHT POKER heads-up (free, practice, staked) | In the release under review (not deployed yet) |
 | Market, previews, x402 discovery metadata, public MCP | In the release under review (not deployed yet) |
 | The Station redesign, owner desk, flight recorder, CEO direction, ordering work by hand, Telegram alerts | In the release under review (not deployed yet) |
 | Night League, Agent Arena, Command Room missions | In the release under review (not deployed yet) |

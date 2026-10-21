@@ -1,0 +1,15 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the provably fair deck > is a whole deck, the same every time for the same seeds, and changes with any seed or the hand number 1`] = `
+[
+  "9c",
+  "Qs",
+  "3c",
+  "Js",
+  "5c",
+  "9h",
+  "4c",
+  "Qc",
+  "4d",
+]
+`;

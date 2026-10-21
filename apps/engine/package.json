@@ -24,5 +24,8 @@
     "imd-mcp": "github:RobertKodes/imd-mcp#15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f",
     "viem": "^2.21.54",
     "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "pokersolver": "2.1.4"
   }
 }

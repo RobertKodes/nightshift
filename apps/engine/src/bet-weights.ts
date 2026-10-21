@@ -33,7 +33,11 @@ import { Chess } from "chess.js";
  *   pool     the game is over or not started; balls still rolling (the server already knows how the
  *            shot ends); the first 8 s after a ball dropped or a foul; a choice after the break
  *            pending; the shooter on the 8-ball; a player reconnecting.
- *   both     SWING_PAUSE_MS after the lead swung by SWING or more between two looks (SwingGuard).
+ *   poker    the match is over or not started; an all-in on the table; a hand's result being shown
+ *            (until the next deal); the first 8 s after a big pot; a player under 10 big blinds; a
+ *            player reconnecting. Poker's weights read only what anyone at the rail sees (the chips
+ *            at the start of the hand, the blinds, the hands played): never a hole card.
+ *   both    SWING_PAUSE_MS after the lead swung by SWING or more between two looks (SwingGuard).
  */
 export const MIN_WEIGHT = 500;
 export const MAX_WEIGHT = 10_000;
@@ -189,6 +193,36 @@ export function pinballWeights(s: PinballInput): Weights {
     : playing && !(s.connected[0] && s.connected[1]) ? "A player is reconnecting."
     : null;
   return shape(p, Math.abs(a - b) / Math.max(a + b, 40_000), leader, locked);
+}
+
+// ---- NIGHT POKER
+
+export type PokerInput = {
+  status: "waiting" | "countdown" | "playing" | "finished";
+  /** Each player's chips at the start of the hand being played, and all the chips in the match. */
+  chips: [number, number]; total: number; bb: number; level: number; hands: number;
+  /** An all-in in the hand being played; a hand's result on show before the next deal. */
+  allIn: boolean; showing: boolean;
+  connected: [boolean, boolean];
+  /** Time since a big pot changed hands, if one did. */
+  sinceSwingMs: number | null;
+};
+/** Betting pauses this long after a big pot. */
+export const POKER_SWING_MS = 8_000;
+/** Weights for NIGHT POKER heads-up: side A is the first seat, side B the second. Progress is the blind level against eight, or the hands against sixty. */
+export function pokerWeights(s: PokerInput): Weights {
+  const [a, b] = s.chips;
+  const p = clamp01(Math.max(s.level / 8, s.hands / 60));
+  const leader = a === b ? null : a > b ? 0 : 1;
+  const locked = s.status === "finished" ? "The match is over."
+    : s.status !== "playing" ? "Waiting for the first hand."
+    : s.allIn ? "An all-in is on the table."
+    : s.showing ? "A hand is being shown. Betting reopens with the next deal."
+    : s.sinceSwingMs !== null && s.sinceSwingMs < POKER_SWING_MS ? "A big pot just changed hands. Betting reopens in a few seconds."
+    : Math.min(a, b) < 10 * s.bb ? "A player is under 10 big blinds: the next all-in can end the match."
+    : !(s.connected[0] && s.connected[1]) ? "A player is reconnecting."
+    : null;
+  return shape(p, Math.abs(a - b) / Math.max(1, s.total), leader, locked);
 }
 
 // ---- NIGHT POOL

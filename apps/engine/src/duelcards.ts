@@ -11,8 +11,8 @@ import type { LiveGame } from "./spectate.js";
  * Community cards for the game duels: a staked challenge going live, the duel starting, and the
  * payout. Free PvP and agent games get a lighter "duel on" card, at most one every few minutes.
  */
-const GAME = { chess: "♟ NIGHT CHESS", pinball: "🎱 SPACE PINBALL", pool: "🎱 NIGHT POOL" } as const;
-const PAGE = { chess: "/games/chess", pinball: "/games/pinball", pool: "/games/pool" } as const;
+const GAME = { chess: "♟ NIGHT CHESS", pinball: "🎱 SPACE PINBALL", pool: "🎱 NIGHT POOL", poker: "🃏 NIGHT POKER" } as const;
+const PAGE = { chess: "/games/chess", pinball: "/games/pinball", pool: "/games/pool", poker: "/games/poker" } as const;
 const short = (a?: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "");
 /** Only a real address or transaction hash goes into a link; a name passes the shared name rule (names.ts) and is escaped. */
 const ADDR = /^0x[0-9a-fA-F]{40}$/, TX = /^0x[0-9a-fA-F]{64}$/;
@@ -33,7 +33,7 @@ async function usd(token: "IMD" | "SHIFT", wei: string): Promise<string> {
   return v >= 1 ? ` (≈ $${v >= 100 ? v.toFixed(0) : v.toFixed(2)})` : "";
 }
 const sym = (t: "IMD" | "SHIFT") => (t === "SHIFT" ? "$SHIFT" : "IMD");
-const mode = (c: Challenge) => (c.game === "chess" ? `⏱ Time control <b>${esc(c.tc ?? "")}</b>` : c.game === "pool" ? "🎱 8-ball, WPA rules: every shot simulated by the server" : "🌌 Score attack: higher verified score wins");
+const mode = (c: Challenge) => (c.game === "chess" ? `⏱ Time control <b>${esc(c.tc ?? "")}</b>` : c.game === "pool" ? "🎱 8-ball, WPA rules: every shot simulated by the server" : c.game === "poker" ? "🃏 Heads-up No-Limit Hold'em, 100 big blinds, a provably fair deck" : "🌌 Score attack: higher verified score wins");
 
 /** The card for one escrow event, or null when there is nothing to tell. */
 export async function duelCard(kind: DuelEvent, c: Challenge): Promise<{ text: string; buttons: Button[][] } | null> {
@@ -100,7 +100,7 @@ export function freeDuelCard(g: LiveGame): { text: string; buttons: Button[][] }
   };
 }
 
-const BET_GAME = { chess: "♟ NIGHT CHESS", pinball: "🎱 SPACE PINBALL", pool: "🎱 NIGHT POOL", arena: "🤖 AGENT ARENA" } as const;
+const BET_GAME = { chess: "♟ NIGHT CHESS", pinball: "🎱 SPACE PINBALL", pool: "🎱 NIGHT POOL", poker: "🃏 NIGHT POKER", arena: "🤖 AGENT ARENA" } as const;
 const watchUrl = (board: keyof typeof BET_GAME, id: string) => `${config.publicUrl}${board === "arena" ? "/arena" : PAGE[board]}?watch=${id}`;
 
 /** Live betting: a big bet as it lands, and a settled pool (only when both sides had bets). */

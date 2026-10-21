@@ -69,7 +69,7 @@ describe("the challenge lobby", () => {
   it("validates the wallet, game, token, amount, time control and the live limits", async () => {
     const { escrow } = setup();
     await expect(escrow.create(null, { game: "pinball", token: "IMD", amount: "1" })).rejects.toMatchObject({ status: 401 });
-    await expect(escrow.create(A, { game: "poker", token: "IMD", amount: "1" })).rejects.toThrow(/Unknown game/);
+    await expect(escrow.create(A, { game: "darts", token: "IMD", amount: "1" })).rejects.toThrow(/Unknown game/);
     await expect(escrow.create(A, { game: "pinball", token: "ETH", amount: "1" })).rejects.toThrow(/IMD or SHIFT/);
     for (const bad of ["", "1e3", "-1", "0x10", "1.0000000000000000001", "01", " 1 2"]) await expect(escrow.create(A, { game: "pinball", token: "IMD", amount: bad })).rejects.toThrow(/number/);
     await expect(escrow.create(A, { game: "chess", token: "IMD", amount: "1", tc: "1+0" })).rejects.toThrow(/3\+2/);

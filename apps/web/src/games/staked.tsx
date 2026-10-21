@@ -16,7 +16,7 @@ import "./staked.css";
  * takes the seat by itself.
  */
 export type MyStake = ChallengeView & { joining: boolean; seat: { game: StakeGame; id: string; player: string } | null; startBy: number | null };
-const NAME: Record<StakeGame, string> = { chess: "NIGHT CHESS", pinball: "SPACE PINBALL", pool: "NIGHT POOL" };
+const NAME: Record<StakeGame, string> = { chess: "NIGHT CHESS", pinball: "SPACE PINBALL", pool: "NIGHT POOL", poker: "NIGHT POKER" };
 
 const st = { list: [] as MyStake[], skew: 0, subs: new Set<() => void>(), timer: null as ReturnType<typeof setTimeout> | null, users: 0, alerted: new Set<string>() };
 const publish = () => { for (const f of st.subs) f(); };

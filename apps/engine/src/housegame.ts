@@ -1,6 +1,7 @@
 import { Chess, type Color, type Move } from "chess.js";
 import { type ChessGames, chess } from "./chess.js";
 import { config } from "./config.js";
+import { type PokerGames, poker } from "./poker.js";
 import { liveGames } from "./spectate.js";
 
 /**
@@ -122,11 +123,57 @@ export class HouseChess {
   }
 }
 
-let house: HouseChess | null = null;
-/** The live exhibition loop (off with HOUSE_GAMES=0). */
+/**
+ * The NIGHT POKER exhibition: Frog #7 heads-up against another frog of the crew, the server playing
+ * both seats with the practice frog's strategy (poker/bot.ts), each seeing only its own cards. The
+ * same rules as the chess one: watchable as HOUSE, never rated, staked or bet on (poker.ts keeps it
+ * from the boards, the arcade and the betting), out of the way past HOUSE_GAMES_MAX_REAL real games,
+ * a new match HOUSE_GAP_MS after one ends.
+ */
+export class HousePoker {
+  #games: PokerGames; #now: () => number; #real: () => number; #max: () => number;
+  #timer: ReturnType<typeof setInterval> | null = null;
+  #id: string | null = null;
+  #endedAt = -Infinity;
+  #round = 0;
+  paused = false;
+  constructor(o: Omit<HouseOptions, "games" | "random"> & { games?: PokerGames } = {}) {
+    this.#games = o.games ?? poker;
+    this.#now = o.now ?? Date.now;
+    this.#real = o.realGames ?? (() => liveGames().filter((g) => !g.house).length);
+    this.#max = o.maxReal ?? (() => config.houseGamesMaxReal);
+  }
+  get current(): string | null { return this.#id; }
+  start(everyMs = 1_000): void {
+    if (this.#timer) return;
+    this.#timer = setInterval(() => { try { this.step(); } catch (e) { console.error("house poker", (e as Error).message); } }, everyMs);
+    this.#timer.unref?.();
+  }
+  stop(): void { if (this.#timer) clearInterval(this.#timer); this.#timer = null; this.#end(); }
+  #end(): void { if (this.#id) { this.#games.stopHouse(this.#id); this.#endedAt = this.#now(); } this.#id = null; }
+  /** One step: step aside under load, notice the end of a match, start the next when it is time. */
+  step(): void {
+    if (this.#real() > this.#max()) { this.#end(); this.paused = true; return; }
+    this.paused = false;
+    if (this.#id) {
+      let done = true;
+      try { done = this.#games.watchView(this.#id).done; } catch { /* gone */ }
+      if (!done) return;
+      this.#id = null; this.#endedAt = this.#now();
+    }
+    if (this.#now() - this.#endedAt < HOUSE_GAP_MS) return;
+    const rival = HOUSE_RIVALS[this.#round++ % HOUSE_RIVALS.length]!;
+    this.#id = this.#games.createHouse(HOUSE_STAR, rival).id;
+  }
+}
+
+let house: HouseChess | null = null, housePoker: HousePoker | null = null;
+/** The live exhibition loops, chess and poker (off with HOUSE_GAMES=0). */
 export function startHouseGames(): HouseChess | null {
   if (!config.houseGames) return null;
   house ??= new HouseChess();
   house.start();
+  housePoker ??= new HousePoker();
+  housePoker.start();
   return house;
 }

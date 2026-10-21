@@ -3,6 +3,7 @@ import { clientIp } from "./auth.js";
 import { type ChessGames, type TimeControl, chess } from "./chess.js";
 import * as pinball from "./pinball.js";
 import { type PoolGames, pool } from "./pool.js";
+import { type PokerGames, poker } from "./poker.js";
 import { type LiveGame, liveGames } from "./spectate.js";
 
 /**
@@ -13,35 +14,37 @@ import { type LiveGame, liveGames } from "./spectate.js";
  * in any time control. The feed carries names and ratings only: never a wallet or a seat token.
  */
 export type OpenGame = {
-  game: "chess" | "pinball" | "pool"; id: string; tc: TimeControl | null; any: boolean; rules?: string;
+  game: "chess" | "pinball" | "pool" | "poker"; id: string; tc: TimeControl | null; any: boolean; rules?: string;
   host: { name: string; rating: number | null; avatar?: string | null; agent?: boolean; level?: number };
   since: number; away: boolean; awayUntil: number | null;
 };
 export type Lounge = {
   now: number; open: OpenGame[];
-  waiting: { chess: Record<TimeControl | "any", number>; pinball: number; pool: number };
+  waiting: { chess: Record<TimeControl | "any", number>; pinball: number; pool: number; poker: number };
   challenges: unknown[]; live: LiveGame[];
   /** The open games the signed-in wallet opened (another tab, a lost page): shown as its own, with Cancel. */
-  mine: { game: "chess" | "pinball" | "pool"; id: string }[];
+  mine: { game: "chess" | "pinball" | "pool" | "poker"; id: string }[];
 };
 type Pinball = Pick<typeof pinball, "lounge" | "queue" | "joinOpen" | "cancel">;
 type Pool = Pick<PoolGames, "lounge" | "queue" | "join" | "cancel">;
-export type Sources = { chess: ChessGames; pinball: Pinball; pool?: Pool; challenges: () => unknown[]; live: () => LiveGame[] };
-const defaults = (challenges: () => unknown[]): Sources => ({ chess, pinball, pool, challenges, live: liveGames });
+type Poker = Pick<PokerGames, "lounge" | "queue" | "join" | "cancel">;
+export type Sources = { chess: ChessGames; pinball: Pinball; pool?: Pool; poker?: Poker; challenges: () => unknown[]; live: () => LiveGame[] };
+const defaults = (challenges: () => unknown[]): Sources => ({ chess, pinball, pool, poker, challenges, live: liveGames });
 
 /** The lounge as one wallet (or a guest, null) sees it. */
 export function lounge(src: Sources, wallet: string | null = null): Lounge {
-  const c = src.chess.lounge(wallet), p = src.pinball.lounge(wallet), q = src.pool?.lounge(wallet) ?? { open: [], waiting: 0, mine: [] };
+  const c = src.chess.lounge(wallet), p = src.pinball.lounge(wallet), q = src.pool?.lounge(wallet) ?? { open: [], waiting: 0, mine: [] }, k = src.poker?.lounge(wallet) ?? { open: [], waiting: 0, mine: [] };
   const open: OpenGame[] = [
     ...c.open.map((g) => ({ game: "chess" as const, ...g })),
     ...p.open.map((g) => ({ game: "pinball" as const, id: g.id, tc: null, any: false, host: { name: g.host.name, rating: null, avatar: g.host.avatar, ...(g.host.agent ? { agent: true } : {}) }, since: g.since, away: g.away, awayUntil: g.awayUntil })),
     ...q.open.map((g) => ({ game: "pool" as const, id: g.id, tc: null, any: false, rules: g.rules, host: g.host, since: g.since, away: g.away, awayUntil: g.awayUntil })),
+    ...k.open.map((g) => ({ game: "poker" as const, id: g.id, tc: null, any: false, host: g.host, since: g.since, away: g.away, awayUntil: g.awayUntil })),
   ].sort((a, b) => a.since - b.since);
   let challenges: unknown[] = [];
   try { challenges = src.challenges().slice(0, 30); } catch { /* the escrow lobby is optional here */ }
   return {
-    now: Date.now(), open, waiting: { chess: c.waiting, pinball: p.waiting, pool: q.waiting }, challenges, live: src.live().slice(0, 30),
-    mine: [...c.mine.map((id) => ({ game: "chess" as const, id })), ...p.mine.map((id) => ({ game: "pinball" as const, id })), ...q.mine.map((id) => ({ game: "pool" as const, id }))],
+    now: Date.now(), open, waiting: { chess: c.waiting, pinball: p.waiting, pool: q.waiting, poker: k.waiting }, challenges, live: src.live().slice(0, 30),
+    mine: [...c.mine.map((id) => ({ game: "chess" as const, id })), ...p.mine.map((id) => ({ game: "pinball" as const, id })), ...q.mine.map((id) => ({ game: "pool" as const, id })), ...k.mine.map((id) => ({ game: "poker" as const, id }))],
   };
 }
 
@@ -109,7 +112,7 @@ function stream(req: IncomingMessage, res: ServerResponse, ctx: Context, src: So
   return true;
 }
 
-const GAMES = new Set(["chess", "pinball", "pool"]);
+const GAMES = new Set(["chess", "pinball", "pool", "poker"]);
 const ID = /^[a-f0-9]{1,40}$/;
 
 /** /api/games/lounge, …/events, …/join, …/any, …/cancel. Call from the games routes, before their own limiter. */
@@ -135,11 +138,13 @@ export async function loungeRoutes(req: IncomingMessage, res: ServerResponse, p:
     if (limited(req, action === "cancel" ? "lounge-cancel" : "lounge-join", action === "cancel" ? 30 : 20, action === "cancel" ? 60_000 : 600_000)) return reply(429, { error: "Too many tries. Try again shortly." });
     const b = await body(req, 2_000);
     const game = String(b.game ?? ""), name = String(b.name ?? ""), avatar = typeof b.avatar === "string" ? b.avatar : null;
-    if (!GAMES.has(game)) return reply(400, { error: "Choose chess, pinball or pool" });
+    if (!GAMES.has(game)) return reply(400, { error: "Choose chess, pinball, pool or poker" });
     if (game === "pool" && !src.pool) return reply(404, { error: "No pool tables here" });
+    if (game === "poker" && !src.poker) return reply(404, { error: "No poker tables here" });
     if (action === "any") {
       if (game === "chess") return reply(200, { game, ...src.chess.queue(name, owner, "any") });
       if (game === "pool") return reply(200, { game, ...src.pool!.queue(name, owner, b.rules === "quick" ? "quick" : "wpa") });
+      if (game === "poker") return reply(200, { game, ...src.poker!.queue(name, owner) });
       return reply(200, { game, ...await src.pinball.queue(name, owner, "FREE", 0, avatar) });
     }
     const id = String(b.id ?? "");
@@ -147,10 +152,11 @@ export async function loungeRoutes(req: IncomingMessage, res: ServerResponse, p:
     if (action === "join") {
       if (game === "chess") return reply(200, { game, ...src.chess.join(id, name, owner) });
       if (game === "pool") return reply(200, { game, ...src.pool!.join(id, name, owner) });
+      if (game === "poker") return reply(200, { game, ...src.poker!.join(id, name, owner) });
       return reply(200, { game, ...await src.pinball.joinOpen(id, name, owner, avatar) });
     }
     const player = typeof b.player === "string" && b.player ? b.player : null;
-    if (game === "chess") src.chess.cancel(id, player, owner); else if (game === "pool") src.pool!.cancel(id, player, owner); else src.pinball.cancel(id, player, owner);
+    if (game === "chess") src.chess.cancel(id, player, owner); else if (game === "pool") src.pool!.cancel(id, player, owner); else if (game === "poker") src.poker!.cancel(id, player, owner); else src.pinball.cancel(id, player, owner);
     return reply(200, { ok: true });
   } catch (err) {
     const status = (err as { status?: unknown }).status;
