@@ -55,12 +55,13 @@ export function digestFacts(all: Iterable<Company>, txs: LedgerTx[], now: number
       if (t.status !== "done" || !inDay(t.updatedAt)) continue;
       if (t.kind === "build_product") {
         const p = c.products.find((x) => x.id === t.productId);
-        if (!p || p.status === "building") continue;
+        if (!p || p.status === "building" || f.products.some((x) => x.name === p.name && x.company === c.name)) continue;
         f.products.push({ name: p.name, kind: p.kind, company: c.name, link: `${base}/c/${c.slug}` });
         row(c.id).built++;
       } else if (t.kind === "build_site") {
         const url = t.result?.siteUrl ?? c.site?.url;
-        if (!url) continue;
+        // a site is launched once: builds that ended at the same address are one site
+        if (!url || f.sites.some((x) => x.url === url)) continue;
         f.sites.push({ company: c.name, url });
         row(c.id).built++;
       }

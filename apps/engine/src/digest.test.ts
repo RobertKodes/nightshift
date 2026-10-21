@@ -52,6 +52,12 @@ function records() {
 describe("the daily company digest", () => {
   afterEach(() => setTelegramTransport(null));
 
+  it("counts a site once however many builds ended at its address", () => {
+    const site = (n: number) => ({ ...(task("build_site", NOW - n * H) as object), cycle: n, result: { siteUrl: "https://lead.example" } });
+    const f = digestFacts([company("lead", { tasks: [site(1), site(2), site(3)] as never })], [], NOW, base);
+    expect(f.sites).toEqual([{ company: "Co lead", url: "https://lead.example" }]);
+  });
+
   it("counts shifts that left only their task (a model's or the owner's move with no journal line), each once", () => {
     const c = company("gamma", { tasks: [7, 8, 9].map((n) => ({ ...(task("marketing", NOW - n * 60_000) as object), cycle: n })) as never });
     const f = digestFacts([c], [], NOW, base);
