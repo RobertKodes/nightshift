@@ -21,7 +21,7 @@ const FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
 const OWNER_OF = parseAbi(["function ownerOf(uint256) view returns (address)"]);
 /** Who holds each NIGHT FROG, read in one multicall and kept a minute, so a frog bought just now shows up. */
 let holders: { at: number; owners: string[] } | null = null;
-async function owners(): Promise<string[]> {
+export async function owners(): Promise<string[]> {
   if (holders && Date.now() - holders.at < 60_000) return holders.owners;
   const nft = (config.nft.address || FROGS) as `0x${string}`;
   const res = await eth.multicall({ contracts: Array.from({ length: 500 }, (_, i) => ({ address: nft, abi: OWNER_OF, functionName: "ownerOf" as const, args: [BigInt(i + 1)] })), allowFailure: true });

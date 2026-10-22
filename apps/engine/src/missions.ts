@@ -80,6 +80,12 @@ export class Missions {
     this.save();
   }
 
+  /** Every frog sent out this week, by any wallet: who sent it, on what, since when and whether it is home. The Ship's mission bay reads it. */
+  out(): { wallet: string; frog: number; mission: string; startedAt: number; done: boolean }[] {
+    this.roll();
+    return Object.entries(this.s.runs).flatMap(([wallet, runs]) => runs.map((r) => ({ wallet, frog: r.frog, mission: r.mission, startedAt: r.startedAt, done: r.doneAt !== null })));
+  }
+
   /** Brings a finished mission home: returns the hours to credit (0 if it is not done yet). */
   report(wallet: string, frogs: Crew[], missionId: string, facts: Facts): number {
     this.roll();

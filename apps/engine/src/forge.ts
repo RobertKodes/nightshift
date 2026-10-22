@@ -26,8 +26,9 @@ type Table = {
 const asset = (f: string) => readFileSync(new URL(`../assets/forge/${f}`, import.meta.url), "utf8");
 export const TABLE: Table = JSON.parse(asset("table.json"));
 /** The collection's onchain art records, as its two ArtStore contracts return them: 0 defs, 1 overlay, then name/SVG pairs. */
-const ART: string[] = JSON.parse(asset("art.json"));
-const OFFSETS = [4, 16, 28, 44, 56, 72, 88];
+export const ART: string[] = JSON.parse(asset("art.json"));
+/** Where each layer's name/SVG pairs start in ART (Background, Body, Skin, Mouth, Eyes, Headwear, Accessory). */
+export const OFFSETS = [4, 16, 28, 44, 56, 72, 88];
 
 export type ForgeTier = { tier: number; roman: string; name: string; min: number; color: string; x: number; slots: number; crew: number };
 /**

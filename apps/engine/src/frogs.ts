@@ -117,8 +117,7 @@ export async function accrueStaking(): Promise<void> {
     const id = i + 1;
     const owner = String(r.result).toLowerCase();
     if (owner === DEAD) { delete staking.holders[id]; return; }
-    const boost = id === 1 ? 1 : 1 + (crew.get(owner) ?? 0) / 100;
-    if (staking.holders[id] === owner && hours > 0) staking.wallets[owner] = (staking.wallets[owner] ?? 0) + hours * multiplier(id) * boost * (staking.seat?.[owner] ? SEAT_BOOST : 1);
+    if (staking.holders[id] === owner && hours > 0) staking.wallets[owner] = (staking.wallets[owner] ?? 0) + hours * hourlyRate(id, multiplier(id), crew.get(owner) ?? 0, Boolean(staking.seat?.[owner]));
     staking.holders[id] = owner;
   });
   fres.forEach((r, i) => {
@@ -127,12 +126,25 @@ export async function accrueStaking(): Promise<void> {
     const owner = String(r.result).toLowerCase();
     // the forge bonus: a week of its hours, once, the first hour a new Night Watcher is seen
     if (staking.holders[id] === undefined) staking.wallets[owner] = (staking.wallets[owner] ?? 0) + FORGE_BONUS_HOURS * forgedRate(f);
-    if (staking.holders[id] === owner && hours > 0) staking.wallets[owner] = (staking.wallets[owner] ?? 0) + hours * forgedRate(f) * (staking.seat?.[owner] ? SEAT_BOOST : 1);
+    if (staking.holders[id] === owner && hours > 0) staking.wallets[owner] = (staking.wallets[owner] ?? 0) + hours * hourlyRate(id, forgedRate(f), 0, Boolean(staking.seat?.[owner]));
     staking.holders[id] = owner;
   });
   staking.at = now;
   writeAtomic(sFile(), JSON.stringify(staking));
 }
+
+/**
+ * Shift hours one NFT credits its holder per hour, as accrueStaking credits them: its base rate (`base`:
+ * multiplier(id) for a NIGHT FROG, forgedRate for a Night Watcher), lifted by the wallet's crew boost
+ * (percent; never for #1 or a Night Watcher itself) and doubled when the wallet also holds an IMD seat.
+ */
+export function hourlyRate(id: number, base: number, crewPct: number, seat: boolean): number {
+  const boost = id === 1 || id >= FORGED_ID ? 1 : 1 + crewPct / 100;
+  return base * boost * (seat ? SEAT_BOOST : 1);
+}
+
+/** When the staking book was last credited, and which holders also hold an IMD seat (the Ship's live rates). */
+export const stakingSeats = (): { at: number; seat: Record<string, boolean> } => ({ at: staking.at, seat: { ...(staking.seat ?? {}) } });
 
 /**
  * The crew boost per wallet, in percent: the best Night Watcher it holds lifts its other NIGHT FROGS by that
@@ -176,7 +188,8 @@ if (forgeOn()) void forgedAll();
 export async function frogSlots(owner: string): Promise<number> {
   if ((await frogCount(owner)) <= 0) return 0;
   const best = Math.max(0, ...stakingOf(owner).frogs.map((f) => f.forged?.tier ?? 0));
-  return Math.max(config.nft.extraSlots, best ? FORGE_TIERS[best - 1]!.slots : 0);
+  // tierInfo, not FORGE_TIERS: The Captain is tier 6, above the five forge tiers
+  return Math.max(config.nft.extraSlots, best ? tierInfo(best).slots : 0);
 }
 
 export function stakingOf(wallet: string): { hours: number; rank: number | null; frogs: StakedFrog[]; perHour: number; imdSeat: boolean } {

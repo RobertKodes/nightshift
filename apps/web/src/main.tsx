@@ -53,6 +53,7 @@ const TgMoved = lazy(() => import("./TgMoved").then((x) => ({ default: x.TgMoved
 const ServicesPage = lazy(() => import("./station/Services").then((x) => ({ default: x.ServicesPage })));
 const VerdictPage = lazy(() => import("./station/Services").then((x) => ({ default: x.VerdictPage })));
 const HookPage = lazy(() => import("./station/Services").then((x) => ({ default: x.HookPage })));
+const ShipPage = lazy(() => import("./ship/ShipPage").then((x) => ({ default: x.ShipPage })));
 const FeedPage = lazy(() => import("./station/Services").then((x) => ({ default: x.FeedPage })));
 
 function App() {
@@ -73,6 +74,8 @@ function App() {
   // NIGHT POOL brings its own three.js table and its own bar, like NIGHT CHESS
   if (seg[0] === "games" && seg[1] === "pool") return <Suspense fallback={<div className="arc-boot" />}><PoolPage /></Suspense>;
   // NIGHT POKER: its own page and bar, the cards drawn in code (no three.js)
+  // THE SHIP: the whole crew live in one isometric scene, full screen under the station bar (its own chunk)
+  if (seg[0] === "ship") return <Suspense fallback={<div className="arc-boot" />}><ShipPage /></Suspense>;
   if (seg[0] === "games" && seg[1] === "poker") return <Suspense fallback={<div className="arc-boot" />}><PokerPage /></Suspense>;
   let page: React.ReactNode = <Home health={health} />;
   if (seg[0] === "co" && seg[1]) page = <CompanyPage id={seg[1]} health={health} />;
@@ -117,7 +120,7 @@ const TITLES: Record<string, string> = {
   companies: "Companies", launch: "Launch a company", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
   market: "Market", token: "$SHIFT", frogs: "NIGHT FROGS", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
   tokenomics: "Tokenomics", games: "Game Room", launchpad: "Launchpad", arena: "Agent Arena",
-  services: "House services", breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League", forge: "The Forge", watch: "The Night Watch",
+  services: "House services", breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League", forge: "The Forge", watch: "The Night Watch", ship: "The Ship",
 };
 
 // The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.
