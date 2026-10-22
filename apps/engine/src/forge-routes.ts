@@ -3,6 +3,7 @@ import { parseAbi } from "viem";
 import { eth } from "./chain.js";
 import { config } from "./config.js";
 import { CAPTAIN_TIER, DEAD, FORGE_ABI, FORGE_SIZE, FORGE_TIERS, ForgeError, RARITIES, SHOWCASE, TABLE, captainSvg, forgeOn, forgedAll, forgedSvg, frogOf, nightFrogSvg, plan, preview, tierInfo } from "./forge.js";
+import { svgPng } from "./frogpng.js";
 import { multiplier } from "./frogs.js";
 import { forgeBuild } from "./swarm.js";
 import { roomCode, roomMembers, roomOn } from "./watch-room.js";
@@ -106,6 +107,15 @@ export async function forgeRoutes(req: IncomingMessage, res: ServerResponse, p: 
     }
     const nf = /^\/api\/forge\/nf\/(\d{1,3})\.svg$/.exec(p);
     if (nf && Number(nf[1]) >= 1 && Number(nf[1]) <= 500) { svg(res, nightFrogSvg(Number(nf[1])), true); return true; }
+    // a Night Watcher as a PNG, for its Telegram announcement and link previews
+    const mp = /^\/api\/forge\/frog\/(\d{1,3})\.png$/.exec(p);
+    if (mp) {
+      const f = (await forgedAll()).find((x) => x.n === Number(mp[1]));
+      if (!f) { json(res, 404, { error: "No Night Watcher with that number yet." }); return true; }
+      res.writeHead(200, { "content-type": "image/png", "cache-control": f.tier < 5 || f.name ? "public, max-age=31536000, immutable" : "public, max-age=300" });
+      res.end(svgPng(forgedSvg(f.n, f.tier, f.traits, f.name, f.inputs, f.points)));
+      return true;
+    }
     const m = /^\/api\/forge\/frog\/(\d{1,3})\.svg$/.exec(p);
     if (m) {
       const f = (await forgedAll()).find((x) => x.n === Number(m[1]));

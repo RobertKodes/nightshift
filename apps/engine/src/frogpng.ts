@@ -9,16 +9,21 @@ import { frogImage } from "./pinball.js";
 const FONT = fileURLToPath(new URL("../assets/fonts/JetBrainsMono-Bold.ttf", import.meta.url));
 const pngs = new Map<string, Buffer>();
 
+/** Any onchain SVG as a PNG (its first frame: animations are not played), with the bundled font. */
+export function svgPng(svg: string, width = 800): Buffer {
+  return new Resvg(svg, {
+    fitTo: { mode: "width", value: width },
+    font: { loadSystemFonts: false, fontFiles: [FONT], defaultFontFamily: "JetBrains Mono", monospaceFamily: "JetBrains Mono" },
+  }).render().asPng();
+}
+
 /** `width`: 800 for photos and previews; 128 for a face at a game table (cheap to paint, an SVG with filters is not). */
 export async function frogPng(id: number, width = 800): Promise<Buffer | null> {
   const key = `${id}:${width}`, hit = pngs.get(key);
   if (hit) return hit;
   const svg = await frogImage(id);
   if (!svg) return null;
-  const png = new Resvg(svg, {
-    fitTo: { mode: "width", value: width },
-    font: { loadSystemFonts: false, fontFiles: [FONT], defaultFontFamily: "JetBrains Mono", monospaceFamily: "JetBrains Mono" },
-  }).render().asPng();
+  const png = svgPng(svg, width);
   if (pngs.size >= 40) pngs.delete(pngs.keys().next().value!);
   pngs.set(key, png);
   return png;

@@ -66,6 +66,7 @@ import { startChangelog } from "./changelog.js";
 import { type ChessEvent, onChess } from "./chess.js";
 import { accrueStaking, frogCached, frogCount, frogSlots, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { roomLink, sweepRoom } from "./watch-room.js";
+import { followForges } from "./forge-news.js";
 import { startNightWatch } from "./nightwatch.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
@@ -352,6 +353,7 @@ Night Watcher #${seat.watcher} repaid ${debt.toLocaleString("en-US", { maximumFr
       void this.adminCard("💎 <b>Real-money duels are live</b>: the escrow's signer is now the server's game signer. Announced to the community.", [], "stakes-live", "launch");
     })().catch((e) => console.error("stakes announce", e)), 120_000);
     // Swarm orders from /setup: announced to the community when the swarm finishes them.
+    followForges();
     followSwarm((text, buttons) => toCommunity(text, buttons, "milestone"), (text) => Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => sendCard(id, "alert", text))));
     // Space Pinball in the community chat: records and crushing wins at once, the rest in a half-hourly report.
     const play = `${config.publicUrl}/games/pinball`;
@@ -459,6 +461,17 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
   /** What the operator can do from Telegram: cards with buttons. */
   async #command(cmd: string, args: string[], ctx?: CommandContext): Promise<Reply> {
     if (cmd === "unmute" || cmd === "mute") return this.#muteCommand(cmd, args, ctx);
+    // sent by an operator inside the private holders' group: that group becomes the Watch Room
+    if (cmd === "watchroom") {
+      if (!ctx?.group) return { text: "Send /watchroom inside the private Night Watchers group, after adding me there as an admin." };
+      const community = config.telegramCommunity;
+      if (ctx.chat === community || (community.startsWith("@") && ctx.chat === String(await tgCall<{ id: number }>(config.telegramToken, "getChat", { chat_id: community }).then((c) => c?.id ?? "").catch(() => "")))) return { text: "⚠️ This is the public community chat, not a private group." };
+      const me = await tgCall<{ status: string; can_invite_users?: boolean; can_restrict_members?: boolean }>(config.telegramToken, "getChatMember", { chat_id: ctx.chat, user_id: Number(config.telegramToken.split(":")[0]) }).catch(() => null);
+      if (me?.status !== "administrator" || !me.can_invite_users || !me.can_restrict_members) return { text: "⚠️ Make me an admin of this group with the rights <b>Invite users via link</b> and <b>Ban users</b>, then send /watchroom again." };
+      writeSettings({ WATCH_ROOM_CHAT: ctx.chat });
+      config.forge.room = ctx.chat;
+      return { text: "✅ <b>This group is now the Watch Room.</b>\nNight Watcher holders get a one-time invite from the Forge page, and wallets that stop holding one are removed." };
+    }
     if (cmd === "live") {
       const s = liveStats();
       return { text: `👀 <b>On getnightshift.tech now</b>\n${s.visitors1m} in the last minute · ${s.visitors5m} in the last 5 minutes\n${s.openPages} pages open live\n\n<i>Counted since the last restart; nothing about visitors is stored.</i>` };

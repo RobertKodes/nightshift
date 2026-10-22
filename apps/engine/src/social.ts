@@ -245,7 +245,7 @@ export async function handleUpdate(token: string, admins: string[], h: BotHandle
   const pub = game ?? await h.open(cmd, args).catch(() => null);
   const rt = m?.reply_to_message?.from;
   const ctx: CommandContext = { chat, group, replyTo: rt && !rt.is_bot ? { id: String(rt.id), name: rt.username ? `@${rt.username}` : (rt.first_name ?? String(rt.id)) } : undefined };
-  const adminHere = isAdmin && (!ctx.group || cmd === "mute" || cmd === "unmute");
+  const adminHere = isAdmin && (!ctx.group || cmd === "mute" || cmd === "unmute" || cmd === "watchroom");
   const reply: Reply | null = pub ?? (adminHere ? await h.admin(cmd, args, ctx).catch((e) => ({ text: `⚠️ ${esc((e as Error).message)}` })) : m?.chat.type === "private" ? { text: "🌙 Public commands: /price · /ca · /links" } : null);
   if (!reply) return;
   if (q?.message && cmd !== "stop") await tg(token, "editMessageText", { chat_id: chat, message_id: q.message.message_id, text: reply.text, parse_mode: "HTML", disable_web_page_preview: true, reply_markup: kb(reply.buttons) });
