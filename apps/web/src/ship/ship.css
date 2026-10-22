@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap');
 /* THE SHIP · a full-screen scene under the station bar, its HUD in the station's angled panels */
 .sh { height: 100dvh; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .sh .nx-backdrop { display: none; }
@@ -213,3 +214,49 @@
   .sh-bottom .sh-zoom button { width: 34px; height: 34px; }
   .sh-list { padding-top: 150px; }
 }
+
+/* ---- the HUD as a pixel game's: one pixel font, bevelled 2px frames, no glow, a press that moves the button */
+.sh-main { --px-font: 'Pixelify Sans', 'JetBrains Mono', ui-monospace, monospace; --px-dark: #181425; --px-mid: #262b44; --px-edge: #3a4466; --px-hi: #5a6988; --px-ink: #f4f4f4; --px-dim: #8b9bb4; --px-gold: #fee761; }
+.sh-title, .sh-roombar, .sh-log-bot, .sh-search, .sh-btn, .sh-zoom button { border-radius: 0; background: var(--px-dark, #181425); border: 2px solid; border-color: var(--px-hi, #5a6988) var(--px-dark, #181425) var(--px-dark, #181425) var(--px-hi, #5a6988); box-shadow: 0 0 0 2px #0b0a12, 3px 3px 0 2px rgba(0, 0, 0, .45); }
+.sh-title h1 { font: 700 22px/1 var(--px-font); letter-spacing: .08em; color: var(--px-ink, #f4f4f4); }
+.sh-kicker, .sh-title .sh-line { font-family: var(--px-font); letter-spacing: .02em; }
+.sh-title .sh-line { font-size: 13px; color: var(--px-dim, #8b9bb4); }
+.sh-title .sh-line b { color: var(--px-ink, #f4f4f4); font-weight: 700; }
+.sh-live { width: 7px; height: 7px; animation: sh-px-blink 1s steps(2, start) infinite; }
+@keyframes sh-px-blink { to { visibility: hidden; } }
+.sh-btn, .sh-search input, .sh-zoom button { font: 600 14px var(--px-font); letter-spacing: .03em; text-transform: uppercase; color: var(--px-ink, #f4f4f4); }
+.sh-btn { height: 36px; }
+.sh-btn:hover, .sh-zoom button:hover { background: var(--px-mid, #262b44); border-color: #8b9bb4 var(--px-dark, #181425) var(--px-dark, #181425) #8b9bb4; }
+.sh-btn:active, .sh-zoom button:active { transform: translate(2px, 2px); box-shadow: 0 0 0 2px #0b0a12; }
+.sh-btn.on { background: var(--px-mid, #262b44); border-color: var(--px-dark, #181425) var(--px-hi, #5a6988) var(--px-hi, #5a6988) var(--px-dark, #181425); color: var(--px-gold, #fee761); }
+.sh-btn:focus-visible, .sh-zoom button:focus-visible, .sh-link:focus-visible { outline: 2px solid var(--px-gold, #fee761); outline-offset: 2px; }
+.sh-search input::placeholder { color: #5a6988; }
+/* the room panel: the room's name like a sign, its live line, its links as pixel tabs */
+.sh-roombar { gap: 12px; padding: 8px 10px; border-top: 4px solid var(--rc); }
+.sh-roominfo b { font: 700 16px var(--px-font); letter-spacing: .05em; text-transform: uppercase; color: var(--rc); }
+.sh-roominfo > span { font: 400 13px/1.35 var(--px-font); color: var(--px-dim, #8b9bb4); }
+.sh-roomlinks .sh-link { font: 600 12px var(--px-font); text-transform: uppercase; color: var(--px-ink, #f4f4f4); text-decoration: none; padding: 2px 6px; background: var(--px-mid, #262b44); border: 2px solid; border-color: var(--px-hi, #5a6988) #0b0a12 #0b0a12 var(--px-hi, #5a6988); }
+.sh-roomlinks .sh-link:hover { color: var(--px-gold, #fee761); }
+/* the ship map: the pixel ship on a canvas, a transparent button over each room */
+.sh-map { position: relative; display: block; flex: none; }
+.sh-map canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+.sh-map button { position: absolute; display: block; padding: 0; background: none; border: 2px solid transparent; cursor: pointer; }
+.sh-map button:hover { border-color: var(--rc); }
+.sh-map button.on { border-color: transparent; }
+.sh-map button small { position: absolute; right: 3px; bottom: 1px; font: 600 11px/1 var(--px-font); color: #c0cbdc; text-shadow: 1px 1px 0 #0b0a12; }
+.sh-map button.on small { color: #fff; }
+.sh-map button::after { content: attr(data-tip); position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); padding: 3px 7px; white-space: nowrap; font: 600 13px var(--px-font); text-transform: uppercase; color: var(--px-ink, #f4f4f4); background: var(--px-dark, #181425); border: 2px solid var(--rc); opacity: 0; pointer-events: none; }
+.sh-map button:hover::after, .sh-map button:focus-visible::after { opacity: 1; }
+.sh-map button i, .sh-map-drive { display: none; }
+/* the ship's log as the ship's terminal: green type, a blinking cursor */
+.sh-log-bot .sh-log, .sh-log { font: 400 13px/1.4 var(--px-font); color: #c0cbdc; }
+.sh-log time { color: #63c74d; }
+.sh-log-bot .sh-log::after { content: "_"; color: #63c74d; animation: sh-px-blink 1s steps(2, start) infinite; }
+@media (prefers-reduced-motion: reduce) { .sh-live, .sh-log-bot .sh-log::after { animation: none; } }
+/* the old box map's styles must not reach the pixel map: no fill over a cell, the counts stay on it */
+.sh-map button, .sh-map button.on, .sh-map button:hover { background: none !important; }
+.sh-map button small { position: absolute !important; display: block; }
+.sh-map canvas { max-width: none !important; height: auto; }
+.sh-kicker { font-size: 12px; }
+/* a phone is narrower than the map: the whole map (picture and buttons together) is zoomed, never squeezed */
+@media (max-width: 420px) { .sh-map { zoom: .9; } }

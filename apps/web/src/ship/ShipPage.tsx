@@ -3,6 +3,7 @@ import { NxIcon } from "../nx/icons";
 import { NxTabs, StationBar, rememberRoom } from "../nx/Shell";
 import { Link } from "../router";
 import { useSession } from "../session";
+import { CELLS, MAP_H, MAP_W, Minimap as MapArt } from "./town/minimap";
 import { Town, roomOf } from "./town/town";
 import { type Crew, FORGE, FORGED_ID, NIGHT_FROGS, type Pick, RARITY_TONE, type ShipStatic, type Snapshot, type SnapFrog, type SnapWatcher, type Station } from "./types";
 import "../nx/nx.css";
@@ -264,16 +265,40 @@ const MAP: { k: RoomKey; area: string; label: string }[] = [
   { k: "quarters", area: "1 / 5 / 2 / 6", label: "Quarters" }, { k: "offices", area: "2 / 5 / 3 / 6", label: "Offices" },
   { k: "bridge", area: "1 / 6 / 3 / 7", label: "Bridge" },
 ];
+/** The ship map: a pixel-art ship (town/minimap.ts) with a transparent button over each room. */
+const MAP_SCALE = 2;
 function Minimap({ room, rooms, mine, onGo }: { room: RoomKey; rooms: Record<RoomKey, RoomStat> | null; mine: Set<RoomKey>; onGo: (k: RoomKey) => void }) {
+  const cv = useRef<HTMLCanvasElement>(null), art = useMemo(() => new MapArt(), []);
+  const live = useRef({ room, rooms, mine });
+  live.current = { room, rooms, mine };
+  useEffect(() => {
+    const c = cv.current?.getContext("2d");
+    if (!c) return;
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let raf = 0, last = 0;
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      if (now - last < 50) return; // 20 frames a second is plenty for a map
+      last = now;
+      const v = live.current, crew = Object.fromEntries(ROOM_ORDER.map((k) => [k, v.rooms?.[k].crew ?? 0]));
+      art.draw(c, still ? 0 : now / 1000, v.room, accent, crew, v.mine);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [art]);
   return (
-    <nav className="sh-map" aria-label="Ship map: pick a room">
-      <span className="sh-map-drive" aria-hidden="true" />
-      {MAP.map((m) => (
-        <button key={m.k} style={{ gridArea: m.area, "--rc": accent(m.k) } as React.CSSProperties} className={`${room === m.k ? "on" : ""}${m.k === "bridge" ? " sh-map-bow" : ""}`}
-          aria-current={room === m.k ? "location" : undefined} aria-label={`${ROOM_NAME[m.k]}${rooms ? `, ${rooms[m.k].crew} aboard` : ""}${mine.has(m.k) ? ", your crew is here" : ""} (key ${ROOM_ORDER.indexOf(m.k) + 1})`} onClick={() => onGo(m.k)}>
-          <b>{m.label}</b>{rooms && <small>{rooms[m.k].crew}</small>}{mine.has(m.k) && <i />}
-        </button>
-      ))}
+    <nav className="sh-map" aria-label="Ship map: pick a room" style={{ width: MAP_W * MAP_SCALE, height: MAP_H * MAP_SCALE }}>
+      <canvas ref={cv} width={MAP_W} height={MAP_H} style={{ width: MAP_W * MAP_SCALE, height: MAP_H * MAP_SCALE }} aria-hidden="true" />
+      {MAP.map((m) => {
+        const [x, y, w, h] = CELLS[m.k];
+        return (
+          <button key={m.k} style={{ left: (x - 1) * MAP_SCALE, top: (y - 1) * MAP_SCALE, width: (w + 2) * MAP_SCALE, height: (h + 2) * MAP_SCALE, "--rc": accent(m.k) } as React.CSSProperties}
+            className={room === m.k ? "on" : undefined} data-tip={`${m.label}${rooms ? ` · ${rooms[m.k].crew}` : ""}`}
+            aria-current={room === m.k ? "location" : undefined} aria-label={`${ROOM_NAME[m.k]}${rooms ? `, ${rooms[m.k].crew} aboard` : ""}${mine.has(m.k) ? ", your crew is here" : ""} (key ${ROOM_ORDER.indexOf(m.k) + 1})`} onClick={() => onGo(m.k)}>
+            {rooms && <small>{rooms[m.k].crew}</small>}
+          </button>
+        );
+      })}
     </nav>
   );
 }
