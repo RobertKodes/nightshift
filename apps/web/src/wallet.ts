@@ -65,6 +65,13 @@ export async function knownWallet(): Promise<Eip1193 | null> {
   return (await kit()).reconnect().catch(() => null);
 }
 
+/** A Solana wallet for the swap page: asked for in the modal unless `ask` is false (then null when none is connected). */
+export async function chooseSolana(o: { ask?: boolean } = {}) {
+  notInTelegram();
+  if (o.ask === false && !remembered()) return null;
+  return (await kit()).connectSolana(o);
+}
+
 /** Disconnects the wallet on this device, so the next action asks again (sign-out). */
 export async function forgetWallet(): Promise<void> {
   const was = remembered();

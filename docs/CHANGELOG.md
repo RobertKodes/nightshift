@@ -2,6 +2,11 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-22 · Swap across Ethereum, Base, Robinhood Chain, Solana and into XRP
+- /swap now swaps between Ethereum, Base, Robinhood Chain and Solana, and into XRP on the XRP Ledger. LI.FI and Relay are asked at once, the better route after every fee comes first, your own wallet signs every step, and the page follows the transfer until it lands.
+- NIGHT FROGS and Night Watcher holders pay no NIGHTSHIFT fee: sign in with the wallet that holds one. Everyone else pays 0.25%, shown on its own line next to the provider's fees.
+- Every route is checked before you sign: only the LI.FI and Relay contracts pinned in the page, each transaction simulated first, approvals for the exact amount. Swapping out of XRP is coming soon; ETH and $SHIFT on Ethereum still trade straight in the pool.
+
 ## 2026-10-22 · NIGHT POKER free tables for up to six
 - Three free NIGHT POKER tables of up to six seats, with play chips that have no value: sit in any empty seat, sit out, top up and stand up between hands. Signed-in players get 10,000 play chips a day; guests sit with fresh chips each time.
 - House frogs, clearly marked HOUSE, fill empty seats so a table is always playable and stand up when people arrive. The first table always plays, so there is always a game to watch.

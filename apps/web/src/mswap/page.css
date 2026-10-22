@@ -1,0 +1,14 @@
+/* /swap itself (loaded with every page): its two modes, and the small text and link styles the swap shares. */
+/* the page's two ways to swap */
+.ms-modes { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--s-bg2); border: 1px solid var(--s-line); justify-self: start; }
+.ms-modes button { padding: 8px 14px; border: 0; border-radius: 9px; background: none; color: var(--s-dim); font: 600 13.5px Inter, sans-serif; cursor: pointer; }
+.ms-modes button.on { background: var(--s-bg); color: var(--s-text); box-shadow: 0 0 0 1px var(--s-line2); }
+.ms-pool { display: grid; gap: 12px; max-width: 560px; }
+.ms-fine { margin: 0; font: 400 12.5px/1.55 Inter, sans-serif; color: var(--s-faint); overflow-wrap: anywhere; }
+.ms-link { padding: 0; border: 0; background: none; color: var(--s-acc); font: 500 13px Inter, sans-serif; cursor: pointer; }
+.ms-link:hover { text-decoration: underline; }
+.ms-link:disabled { color: var(--s-faint); cursor: default; text-decoration: none; }
+@media (max-width: 520px) {
+  .ms-modes { justify-self: stretch; }
+  .ms-modes button { flex: 1; padding: 8px 6px; }
+}

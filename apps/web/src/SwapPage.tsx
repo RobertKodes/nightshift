@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import "./mswap/page.css";
 import { LIVE_LAUNCH, SHIFT, SHIFT_POOL, fetchLaunch } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, formatEther, http, maxUint256, parseEther } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
 import { type Step, canBatch, sendSteps } from "./batch";
 import { type PoolKey, V4, permit2Abi, quoteArgs, quoterAbi, routerAbi, swapCall } from "./v4";
+
+// the multichain swap and its provider code load with /swap only, not with every page
+const MultiSwap = lazy(() => import("./mswap/MultiSwap").then((m) => ({ default: m.MultiSwap })));
 
 const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
 type Launch = { token?: string; symbol: string; open?: boolean; pool?: PoolKey } | null;
@@ -17,11 +21,11 @@ const errText = (e: unknown) => ((e as { shortMessage?: string }).shortMessage ?
  * from your own wallet. The site adds no fee and holds nothing: one Universal Router call, quoted
  * first by Uniswap's own V4 Quoter, signed in your wallet.
  */
-export function SwapBox({ launch }: { launch?: Launch } = {}) {
+export function SwapBox({ launch, initialSide = "buy" }: { launch?: Launch; initialSide?: "buy" | "sell" } = {}) {
   const [fetchedLaunch, setFetchedLaunch] = useState<Launch>(LIVE_LAUNCH);
   const l = launch === undefined ? fetchedLaunch : launch;
   const [me, setMe] = useState<Address | null>(null);
-  const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [side, setSide] = useState<"buy" | "sell">(initialSide);
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<bigint | null>(null);
   const [qErr, setQErr] = useState<string | null>(null);
@@ -144,26 +148,43 @@ export function SwapBox({ launch }: { launch?: Launch } = {}) {
   );
 }
 
+/**
+ * /swap: the multichain swap (Ethereum, Base, Robinhood Chain, Solana, and into XRP) through LI.FI and Relay,
+ * and $SHIFT's own pool swap, the default for ETH and $SHIFT on Ethereum.
+ */
 export function SwapPage() {
   const [l, setL] = useState<Launch>(LIVE_LAUNCH);
   useEffect(() => { void fetchLaunch<Launch>(LIVE_LAUNCH).then(setL); }, []);
-  const pool = l?.pool ?? null;
+  const [mode, setMode] = useState<"any" | "pool">(() => (new URLSearchParams(location.search).get("pool") !== null ? "pool" : "any"));
+  const [poolSide, setPoolSide] = useState<"buy" | "sell">("buy");
   const sym = l?.symbol ?? "SHIFT";
   return (
     <div className="docs token-page swap-page">
-      <span className="eyebrow">{pool ? (l?.open ? "LIVE · ETHEREUM" : "DEPLOYED · OPENS WITH THE FIRST BUY") : "OPENS AT LAUNCH"}</span>
-      <h1>NIGHTSHIFT Swap. <em>${sym} for ETH, straight from its pool.</em></h1>
-      <p className="lead">Buy and sell ${sym} from your own wallet, through its Uniswap v4 pool and hook. No extra fee from us, nothing held by us: Uniswap's quoter prices it, Uniswap's router swaps it, your wallet signs it.</p>
+      <span className="eyebrow">LIVE · ETHEREUM · BASE · ROBINHOOD CHAIN · SOLANA · XRP</span>
+      <h1>NIGHTSHIFT Swap. <em>Five chains, your own wallet.</em></h1>
+      <p className="lead">Swap between Ethereum, Base, Robinhood Chain and Solana, and into XRP on the XRP Ledger. LI.FI and Relay find the route; your wallet signs every step; NIGHTSHIFT holds nothing. NIGHT FROGS holders pay no NIGHTSHIFT fee.</p>
 
-      <SwapBox launch={l} />
+      <div className="ms-modes" role="tablist" aria-label="Swap">
+        <button type="button" role="tab" aria-selected={mode === "any"} className={mode === "any" ? "on" : ""} onClick={() => setMode("any")}>Any chain</button>
+        <button type="button" role="tab" aria-selected={mode === "pool"} className={mode === "pool" ? "on" : ""} onClick={() => setMode("pool")}>${sym} pool</button>
+      </div>
+      {mode === "any"
+        ? <Suspense fallback={<div style={{ minHeight: 420 }}><p className="ms-fine">Loading the swap…</p></div>}><MultiSwap onPool={(side) => { setPoolSide(side); setMode("pool"); }} /></Suspense>
+        : <div className="ms-pool">
+            <SwapBox launch={l} initialSide={poolSide} key={poolSide} />
+            <p className="ms-fine">ETH and ${sym} on Ethereum trade here, straight in the pool: no aggregator and no NIGHTSHIFT fee. ${sym} from another chain or token: <button type="button" className="ms-link" onClick={() => setMode("any")}>Any chain</button>.</p>
+          </div>}
 
       <h2>How it works</h2>
       <ul className="frogs-util">
-        <li><b>Straight to the pool</b>one call to Uniswap's Universal Router <code>{V4.router.slice(0, 6)}…{V4.router.slice(-4)}</code> on the ${sym}/ETH v4 pool with the NIGHTSHIFT hook. You can check every address on Etherscan.</li>
-        <li><b>Priced by Uniswap</b>the quote comes from Uniswap's V4 Quoter, and your minimum is that quote less your slippage. Below it, the swap reverts and you keep your funds.</li>
-        <li><b>Fees, plainly</b>every trade pays the pool's 1.25% (1% to the launch payer, 0.25% to IMD). Sells also pay 5%, split by the one rule: stakers and NIGHT FROGS holders, the dev wallet, the treasury, and SHIFT and IMD burns.</li>
-        <li><b>Selling, once</b>the first sell asks for two approvals (Permit2, then the router), as on Uniswap. After that, one signature.</li>
+        <li><b>Two route finders, asked at once</b>LI.FI (bridges and exchanges across Ethereum, Base, Robinhood Chain and Solana) and Relay (the same chains plus native XRP). The route that delivers more after every fee comes first; the other one sits beside it.</li>
+        <li><b>Fees, apart</b>the provider's own fees (LI.FI's 0.25% service fee, bridge and relayer fees) and NIGHTSHIFT's fee are shown on separate lines before you sign. Signed in with a wallet that holds a NIGHT FROG or a Night Watcher, NIGHTSHIFT's fee is 0 on every chain.</li>
+        <li><b>Checked before you sign</b>the page only signs calls to the LI.FI and Relay contracts pinned in its code, shows each one with its address, simulates every transaction first, and allows a token exactly the amount you swap, never unlimited.</li>
+        <li><b>Followed to the end</b>after you send, the page follows the transfer with the provider until it lands on the other chain, with both transactions linked.</li>
+        <li><b>XRP</b>into XRP works now: you type your XRP Ledger address. Out of XRP is coming: it needs an XRP Ledger wallet in the page and a tested payment to the provider's XRPL account.</li>
+        <li><b>${sym} stays in its pool</b>ETH ↔ ${sym} on Ethereum goes through the Uniswap v4 pool and its hook, as before (${sym} pool tab). The pool's 1.25% and the 5% sell fee apply as always.</li>
       </ul>
+      <p className="dim">Research and sources: <a href="https://github.com/RobertKodes/nightshift/blob/main/docs/swap/RESEARCH.md" target="_blank" rel="noreferrer">docs/swap/RESEARCH.md</a>. The routes are LI.FI's and Relay's; cross-chain transfers carry their bridges' risks. V4 router for the pool: <code>{V4.router.slice(0, 6)}…{V4.router.slice(-4)}</code>.</p>
     </div>
   );
 }

@@ -151,6 +151,13 @@ const GROUPS: { title: string; note?: string; fields: { k: string; label: string
     { k: "ETHERSCAN_API_KEY", label: "Etherscan API key (v2, free tier)", secret: true },
     { k: "WATCHTOWER_URL", label: "IMD Watchtower status URL", hint: "http://imd-watchtower:8787/status" },
   ] },
+  { title: "Multichain swap", note: "The /swap page's routes across Ethereum, Base, Robinhood Chain, Solana and the XRP Ledger, from LI.FI and Relay. NIGHTSHIFT's fee is asked per quote; NIGHT FROGS holders signed in with their wallet pay none. LI.FI collects it only once the integration is registered on portal.li.fi with a fee wallet (EVM and Solana), under the name set here; Relay pays it to the fee wallet as USDC to claim at relay.link/claim-app-fees. Keys stay on this server. Applies at once, no restart.", fields: [
+    { k: "SWAP_FEE_BPS", label: "NIGHTSHIFT swap fee (basis points, 25 = 0.25%, at most 100)", hint: "25" },
+    { k: "SWAP_FEE_WALLET", label: "Fee wallet for Relay app fees (EVM; empty = the treasury)", hint: "0x…" },
+    { k: "LIFI_INTEGRATOR", label: "LI.FI integration name (from portal.li.fi)", hint: "nightshift" },
+    { k: "LIFI_API_KEY", label: "LI.FI API key", secret: true },
+    { k: "RELAY_API_KEY", label: "Relay API key (dashboard.relay.link)", secret: true },
+  ] },
   { title: "Game Room", note: "The house exhibition: one NIGHT CHESS game between house bots, never rated or staked, stepping aside while more than the limit of real games are on. Weekly prizes: shift hours to the top 3 of each game (1st,2nd,3rd), added 48 hours after the week ends. Applies after a restart.", fields: [
     { k: "HOUSE_GAMES", label: "House exhibition", options: [["", "Default (on)"], ["1", "On"], ["0", "Off"]] },
     { k: "HOUSE_GAMES_MAX_REAL", label: "Pause it past this many real games", hint: "12" },

@@ -5,9 +5,11 @@
  * wallet and email or social sign-in (Reown's embedded wallet, for an in-app browser with no wallet)
  * all end in one EIP-1193 provider that every page signs and sends with through viem. Never inside a
  * Telegram Mini App webview, where Telegram allows TON Connect only (wallet.ts refuses before this loads).
+ * Loaded on /swap, it also carries AppKit's Solana adapter (Phantom, Solflare, Backpack, WalletConnect),
+ * fetched as its own chunk, and Robinhood Chain (4663) among the EVM networks.
  */
 import { createAppKit } from "@reown/appkit";
-import { type AppKitNetwork, base, baseSepolia, mainnet } from "@reown/appkit/networks";
+import { type AppKitNetwork, base, baseSepolia, mainnet, robinhood, solana } from "@reown/appkit/networks";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { coinbaseWallet } from "@wagmi/connectors";
 import { type CreateConnectorFn, getAccount, watchAccount } from "@wagmi/core";
@@ -32,6 +34,13 @@ type Kit = {
   config: WagmiAdapter["wagmiConfig"];
   networks: AppKitNetwork[];
   provider: Eip1193;
+  /** Solana wallets too (the kit was first loaded on /swap). */
+  solana: boolean;
+};
+/** What the swap page needs from a Solana wallet (AppKit's Solana provider). */
+export type SolanaWallet = {
+  signTransaction<T>(tx: T): Promise<T>;
+  signAndSendTransaction?(tx: unknown, options?: { skipPreflight?: boolean; maxRetries?: number }): Promise<string>;
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -71,6 +80,9 @@ function lazy(fn: CreateConnectorFn): CreateConnectorFn {
  */
 const noThirdParty = () => { (WagmiAdapter.prototype as unknown as { addThirdPartyConnectors: () => Promise<void> }).addThirdPartyConnectors = async () => {}; };
 
+/** The kit takes Solana wallets only where they are used: the first load on /swap. */
+const wantsSolana = () => /^\/swap(\/|$)/.test(location.pathname);
+
 async function init(): Promise<Kit> {
   if (inTelegramApp()) throw new Error("Wallets are not available inside Telegram.");
   const cfg: Cfg = await fetch("/api/wallet-config").then((r) => r.json() as Promise<Cfg>).catch(() => { throw new Error("NIGHTSHIFT could not be reached to open your wallets. Check the connection and try again."); });
@@ -79,21 +91,25 @@ async function init(): Promise<Kit> {
   const url = metadataUrl(cfg.site);
   const social = cfg.social !== false;
   const icon = `${url}/brand/shift-icon-512.png`;
-  const networks: [AppKitNetwork, ...AppKitNetwork[]] = cfg.salesChainId === 84532 ? [mainnet, base, baseSepolia] : [mainnet, base];
+  const withSolana = wantsSolana();
+  const evm: AppKitNetwork[] = cfg.salesChainId === 84532 ? [mainnet, base, robinhood, baseSepolia] : [mainnet, base, robinhood];
+  const networks: [AppKitNetwork, ...AppKitNetwork[]] = [mainnet, ...evm.slice(1), ...(withSolana ? [solana] : [])];
   noThirdParty();
   pinDashboard();
   const adapter = new WagmiAdapter({
-    projectId, networks,
+    projectId, networks: evm,
     transports: {
       [mainnet.id]: fallback([http("https://ethereum-rpc.publicnode.com"), http("https://eth.drpc.org")]),
       [base.id]: http("https://mainnet.base.org"),
+      [robinhood.id]: http("https://rpc.mainnet.chain.robinhood.com"),
       [baseSepolia.id]: http("https://sepolia.base.org"),
     },
     // Coinbase's smart wallet and app; its telemetry would inject an inline script our CSP refuses
     connectors: [lazy(coinbaseWallet({ version: "4", appName: "NIGHTSHIFT", appLogoUrl: icon, preference: { options: "all", telemetry: false } }))],
   });
+  const solanaAdapter = withSolana ? new (await import("@reown/appkit-adapter-solana")).SolanaAdapter() : null;
   const modal = createAppKit({
-    adapters: [adapter], networks, defaultNetwork: mainnet, projectId,
+    adapters: solanaAdapter ? [adapter, solanaAdapter] : [adapter], networks, defaultNetwork: mainnet, projectId,
     metadata: { name: "NIGHTSHIFT", description: "AI companies that run themselves, NIGHT CHESS and Space Pinball, on Ethereum and Base.", url, icons: [icon] },
     featuredWalletIds: Object.values(FEATURED),
     allWallets: "SHOW",
@@ -119,7 +135,7 @@ async function init(): Promise<Kit> {
       "--w3m-z-index": 2147483000,
     },
   });
-  const k: Kit = { modal, config: adapter.wagmiConfig, networks, provider: null as unknown as Eip1193 };
+  const k: Kit = { modal, config: adapter.wagmiConfig, networks, provider: null as unknown as Eip1193, solana: withSolana };
   k.provider = provider(k);
   await modal.ready().catch(() => {});
   // The dashboard's switches win over `features`. Reown Authentication (SIWX) would ask every wallet
@@ -209,7 +225,7 @@ function choose(k: Kit): Promise<void> {
       // closed without a wallet: the person changed their mind (a connection in flight gets a moment to land)
       else if (opened) void sleep(500).then(() => { if (!connected(k) && !k.modal.isOpen()) finish(new Error("No wallet chosen.")); });
     });
-    void k.modal.open({ view: "Connect" }).catch(() => sleep(500).then(() => { if (!connected(k) && !k.modal.isOpen()) finish(new Error("The wallet did not connect. Try again.")); }));
+    void k.modal.open({ view: "Connect", ...(k.solana ? { namespace: "eip155" as const } : {}) }).catch(() => sleep(500).then(() => { if (!connected(k) && !k.modal.isOpen()) finish(new Error("The wallet did not connect. Try again.")); }));
   });
 }
 
@@ -279,4 +295,33 @@ export async function disconnect(): Promise<void> {
   const k = await load();
   await settled(k);
   if (connected(k)) await k.modal.disconnect().catch(() => {});
+}
+
+const solAddress = (k: Kit) => { const a = k.modal.getAccount("solana"); return a?.isConnected && a.address ? a.address : null; };
+
+/** The modal for a Solana wallet, until one is connected or the person closes it. */
+function chooseSolana(k: Kit): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let opened = false, done = false;
+    const finish = (e?: Error) => { if (done) return; done = true; offAccount(); offModal(); if (e) reject(e); else resolve(); };
+    const offAccount = k.modal.subscribeAccount((a) => { if (a.isConnected && a.address) finish(); }, "solana");
+    const offModal = k.modal.subscribeState((s) => {
+      if (s.open) opened = true;
+      else if (opened) void sleep(500).then(() => { if (!solAddress(k) && !k.modal.isOpen()) finish(new Error("No Solana wallet chosen.")); });
+    });
+    void k.modal.open({ view: "Connect", namespace: "solana" }).catch(() => finish(new Error("The Solana wallet did not connect. Try again.")));
+  });
+}
+
+/** The connected Solana wallet (the modal first when there is none): its address and the provider that signs. */
+export async function connectSolana(o: { ask?: boolean } = {}): Promise<{ address: string; wallet: SolanaWallet } | null> {
+  const k = await load();
+  if (!k.solana) throw new Error("Solana wallets load with the swap page: reload this page to connect one.");
+  await settled(k);
+  for (let i = 0; i < 20 && !solAddress(k) && k.modal.getAccount("solana")?.status === "reconnecting"; i++) await sleep(100);
+  if (!solAddress(k)) { if (o.ask === false) return null; await chooseSolana(k); }
+  const address = solAddress(k), wallet = k.modal.getProvider<SolanaWallet>("solana");
+  if (!address || !wallet) throw new Error("The Solana wallet did not connect. Try again.");
+  remember(true);
+  return { address, wallet };
 }
