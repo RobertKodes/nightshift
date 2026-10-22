@@ -32,7 +32,7 @@ export type Crew = {
 };
 
 /** Something on the ship a pointer can land on. */
-export type Pick = { kind: "frog"; id: number } | { kind: "watcher"; n: number } | { kind: "seat"; seat: number } | { kind: "room"; station: Station | "drive" };
+export type Pick = { kind: "frog"; id: number } | { kind: "watcher"; n: number } | { kind: "seat"; seat: number } | { kind: "room"; station: Station };
 
 export const NIGHT_FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
 export const FORGE = "0xbdff33cffc3f617f808a6de012a2574dbf69d819";

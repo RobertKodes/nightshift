@@ -4,7 +4,7 @@ import { MISSIONS } from "./missions.js";
 import type { Book } from "./nightwatch.js";
 
 /**
- * THE SHIP: the NIGHTSHIFT ship as one isometric scene (web/src/ship), every NIGHT FROG and Night Watcher at
+ * THE SHIP: the NIGHTSHIFT ship as a pixel town, one room at a time (web/src/ship/town), every NIGHT FROG and Night Watcher at
  * the station its traits fit, working. This module decides where each one works and gathers the live numbers
  * the scene shows: who holds it, what it earns an hour (the same arithmetic accrueStaking credits), which
  * frogs are out on missions this week, which were forged (they sit at 0x…dEaD and earn nothing), the Night

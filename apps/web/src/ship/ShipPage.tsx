@@ -3,23 +3,26 @@ import { NxIcon } from "../nx/icons";
 import { NxTabs, StationBar, rememberRoom } from "../nx/Shell";
 import { Link } from "../router";
 import { useSession } from "../session";
-import { type Labels, ShipScene } from "./scene";
-import { CW, CH } from "./sprites";
+import { Town, roomOf } from "./town/town";
 import { type Crew, FORGE, FORGED_ID, NIGHT_FROGS, type Pick, RARITY_TONE, type ShipStatic, type Snapshot, type SnapFrog, type SnapWatcher, type Station } from "./types";
-import { type RoomKey, ROOMS, WATCH_SEATS } from "./world";
 import "../nx/nx.css";
 import "./ship.css";
 
 /**
- * THE SHIP: every NIGHT FROG and Night Watcher on the NIGHTSHIFT ship, live. The scene (scene.ts) draws them at
- * their stations from their onchain art; this page feeds it the live snapshot and shows what each one is and
- * earns, the signed-in wallet's crew, search and filters, and the same crew as a plain list.
+ * THE SHIP: every NIGHT FROG and Night Watcher on the NIGHTSHIFT ship, live. The town (town/) draws one room at a
+ * time as pixel art, its real crew walking, working and talking with their onchain faces; this page feeds it the
+ * live snapshot and shows what each one is and earns, the signed-in wallet's crew, search and filters, the ship
+ * map, and the same crew as a plain list.
  */
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const fmt = (n: number, d = 1) => n.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: 0 });
+type RoomKey = Station;
 const ROOM_ORDER: RoomKey[] = ["bridge", "quarters", "offices", "breakroom", "missions", "engine", "forge"];
-const ROOM_NAME: Record<RoomKey, string> = { bridge: "Bridge", quarters: "Captain's quarters", offices: "Company offices", breakroom: "Breakroom", missions: "Mission bay", engine: "Engine room", forge: "The Forge", drive: "Drive" };
-const accent = (k: RoomKey) => ROOMS.find((r) => r.key === k)!.accent;
+const ROOM_NAME: Record<RoomKey, string> = { bridge: "Bridge", quarters: "Captain's quarters", offices: "Company offices", breakroom: "Breakroom", missions: "Mission bay", engine: "Engine room", forge: "The Forge" };
+const ACCENT: Record<RoomKey, string> = { bridge: "#4ad8ff", quarters: "#ffc46b", offices: "#a98bff", breakroom: "#ff5ca8", missions: "#b8ff4a", engine: "#ffb547", forge: "#ff7a3d" };
+const accent = (k: RoomKey) => ACCENT[k];
+/** The Night Watch's seats on the bridge: 50 Night Watchers, less the 4 Night Bosses' plinths in the quarters. */
+const WATCH_SEATS = 46;
 
 /** What a trait does on the ship (its effect), in a few words. */
 const FX: Record<string, string> = {
@@ -29,13 +32,17 @@ const FX: Record<string, string> = {
 };
 const BLINKS = new Set(["Heavy Lids", "Wired", "Deadpan Wink", "Acid Glow", "Monocle"]);
 
-type Filter = { rarity: string; layer: number; value: number; station: string; special: "" | "watchers" | "missions" | "forged"; tier: number };
-const NO_FILTER: Filter = { rarity: "", layer: -1, value: -1, station: "", special: "", tier: 0 };
+type Filter = { rarity: string; layer: number; value: number; station: string; special: "" | "watchers" | "missions" | "forged"; tier: number; room: "" | RoomKey };
+const NO_FILTER: Filter = { rarity: "", layer: -1, value: -1, station: "", special: "", tier: 0, room: "" };
 
 export function ShipPage() {
   const { address, signIn, busy } = useSession();
   const canvas = useRef<HTMLCanvasElement>(null);
-  const scene = useRef<ShipScene | null>(null);
+  const scene = useRef<Town | null>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const botRef = useRef<HTMLDivElement>(null);
+  const [roomInfo, setRoomInfo] = useState<{ room: RoomKey; shown: number; total: number } | null>(null);
   const [st, setSt] = useState<ShipStatic | null>(null);
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -78,10 +85,12 @@ export function ShipPage() {
   // the scene
   useEffect(() => {
     if (!st || !canvas.current || view !== "scene" || !canDraw) return;
-    const s = new ShipScene(canvas.current, st, still);
+    const s = new Town(canvas.current, st, still);
     scene.current = s;
-    // ?debug: the scene on window, for the frame-rate checks
-    if (new URLSearchParams(location.search).has("debug")) (window as unknown as { __shipScene?: ShipScene }).__shipScene = s;
+    // ?debug: the town on window, for the frame-rate checks
+    if (new URLSearchParams(location.search).has("debug")) (window as unknown as { __shipScene?: Town }).__shipScene = s;
+    s.onRoom = (i) => setRoomInfo(i);
+    if (snap) s.setSnapshot(snap);
     s.onPick = (p) => { setPick(p && p.kind === "room" && pick?.kind !== "room" ? p : p); if (p && p.kind !== "room") setPanel((x) => (x === "filters" ? "none" : x)); };
     s.onHover = (p, x, y) => setHover(p ? { p, x, y } : null);
     const t = setInterval(() => { const x = s.getStats(); setStats({ fps: x.fps, ms: x.frameMs }); }, 1000);
@@ -107,28 +116,30 @@ export function ShipPage() {
     if (crewKeys.length) { setPanel("crew"); setTimeout(() => scene.current?.focusKeys(crewKeys), 350); }
   }, [crew, crewKeys, snap]);
 
-  // what the panels cover, so the camera frames its targets in the rest of the screen
+  // what the HUD and the panels cover, so the room is framed in the rest of the screen
   const sheet = Boolean(pick) || panel !== "none";
   const phone = typeof window !== "undefined" && window.innerWidth <= 820;
   useEffect(() => {
-    const s = scene.current;
-    if (!s) return;
-    s.inset = phone ? { l: 0, r: 0, t: sheet ? 0 : 120, b: sheet ? Math.round(window.innerHeight * (panel === "crew" ? 0.56 : 0.66)) : 150 }
-      : { l: panel === "crew" ? 420 : 0, r: pick ? 420 : 0, t: 90, b: 70 };
+    const s = scene.current, m = mainRef.current;
+    if (!s || !m) return;
+    const measure = () => {
+      const mr = m.getBoundingClientRect(), tb = topRef.current?.getBoundingClientRect(), bb = botRef.current?.getBoundingClientRect();
+      const t = tb ? Math.round(tb.bottom - mr.top + 6) : 0, b = bb ? Math.round(mr.bottom - bb.top + 6) : 0;
+      s.inset = phone ? { l: 0, r: 0, t: sheet ? 0 : t, b: sheet ? Math.round(mr.height * (panel === "crew" ? 0.56 : 0.66)) : b }
+        : { l: panel === "crew" ? 420 : 0, r: pick ? 420 : 0, t, b };
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    for (const el of [m, topRef.current, botRef.current]) if (el) ro.observe(el);
+    return () => ro.disconnect();
   }, [pick, panel, phone, view, st]);
 
   const selKey = pick?.kind === "frog" ? String(pick.id) : pick?.kind === "watcher" ? `w${pick.n}` : null;
   useEffect(() => { if (scene.current) scene.current.selected = selKey; }, [selKey]);
 
-  // labels over the rooms: live counts and what they earn an hour
+  // live counts per room, and the rooms the wallet's crew is in
   const rooms = useMemo(() => roomStats(st, snap), [st, snap]);
-  useEffect(() => {
-    if (!scene.current || !rooms) return;
-    const L: Labels = {};
-    for (const k of ROOM_ORDER) L[k] = { title: ROOM_NAME[k].toUpperCase(), line: rooms[k].line };
-    L.drive = { title: "DRIVE", line: "engines · no crew" };
-    scene.current.labels = L;
-  }, [rooms, view, st]);
+  const crewRooms = useMemo(() => new Set(st ? crewKeys.map((k) => roomOf(st, snap, k)).filter(Boolean) as RoomKey[] : []), [st, snap, crewKeys]);
 
   // filters and search dim everyone else
   const matches = useMemo(() => matcher(st, snap, filter), [st, snap, filter]);
@@ -140,7 +151,7 @@ export function ShipPage() {
     if (!fly || !scene.current) return;
     const key = p.kind === "frog" ? String(p.id) : p.kind === "watcher" ? `w${p.n}` : null;
     // after the card is laid out, so the camera knows what it covers
-    setTimeout(() => { if (key && scene.current && !scene.current.focusKey(key) && p.kind === "frog") setToast(`#${p.id} is not at a seat on the ship right now: it is forged or out on a mission.`); }, 30);
+    setTimeout(() => { if (key && scene.current && !scene.current.focusKey(key) && p.kind === "frog") setToast(`#${p.id} is not aboard right now.`); }, 30);
   }, []);
   const search = (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,7 +162,8 @@ export function ShipPage() {
     if (f) { const id = Number(f[1]); if (id >= 1 && id <= 500) { open({ kind: "frog", id }); if (view === "list") setView("list"); } else setToast("NIGHT FROGS are #1 to #500."); return; }
     setToast("Type a frog number (1-500) or NW and a Night Watcher's number.");
   };
-  const flyRoom = (k: RoomKey) => { setPick({ kind: "room", station: k }); setTimeout(() => scene.current?.focusRoom(k), 30); };
+  const flyRoom = (k: RoomKey) => { scene.current?.focusRoom(k); if (pick?.kind === "room") setPick({ kind: "room", station: k }); };
+  const room = roomInfo?.room ?? "bridge", more = roomInfo ? Math.max(0, roomInfo.total - roomInfo.shown) : 0;
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") { setPick(null); setPanel("none"); } };
     addEventListener("keydown", k); return () => removeEventListener("keydown", k);
@@ -164,28 +176,26 @@ export function ShipPage() {
   return (
     <div className="ns ns-app nx-shell sh" data-room="command" style={{ "--acc": "#b8ff4a", "--acc2": "#d9ff9c" } as React.CSSProperties}>
       <header className="nx-head"><StationBar room="command" title="The Ship" /></header>
-      <main className="sh-main">
+      <main className="sh-main" ref={mainRef}>
         {view === "scene" && canDraw ? (
           <div className="sh-stage">
             <canvas ref={canvas} className="sh-canvas" tabIndex={0} role="img"
-              aria-label={`The NIGHTSHIFT ship: ${totals ? `${totals.held} NIGHT FROGS aboard and ${totals.watchers} Night Watcher${totals.watchers === 1 ? "" : "s"}` : "loading the crew"}. Drag or use the arrow keys to move, scroll or + and - to zoom. The list view shows the same crew as text.`} />
+              aria-label={`The NIGHTSHIFT ship, the ${ROOM_NAME[room]}: ${roomInfo ? `${roomInfo.total} aboard here` : "loading the crew"}${totals ? `, ${totals.held} NIGHT FROGS and ${totals.watchers} Night Watcher${totals.watchers === 1 ? "" : "s"} on the ship` : ""}. Keys 1 to 7 change rooms, arrows move, + and - zoom. The list view shows the same crew as text.`} />
             {!st && !err && <div className="sh-boot"><i /><span>Boarding the ship…</span></div>}
-            {st && scene.current && scene.current.sprites.pending > 0 && <Loading scene={scene.current} />}
           </div>
         ) : (
           <ListView st={st} snap={snap} matches={matches} q={q} onOpen={(p) => open(p, false)} />
         )}
 
+        <div className="sh-top" ref={topRef}>
         <section className={`sh-hud sh-title${sheet ? " sh-under" : ""}`} aria-label="The ship, live">
-          <span className="sh-kicker"><i className="sh-live" />LIVE · {shiftName} · {clock} UTC</span>
-          <h1>THE SHIP</h1>
+          <div className="sh-title-row"><h1>THE SHIP</h1><span className="sh-kicker"><i className="sh-live" />LIVE · {shiftName} · {clock} UTC</span></div>
           {totals ? (
             <p className="sh-line">
-              <b>{totals.held}</b> NIGHT FROGS aboard · <b>{totals.burned}</b> forged · <b>{totals.watchers}</b> Night Watcher{totals.watchers === 1 ? "" : "s"} · <b>{totals.holders}</b> holders
-              <br /><b className="sh-acc">{fmt(totals.perHour, 1)}</b> shift hours an hour{totals.onMissions ? <> · <b>{totals.onMissions}</b> out on missions</> : null}
+              <b>{totals.held}</b> NIGHT FROGS aboard · <b>{totals.burned}</b> forged · <b>{totals.watchers}</b> Night Watcher{totals.watchers === 1 ? "" : "s"} · <b>{totals.holders}</b> holders · <b className="sh-acc">{fmt(totals.perHour, 1)}</b> shift hours an hour{totals.onMissions ? <> · <b>{totals.onMissions}</b> out on missions</> : null}
             </p>
           ) : <p className="sh-line">{err ?? "Reading the crew from Ethereum…"}</p>}
-          {snap && <ShipLog snap={snap} now={now} />}
+          {snap && <div className="sh-log-top"><ShipLog snap={snap} now={now} /></div>}
         </section>
 
         <section className="sh-hud sh-tools" aria-label="Find on the ship">
@@ -197,23 +207,29 @@ export function ShipPage() {
           <button className={`sh-btn sh-btn-crew${panel === "crew" ? " on" : ""}`} onClick={() => { setPanel(panel === "crew" ? "none" : "crew"); if (crewKeys.length) scene.current?.focusKeys(crewKeys); }} aria-expanded={panel === "crew"}><NxIcon name="crew" size={16} /><span>My crew{crew ? ` · ${crew.frogs.length + crew.watchers.length}` : ""}</span></button>
           <button className="sh-btn" onClick={() => setView(view === "scene" ? "list" : "scene")} aria-pressed={view === "list"}><NxIcon name={view === "scene" ? "menu" : "command"} size={16} /><span>{view === "scene" ? "List" : "Scene"}</span></button>
         </section>
+        </div>
 
-        {view === "scene" && (
-          <div className="sh-hud sh-zoom" role="group" aria-label="Zoom">
-            <button onClick={() => scene.current?.zoomBy(1.35)} aria-label="Zoom in">+</button>
-            <button onClick={() => scene.current?.zoomBy(1 / 1.35)} aria-label="Zoom out">−</button>
-            <button onClick={() => { scene.current?.fit(); setPick(null); }} aria-label="See the whole ship"><NxIcon name="way" size={15} /></button>
+        {view === "scene" && canDraw && (
+          <div className="sh-bottom" ref={botRef}>
+            {snap && <div className="sh-hud sh-log-bot"><ShipLog snap={snap} now={now} /></div>}
+            <div className="sh-hud sh-roombar" style={{ "--rc": accent(room) } as React.CSSProperties}>
+              <div className="sh-roominfo">
+                <b>{ROOM_NAME[room]}</b>
+                <span>{rooms ? rooms[room].line : "…"}</span>
+                <div className="sh-roomlinks">
+                  {more > 0 && <button className="sh-link" onClick={() => { setFilter({ ...NO_FILTER, room }); setView("list"); setPick(null); }}>+{more} more in this room</button>}
+                  <button className="sh-link" onClick={() => setPick({ kind: "room", station: room })}>About this room</button>
+                  {st && scene.current && <Loading town={scene.current} />}
+                </div>
+              </div>
+              <Minimap room={room} rooms={rooms} mine={crewRooms} onGo={flyRoom} />
+            </div>
+            <div className="sh-hud sh-zoom" role="group" aria-label="Zoom">
+              <button onClick={() => scene.current?.zoomBy(2)} aria-label="Zoom in">+</button>
+              <button onClick={() => scene.current?.zoomBy(0.5)} aria-label="Zoom out">−</button>
+              <button onClick={() => scene.current?.fit()} aria-label="Fit the room"><NxIcon name="way" size={15} /></button>
+            </div>
           </div>
-        )}
-
-        {view === "scene" && (
-          <nav className="sh-hud sh-rooms" aria-label="Rooms">
-            {ROOM_ORDER.map((k) => (
-              <button key={k} style={{ "--rc": accent(k) } as React.CSSProperties} className={pick?.kind === "room" && pick.station === k ? "on" : ""} onClick={() => flyRoom(k)}>
-                <i /><span>{ROOM_NAME[k]}</span>{rooms && <small>{rooms[k].crew}</small>}
-              </button>
-            ))}
-          </nav>
         )}
 
         {panel === "filters" && st && <Filters st={st} filter={filter} setFilter={setFilter} count={matchCount} onClose={() => setPanel("none")} />}
@@ -234,18 +250,39 @@ export function ShipPage() {
   );
 }
 
-function Loading({ scene }: { scene: ShipScene }) {
-  const [n, setN] = useState(scene.sprites.readyCount);
-  useEffect(() => { const t = setInterval(() => setN(scene.sprites.readyCount), 250); return () => clearInterval(t); }, [scene]);
-  if (n >= 500) return null;
-  return <div className="sh-loading" aria-hidden="true"><i style={{ width: `${(n / 500) * 100}%` }} /><span>Drawing the crew from their onchain art · {n}/500</span></div>;
+function Loading({ town }: { town: Town }) {
+  const [n, setN] = useState(town.pending);
+  useEffect(() => { const t = setInterval(() => setN(town.pending), 300); return () => clearInterval(t); }, [town]);
+  if (!n) return null;
+  return <span className="sh-drawing" aria-hidden="true">drawing faces from the onchain art…</span>;
+}
+
+/** The ship map: the seven rooms where they sit in the hull, bow to the right. */
+const MAP: { k: RoomKey; area: string; label: string }[] = [
+  { k: "forge", area: "1 / 2 / 3 / 3", label: "Forge" }, { k: "engine", area: "1 / 3 / 3 / 4", label: "Engine" },
+  { k: "breakroom", area: "1 / 4 / 2 / 5", label: "Break" }, { k: "missions", area: "2 / 4 / 3 / 5", label: "Missions" },
+  { k: "quarters", area: "1 / 5 / 2 / 6", label: "Quarters" }, { k: "offices", area: "2 / 5 / 3 / 6", label: "Offices" },
+  { k: "bridge", area: "1 / 6 / 3 / 7", label: "Bridge" },
+];
+function Minimap({ room, rooms, mine, onGo }: { room: RoomKey; rooms: Record<RoomKey, RoomStat> | null; mine: Set<RoomKey>; onGo: (k: RoomKey) => void }) {
+  return (
+    <nav className="sh-map" aria-label="Ship map: pick a room">
+      <span className="sh-map-drive" aria-hidden="true" />
+      {MAP.map((m) => (
+        <button key={m.k} style={{ gridArea: m.area, "--rc": accent(m.k) } as React.CSSProperties} className={`${room === m.k ? "on" : ""}${m.k === "bridge" ? " sh-map-bow" : ""}`}
+          aria-current={room === m.k ? "location" : undefined} aria-label={`${ROOM_NAME[m.k]}${rooms ? `, ${rooms[m.k].crew} aboard` : ""}${mine.has(m.k) ? ", your crew is here" : ""} (key ${ROOM_ORDER.indexOf(m.k) + 1})`} onClick={() => onGo(m.k)}>
+          <b>{m.label}</b>{rooms && <small>{rooms[m.k].crew}</small>}{mine.has(m.k) && <i />}
+        </button>
+      ))}
+    </nav>
+  );
 }
 
 // ------------------------------------------------------------------ live numbers per room
 type RoomStat = { crew: number; perHour: number; line: string };
 function roomStats(st: ShipStatic | null, snap: Snapshot | null): Record<RoomKey, RoomStat> | null {
   if (!st) return null;
-  const out = Object.fromEntries([...ROOM_ORDER, "drive"].map((k) => [k, { crew: 0, perHour: 0, line: "" }])) as Record<RoomKey, RoomStat>;
+  const out = Object.fromEntries(ROOM_ORDER.map((k) => [k, { crew: 0, perHour: 0, line: "" }])) as Record<RoomKey, RoomStat>;
   st.frogs.forEach((row, i) => {
     const f = snap?.frogs[i], station: Station = st.rules[row[10]!]!.station;
     if (f?.dead) return;
@@ -268,16 +305,18 @@ function roomStats(st: ShipStatic | null, snap: Snapshot | null): Record<RoomKey
 
 // ------------------------------------------------------------------ filters
 function matcher(st: ShipStatic | null, snap: Snapshot | null, f: Filter): ((key: string) => boolean) | null {
-  if (!st || (f.rarity === "" && f.layer < 0 && f.station === "" && f.special === "" && !f.tier)) return null;
+  if (!st || (f.rarity === "" && f.layer < 0 && f.station === "" && f.special === "" && !f.tier && !f.room)) return null;
   return (key: string) => {
     if (key.startsWith("w")) {
       const w = snap?.watchers.find((x) => `w${x.n}` === key);
       if (!w) return false;
+      if (f.room) return roomOf(st, snap, key) === f.room && (!f.tier || w.tier === f.tier);
       if (f.tier) return w.tier === f.tier && (f.layer < 0 || f.value < 0 || w.traits[f.layer] === f.value);
       if (f.special === "watchers") return true;
       if (f.special || f.rarity || f.station) return false;
       return f.layer >= 0 && (f.value < 0 || w.traits[f.layer] === f.value);
     }
+    if (f.room && roomOf(st, snap, key) !== f.room) return false;
     const id = Number(key), row = st.frogs[id - 1];
     if (!row) return false;
     const sf = snap?.frogs[id - 1];
@@ -296,6 +335,7 @@ function Filters({ st, filter, setFilter, count, onClose }: { st: ShipStatic; fi
     <aside className="sh-panel sh-filters" aria-label="Filter the crew">
       <div className="sh-panel-head"><b>Filter the crew</b><button className="sh-x" onClick={onClose} aria-label="Close"><NxIcon name="close" size={14} /></button></div>
       <label>Rarity<select value={filter.rarity} onChange={(e) => setFilter({ ...filter, rarity: e.target.value })}><option value="">Any</option>{st.rarities.map((r) => <option key={r}>{r}</option>)}</select></label>
+      <label>Aboard in<select value={filter.room} onChange={(e) => setFilter({ ...filter, room: e.target.value as Filter["room"] })}><option value="">Any room</option>{ROOM_ORDER.map((k) => <option key={k} value={k}>{ROOM_NAME[k]}</option>)}</select></label>
       <label>Station<select value={filter.station} onChange={(e) => setFilter({ ...filter, station: e.target.value })}><option value="">Any</option>{ROOM_ORDER.map((k) => <option key={k} value={k}>{ROOM_NAME[k]}</option>)}</select></label>
       <label>Trait<select value={filter.layer} onChange={(e) => setFilter({ ...filter, layer: Number(e.target.value), value: -1 })}><option value={-1}>Any layer</option>{st.layers.map((l, i) => i > 0 && <option key={l} value={i}>{l}</option>)}</select></label>
       {filter.layer >= 0 && <label>{st.layers[filter.layer]}<select value={filter.value} onChange={(e) => setFilter({ ...filter, value: Number(e.target.value) })}><option value={-1}>Pick one</option>{st.names[filter.layer]!.map((n, i) => <option key={n} value={i}>{n} · {st.counts[filter.layer]![i]} frogs</option>)}</select></label>}
@@ -307,7 +347,7 @@ function Filters({ st, filter, setFilter, count, onClose }: { st: ShipStatic; fi
 }
 
 // ------------------------------------------------------------------ the detail card
-function Card({ pick, st, snap, rooms, scene, onOpen, onClose, onWallet }: { pick: Pick; st: ShipStatic; snap: Snapshot | null; rooms: Record<RoomKey, RoomStat> | null; scene: ShipScene | null; onOpen: (p: Pick) => void; onClose: () => void; onWallet: (w: string) => void }) {
+function Card({ pick, st, snap, rooms, scene, onOpen, onClose, onWallet }: { pick: Pick; st: ShipStatic; snap: Snapshot | null; rooms: Record<RoomKey, RoomStat> | null; scene: Town | null; onOpen: (p: Pick) => void; onClose: () => void; onWallet: (w: string) => void }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => { ref.current?.focus(); }, [pick]);
   let body: React.ReactNode = null;
@@ -432,7 +472,7 @@ function WatcherCard({ n, st, snap, onOpen, onWallet }: { n: number; st: ShipSta
   );
 }
 
-function SeatCard({ seat, st, snap, scene, onOpen }: { seat: number; st: ShipStatic; snap: Snapshot | null; scene: ShipScene | null; onOpen: (p: Pick) => void }) {
+function SeatCard({ seat, st, snap, scene, onOpen }: { seat: number; st: ShipStatic; snap: Snapshot | null; scene: Town | null; onOpen: (p: Pick) => void }) {
   const why = scene?.emptyWhy(seat) ?? null;
   const forged = snap?.watchers.filter((w) => w.n !== 0).length ?? 0, bosses = snap?.watchers.filter((w) => w.tier === 5).length ?? 0;
   void st;
@@ -459,14 +499,14 @@ function SeatCard({ seat, st, snap, scene, onOpen }: { seat: number; st: ShipSta
 
 function RoomCard({ k, st, snap, rooms }: { k: RoomKey; st: ShipStatic; snap: Snapshot | null; rooms: Record<RoomKey, RoomStat> | null }) {
   const r = rooms?.[k];
-  const meta = k === "drive" ? { name: "Drive", deck: "Aft", about: "The drive cores feeding the three engines. Machinery only: no seats." } : st.stations[k];
+  const meta = st.stations[k];
   const radar = snap?.radar;
   return (
     <>
       <span className="sh-kicker" style={{ color: accent(k) }}>{meta.deck}</span>
       <h2>{meta.name}</h2>
       <p className="sh-fine">{meta.about}</p>
-      {r && k !== "drive" && <dl className="sh-nums"><div><dt>Aboard here</dt><dd>{r.crew}</dd></div><div><dt>Shift hours / hour</dt><dd className="sh-acc">{fmt(r.perHour, 1)}</dd></div></dl>}
+      {r && <dl className="sh-nums"><div><dt>Aboard here</dt><dd>{r.crew}</dd></div><div><dt>Shift hours / hour</dt><dd className="sh-acc">{fmt(r.perHour, 1)}</dd></div></dl>}
       {k === "bridge" && (
         <div className="sh-note"><b>The radar:</b> {radar ? `live from the imdUSD vault: ${radar.loans.length} open loans worth a liquidation, ${fmt(radar.totalDebt, 0)} imdUSD owed. A blip nearer the centre is closer to the ${radar.mat}% liquidation line (dashed red); its bearing is fixed by the borrower's address. Loans under ${radar.mat}% can be marked by a Night Watch seat, then liquidated after ${radar.lullHours} hours. The vault charges the loan a ${radar.bonusPct}% liquidation penalty; the seats share it.${radar.stale.length ? ` Stale feeds right now: ${radar.stale.join(", ")}.` : ""}` : "waiting for the first read of the imdUSD vault."}</div>
       )}
@@ -478,7 +518,7 @@ function RoomCard({ k, st, snap, rooms }: { k: RoomKey; st: ShipStatic; snap: Sn
   );
 }
 
-function Hover({ h, st, snap, scene }: { h: { p: Pick; x: number; y: number }; st: ShipStatic; snap: Snapshot | null; scene: ShipScene | null }) {
+function Hover({ h, st, snap, scene }: { h: { p: Pick; x: number; y: number }; st: ShipStatic; snap: Snapshot | null; scene: Town | null }) {
   let t = "";
   if (h.p.kind === "frog") { const row = st.frogs[h.p.id - 1]!, f = snap?.frogs[h.p.id - 1]; t = `#${h.p.id} · ${st.rarities[row[1]!]} · ${f ? `${fmt(f.rate, 2)} h/h` : ""}`; }
   else if (h.p.kind === "watcher") { const n = h.p.n, w = snap?.watchers.find((x) => x.n === n); t = w ? `${n === 0 ? "The Captain" : `Night Watcher #${n}`} · ${w.tierName} · ${fmt(w.rate, 2)} h/h` : ""; }
@@ -573,7 +613,6 @@ function ListView({ st, snap, matches, q, onOpen }: { st: ShipStatic | null; sna
     </div>
   );
 }
-void CW; void CH;
 
 /** The ship's log: its latest real events (forges, missions leaving, the hourly shift-hours credit), newest first. */
 function ShipLog({ snap, now }: { snap: Snapshot; now: number }) {
