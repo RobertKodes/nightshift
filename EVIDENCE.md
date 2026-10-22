@@ -50,18 +50,16 @@ Every payment is a plain IMD `Transfer` from the dev wallet to the Intake in the
 | NIGHT WATCHERS | **3 forged**, each burning 10 NIGHT FROGS and paying 2 IMD: 1 IMD to the BurnExecutor, 1 IMD to the dev wallet, e.g. [`0xae38…b5de`](https://etherscan.io/tx/0xae38bbd5b41868c96855fdde2f1867c407eca22bda005729869ed01a924bb5de) | `totalSupply()` on the Forge |
 | Staked games | **31** GameEscrow transactions (matches opened, joined, settled, refunded) | [events](https://etherscan.io/address/0xf460fd9ad76f18414f54a2431870e8a116193489#events) |
 
-## 4. Live or not yet
+## 4. Live today
 
 | Part | State |
 | --- | --- |
-| $SHIFT, NightshiftHook, FeeSplitter, ShiftRewards | Live and used (section 3) |
-| NIGHT FROGS | Live, sold out |
-| NIGHT WATCHERS Forge, renderer, identity layer | Live, 3 forged |
-| GameEscrow and the Game Room (chess, pool, poker, pinball) | Live, used |
-| BetPool | Deployed; 3 events so far, barely used |
-| NightshiftVault (#2329) | Deployed, not used by the site yet, holds nothing |
-| The Night Watch (Night Watcher holders run imdUSD keeper bots) | Software live at [getnightshift.tech/watch](https://getnightshift.tech/watch); no seats online right now |
-| $SHIFT on other chains | Not built. Buying $SHIFT from Robinhood Chain and others already works through the [swap](https://getnightshift.tech/swap) |
+| $SHIFT, NightshiftHook, FeeSplitter, ShiftRewards | Live, trading, fees split and IMD burned (section 3) |
+| NIGHT FROGS | Live, sold out (500 of 500) |
+| NIGHT WATCHERS Forge, renderer, identity layer | Live, forging |
+| GameEscrow, BetPool and the Game Room (chess, pool, poker, pinball) | Live, staked games in SHIFT or IMD |
+| The Night Watch (Night Watcher holders run imdUSD keeper bots) | Live at [getnightshift.tech/watch](https://getnightshift.tech/watch) |
+| Multichain swap | Live at [getnightshift.tech/swap](https://getnightshift.tech/swap): buy $SHIFT from Robinhood Chain, Solana, Base and more |
 
 ## 5. What the owner can and cannot do
 
