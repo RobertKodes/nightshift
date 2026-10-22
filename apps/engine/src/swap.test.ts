@@ -17,14 +17,14 @@ const IMD_RH = "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127", NATIVE = "0x0000000
 const ethToImd = { fromChain: "eth", toChain: "rh", fromToken: NATIVE, toToken: IMD_RH, amount: "100000000000000000", from: ME, to: ME, slippage: 0.02 };
 
 type Call = { url: string; init?: RequestInit };
-function fake(o: { lifi?: (u: URL) => [number, unknown]; relay?: (body: Record<string, unknown>) => [number, unknown]; settings?: Partial<SwapModule.SwapSettings> } = {}) {
+function fake(o: { lifi?: (u: URL) => [number, unknown]; relay?: (body: Record<string, unknown>) => [number, unknown]; dex?: (u: URL) => [number, unknown]; settings?: Partial<SwapModule.SwapSettings> } = {}) {
   const calls: Call[] = [];
   const reads: string[] = [];
   const svc = S.swapService({
     fetch: async (url, init) => {
       calls.push({ url, init });
       const u = new URL(url);
-      const [status, body] = u.host === "li.quest"
+      const [status, body] = u.host === "api.dexscreener.com" ? (o.dex ?? (() => [200, { pairs: [] }]))(u) : u.host === "li.quest"
         ? (o.lifi ?? (() => [200, fx("lifi-quote-eth-rh-imd")]))(u)
         : (o.relay ?? (() => [200, fx("relay-quote-eth-rh-imd-fee")]))(JSON.parse(String(init?.body ?? "{}")));
       return new Response(JSON.stringify(body), { status });
@@ -194,5 +194,27 @@ describe("the HTTP routes", () => {
   it("answers 400 to a broken body and leaves other paths alone", async () => {
     expect(await run("POST", "/api/swap/quote", { body: async () => { throw new Error("bad json"); } })).toMatchObject({ ok: true, status: 400 });
     expect((await run("GET", "/api/swap/nope")).ok).toBe(false);
+  });
+});
+
+describe("token search", () => {
+  const REAL = "0x6982508145454Ce325dDbE47a25d4ec3d2311933", COPY = "0xbe042e9d09CB588331Ff911c2B46FD833A3E5bd6";
+  const WIF = "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", SOL_COPY = "B5WTLaRwaUQpKk7ir1wniNB6m5o8GgMrimhKMYan2R6B";
+  const tok = (chainId: number, address: string, symbol: string, o: Record<string, unknown> = {}) => ({ address, chainId, symbol, name: symbol, decimals: 18, priceUSD: "0.01", verificationStatus: "verified", ...o });
+  const lifi = (u: URL): [number, unknown] => u.pathname.endsWith("/tokens")
+    ? [200, { tokens: { 1: [tok(1, COPY, "PEPE"), tok(1, REAL, "PEPE", { coinKey: "PEPE" })], 1151111081099710: [tok(1151111081099710, WIF, "$WIF", { verificationStatus: "unverified" }), tok(1151111081099710, SOL_COPY, "PEPE", { verificationStatus: "unverified" })] } }]
+    : [200, fx("lifi-quote-eth-rh-imd")];
+  const dex = (u: URL): [number, unknown] => [200, { pairs: u.searchParams.get("q") === "pepe"
+    ? [{ chainId: "ethereum", baseToken: { address: COPY }, liquidity: { usd: 40_000 } }, { chainId: "ethereum", baseToken: { address: REAL }, liquidity: { usd: 31_000_000 } }, { chainId: "solana", baseToken: { address: SOL_COPY }, liquidity: { usd: 9_000 } }]
+    : [{ chainId: "solana", baseToken: { address: WIF }, liquidity: { usd: 22_000_000 } }] }];
+  it("puts the real token first by its liquidity, finds $WIF as wif, and hides unverified copies with no real liquidity", async () => {
+    const f = fake({ lifi, dex });
+    const pepe = ((await f.svc.tokens("eth", "PEPE")).body as { tokens: { address: string; liquidityUsd?: number | null }[] }).tokens;
+    expect(pepe[0]).toMatchObject({ address: REAL, liquidityUsd: 31_000_000 });
+    expect(pepe.map((t) => t.address)).toContain(COPY);
+    const wif = ((await f.svc.tokens("sol", "wif")).body as { tokens: { address: string }[] }).tokens;
+    expect(wif.map((t) => t.address)).toContain(WIF);
+    const solPepe = ((await f.svc.tokens("sol", "$pepe")).body as { tokens: { address: string }[] }).tokens;
+    expect(solPepe.map((t) => t.address)).not.toContain(SOL_COPY);
   });
 });

@@ -56,6 +56,11 @@ export async function readHoldings(wallet: string): Promise<boolean> {
 }
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
+/** DexScreener's names for our chains (Robinhood Chain's is used once it lists it). */
+const DEX_SLUG: Partial<Record<ChainKey, string>> = { eth: "ethereum", base: "base", sol: "solana", rh: "robinhood" };
+/** A token LI.FI has not verified is only offered for its exact symbol, and only with this much real liquidity. */
+export const UNVERIFIED_MIN_USD = 250_000;
+
 export type SwapDeps = { fetch: Fetch; holds: (wallet: string) => Promise<boolean>; settings: () => SwapSettings; now: () => number };
 
 const FEATURED: Record<ChainKey, string[]> = {
@@ -153,6 +158,19 @@ export function swapService(d: SwapDeps) {
   }
 
   /** A chain's tokens: NIGHTSHIFT's pinned ones first, then the featured ones, or the matches for `q` (a symbol, a name, an address). */
+  /** The deepest pool liquidity per token address on `chain` for a symbol search, from DexScreener (cached 10 min). */
+  async function liquidity(chain: ChainKey, q: string): Promise<Map<string, number>> {
+    const slug = DEX_SLUG[chain], out = new Map<string, number>();
+    if (!slug || q.length < 2) return out;
+    const a = await getJson(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`, { ttl: 600_000 }).catch(() => null);
+    for (const p of ((a?.body.pairs ?? []) as { chainId?: string; baseToken?: { address?: string }; liquidity?: { usd?: number } }[])) {
+      if (p.chainId !== slug || !p.baseToken?.address) continue;
+      const k = chain === "sol" ? p.baseToken.address : p.baseToken.address.toLowerCase();
+      out.set(k, Math.max(out.get(k) ?? 0, Number(p.liquidity?.usd ?? 0)));
+    }
+    return out;
+  }
+
   async function tokens(chain: string, q: string): Promise<{ status: number; body: unknown }> {
     if (!isChain(chain)) return { status: 400, body: { error: "unknown chain" } };
     const pinned = pinnedOn(chain);
@@ -172,9 +190,17 @@ export function swapService(d: SwapDeps) {
       }
       return { status: 200, body: { tokens: [] } };
     }
-    const needle = query.toLowerCase();
-    const score = (t: Token) => (t.symbol.toLowerCase() === needle ? 0 : t.symbol.toLowerCase().startsWith(needle) ? 1 : t.name.toLowerCase().includes(needle) ? 2 : 9);
-    const hits = [...pinned, ...all.filter((t) => t.verified && notPinned(t))].filter((t) => score(t) < 9).sort((a, b) => score(a) - score(b) || (b.priceUsd ? 1 : 0) - (a.priceUsd ? 1 : 0)).slice(0, 30);
+    // a symbol search: copies share the symbol, so the real token is found by where the money is (DexScreener's
+    // deepest pool on this chain) and LI.FI's canonical mark; an unverified token only shows with real liquidity
+    const needle = query.toLowerCase().replace(/^\$/, ""), sym = (t: Token) => t.symbol.toLowerCase().replace(/^\$/, "");
+    const score = (t: Token) => (sym(t) === needle ? 0 : sym(t).startsWith(needle) ? 1 : t.name.toLowerCase().includes(needle) ? 2 : 9);
+    const liq = await liquidity(chain, needle);
+    const depth = (t: Token) => liq.get(chain === "sol" ? t.address : t.address.toLowerCase()) ?? 0;
+    const hits = [...pinned, ...all.filter((t) => notPinned(t) && (t.verified || (score(t) === 0 && depth(t) >= UNVERIFIED_MIN_USD)))]
+      .filter((t) => score(t) < 9)
+      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || score(a) - score(b) || depth(b) - depth(a) || Number(Boolean(b.canonical)) - Number(Boolean(a.canonical)) || (b.priceUsd ? 1 : 0) - (a.priceUsd ? 1 : 0))
+      .slice(0, 30)
+      .map((t) => (liq.size ? { ...t, liquidityUsd: depth(t) || null } : t));
     return { status: 200, body: { tokens: hits } };
   }
 

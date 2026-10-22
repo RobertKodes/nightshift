@@ -62,6 +62,10 @@ export type Token = {
   /** On the provider's verified list, a chain's native coin, or pinned by NIGHTSHIFT. */
   verified: boolean;
   pinned?: boolean;
+  /** LI.FI names this the canonical coin for its symbol (its coinKey), e.g. the real PEPE among copies. */
+  canonical?: boolean;
+  /** The deepest DEX liquidity of this token on its chain, from DexScreener (search answers only). */
+  liquidityUsd?: number | null;
 };
 
 export const SHIFT_TOKEN = "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac";

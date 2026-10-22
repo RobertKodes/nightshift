@@ -24,7 +24,7 @@ export function lifiQuoteQuery(r: QuoteRequest, o: { integrator: string; feeBps:
   }).toString();
 }
 
-type LifiToken = { address: string; chainId: number; symbol: string; name: string; decimals: number; logoURI?: string; priceUSD?: string; verificationStatus?: string };
+type LifiToken = { address: string; chainId: number; symbol: string; name: string; decimals: number; logoURI?: string; priceUSD?: string; verificationStatus?: string; coinKey?: string };
 type LifiStep = { type: string; tool: string; toolDetails?: { name?: string }; action: { fromChainId: number; toChainId: number; fromToken: LifiToken; toToken: LifiToken } };
 export type LifiQuote = {
   id: string; tool: string; toolDetails?: { name?: string };
@@ -37,6 +37,7 @@ export type LifiQuote = {
 export const lifiToken = (t: LifiToken, chain: ChainKey): Token => ({
   chain, address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals, logo: t.logoURI || undefined,
   priceUsd: usd(t.priceUSD), verified: t.verificationStatus === "verified" || isNative(chain, t.address),
+  ...(t.coinKey ? { canonical: true } : {}),
 });
 
 const stepType = (s: LifiStep): Step["type"] => (s.type === "cross" ? "bridge" : s.type === "swap" ? "swap" : s.tool === "feeCollection" ? "fee" : "wrap");

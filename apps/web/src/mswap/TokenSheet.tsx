@@ -11,6 +11,9 @@ export function TokenLogo({ t }: { t: Pick<Token, "logo" | "symbol"> }) {
   return t.logo && !bad ? <img className="ms-logo" src={t.logo} alt="" width={28} height={28} loading="lazy" onError={() => setBad(true)} /> : <span className="ms-logo ms-letter" aria-hidden="true">{t.symbol.slice(0, 1)}</span>;
 }
 
+/** A pool depth in short dollars: $31M, $250K, $9K. */
+const liq = (v: number) => `$${v >= 1e9 ? `${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}K` : Math.round(v)}`;
+
 /** Picking a chain and a token: NIGHTSHIFT's tokens first, then the provider's verified list, or a search. */
 export function TokenSheet({ side, chain, onPick, onClose }: { side: "from" | "to"; chain: ChainKey; onPick: (t: Token) => void; onClose: () => void }) {
   const [c, setC] = useState<ChainKey>(chain === "xrpl" && side === "from" ? "eth" : chain);
@@ -45,7 +48,7 @@ export function TokenSheet({ side, chain, onPick, onClose }: { side: "from" | "t
             <button key={`${t.chain}:${t.address}`} type="button" className="ms-tok" onClick={() => onPick(t)}>
               <TokenLogo t={t} />
               <span className="ms-tok-n"><b>{t.symbol}{t.pinned && t.address !== CHAINS[t.chain].native.address && <em className="ms-pin">NIGHTSHIFT</em>}</b><i>{t.name}</i></span>
-              <span className="ms-tok-a">{t.address === CHAINS[t.chain].native.address ? "native" : shortAddr(t.address)}{!t.verified && <em className="ms-unv">unverified</em>}</span>
+              <span className="ms-tok-a">{t.address === CHAINS[t.chain].native.address ? "native" : shortAddr(t.address)}{!t.verified && <em className="ms-unv">unverified</em>}{t.liquidityUsd ? <em className="ms-liq">{liq(t.liquidityUsd)} liquidity</em> : null}</span>
             </button>
           ))}
         </div>

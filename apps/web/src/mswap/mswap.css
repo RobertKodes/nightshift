@@ -119,6 +119,7 @@
 .ms-tok-a { display: grid; justify-items: end; font: 500 12px var(--mono); color: var(--s-faint); }
 .ms-pin { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--s-acc-bg); color: #cdbfff; font: 600 9.5px Inter, sans-serif; font-style: normal; letter-spacing: .06em; vertical-align: 2px; }
 .ms-unv { font: 500 11px Inter, sans-serif; font-style: normal; color: var(--s-warn); }
+.ms-liq { font: 500 11px Inter, sans-serif; font-style: normal; color: var(--s-dim, #9a93b8); margin-left: 6px; }
 
 @media (max-width: 860px) { .ms { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 520px) {
