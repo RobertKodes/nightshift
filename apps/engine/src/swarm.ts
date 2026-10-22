@@ -194,8 +194,18 @@ const SAYS: Record<string, string> = { built: "its contracts are written and com
  * Every 10 minutes: an order the swarm has finished is announced to the community once, with its
  * public job page (and the audit report). Failures are told to the admins only.
  */
-/** The job of the first admitted payment for an order: the latest one, then any earlier ones. */
+/** An order's job as IMD runs it now: a job continued by its payer goes on as a newer version of the same project. */
 async function admittedJob(p: Placed): Promise<string | undefined> {
+  const first = await firstJob(p);
+  if (!first) return first;
+  const j = await fetch(`https://api.imd.fun/jobs/${first}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as { job?: { project?: Project }; project?: Project } | null;
+  const pr = (j?.job ?? j)?.project;
+  return pr?.running ?? pr?.versions?.at(-1)?.jobId ?? first;
+}
+type Project = { running?: string | null; versions?: { jobId?: string }[] };
+
+/** The job of the first admitted payment for an order: the latest one, then any earlier ones. */
+async function firstJob(p: Placed): Promise<string | undefined> {
   if (p.job) return p.job; // ordered on explorer.imd.fun: the job is known, there is no Intake payment to read
   for (const tx of [p.tx, ...(p.earlier ?? [])]) {
     const intake = await fetch(`https://api.imd.fun/intake/1/${tx}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as { entries?: { admission?: { result?: { jobId?: string } } }[] } | null;

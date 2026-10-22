@@ -248,7 +248,7 @@ export function forgedSvg(n: number | null, tier: number, traits: number[], name
 export function rendererSvg(n: number | null, tier: number, traits: number[], name = "", inputs: number[] = [], points = 0): string {
   const T = tierInfo(tier);
   const layer = (l: number) => ART[OFFSETS[l]! + traits[l]! * 2 + 1]!;
-  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000" color="${T.color}"><title>NIGHT WATCHERS${n ? ` #${n}` : ""}</title>${ART[0]}${fill("defs", { C: T.color })}`;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000" color="${T.color}"><title>NIGHT WATCHERS${n !== null ? ` #${n}` : ""}</title>${ART[0]}${fill("defs", { C: T.color })}`;
   s += layer(0) + backdrop(T.tier) + `<g filter="url(#otA)">`;
   for (let l = 1; l < 7; l++) s += l === 4 && T.tier >= 3 ? `<g filter="url(#otE)">${layer(l)}</g>` : layer(l);
   s += "</g>";

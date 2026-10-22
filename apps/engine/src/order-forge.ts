@@ -15,7 +15,7 @@ export const FORGE_VECTORS = [
   { n: 9, ids: [112, 120, 146, 170, 205, 232, 276, 281, 310, 370], name: "", tier: 2, points: 20, traits: [1, 4, 3, 5, 6, 3, 1], keccak: "0x6599cac260892032e955386e9d89eadb3155873df88c7d0eb9811d0516a71e9f" },
   { n: 7, ids: [26, 30, 50, 2, 5, 96, 97, 93, 94, 87], name: "", tier: 3, points: 50, traits: [5, 4, 3, 5, 3, 3, 4], keccak: "0x77a2bd2785100118716ecfd64d45fac8dc442da9985103657651e4cdfd3cff34" },
   { n: 50, ids: [10, 45, 103, 12, 19, 22, 69, 188, 204, 267], name: "KODES", tier: 5, points: 128, traits: [5, 5, 7, 5, 7, 6, 4], keccak: "0x7615dc42aa811e30e90ea4b235d71d4fdf31c0fa8e07440ee34715e47fd00609" },
-  { n: 0, ids: [1, 45, 103, 12, 19, 22, 69, 188, 204, 267], name: "", tier: 6, points: 128, traits: [5, 5, 7, 0, 1, 3, 0], keccak: "0x57f3c7b814f1a4b3cd83136106e2345984b5e5316489aaa06a9d2d1d6ea5dcde" },
+  { n: 0, ids: [1, 45, 103, 12, 19, 22, 69, 188, 204, 267], name: "", tier: 6, points: 128, traits: [5, 5, 7, 0, 1, 3, 0], keccak: "0xe3bc253ef478a52132f479126df379e37100408b505528a7fee1b5879cf27cdc" },
 ];
 /** One per branch of the identity layer: tiers 1 (no beam or orbit), 3 (code columns), 5 (two orbits, the edge), the Captain (three). */
 export const SKIN_VECTORS = [
