@@ -39,6 +39,8 @@ function refuseBody(action: string, body: unknown): string | null {
 }
 
 type Check = { blockers?: { code?: string; detail?: string; message?: string }[]; plan?: { title: string }[]; error?: string };
+/** A job the swarm ended or paused for input: it can be ordered again with the current brief. */
+const stopped = (o: Order) => ["blocked", "failed", "cancelled", "canceled", "rejected"].includes(String(o.state?.stage ?? o.state?.status ?? "").toLowerCase());
 type Order = { key: string; title: string; what: string; intake: string; placed: { tx: string; at: number } | null; state: { status?: string; stage?: string; jobId?: string; launchId?: string; error?: string } | null };
 
 /** Orders for the IMD swarm, one card each: free check, pay 0.5 IMD from the dev wallet, then follow it. */
@@ -117,9 +119,11 @@ export function SwarmOrders({ call, token }: { call: (token: string, path: strin
                 {o.state?.error && <span className="bad"> · {o.state.error === "unknown_transaction" ? "not seen by IMD yet" : o.state.error}</span>}
               </p>
             )}
-            {(!o.placed || o.state?.error === "unknown_transaction") && (
+            {(!o.placed || o.state?.error === "unknown_transaction" || stopped(o)) && (
               <>
-                {o.placed && <p className="dim">IMD has not admitted this payment yet. You can pay again: both payments stay followed, and whichever IMD admits first is the one tracked.</p>}
+                {o.placed && (stopped(o)
+                  ? <p className="dim">The swarm stopped this job ({o.state?.stage}). Check and pay again to start a new job with the current brief. The old job stays on IMD, and the new one is followed from here.</p>
+                  : <p className="dim">IMD has not admitted this payment yet. You can pay again: both payments stay followed, and whichever IMD admits first is the one tracked.</p>)}
                 {c && "error" in c && <p className="bad">{c.error}</p>}
                 {c && !("error" in c) && c.check && (blockers.length
                   ? <ul className="bad">{blockers.map((b, i) => <li key={i}>{b.message ?? b.detail ?? b.code}</li>)}</ul>

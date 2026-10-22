@@ -157,7 +157,7 @@ export function placeOrder(key: string, tx: string): Record<string, Placed> {
   // a job id (an order paid on IMD's own site) is followed as it is, keeping the payments made before it
   if (/^[0-9a-f-]{36}$/.test(tx)) { all[key] = { ...(was ?? { tx: "", at: Date.now() }), job: tx, at: Date.now() }; writeAtomic(file(), JSON.stringify(all, null, 2)); return all; }
   // paying again (e.g. while IMD's intake is stalled) keeps the earlier payments followed too
-  all[key] = { tx, at: Date.now(), earlier: was ? [...(was.earlier ?? []), was.tx] : undefined };
+  all[key] = { tx, at: Date.now(), earlier: was ? [...(was.earlier ?? []), was.tx].filter(Boolean) : undefined };
   writeAtomic(file(), JSON.stringify(all, null, 2));
   return all;
 }
@@ -285,7 +285,7 @@ export async function forgeBuild(): Promise<Build[]> {
     if (!job) return { key, title: o.title, stage: "paid, waiting for IMD to start it", job: null };
     const j = await fetch(`https://api.imd.fun/jobs/${job}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as (Job & { job?: Job }) | null;
     const st = String((j?.job ?? j)?.state ?? "").toLowerCase();
-    const stage = DONE.has(st) ? "built and audited, deploying" : ["failed", "cancelled", "canceled", "rejected"].includes(st) ? "stopped: ordered again soon" : "the swarm is building it";
+    const stage = DONE.has(st) ? "built and audited, deploying" : ["failed", "cancelled", "canceled", "rejected", "blocked"].includes(st) ? "paused: ordered again soon" : "the swarm is building it";
     return { key, title: o.title, stage, job };
   }));
   build = { at: Date.now(), rows };
