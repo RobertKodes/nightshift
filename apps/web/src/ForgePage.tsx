@@ -17,7 +17,7 @@ import "./forge.css";
 const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
 const NIGHT_FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
 /** Pinned when IMD deploys the forge, like every contract this site asks a wallet to approve. Empty: the forge is not open. */
-const FORGE: string = "";
+const FORGE: string = "0xbdff33cffc3f617f808a6de012a2574dbf69d819";
 const FORGE_ABI = parseAbi(["function forge(uint256[10] ids, uint8 minTier) returns (uint256)", "function fee() view returns (uint256)"]);
 const NF_ABI = parseAbi(["function isApprovedForAll(address owner, address operator) view returns (bool)", "function setApprovalForAll(address operator, bool approved)"]);
 const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
