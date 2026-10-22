@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   CHAINS, CHAIN_ORDER, type ChainKey, DEFAULT_FEE_BPS, type FeeDecision, LIFI_API, MAX_FEE_BPS, type Quote, type QuoteRequest, RELAY_API, type Token, type Track,
   XRPL_SOURCE_SOON, bestFirst, checkRequest, decideFee, fromLifi, fromLifiStatus, fromRelay, fromRelayStatus, isChain, isEvmAddress, lifiQuoteQuery,
-  lifiToken, pinnedOn, providerFee, relayQuoteBody, sameAddress, validAddress,
+  isNative, lifiToken, pinnedOn, providerFee, relayQuoteBody, sameAddress, validAddress,
 } from "@nightshift/swap";
 import { parseAbi } from "viem";
 import { eth } from "./chain.js";
@@ -146,7 +146,7 @@ export function swapService(d: SwapDeps) {
     if (list && d.now() - list.at < 6 * 3_600_000) return list.tokens;
     loading ??= (async () => {
       try {
-        const a = await getJson(`${LIFI_API}/tokens?chains=${LIFI_CHAINS.map((c) => CHAINS[c].lifi).join(",")}`, { headers: d.settings().lifiKey ? { "x-lifi-api-key": d.settings().lifiKey } : {} });
+        const a = await getJson(`${LIFI_API}/tokens?minPriceUSD=0&chains=${LIFI_CHAINS.map((c) => CHAINS[c].lifi).join(",")}`, { headers: d.settings().lifiKey ? { "x-lifi-api-key": d.settings().lifiKey } : {} });
         const raw = (a.body.tokens ?? {}) as Record<string, Parameters<typeof lifiToken>[0][]>;
         const tokens: Partial<Record<ChainKey, Token[]>> = {};
         for (const c of LIFI_CHAINS) tokens[c] = (raw[String(CHAINS[c].lifi)] ?? []).map((t) => lifiToken(t, c));
@@ -158,17 +158,26 @@ export function swapService(d: SwapDeps) {
   }
 
   /** A chain's tokens: NIGHTSHIFT's pinned ones first, then the featured ones, or the matches for `q` (a symbol, a name, an address). */
-  /** The deepest pool liquidity per token address on `chain` for a symbol search, from DexScreener (cached 10 min). */
-  async function liquidity(chain: ChainKey, q: string): Promise<Map<string, number>> {
-    const slug = DEX_SLUG[chain], out = new Map<string, number>();
-    if (!slug || q.length < 2) return out;
-    const a = await getJson(`https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`, { ttl: 600_000 }).catch(() => null);
-    for (const p of ((a?.body.pairs ?? []) as { chainId?: string; baseToken?: { address?: string }; liquidity?: { usd?: number } }[])) {
+  /** The deepest pool liquidity of each of these tokens on `chain`, from DexScreener's token lookup (30 a call, cached 10 min). */
+  async function liquidity(chain: ChainKey, addresses: string[]): Promise<Map<string, number>> {
+    const slug = DEX_SLUG[chain], out = new Map<string, number>(), key = (a: string) => (chain === "sol" ? a : a.toLowerCase());
+    if (!slug || !addresses.length) return out;
+    const a = await getJson(`https://api.dexscreener.com/tokens/v1/${slug}/${addresses.slice(0, 30).join(",")}`, { ttl: 600_000 }).catch(() => null);
+    const pairs = (Array.isArray(a?.body) ? a.body : []) as { chainId?: string; baseToken?: { address?: string }; liquidity?: { usd?: number } }[];
+    for (const p of pairs) {
       if (p.chainId !== slug || !p.baseToken?.address) continue;
-      const k = chain === "sol" ? p.baseToken.address : p.baseToken.address.toLowerCase();
+      const k = key(p.baseToken.address);
       out.set(k, Math.max(out.get(k) ?? 0, Number(p.liquidity?.usd ?? 0)));
     }
     return out;
+  }
+  /** Every pool of one token (DexScreener's batch lookup returns only one each): its deepest pool. */
+  async function depthOf(chain: ChainKey, address: string): Promise<number> {
+    const slug = DEX_SLUG[chain];
+    if (!slug) return 0;
+    const a = await getJson(`https://api.dexscreener.com/token-pairs/v1/${slug}/${address}`, { ttl: 600_000 }).catch(() => null);
+    const pairs = (Array.isArray(a?.body) ? a.body : []) as { liquidity?: { usd?: number } }[];
+    return pairs.reduce((m, p) => Math.max(m, Number(p.liquidity?.usd ?? 0)), 0);
   }
 
   async function tokens(chain: string, q: string): Promise<{ status: number; body: unknown }> {
@@ -194,7 +203,11 @@ export function swapService(d: SwapDeps) {
     // deepest pool on this chain) and LI.FI's canonical mark; an unverified token only shows with real liquidity
     const needle = query.toLowerCase().replace(/^\$/, ""), sym = (t: Token) => t.symbol.toLowerCase().replace(/^\$/, "");
     const score = (t: Token) => (sym(t) === needle ? 0 : sym(t).startsWith(needle) ? 1 : t.name.toLowerCase().includes(needle) ? 2 : 9);
-    const liq = await liquidity(chain, needle);
+    // the symbol's closest matches (canonical and verified first) are looked up by address: the real one has the money
+    const near = [...pinned, ...all].filter((t) => score(t) <= 1 && !isNative(chain, t.address)).sort((a, b) => score(a) - score(b) || Number(Boolean(b.canonical)) - Number(Boolean(a.canonical)) || Number(b.verified) - Number(a.verified));
+    const liq = await liquidity(chain, [...new Set(near.map((t) => t.address))]);
+    const k = (t: Token) => (chain === "sol" ? t.address : t.address.toLowerCase());
+    await Promise.all(near.filter((t) => score(t) === 0).slice(0, 6).map(async (t) => liq.set(k(t), Math.max(liq.get(k(t)) ?? 0, await depthOf(chain, t.address)))));
     const depth = (t: Token) => liq.get(chain === "sol" ? t.address : t.address.toLowerCase()) ?? 0;
     const hits = [...pinned, ...all.filter((t) => notPinned(t) && (t.verified || (score(t) === 0 && depth(t) >= UNVERIFIED_MIN_USD)))]
       .filter((t) => score(t) < 9)

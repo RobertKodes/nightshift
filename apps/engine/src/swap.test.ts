@@ -204,9 +204,13 @@ describe("token search", () => {
   const lifi = (u: URL): [number, unknown] => u.pathname.endsWith("/tokens")
     ? [200, { tokens: { 1: [tok(1, COPY, "PEPE"), tok(1, REAL, "PEPE", { coinKey: "PEPE" })], 1151111081099710: [tok(1151111081099710, WIF, "$WIF", { verificationStatus: "unverified" }), tok(1151111081099710, SOL_COPY, "PEPE", { verificationStatus: "unverified" })] } }]
     : [200, fx("lifi-quote-eth-rh-imd")];
-  const dex = (u: URL): [number, unknown] => [200, { pairs: u.searchParams.get("q") === "pepe"
-    ? [{ chainId: "ethereum", baseToken: { address: COPY }, liquidity: { usd: 40_000 } }, { chainId: "ethereum", baseToken: { address: REAL }, liquidity: { usd: 31_000_000 } }, { chainId: "solana", baseToken: { address: SOL_COPY }, liquidity: { usd: 9_000 } }]
-    : [{ chainId: "solana", baseToken: { address: WIF }, liquidity: { usd: 22_000_000 } }] }];
+  // DexScreener: the batch lookup answers one pool per token, the pair list all of them (WIF's depth is only in the list)
+  const depth: Record<string, [string, number, number]> = { [REAL.toLowerCase()]: ["ethereum", 31_000_000, 31_000_000], [COPY.toLowerCase()]: ["ethereum", 40_000, 40_000], [WIF]: ["solana", 155_000, 5_800_000], [SOL_COPY]: ["solana", 9_000, 9_000] };
+  const dex = (u: URL): [number, unknown] => {
+    const [, kind, , slug, list] = u.pathname.split("/");
+    const pair = (a: string, i: 1 | 2) => { const d = depth[slug === "solana" ? a : a.toLowerCase()]; return d && d[0] === slug ? [{ chainId: slug, baseToken: { address: a }, liquidity: { usd: d[i] } }] : []; };
+    return [200, (list ?? "").split(",").flatMap((a) => pair(a, kind === "token-pairs" ? 2 : 1))];
+  };
   it("puts the real token first by its liquidity, finds $WIF as wif, and hides unverified copies with no real liquidity", async () => {
     const f = fake({ lifi, dex });
     const pepe = ((await f.svc.tokens("eth", "PEPE")).body as { tokens: { address: string; liquidityUsd?: number | null }[] }).tokens;
