@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap');
 /* THE SHIP · a full-screen scene under the station bar, its HUD in the station's angled panels */
 .sh { height: 100dvh; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .sh .nx-backdrop { display: none; }
@@ -216,7 +215,7 @@
 }
 
 /* ---- the HUD as a pixel game's: one pixel font, bevelled 2px frames, no glow, a press that moves the button */
-.sh-main { --px-font: 'Pixelify Sans', 'JetBrains Mono', ui-monospace, monospace; --px-dark: #181425; --px-mid: #262b44; --px-edge: #3a4466; --px-hi: #5a6988; --px-ink: #f4f4f4; --px-dim: #8b9bb4; --px-gold: #fee761; }
+.sh-main { --px-font: var(--nx-ui); --px-dark: #181425; --px-mid: #262b44; --px-edge: #3a4466; --px-hi: #5a6988; --px-ink: #f4f4f4; --px-dim: #8b9bb4; --px-gold: #fee761; }
 .sh-title, .sh-roombar, .sh-log-bot, .sh-search, .sh-btn, .sh-zoom button { border-radius: 0; background: var(--px-dark, #181425); border: 2px solid; border-color: var(--px-hi, #5a6988) var(--px-dark, #181425) var(--px-dark, #181425) var(--px-hi, #5a6988); box-shadow: 0 0 0 2px #0b0a12, 3px 3px 0 2px rgba(0, 0, 0, .45); }
 .sh-title h1 { font: 700 22px/1 var(--px-font); letter-spacing: .08em; color: var(--px-ink, #f4f4f4); }
 .sh-kicker, .sh-title .sh-line { font-family: var(--px-font); letter-spacing: .02em; }
@@ -260,3 +259,62 @@
 .sh-kicker { font-size: 12px; }
 /* a phone is narrower than the map: the whole map (picture and buttons together) is zoomed, never squeezed */
 @media (max-width: 420px) { .sh-map { zoom: .9; } }
+/* following one character: a chip under the title */
+.sh-follow { position: absolute; z-index: 6; left: 50%; top: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 7px 12px; font: 600 12px var(--nx-ui); color: #f3f1ff; background: rgba(12, 12, 22, .86); border: 1px solid rgba(255, 255, 255, .12); border-radius: 999px; }
+.sh-follow b { color: #fff; }
+.sh-follow kbd { font: 600 10px var(--nx-mono); padding: 1px 5px; border: 1px solid rgba(255, 255, 255, .2); border-radius: 4px; color: var(--nx-dim); }
+.sh-follow-btn { margin-top: 8px; }
+.sh-follow-btn.on { border-color: #c6f27a; color: #c6f27a; }
+.sh-zoom input[type=range] { width: 110px; accent-color: #c6f27a; }
+
+/* ---- the HUD, calm: dark glass panels with one hairline, the station's own type, the accent used sparingly */
+.sh > main.sh-main { background: #05070d; }
+.sh-main { --gl-bg: rgba(10, 12, 20, .8); --gl-line: rgba(255, 255, 255, .085); --gl-ink: #eef0f7; --gl-dim: #9aa1b8; --gl-acc: #c6f27a; }
+.sh-title, .sh-roombar, .sh-log-bot, .sh-search, .sh-btn, .sh-zoom { background: var(--gl-bg); border: 1px solid var(--gl-line); border-radius: 12px; box-shadow: 0 14px 34px rgba(0, 0, 0, .38); backdrop-filter: blur(12px) saturate(1.1); -webkit-backdrop-filter: blur(12px) saturate(1.1); }
+.sh-title { padding: 12px 16px 12px; border-left: 1px solid var(--gl-line); }
+.sh-title h1 { font: 700 17px/1 var(--nx-ui); letter-spacing: .2em; color: var(--gl-ink); }
+.sh-kicker { font: 600 10.5px var(--nx-mono); letter-spacing: .12em; color: var(--gl-acc); }
+.sh-title .sh-line { font: 500 12.5px/1.55 var(--nx-ui); color: var(--gl-dim); letter-spacing: .01em; }
+.sh-title .sh-line b { color: var(--gl-ink); font-weight: 600; }
+.sh-live { width: 7px; height: 7px; border-radius: 50%; background: #ff6b81; box-shadow: 0 0 0 3px rgba(255, 107, 129, .16); animation: nx-blink 1.8s ease-in-out infinite; }
+.sh-btn, .sh-search input { font: 600 12.5px var(--nx-ui); letter-spacing: .02em; text-transform: none; color: var(--gl-ink); }
+.sh-btn { height: 38px; padding: 0 14px; }
+.sh-btn .nx-ic, .sh-search .nx-ic { color: var(--gl-dim); }
+.sh-btn:hover, .sh-zoom button:hover { background: rgba(255, 255, 255, .06); border-color: rgba(255, 255, 255, .18); }
+.sh-btn:active, .sh-zoom button:active { transform: none; box-shadow: none; }
+.sh-btn.on { background: rgba(198, 242, 122, .1); border-color: rgba(198, 242, 122, .45); color: #e8ffc9; }
+.sh-btn.on .nx-ic { color: var(--gl-acc); }
+.sh-btn:focus-visible, .sh-zoom button:focus-visible, .sh-link:focus-visible, .sh-zoom input:focus-visible { outline: 2px solid var(--gl-acc); outline-offset: 2px; }
+.sh-search { height: 38px; }
+.sh-search input::placeholder { color: #6b7290; }
+/* the room bar: the room's name in its colour, its live line, its links as quiet text buttons; the ship map beside it */
+.sh-roombar { gap: 14px; padding: 9px 12px; border-top: 1px solid var(--gl-line); }
+.sh-roombar::before { content: ""; position: absolute; left: 14px; right: 14px; top: -1px; height: 2px; border-radius: 2px; background: var(--rc); opacity: .7; }
+.sh-roombar { position: relative; }
+.sh-roominfo b { font: 700 14px var(--nx-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--rc); }
+.sh-roominfo > span { font: 500 11.5px/1.4 var(--nx-mono); color: var(--gl-dim); }
+.sh-roomlinks .sh-link { font: 600 11.5px var(--nx-ui); text-transform: none; color: var(--gl-ink); padding: 3px 8px; background: rgba(255, 255, 255, .05); border: 1px solid var(--gl-line); border-radius: 7px; text-decoration: none; }
+.sh-roomlinks .sh-link:hover { border-color: rgba(255, 255, 255, .2); color: #fff; }
+.sh-map { border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 1px var(--gl-line); cursor: crosshair; touch-action: none; }
+.sh-map button { pointer-events: none; }
+.sh-map button:focus-visible { pointer-events: auto; }
+.sh-map button small { font: 600 10.5px/1 var(--nx-mono); color: #dfe3f0; text-shadow: 0 1px 0 #05070d; }
+.sh-map button::after { font: 600 11.5px var(--nx-ui); text-transform: none; background: rgba(10, 12, 20, .92); border: 1px solid var(--rc); border-radius: 6px; }
+/* the ship's log */
+.sh-log-bot { padding: 9px 13px; }
+.sh-log-bot .sh-log, .sh-log { font: 500 11.5px/1.45 var(--nx-mono); color: #b7bdd2; }
+.sh-log time { color: var(--gl-acc); }
+.sh-log-bot .sh-log::after { content: none; }
+/* zoom: one pill, out · slider · in · whole ship */
+.sh-bottom .sh-zoom, .sh-zoom { display: flex; align-items: center; gap: 2px; padding: 4px; }
+.sh-zoom button { width: 34px; height: 34px; display: grid; place-items: center; background: transparent; border: 0; border-radius: 8px; box-shadow: none; color: var(--gl-ink); font: 500 18px/1 var(--nx-ui); }
+.sh-zoom input[type=range] { width: 104px; height: 20px; margin: 0 4px; accent-color: var(--gl-acc); cursor: pointer; }
+.sh-follow { font: 600 12.5px var(--nx-ui); background: var(--gl-bg); border-color: var(--gl-line); box-shadow: 0 14px 34px rgba(0, 0, 0, .38); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.sh-follow .sh-link { color: var(--gl-acc); }
+@media (max-width: 820px) {
+  .sh-title h1 { font-size: 15px; }
+  .sh-title .sh-line { font-size: 11px; }
+  .sh-zoom input[type=range] { width: 76px; }
+  .sh-bottom .sh-zoom { right: 6px; bottom: calc(100% + 6px); }
+  .sh-follow { top: auto; bottom: 168px; }
+}

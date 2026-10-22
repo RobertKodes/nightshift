@@ -1,4 +1,4 @@
-import type { Station as RoomKey } from "../types";
+import type { Station as RoomKey } from "./types";
 
 /**
  * The ship map as a pixel-art ship (176 × 28 pixels, drawn crisp at an integer scale): three engines with
@@ -27,9 +27,21 @@ const ICON: Record<RoomKey, string[]> = {
 };
 type Dot = { x: number; y: number; tx: number; ty: number };
 
+/** Along the ship (deck y, bow 0 → stern 88) to map x, by the rooms' cells: bow on the right. */
+const KY = [0, 20, 36, 54, 76, 88], KX = [158, 135, 107, 77, 43, 14];
+const lerpK = (v: number, a: number[], b: number[]) => {
+  let i = 0;
+  while (i < a.length - 2 && v > a[i + 1]!) i++;
+  return b[i]! + ((v - a[i]!) / (a[i + 1]! - a[i]!)) * (b[i + 1]! - b[i]!);
+};
+/** A deck point (x across 0..32, y along 0..88) on the map, in map pixels. */
+export const toMap = (fx: number, fy: number): [number, number] => [lerpK(fy, KY, KX), 4 + (fx / 32) * 20];
+/** A map pixel back to the deck. */
+export const fromMap = (mx: number, my: number): [number, number] => [((my - 4) / 20) * 32, lerpK(-mx, KX.map((v) => -v), KY)];
+
 export class Minimap {
   private dots = new Map<RoomKey, Dot[]>();
-  draw(c: CanvasRenderingContext2D, t: number, room: RoomKey, accent: (k: RoomKey) => string, crew: Partial<Record<RoomKey, number>>, mine: Set<RoomKey>) {
+  draw(c: CanvasRenderingContext2D, t: number, room: RoomKey, accent: (k: RoomKey) => string, crew: Partial<Record<RoomKey, number>>, mine: Set<RoomKey>, view?: [number, number][] | null) {
     c.imageSmoothingEnabled = false;
     c.clearRect(0, 0, MAP_W, MAP_H);
     const px = (x: number, y: number, w: number, h: number, col: string) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
@@ -64,6 +76,35 @@ export class Minimap {
       // your crew is here: a yellow flag in the corner
       if (mine.has(k)) { px(x + 1, y + 1, 1, 4, "#fee761"); px(x + 2, y + 1, 2, 2, "#fee761"); }
     }
+    if (view) this.frame(c, view);
+  }
+
+  /**
+   * What the camera sees, as a rectangle on the map: the part of the deck on screen (the screen's footprint on
+   * the deck, cut to the hull), from end to end along the ship and side to side. Not drawn when all of it shows.
+   */
+  private frame(c: CanvasRenderingContext2D, quad: [number, number][]) {
+    let poly = quad;
+    const cut = (keep: (p: [number, number]) => boolean, at: (a: [number, number], b: [number, number]) => [number, number]) => {
+      const out: [number, number][] = [];
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i]!, b = poly[(i + 1) % poly.length]!, ka = keep(a), kb = keep(b);
+        if (ka) out.push(a);
+        if (ka !== kb) out.push(at(a, b));
+      }
+      poly = out;
+    };
+    const ix = (v: number) => (a: [number, number], b: [number, number]): [number, number] => { const t = (v - a[0]) / (b[0] - a[0]); return [v, a[1] + (b[1] - a[1]) * t]; };
+    const iy = (v: number) => (a: [number, number], b: [number, number]): [number, number] => { const t = (v - a[1]) / (b[1] - a[1]); return [a[0] + (b[0] - a[0]) * t, v]; };
+    cut((p) => p[0] >= 0, ix(0)); cut((p) => p[0] <= 32, ix(32)); cut((p) => p[1] >= 0, iy(0)); cut((p) => p[1] <= 88, iy(88));
+    if (poly.length < 3) return;
+    const pts = poly.map(([x, y]) => toMap(x, y)), xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const x0 = Math.floor(Math.min(...xs)), x1 = Math.ceil(Math.max(...xs)), y0 = Math.floor(Math.min(...ys)), y1 = Math.ceil(Math.max(...ys));
+    if (x1 - x0 >= 140 && y1 - y0 >= 19) return;
+    const w = Math.max(3, x1 - x0), h = Math.max(3, y1 - y0);
+    c.fillStyle = "rgba(255,255,255,.1)"; c.fillRect(x0, y0, w, h);
+    c.fillStyle = "#0b0a12"; c.fillRect(x0 - 1, y0 - 1, w + 2, 1); c.fillRect(x0 - 1, y0 + h, w + 2, 1); c.fillRect(x0 - 1, y0, 1, h); c.fillRect(x0 + w, y0, 1, h);
+    c.fillStyle = "#ffffff"; c.fillRect(x0, y0, w, 1); c.fillRect(x0, y0 + h - 1, w, 1); c.fillRect(x0, y0, 1, h); c.fillRect(x0 + w - 1, y0, 1, h);
   }
 }
 const spot = (x: number, y: number, w: number, h: number): [number, number] => [x + 2 + Math.random() * (w - 4), y + h - 2 - Math.random() * Math.min(3, h - 8)];

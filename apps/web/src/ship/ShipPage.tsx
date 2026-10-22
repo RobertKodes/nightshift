@@ -3,24 +3,25 @@ import { NxIcon } from "../nx/icons";
 import { NxTabs, StationBar, rememberRoom } from "../nx/Shell";
 import { Link } from "../router";
 import { useSession } from "../session";
-import { CELLS, MAP_H, MAP_W, Minimap as MapArt } from "./town/minimap";
-import { Town, roomOf } from "./town/town";
+import { CELLS, MAP_H, MAP_W, Minimap as MapArt, fromMap } from "./minimap";
+import { type Labels, ShipScene } from "./scene";
 import { type Crew, FORGE, FORGED_ID, NIGHT_FROGS, type Pick, RARITY_TONE, type ShipStatic, type Snapshot, type SnapFrog, type SnapWatcher, type Station } from "./types";
 import "../nx/nx.css";
 import "./ship.css";
 
 /**
- * THE SHIP: every NIGHT FROG and Night Watcher on the NIGHTSHIFT ship, live. The town (town/) draws one room at a
- * time as pixel art, its real crew walking, working and talking with their onchain faces; this page feeds it the
- * live snapshot and shows what each one is and earns, the signed-in wallet's crew, search and filters, the ship
- * map, and the same crew as a plain list.
+ * THE SHIP: every NIGHT FROG and Night Watcher on the NIGHTSHIFT ship, live. The scene (scene.ts) draws the whole
+ * ship in isometric cross-section with all its crew, whole-body with their onchain faces, at their seats or up and
+ * walking about and talking; this page feeds it the live snapshot and shows what each one is and earns, the
+ * signed-in wallet's crew, search and filters, the ship map with the camera's view on it, and the same crew as a
+ * plain list.
  */
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const fmt = (n: number, d = 1) => n.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: 0 });
 type RoomKey = Station;
 const ROOM_ORDER: RoomKey[] = ["bridge", "quarters", "offices", "breakroom", "missions", "engine", "forge"];
 const ROOM_NAME: Record<RoomKey, string> = { bridge: "Bridge", quarters: "Captain's quarters", offices: "Company offices", breakroom: "Breakroom", missions: "Mission bay", engine: "Engine room", forge: "The Forge" };
-const ACCENT: Record<RoomKey, string> = { bridge: "#4ad8ff", quarters: "#ffc46b", offices: "#a98bff", breakroom: "#ff5ca8", missions: "#b8ff4a", engine: "#ffb547", forge: "#ff7a3d" };
+const ACCENT: Record<RoomKey, string> = { bridge: "#6cc8ee", quarters: "#f2c47e", offices: "#a493f0", breakroom: "#ee7fae", missions: "#b5e37a", engine: "#f2b25e", forge: "#f08a5a" };
 const accent = (k: RoomKey) => ACCENT[k];
 /** The Night Watch's seats on the bridge: 50 Night Watchers, less the 4 Night Bosses' plinths in the quarters. */
 const WATCH_SEATS = 46;
@@ -33,13 +34,21 @@ const FX: Record<string, string> = {
 };
 const BLINKS = new Set(["Heavy Lids", "Wired", "Deadpan Wink", "Acid Glow", "Monocle"]);
 
+/** The room a frog or a Night Watcher is in, by the same rules as the page's counts (null: forged, or unknown). */
+function roomOf(st: ShipStatic, snap: Snapshot | null, key: string): Station | null {
+  if (key.startsWith("w")) { const w = snap?.watchers.find((x) => `w${x.n}` === key); return w ? (w.tier === 5 ? "quarters" : "bridge") : null; }
+  const id = Number(key), row = st.frogs[id - 1], f = snap?.frogs[id - 1];
+  if (!row || f?.dead) return null;
+  return f?.mission && !f.mission.done ? "missions" : st.rules[row[10]!]!.station;
+}
+
 type Filter = { rarity: string; layer: number; value: number; station: string; special: "" | "watchers" | "missions" | "forged"; tier: number; room: "" | RoomKey };
 const NO_FILTER: Filter = { rarity: "", layer: -1, value: -1, station: "", special: "", tier: 0, room: "" };
 
 export function ShipPage() {
   const { address, signIn, busy } = useSession();
   const canvas = useRef<HTMLCanvasElement>(null);
-  const scene = useRef<Town | null>(null);
+  const scene = useRef<ShipScene | null>(null);
   const mainRef = useRef<HTMLElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const botRef = useRef<HTMLDivElement>(null);
@@ -60,6 +69,7 @@ export function ShipPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [stats, setStats] = useState<{ fps: number; ms: number } | null>(null);
+  const [following, setFollowing] = useState<string | null>(null);
   const still = useMemo(() => matchMedia("(prefers-reduced-motion: reduce)").matches, []);
   const canDraw = useMemo(() => { try { return Boolean(document.createElement("canvas").getContext("2d")); } catch { return false; } }, []);
   const wallet = viewing ?? address?.toLowerCase() ?? null;
@@ -86,11 +96,12 @@ export function ShipPage() {
   // the scene
   useEffect(() => {
     if (!st || !canvas.current || view !== "scene" || !canDraw) return;
-    const s = new Town(canvas.current, st, still);
+    const s = new ShipScene(canvas.current, st, still);
     scene.current = s;
-    // ?debug: the town on window, for the frame-rate checks
-    if (new URLSearchParams(location.search).has("debug")) (window as unknown as { __shipScene?: Town }).__shipScene = s;
+    // ?debug: the scene on window, for the frame-rate checks
+    if (new URLSearchParams(location.search).has("debug")) (window as unknown as { __shipScene?: ShipScene }).__shipScene = s;
     s.onRoom = (i) => setRoomInfo(i);
+    s.onFollow = (k) => setFollowing(k);
     if (snap) s.setSnapshot(snap);
     s.onPick = (p) => { setPick(p && p.kind === "room" && pick?.kind !== "room" ? p : p); if (p && p.kind !== "room") setPanel((x) => (x === "filters" ? "none" : x)); };
     s.onHover = (p, x, y) => setHover(p ? { p, x, y } : null);
@@ -138,8 +149,15 @@ export function ShipPage() {
   const selKey = pick?.kind === "frog" ? String(pick.id) : pick?.kind === "watcher" ? `w${pick.n}` : null;
   useEffect(() => { if (scene.current) scene.current.selected = selKey; }, [selKey]);
 
-  // live counts per room, and the rooms the wallet's crew is in
+  // live counts per room, and the rooms the wallet's crew is in; the room labels in the scene
   const rooms = useMemo(() => roomStats(st, snap), [st, snap]);
+  useEffect(() => {
+    if (!scene.current || !rooms) return;
+    const L: Labels = {};
+    for (const k of ROOM_ORDER) L[k] = { title: ROOM_NAME[k].toUpperCase(), line: rooms[k].line };
+    L.drive = { title: "DRIVE", line: "engines · no crew" };
+    scene.current.labels = L;
+  }, [rooms, view, st]);
   const crewRooms = useMemo(() => new Set(st ? crewKeys.map((k) => roomOf(st, snap, k)).filter(Boolean) as RoomKey[] : []), [st, snap, crewKeys]);
 
   // filters and search dim everyone else
@@ -164,6 +182,7 @@ export function ShipPage() {
     setToast("Type a frog number (1-500) or NW and a Night Watcher's number.");
   };
   const flyRoom = (k: RoomKey) => { scene.current?.focusRoom(k); if (pick?.kind === "room") setPick({ kind: "room", station: k }); };
+  const follow = (key: string | null) => { scene.current?.follow(key); };
   const room = roomInfo?.room ?? "bridge", more = roomInfo ? Math.max(0, roomInfo.total - roomInfo.shown) : 0;
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") { setPick(null); setPanel("none"); } };
@@ -181,7 +200,7 @@ export function ShipPage() {
         {view === "scene" && canDraw ? (
           <div className="sh-stage">
             <canvas ref={canvas} className="sh-canvas" tabIndex={0} role="img"
-              aria-label={`The NIGHTSHIFT ship, the ${ROOM_NAME[room]}: ${roomInfo ? `${roomInfo.total} aboard here` : "loading the crew"}${totals ? `, ${totals.held} NIGHT FROGS and ${totals.watchers} Night Watcher${totals.watchers === 1 ? "" : "s"} on the ship` : ""}. Keys 1 to 7 change rooms, arrows move, + and - zoom. The list view shows the same crew as text.`} />
+              aria-label={`The NIGHTSHIFT ship, the whole of it, centred on the ${ROOM_NAME[room]}${rooms ? ` (${rooms[room].crew} aboard there)` : ""}${totals ? `: ${totals.held} NIGHT FROGS and ${totals.watchers} Night Watcher${totals.watchers === 1 ? "" : "s"} on the ship` : ""}. Drag or arrows and W A S D to move, the wheel, pinch or + and - to zoom, double-click a room to fly to it, keys 1 to 7 fly to the rooms, 0 shows the whole ship, F follows the selected frog. The list view shows the same crew as text.`} />
             {!st && !err && <div className="sh-boot"><i /><span>Boarding the ship…</span></div>}
           </div>
         ) : (
@@ -220,16 +239,18 @@ export function ShipPage() {
                 <div className="sh-roomlinks">
                   {more > 0 && <button className="sh-link" onClick={() => { setFilter({ ...NO_FILTER, room }); setView("list"); setPick(null); }}>+{more} more in this room</button>}
                   <button className="sh-link" onClick={() => setPick({ kind: "room", station: room })}>About this room</button>
-                  {st && scene.current && <Loading town={scene.current} />}
+                  {st && scene.current && <Loading scene={scene.current} />}
                 </div>
               </div>
-              <Minimap room={room} rooms={rooms} mine={crewRooms} onGo={flyRoom} />
+              <Minimap room={room} rooms={rooms} mine={crewRooms} onGo={flyRoom} scene={scene} />
             </div>
-            <div className="sh-hud sh-zoom" role="group" aria-label="Zoom">
-              <button onClick={() => scene.current?.zoomBy(2)} aria-label="Zoom in">+</button>
-              <button onClick={() => scene.current?.zoomBy(0.5)} aria-label="Zoom out">−</button>
-              <button onClick={() => scene.current?.fit()} aria-label="Fit the room"><NxIcon name="way" size={15} /></button>
-            </div>
+            <Zoom scene={scene} />
+          </div>
+        )}
+        {view === "scene" && canDraw && following && (
+          <div className="sh-hud sh-follow" role="status">
+            <i className="sh-live" /><span>Following <b>{following === "w0" ? "The Captain" : following.startsWith("w") ? `Night Watcher #${following.slice(1)}` : `#${following}`}</b></span>
+            <button className="sh-link" onClick={() => follow(null)}>Stop <kbd>Esc</kbd></button>
           </div>
         )}
 
@@ -239,7 +260,7 @@ export function ShipPage() {
             onView={(w) => { setViewing(w); flown.current = null; }} onOpen={(p) => open(p)} onFly={() => scene.current?.focusKeys(crewKeys)} onClose={() => setPanel("none")} />
         )}
         {pick && st && (
-          <Card pick={pick} st={st} snap={snap} rooms={rooms} scene={scene.current} onOpen={(p) => open(p)} onClose={() => setPick(null)}
+          <Card pick={pick} st={st} snap={snap} rooms={rooms} scene={scene.current} following={following} onFollow={follow} onOpen={(p) => open(p)} onClose={() => setPick(null)}
             onWallet={(w) => { setViewing(w); flown.current = null; setPanel("crew"); }} />
         )}
         {hover && hover.p.kind !== "room" && !pick && st && <Hover h={hover} st={st} snap={snap} scene={scene.current} />}
@@ -251,9 +272,9 @@ export function ShipPage() {
   );
 }
 
-function Loading({ town }: { town: Town }) {
-  const [n, setN] = useState(town.pending);
-  useEffect(() => { const t = setInterval(() => setN(town.pending), 300); return () => clearInterval(t); }, [town]);
+function Loading({ scene }: { scene: ShipScene }) {
+  const [n, setN] = useState(scene.pending);
+  useEffect(() => { const t = setInterval(() => setN(scene.pending), 300); return () => clearInterval(t); }, [scene]);
   if (!n) return null;
   return <span className="sh-drawing" aria-hidden="true">drawing faces from the onchain art…</span>;
 }
@@ -265,12 +286,17 @@ const MAP: { k: RoomKey; area: string; label: string }[] = [
   { k: "quarters", area: "1 / 5 / 2 / 6", label: "Quarters" }, { k: "offices", area: "2 / 5 / 3 / 6", label: "Offices" },
   { k: "bridge", area: "1 / 6 / 3 / 7", label: "Bridge" },
 ];
-/** The ship map: a pixel-art ship (town/minimap.ts) with a transparent button over each room. */
+/**
+ * The ship map: a pixel-art ship (minimap.ts) with the camera's view framed on it. Press or drag on it to move the
+ * camera there; a button over each room (for keys and screen readers) flies to the room.
+ */
 const MAP_SCALE = 2;
-function Minimap({ room, rooms, mine, onGo }: { room: RoomKey; rooms: Record<RoomKey, RoomStat> | null; mine: Set<RoomKey>; onGo: (k: RoomKey) => void }) {
+type SceneRef = React.MutableRefObject<ShipScene | null>;
+function Minimap({ room, rooms, mine, onGo, scene }: { room: RoomKey; rooms: Record<RoomKey, RoomStat> | null; mine: Set<RoomKey>; onGo: (k: RoomKey) => void; scene: SceneRef }) {
   const cv = useRef<HTMLCanvasElement>(null), art = useMemo(() => new MapArt(), []);
   const live = useRef({ room, rooms, mine });
   live.current = { room, rooms, mine };
+  const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   useEffect(() => {
     const c = cv.current?.getContext("2d");
     if (!c) return;
@@ -278,28 +304,63 @@ function Minimap({ room, rooms, mine, onGo }: { room: RoomKey; rooms: Record<Roo
     let raf = 0, last = 0;
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      if (now - last < 50) return; // 20 frames a second is plenty for a map
+      if (now - last < 33) return; // 30 frames a second is plenty for a map
       last = now;
       const v = live.current, crew = Object.fromEntries(ROOM_ORDER.map((k) => [k, v.rooms?.[k].crew ?? 0]));
-      art.draw(c, still ? 0 : now / 1000, v.room, accent, crew, v.mine);
+      art.draw(c, still ? 0 : now / 1000, v.room, accent, crew, v.mine, scene.current?.viewQuad() ?? null);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [art]);
+  }, [art, scene]);
+  // a point on the map, in map pixels
+  const at = (e: React.PointerEvent) => { const r = e.currentTarget.getBoundingClientRect(); return [((e.clientX - r.left) / r.width) * MAP_W, ((e.clientY - r.top) / r.height) * MAP_H] as const; };
+  const jump = (e: React.PointerEvent, animate: boolean) => { const [mx, my] = at(e), [fx, fy] = fromMap(mx, my); scene.current?.lookAt(Math.max(0, Math.min(32, fx)), Math.max(0, Math.min(88, fy)), animate); };
   return (
-    <nav className="sh-map" aria-label="Ship map: pick a room" style={{ width: MAP_W * MAP_SCALE, height: MAP_H * MAP_SCALE }}>
+    <nav className="sh-map" aria-label="Ship map: press to move there, or pick a room" style={{ width: MAP_W * MAP_SCALE, height: MAP_H * MAP_SCALE }}
+      onPointerDown={(e) => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); press.current = { x: e.clientX, y: e.clientY, moved: false }; jump(e, true); }}
+      onPointerMove={(e) => { const p = press.current; if (!p) return; if (Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y) > 3) p.moved = true; if (p.moved) jump(e, false); }}
+      onPointerUp={() => { press.current = null; }} onPointerCancel={() => { press.current = null; }}>
       <canvas ref={cv} width={MAP_W} height={MAP_H} style={{ width: MAP_W * MAP_SCALE, height: MAP_H * MAP_SCALE }} aria-hidden="true" />
       {MAP.map((m) => {
         const [x, y, w, h] = CELLS[m.k];
         return (
           <button key={m.k} style={{ left: (x - 1) * MAP_SCALE, top: (y - 1) * MAP_SCALE, width: (w + 2) * MAP_SCALE, height: (h + 2) * MAP_SCALE, "--rc": accent(m.k) } as React.CSSProperties}
             className={room === m.k ? "on" : undefined} data-tip={`${m.label}${rooms ? ` · ${rooms[m.k].crew}` : ""}`}
-            aria-current={room === m.k ? "location" : undefined} aria-label={`${ROOM_NAME[m.k]}${rooms ? `, ${rooms[m.k].crew} aboard` : ""}${mine.has(m.k) ? ", your crew is here" : ""} (key ${ROOM_ORDER.indexOf(m.k) + 1})`} onClick={() => onGo(m.k)}>
+            aria-current={room === m.k ? "location" : undefined} aria-label={`${ROOM_NAME[m.k]}${rooms ? `, ${rooms[m.k].crew} aboard` : ""}${mine.has(m.k) ? ", your crew is here" : ""} (key ${ROOM_ORDER.indexOf(m.k) + 1})`}
+            onClick={(e) => { if (e.detail === 0) onGo(m.k); }} onDoubleClick={() => onGo(m.k)}>
             {rooms && <small>{rooms[m.k].crew}</small>}
           </button>
         );
       })}
     </nav>
+  );
+}
+
+/** Zoom: out, a slider (eased, log scale), in, and the whole ship. */
+function Zoom({ scene }: { scene: SceneRef }) {
+  const range = useRef<HTMLInputElement>(null), held = useRef(false);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const s = scene.current, r = range.current;
+      if (!s || !r || held.current) return;
+      const lo = Math.log(s.minZoom()), hi = Math.log(s.maxZoom), v = Math.round(((Math.log(s.cam.z) - lo) / (hi - lo)) * 1000);
+      if (Number(r.value) !== v) r.value = String(v);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [scene]);
+  const set = (v: number) => { const s = scene.current; if (!s) return; const lo = Math.log(s.minZoom()), hi = Math.log(s.maxZoom); s.zoomTo(Math.exp(lo + (v / 1000) * (hi - lo))); };
+  return (
+    <div className="sh-hud sh-zoom" role="group" aria-label="Zoom">
+      <button onClick={() => scene.current?.zoomBy(1 / 1.6)} aria-label="Zoom out" title="Zoom out (−)">−</button>
+      <input ref={range} type="range" min={0} max={1000} defaultValue={200} aria-label="Zoom level"
+        onPointerDown={() => { held.current = true; }} onPointerUp={() => { held.current = false; }} onBlur={() => { held.current = false; }}
+        onInput={(e) => set(Number((e.target as HTMLInputElement).value))} />
+      <button onClick={() => scene.current?.zoomBy(1.6)} aria-label="Zoom in" title="Zoom in (+)">+</button>
+      <button onClick={() => scene.current?.fit()} aria-label="See the whole ship" title="The whole ship (0)"><NxIcon name="way" size={15} /></button>
+    </div>
   );
 }
 
@@ -372,12 +433,15 @@ function Filters({ st, filter, setFilter, count, onClose }: { st: ShipStatic; fi
 }
 
 // ------------------------------------------------------------------ the detail card
-function Card({ pick, st, snap, rooms, scene, onOpen, onClose, onWallet }: { pick: Pick; st: ShipStatic; snap: Snapshot | null; rooms: Record<RoomKey, RoomStat> | null; scene: Town | null; onOpen: (p: Pick) => void; onClose: () => void; onWallet: (w: string) => void }) {
+function Card({ pick, st, snap, rooms, scene, following, onFollow, onOpen, onClose, onWallet }: { pick: Pick; st: ShipStatic; snap: Snapshot | null; rooms: Record<RoomKey, RoomStat> | null; scene: ShipScene | null; following: string | null; onFollow: (k: string | null) => void; onOpen: (p: Pick) => void; onClose: () => void; onWallet: (w: string) => void }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => { ref.current?.focus(); }, [pick]);
   let body: React.ReactNode = null;
-  if (pick.kind === "frog") body = <FrogCard id={pick.id} st={st} snap={snap} onOpen={onOpen} onWallet={onWallet} />;
-  else if (pick.kind === "watcher") body = <WatcherCard n={pick.n} st={st} snap={snap} onOpen={onOpen} onWallet={onWallet} />;
+  const key = pick.kind === "frog" ? String(pick.id) : pick.kind === "watcher" ? `w${pick.n}` : null;
+  const aboard = key !== null && Boolean(scene?.seatOf(key));
+  const fol = key && aboard ? <FollowButton on={following === key} onClick={() => onFollow(following === key ? null : key)} /> : null;
+  if (pick.kind === "frog") body = <FrogCard id={pick.id} st={st} snap={snap} onOpen={onOpen} onWallet={onWallet} follow={fol} />;
+  else if (pick.kind === "watcher") body = <WatcherCard n={pick.n} st={st} snap={snap} onOpen={onOpen} onWallet={onWallet} follow={fol} />;
   else if (pick.kind === "seat") body = <SeatCard seat={pick.seat} st={st} snap={snap} scene={scene} onOpen={onOpen} />;
   else body = <RoomCard k={pick.station} st={st} snap={snap} rooms={rooms} />;
   return (
@@ -395,7 +459,11 @@ function rateLine(f: SnapFrog, snap: Snapshot) {
   return parts.join(" · ");
 }
 
-function FrogCard({ id, st, snap, onOpen, onWallet }: { id: number; st: ShipStatic; snap: Snapshot | null; onOpen: (p: Pick) => void; onWallet: (w: string) => void }) {
+function FollowButton({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return <button className={`nx-btn sh-follow-btn${on ? " on" : ""}`} onClick={onClick} aria-pressed={on} title="Keep the camera on it while it walks about (F)"><NxIcon name="way" size={15} /> {on ? "Following" : "Follow"}</button>;
+}
+
+function FrogCard({ id, st, snap, onOpen, onWallet, follow }: { id: number; st: ShipStatic; snap: Snapshot | null; onOpen: (p: Pick) => void; onWallet: (w: string) => void; follow: React.ReactNode }) {
   const row = st.frogs[id - 1]!, [rank, ri, points] = row as [number, number, number], traits = row.slice(3, 10), rule = st.rules[row[10]!]!;
   const f = snap?.frogs[id - 1], owner = f && f.o >= 0 ? snap!.wallets[f.o]! : null;
   const rarity = st.rarities[ri]!;
@@ -409,6 +477,7 @@ function FrogCard({ id, st, snap, onOpen, onWallet }: { id: number; st: ShipStat
           <h2>#{id}{id === 1 ? " · Zero-Sleep Captain" : ""}</h2>
           <div className="sh-tags"><span className="sh-tag" style={{ "--tc": RARITY_TONE[rarity] } as React.CSSProperties}>{rarity}</span><span className="sh-tag">rank {rank} / 500</span><span className="sh-tag">{points} forge pts</span></div>
           <p className="sh-station" style={{ "--rc": accent(station) } as React.CSSProperties}><i />{f?.dead ? "The Forge's memorial wall" : ROOM_NAME[station]}</p>
+          {follow}
         </div>
       </div>
       {f?.dead ? (
@@ -454,7 +523,7 @@ function Traits({ st, traits, decide }: { st: ShipStatic; traits: number[]; deci
   );
 }
 
-function WatcherCard({ n, st, snap, onOpen, onWallet }: { n: number; st: ShipStatic; snap: Snapshot | null; onOpen: (p: Pick) => void; onWallet: (w: string) => void }) {
+function WatcherCard({ n, st, snap, onOpen, onWallet, follow }: { n: number; st: ShipStatic; snap: Snapshot | null; onOpen: (p: Pick) => void; onWallet: (w: string) => void; follow: React.ReactNode }) {
   const w = snap?.watchers.find((x) => x.n === n) as SnapWatcher | undefined;
   if (!w || !snap) return <p className="sh-fine">Reading Night Watcher #{n}…</p>;
   const owner = w.o >= 0 ? snap.wallets[w.o]! : null;
@@ -468,6 +537,7 @@ function WatcherCard({ n, st, snap, onOpen, onWallet }: { n: number; st: ShipSta
           <h2>{n === 0 ? "The Captain" : `Night Watcher #${n}`}{w.name ? ` · ${w.name}` : ""}</h2>
           <div className="sh-tags"><span className="sh-tag" style={{ "--tc": w.color } as React.CSSProperties}>Tier {tier.roman} · {w.tierName}</span><span className="sh-tag">{w.points} forge pts</span><span className="sh-tag">forged {new Date(w.forgedAt).toISOString().slice(0, 10)}</span></div>
           <p className="sh-station" style={{ "--rc": w.color } as React.CSSProperties}><i />{w.tier === 5 ? "Captain's quarters · a Night Boss plinth" : n === 0 ? "Bridge · the Captain's chair" : "Bridge · Night Watch seat"}</p>
+          {follow}
         </div>
       </div>
       <dl className="sh-nums">
@@ -497,7 +567,7 @@ function WatcherCard({ n, st, snap, onOpen, onWallet }: { n: number; st: ShipSta
   );
 }
 
-function SeatCard({ seat, st, snap, scene, onOpen }: { seat: number; st: ShipStatic; snap: Snapshot | null; scene: Town | null; onOpen: (p: Pick) => void }) {
+function SeatCard({ seat, st, snap, scene, onOpen }: { seat: number; st: ShipStatic; snap: Snapshot | null; scene: ShipScene | null; onOpen: (p: Pick) => void }) {
   const why = scene?.emptyWhy(seat) ?? null;
   const forged = snap?.watchers.filter((w) => w.n !== 0).length ?? 0, bosses = snap?.watchers.filter((w) => w.tier === 5).length ?? 0;
   void st;
@@ -543,7 +613,7 @@ function RoomCard({ k, st, snap, rooms }: { k: RoomKey; st: ShipStatic; snap: Sn
   );
 }
 
-function Hover({ h, st, snap, scene }: { h: { p: Pick; x: number; y: number }; st: ShipStatic; snap: Snapshot | null; scene: Town | null }) {
+function Hover({ h, st, snap, scene }: { h: { p: Pick; x: number; y: number }; st: ShipStatic; snap: Snapshot | null; scene: ShipScene | null }) {
   let t = "";
   if (h.p.kind === "frog") { const row = st.frogs[h.p.id - 1]!, f = snap?.frogs[h.p.id - 1]; t = `#${h.p.id} · ${st.rarities[row[1]!]} · ${f ? `${fmt(f.rate, 2)} h/h` : ""}`; }
   else if (h.p.kind === "watcher") { const n = h.p.n, w = snap?.watchers.find((x) => x.n === n); t = w ? `${n === 0 ? "The Captain" : `Night Watcher #${n}`} · ${w.tierName} · ${fmt(w.rate, 2)} h/h` : ""; }

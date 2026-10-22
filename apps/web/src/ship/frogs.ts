@@ -1,4 +1,4 @@
-import type { ShipStatic } from "../types";
+import type { ShipStatic } from "./types";
 import { C, type Col, Pix, copy, sheet, tone } from "./pix";
 
 /**
@@ -50,11 +50,15 @@ export class Faces {
     if (!this.queued.has(id)) { this.queued.add(id); this.queue.push({ id, key, k }); }
     return null;
   }
-  pump() {
-    while (this.inflight < 4 && this.queue.length) {
+  /** Called when a head is ready (the scene redraws, and re-bakes what it baked without it). */
+  onReady?: (key: Key) => void;
+  /** Forgets a character's head (a Night Watcher's traits came in): drawn again on the next ask. */
+  forget(key: Key) { for (const id of [...this.done.keys()]) if (id.startsWith(`${key}@`)) this.done.delete(id); }
+  pump(max = 4) {
+    while (this.inflight < max && this.queue.length) {
       const j = this.queue.shift()!;
       this.inflight++;
-      void this.make(j.key, j.k).then((h) => { if (h) { this.done.set(j.id, h); this.ready++; } }).catch(() => {}).finally(() => { this.inflight--; this.queued.delete(j.id); });
+      void this.make(j.key, j.k).then((h) => { if (h) { this.done.set(j.id, h); this.ready++; this.onReady?.(j.key); } }).catch(() => {}).finally(() => { this.inflight--; this.queued.delete(j.id); });
     }
   }
 
@@ -165,23 +169,42 @@ export type BodySpec = { k: number; outfit: number; skin: { s: Col; d: Col; l: C
 /** Poses, one column each: idle (breathing in, out), the 4-frame walk, sitting, talking (2 frames of a wave). */
 export const POSES = 9;
 export const P_IDLE = 0, P_WALK = 2, P_SIT = 6, P_TALK = 7;
-export type Frames = { sheet: HTMLCanvasElement; cw: number; ch: number; cx: number; by: number; head: Int8Array; hx: Int8Array };
+/** `acc`: where the held or worn accessory is in each cell (x, y from the cell's top left; -1 when hidden), for its effect. */
+export type Frames = { sheet: HTMLCanvasElement; cw: number; ch: number; cx: number; by: number; head: Int8Array; hx: Int8Array; acc: Int16Array };
 
 export function bodyFrames(b: BodySpec): Frames {
   const k = b.k, cw = Math.ceil(34 * k), ch = Math.ceil(28 * k), cx = Math.floor(cw / 2), by = ch - 1;
-  const s = sheet(cw * POSES, ch * 4), head = new Int8Array(POSES * 4), hx = new Int8Array(POSES * 4);
+  const s = sheet(cw * POSES, ch * 4), head = new Int8Array(POSES * 4), hx = new Int8Array(POSES * 4), acc = new Int16Array(POSES * 4 * 2).fill(-1);
+  const cell = sheet(cw, ch);
   for (let dir = 0; dir < 4; dir++) for (let pose = 0; pose < POSES; pose++) {
-    const cell = sheet(cw, ch);
+    cell.p.g.clearRect(0, 0, cw, ch);
     const right = dir === 1 || dir === 2;
     const yT = paint(cell.p, b, right ? 2 : dir, pose, cx, by, "ink") ;
     paint(cell.p, b, right ? 2 : dir, pose, cx, by, "fill");
     const g = s.p.g;
     if (dir === 1) { g.save(); g.translate(pose * cw + cw, dir * ch); g.scale(-1, 1); g.drawImage(cell.c, 0, 0); g.restore(); }
     else g.drawImage(cell.c, pose * cw, dir * ch);
-    head[dir * POSES + pose] = yT - by;
-    hx[dir * POSES + pose] = dir === 2 ? Math.max(1, Math.round(k)) : dir === 1 ? -Math.max(1, Math.round(k)) : 0;
+    const i = dir * POSES + pose;
+    head[i] = yT - by;
+    hx[i] = dir === 2 ? Math.max(1, Math.round(k)) : dir === 1 ? -Math.max(1, Math.round(k)) : 0;
+    const a = accAt(b, right ? 2 : dir, pose, cx, yT);
+    if (a) { acc[i * 2] = dir === 1 ? cw - 1 - a[0] : a[0]; acc[i * 2 + 1] = a[1]; }
   }
-  return { sheet: s.c, cw, ch, cx, by, head, hx };
+  return { sheet: s.c, cw, ch, cx, by, head, hx, acc };
+}
+
+/** The accessory's point in a cell, by the same geometry `paint` draws it with (null: none, or turned away). */
+function accAt(b: BodySpec, dir: number, pose: number, cx: number, yT: number): [number, number] | null {
+  if (b.tier > 0 || dir === 3 || (b.acc !== 0 && b.acc !== 2 && b.acc !== 3)) return null;
+  const k = b.k, K = (v: number) => Math.max(1, Math.round(v * k)), walk = pose >= P_WALK && pose < P_SIT ? pose - P_WALK : -1;
+  if (dir === 0) {
+    const tw = K(13) + (K(13) % 2), x0 = cx - tw / 2;
+    if (b.acc === 0) return [cx, yT + K(4)];
+    return b.acc === 2 ? [x0 + tw + K(2.5), yT + K(4)] : [x0 + tw + K(2), yT + K(4)];
+  }
+  if (b.acc === 0 || pose >= P_TALK) return null;
+  const aw = K(3), al = K(7), st = K(2), ax = cx - Math.floor(aw / 2) + (walk === 0 ? -st : walk === 2 ? st : 0);
+  return b.acc === 2 ? [ax + aw + K(0.5), yT + al - K(1)] : [ax + aw, yT + al - K(1)];
 }
 
 /**
