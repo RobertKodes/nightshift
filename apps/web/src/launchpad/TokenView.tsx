@@ -45,7 +45,7 @@ export function TokenView({ ref_ }: { ref_: string }) {
             <h1 className="lp-h1">{sym ? `$${sym}` : name}</h1>
             <p className="lp-small">{name}{l?.chain && <> · <i className={`lp-chain ${l.chain}`}>{CHAIN_NAME[l.chain]}</i></>}{l && <> · {l.kind} · {age(l.createdAt)} old</>}{l?.ours && <em className="lp-here">LAUNCHED HERE</em>}</p>
           </div>
-          <span className={`lp-stage ${v.stage}`}>{STAGE[v.stage]}</span>
+          <span className={`lp-stage ${v.stage}`}>{v.stage === "paid" && !v.payment?.state ? "WAITING FOR IMD" : STAGE[v.stage]}</span>
         </header>
         <p className="st-note">{v.stageText}</p>
         {v.coin?.about && <p className="lp-about">{v.coin.about}</p>}
@@ -91,10 +91,10 @@ function Progress({ v }: { v: LaunchView }) {
     <section className="st-panel">
       <h3>Following it at IMD</h3>
       <ol className="lp-steps">
-        <li className={v.payment || v.job ? "ok" : "go"}>Paid with 0.5 IMD {v.payment && <a href={`${EXPLORER[v.payment.chainId] ?? EXPLORER[1]}/tx/${v.payment.tx}`} target="_blank" rel="noreferrer">{short(v.payment.tx)} ↗</a>}</li>
+        <li className={v.job || v.payment?.state ? "ok" : "go"}>{v.payment && !v.payment.state && !v.job ? "Payment sent; IMD has not read it yet" : "Paid with 0.5 IMD"} {v.payment && <a href={`${EXPLORER[v.payment.chainId] ?? EXPLORER[1]}/tx/${v.payment.tx}`} target="_blank" rel="noreferrer">{short(v.payment.tx)} ↗</a>}</li>
         <li className={v.job ? "ok" : v.stage === "refused" ? "bad" : "go"}>{v.stage === "refused" ? `Refused by IMD: ${v.payment?.reason ?? "no reason given"}` : v.job ? <>Admitted by IMD as a job <a href={`https://explorer.imd.fun/jobs/${v.job.id}`} target="_blank" rel="noreferrer">on its explorer ↗</a></> : "Waiting for IMD to admit it"}</li>
         {steps.map((s) => <li key={s.key} className={done(s.state) ? "ok" : s.state === "working" ? "go" : s.state === "failed" ? "bad" : ""}>{s.label} <small>{s.state}</small></li>)}
-        <li className={v.stage === "live" ? "ok" : v.stage === "deploying" ? "go" : ""}>Deployed by IMD with its Uniswap v4 pool</li>
+        <li className={v.stage === "live" ? "ok" : v.stage === "deploying" ? "go" : ""}>{v.launch?.kind === "evm_contracts" ? "Deployed by IMD" : "Deployed by IMD with its Uniswap v4 pool"}</li>
       </ol>
       {v.stage === "needs_input" && v.job?.blockedReason && <div className="lp-refused"><b>The swarm asks:</b><p>{v.job.blockedReason}</p><p className="lp-small">The payer answers it on IMD with a follow-up job (job.continue, 0.5 IMD, from the same wallet), or leaves it. A coin request from this form is IMD's standard one and rarely stops here.</p></div>}
     </section>

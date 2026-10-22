@@ -121,6 +121,8 @@ export function launchpadService(d: LaunchpadDeps) {
   const boards = new TtlCache<Board>(2 * 60_000, 1, d.now);
   const charts = new TtlCache<{ t: number; o: number; h: number; l: number; c: number; v: number }[]>(10 * 60_000, 300, d.now);
   const caps = new TtlCache<Caps>(30 * 60_000, 1, d.now);
+  // a launch page polls every 15 s per viewer: one read of IMD per launch every 10 s, whoever is watching
+  const views = new TtlCache<{ status: number; body: LaunchView | { error: string } }>(10_000, 500, d.now);
   const fetchJson = <T,>(u: string) => d.net.json<T>(u, 15_000);
 
   /** A launch's record: kept 6 hours once it is live (its coin, logo and pool no longer change), 2 minutes before. */
@@ -174,7 +176,10 @@ export function launchpadService(d: LaunchpadDeps) {
 
   /** One launch, from a payment (`tx-<chain>-<hash>`), a launch number, a launch id or a token (`eth-0x…`), to its live pool. */
   async function launch(ref: string): Promise<{ status: number; body: LaunchView | { error: string } }> {
-    const r = ref.trim().toLowerCase();
+    const r = ref.trim().toLowerCase().slice(0, 100);
+    return (await views.get(r, () => follow(r))).v;
+  }
+  async function follow(r: string): Promise<{ status: number; body: LaunchView | { error: string } }> {
     let payment: LaunchView["payment"] = null, job: Job | null = null, rec: LaunchDetail | null = null;
     const tx = r.match(/^tx-(1|4663)-(0x[0-9a-f]{64})$/), tok = r.match(/^(eth|rh)-(0x[0-9a-f]{40})$/);
     if (tx) {
@@ -211,10 +216,10 @@ export function launchpadService(d: LaunchpadDeps) {
 
     const jobState = String(job?.state ?? "").toLowerCase();
     let stage: Stage, stageText: string;
-    if (live) { stage = "live"; stageText = "Live: its pool is open on Uniswap v4."; }
+    if (live) { stage = "live"; stageText = token ? "Live: its pool is open on Uniswap v4." : "Live: IMD deployed its contracts (no token or pool)."; }
     else if (rec?.status === "parked") { stage = "parked"; stageText = `IMD parked this launch: ${rec.parkedReason ?? "no reason given"}.`; }
     else if (payment && !job && payment.state && /refus|reject|fail/.test(payment.state)) { stage = "refused"; stageText = `IMD refused the request: ${payment.reason ?? payment.state}. A refused body is a spent payment.`; }
-    else if (!job) { stage = "paid"; stageText = payment?.state ? "Paid. IMD is admitting the request." : "Paid. Waiting for IMD to read the payment (usually under a minute)."; }
+    else if (!job) { stage = "paid"; stageText = payment?.state ? "Paid. IMD is admitting the request." : "Waiting for IMD to read this payment, usually under a minute. If nothing shows after a few minutes, check the transaction on the explorer."; }
     else if (jobState === "blocked") { stage = "needs_input"; stageText = "The swarm stopped and asks for input."; }
     else if (["failed", "cancelled", "canceled", "rejected"].includes(jobState)) { stage = "failed"; stageText = `The job ended as ${jobState}.`; }
     else if (["completed", "done", "complete"].includes(jobState)) { stage = "deploying"; stageText = "Built and audited. IMD is deploying it with its pool."; }

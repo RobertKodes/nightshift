@@ -2,6 +2,11 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-22 · The Launchpad: launch a coin on IMD, buy it from any chain
+- /launchpad lists every live IMD coin on Ethereum and Robinhood Chain with its price, market cap, liquidity and volume, the coins the swarm is building now, and a "Buy from any chain" button that opens the swap with that coin.
+- Launch your own at /launchpad/new: a short form builds IMD's coin request, IMD checks it for free, and you pay 0.5 IMD from your own wallet. The swarm builds, tests, audits and deploys it with its Uniswap v4 pool, and 1% of every trade goes to you. NIGHTSHIFT takes no launch fee and holds nothing.
+- Each coin has a page that follows its launch through IMD to its pool, then shows its chart, its contracts, IMD's checks and the swap to buy it from Ethereum, Base, Robinhood Chain or Solana.
+
 ## 2026-10-22 · Swap across Ethereum, Base, Robinhood Chain, Solana and into XRP
 - /swap now swaps between Ethereum, Base, Robinhood Chain and Solana, and into XRP on the XRP Ledger. LI.FI and Relay are asked at once, the better route after every fee comes first, your own wallet signs every step, and the page follows the transfer until it lands.
 - NIGHT FROGS and Night Watcher holders pay no NIGHTSHIFT fee: sign in with the wallet that holds one. Everyone else pays 0.25%, shown on its own line next to the provider's fees.

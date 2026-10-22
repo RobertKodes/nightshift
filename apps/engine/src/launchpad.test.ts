@@ -195,6 +195,7 @@ describe("GET /api/launchpad/launch: one launch, followed to its pool", () => {
     expect(v.job?.id).toBe("3d2313bb-d6d8-4b83-b0d8-2964dbc762af");
     expect(v.launch?.launchNumber).toBe(2445);
     expect(v.stage).toBe("live");
+    expect(v.stageText).toMatch(/no token or pool/);
     expect(v.launch?.token).toBeNull();
   });
   it("a payment IMD has not read yet, one being built, one the swarm stopped", async () => {
@@ -209,6 +210,13 @@ describe("GET /api/launchpad/launch: one launch, followed to its pool", () => {
     expect(stopped.stage).toBe("needs_input");
     expect(stopped.job?.blockedReason).toMatch(/needs_input/);
     expect((await svc.launch(`tx-1-${tx("d")}`)).status).toBe(400);
+  });
+  it("reads IMD once per launch every 10 seconds, however many pages poll it", async () => {
+    const f = fake();
+    await f.svc.launch(`tx-1-${RECORDED_TX}`);
+    const n = f.calls.length;
+    await f.svc.launch(`TX-1-${RECORDED_TX.toUpperCase().replace("0X", "0x")}`);
+    expect(f.calls.length).toBe(n);
   });
   it("refuses a reference it does not understand", async () => {
     const { svc } = fake();
