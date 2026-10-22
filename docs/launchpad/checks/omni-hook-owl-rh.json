@@ -1,0 +1,159 @@
+{
+  "checkedAt": "2026-10-22T16:53:56.073Z",
+  "status": 200,
+  "action": "launch.open",
+  "intake": "launch.open@launch-1",
+  "title": "OWL pool on Robinhood Chain: gated v4 hook with a gap fee",
+  "request": {
+    "objective": "The pool of Night Owl (OWL) on Robinhood Chain: two contracts, OmniPoolHook and OmniPoolSeeder, for a Uniswap v4 pool OWL/ETH. OWL here is OmniSpokeToken, a 6-decimals ERC-20 minted only by a Wormhole NTT manager when the same coin is locked on Solana (the pump.fun mint 8QtbrC9d3BezyCwzBFUQbNsWJGte7ckrZ7HWcn81pump); its address is a constructor argument. This pool is the EVM twin of the PumpSwap pool on Solana (program pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA); the two pools are kept at one price by arbitrage keepers, never by a bridge inside a swap.\n\nThe owner is 0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5, set from $owner.\n\nOmniPoolHook (one pool, immutable, the owner has no power over swaps or funds):\n1. Constructor arguments: PoolManager, TOKEN (the spoke token), FEE_TO = 0x1119d5df2f046bc2d3c0f6279ef2e9ce49422d44 (the NIGHTSHIFT FeeSplitter, accepts ETH), GATE (an address that may call open(); the owner sets it once with setGate, only while the pool is closed), OPENS_BY (a timestamp, the earliest the owner may open the pool without proof), REF (optional price-reference contract, may be zero).\n2. Closed until open(): while closed, swaps revert and only the seeder may add liquidity. open() can be called by GATE or, after OPENS_BY, by the owner; it emits Opened(by) and cannot be undone. GATE is the contract that checks that the coin has graduated on pump.fun (ordered separately); the hook knows only its address.\n3. Fees, taken in ETH through the hook's return deltas and sent to FEE_TO in the same swap: a base hook fee FEE_BPS = 25 (0.25%) on every swap's ETH amount, plus a gap fee. The gap fee reads GAP() on REF: it returns the signed price gap in basis points between this pool and the Solana pool, with a timestamp. If REF is zero or its answer is older than 60 seconds or the call reverts, the gap fee is 0 and trading is unaffected. A swap that moves this pool's price toward the reference (that closes the gap) pays an extra gapFee = min(|gap| x 50%, 500) basis points of its ETH amount; a swap that widens the gap pays nothing extra. Nobody can make the hook revert a swap through REF.\n4. Events: FeeTaken(address indexed sender, bool buy, uint256 baseFee, uint256 gapFee, int256 gapBps).\n5. Swaps work through the Uniswap v4 Universal Router with empty hookData and are quotable by the V4 Quoter, so intent routers can buy from other chains.\n6. No oracle is needed for safety: with REF zero the hook is a plain 0.25% hook. Immutable, no upgrade, no pause, no admin function except setGate once and open-by-owner after OPENS_BY. It holds no funds between swaps.\n\nOmniPoolSeeder (one-shot helper): the owner calls seed(tokenAmount, startSqrtPriceX96, tickLower, tickUpper) with ETH attached after sending OWL to it; it initialises the pool with the hook, a fixed LP fee of 1.00% (fee 10000, tick spacing 200), adds one liquidity position with all of its ETH and tokens, and sends the position to the owner. It can run once. The LP position belongs to the owner; nothing locks it unless the owner chooses a lock later.\n\nThe hook's address needs the Uniswap v4 permission bits it uses (beforeAddLiquidity, beforeSwap and afterSwap with return deltas); the deploy script mines a CREATE2 salt for them with a known deployer and the tests prove the address bits. Foundry tests on a real v4-core PoolManager: closed pool reverts swaps and allows seeding; open() by GATE, by the owner only after OPENS_BY, by nobody else; base fee 0.25% on buys and sells, exact-input and exact-output; gap fee zero without REF, with a stale REF and with a reverting REF; gap fee only on swaps that close the gap, capped at 500 bps; fees arrive at FEE_TO; nothing stays in the hook; a second pool reverts; seeder runs once and hands over the position; fuzz on amounts and gaps.",
+    "onchain": "evm_contracts",
+    "chainId": 4663,
+    "owner": "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5"
+  },
+  "response": {
+    "action": "launch.open",
+    "kind": "contracts",
+    "plan": [
+      {
+        "title": "Build and test the contracts",
+        "short": "contracts",
+        "skill": "build-contract-project",
+        "stage": 0
+      },
+      {
+        "title": "Test them, as another agent",
+        "short": "tests",
+        "skill": "write-foundry-tests",
+        "stage": 1
+      },
+      {
+        "title": "Write what to deploy",
+        "short": "",
+        "stage": 1
+      },
+      {
+        "title": "Audit the math, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the permissions, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the economics, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the control flow, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Judge the audit: reproduce, merge and rank what was found",
+        "short": "judge",
+        "skill": "audit-judge",
+        "stage": 2
+      },
+      {
+        "title": "Deploy on Robinhood Chain",
+        "short": "deploy"
+      }
+    ],
+    "facts": [
+      {
+        "id": "what",
+        "label": "What each contract does",
+        "state": "stated",
+        "required": false,
+        "example": "e.g. a vault: deposit ETH, withdraw after a lock"
+      },
+      {
+        "id": "access",
+        "label": "Who can call what",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: an owner who can change settings, and anyone for everything else.",
+        "example": "e.g. only the owner sets the fee; anyone deposits"
+      },
+      {
+        "id": "numbers",
+        "label": "Numbers the contracts enforce",
+        "state": "stated",
+        "required": false,
+        "assumed": "The builders will choose limits, ratios and durations and write them in the README. Fee rates and prices they will not choose: name them.",
+        "example": "e.g. 0.3% fee, 7-day lock, max 10 ETH per wallet"
+      },
+      {
+        "id": "upgrades",
+        "label": "Upgrades and pausing",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: not upgradeable and not pausable.",
+        "example": "e.g. not upgradeable; owner can pause"
+      },
+      {
+        "id": "dependencies",
+        "label": "Outside services and values",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: none beyond standard libraries.",
+        "example": "e.g. Chainlink VRF subscription 1234, or: the owner sets the feed after launch"
+      },
+      {
+        "id": "recipient",
+        "label": "Who receives fees and payouts",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: the launch's owner, the wallet that pays.",
+        "example": "e.g. 0x1f9a…c3e2, or: the wallet that pays"
+      },
+      {
+        "id": "token_name",
+        "label": "Token name",
+        "state": "not_applicable",
+        "required": false,
+        "example": "e.g. Signal"
+      },
+      {
+        "id": "token_symbol",
+        "label": "Token symbol",
+        "state": "not_applicable",
+        "required": false,
+        "example": "e.g. SIG"
+      },
+      {
+        "id": "token_supply",
+        "label": "Total supply",
+        "state": "not_applicable",
+        "required": false,
+        "example": "e.g. 1,000,000"
+      },
+      {
+        "id": "token_minting",
+        "label": "Minting after launch",
+        "state": "not_applicable",
+        "required": false,
+        "assumed": "Assumed: a fixed supply that nobody can mint more of.",
+        "example": "e.g. fixed supply, nobody mints more"
+      },
+      {
+        "id": "token_rules",
+        "label": "Transfer rules",
+        "state": "not_applicable",
+        "required": false,
+        "assumed": "Assumed: plain transfers with no fee or limit.",
+        "example": "e.g. plain transfers, no fee"
+      }
+    ],
+    "judged": true,
+    "blockers": [],
+    "suggestions": []
+  }
+}

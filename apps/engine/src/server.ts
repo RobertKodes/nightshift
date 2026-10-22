@@ -53,6 +53,7 @@ import { CHANNELS } from "@nightshift/core";
 import { walletConfig } from "./wallet-config.js";
 import { swapRoutes } from "./swap.js";
 import { launchpadRoutes } from "./launchpad.js";
+import { omniRoutes } from "./omni.js";
 import { usdc } from "@nightshift/core";
 import { erc20Abi, getAddress, parseAbi } from "viem";
 import { serviceRoutes, useServices } from "./services/routes.js";
@@ -551,6 +552,7 @@ export function serve(engine: Engine) {
       // the multichain swap: NIGHTSHIFT's fee for the signed-in wallet, LI.FI and Relay routes, transfer status
       if (p.startsWith("/api/swap/") && await swapRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/launchpad/") && await launchpadRoutes(req, res, p, { json, body, limited, url })) return;
+      if (p.startsWith("/api/omni/") && await omniRoutes(req, res, p, { json, limited, url })) return;
       if (p.startsWith("/api/forge") && await forgeRoutes(req, res, p, { json, limited, url, owner })) return;
       if (p.startsWith("/api/ship") && await shipRoutes(req, res, p, { json, limited, url, companies: () => [...engine.store.companies.values()] })) return;
       if ((p.startsWith("/api/watch") || p.startsWith("/nightwatch/")) && await watchRoutes(req, res, p, { json, body, limited, url })) return;

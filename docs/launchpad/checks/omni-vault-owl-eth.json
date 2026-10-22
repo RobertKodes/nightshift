@@ -1,0 +1,159 @@
+{
+  "checkedAt": "2026-10-22T16:54:21.210Z",
+  "status": 200,
+  "action": "launch.open",
+  "intake": "launch.open@launch-1",
+  "title": "OWL sync vault (bounded inventory for LP-sync keepers)",
+  "request": {
+    "objective": "OmniSyncVault on Ethereum: a bounded inventory vault for LP-sync keepers of OWL (the bridged twin of pump.fun coin 8QtbrC9d3BezyCwzBFUQbNsWJGte7ckrZ7HWcn81pump). Keepers trade the one OWL/ETH Uniswap v4 pool against the Solana pool and move inventory over Wormhole NTT; the vault lets depositors fund them without handing over keys. Constructor arguments: PoolManager and the pool key (token OWL, ETH, fee 10000, tick spacing 200, the OmniPoolHook), TOKEN, NTT_MANAGER (the Wormhole NttManager), SOLANA_RECIPIENT (a 32-byte Solana address that receives every bridge transfer), KEEPER_CAP = 5.\n\nNo token is created: shares are internal accounting in the vault, not an ERC-20, not transferable, with no name, symbol or supply. Depositors. deposit() payable and depositToken(amount) credit shares: ETH shares and OWL shares are two separate claims, each over its own balance, so the vault never values the token in ETH through a price feed. withdraw(ethShares, tokenShares) pays out pro rata at any time, never more than the vault holds right now; funds that are away on the Solana side are claimed when they return. No fee on deposits or withdrawals.\n\nKeepers. The owner 0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5 adds up to KEEPER_CAP keeper addresses (addKeeper, removeKeeper; removal is immediate). A keeper can only: (1) swap exactly through the one pool with the vault's own funds, each swap at most MAX_SWAP = 2 ETH (or the same value in OWL, measured by the swap itself), at most 10 ETH of volume per rolling 24 hours, with a minimum output the keeper passes; the vault requires its total value in ETH terms (ETH balance plus OWL balance priced at the pool's price after the swap) not to fall by more than 0.5% of the vault's value per swap and 3% per 24 hours, otherwise the swap reverts; (2) send OWL to SOLANA_RECIPIENT through NTT_MANAGER.transfer (at most 500,000 OWL per transfer and 2,000,000 per 24 hours), never to any other address or chain; (3) trigger receipt of what NTT delivers to the vault. A keeper cannot withdraw, approve, or send anything to an address that is not the pool, the NTT manager or SOLANA_RECIPIENT. Keepers earn KEEPER_BPS = 2000 (20%) of the vault's realised profit in ETH terms, measured against a high-water mark, paid on harvest(); losses are shared by depositors.\n\nSafety. The owner can pause keepers (pauseKeepers), never deposits or withdrawals, and cannot change SOLANA_RECIPIENT, the pool, NTT_MANAGER, caps or KEEPER_BPS: they are immutable. No upgrade, no sweep or rescue function. Events for every deposit, withdrawal, swap, bridge send, receipt and harvest. Foundry tests on a real v4-core PoolManager and a mock NttManager: every cap at its exact boundary, a keeper trying to send to another address, a swap that loses more than 0.5%, share maths with fuzz, withdrawal while funds are away, pause, harvest with the high-water mark, reentrancy.",
+    "onchain": "evm_contracts",
+    "chainId": 1,
+    "owner": "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5"
+  },
+  "response": {
+    "action": "launch.open",
+    "kind": "contracts",
+    "plan": [
+      {
+        "title": "Build and test the contracts",
+        "short": "contracts",
+        "skill": "build-contract-project",
+        "stage": 0
+      },
+      {
+        "title": "Test them, as another agent",
+        "short": "tests",
+        "skill": "write-foundry-tests",
+        "stage": 1
+      },
+      {
+        "title": "Write what to deploy",
+        "short": "",
+        "stage": 1
+      },
+      {
+        "title": "Audit the math, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the permissions, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the economics, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the control flow, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Judge the audit: reproduce, merge and rank what was found",
+        "short": "judge",
+        "skill": "audit-judge",
+        "stage": 2
+      },
+      {
+        "title": "Deploy on Ethereum mainnet",
+        "short": "deploy"
+      }
+    ],
+    "facts": [
+      {
+        "id": "what",
+        "label": "What each contract does",
+        "state": "stated",
+        "required": false,
+        "example": "e.g. a vault: deposit ETH, withdraw after a lock"
+      },
+      {
+        "id": "access",
+        "label": "Who can call what",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: an owner who can change settings, and anyone for everything else.",
+        "example": "e.g. only the owner sets the fee; anyone deposits"
+      },
+      {
+        "id": "numbers",
+        "label": "Numbers the contracts enforce",
+        "state": "stated",
+        "required": false,
+        "assumed": "The builders will choose limits, ratios and durations and write them in the README. Fee rates and prices they will not choose: name them.",
+        "example": "e.g. 0.3% fee, 7-day lock, max 10 ETH per wallet"
+      },
+      {
+        "id": "upgrades",
+        "label": "Upgrades and pausing",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: not upgradeable and not pausable.",
+        "example": "e.g. not upgradeable; owner can pause"
+      },
+      {
+        "id": "dependencies",
+        "label": "Outside services and values",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: none beyond standard libraries.",
+        "example": "e.g. Chainlink VRF subscription 1234, or: the owner sets the feed after launch"
+      },
+      {
+        "id": "recipient",
+        "label": "Who receives fees and payouts",
+        "state": "unknown",
+        "required": false,
+        "assumed": "Assumed: the launch's owner, the wallet that pays.",
+        "example": "e.g. 0x1f9a…c3e2, or: the wallet that pays"
+      },
+      {
+        "id": "token_name",
+        "label": "Token name",
+        "state": "not_applicable",
+        "required": false,
+        "example": "e.g. Signal"
+      },
+      {
+        "id": "token_symbol",
+        "label": "Token symbol",
+        "state": "not_applicable",
+        "required": false,
+        "example": "e.g. SIG"
+      },
+      {
+        "id": "token_supply",
+        "label": "Total supply",
+        "state": "not_applicable",
+        "required": false,
+        "example": "e.g. 1,000,000"
+      },
+      {
+        "id": "token_minting",
+        "label": "Minting after launch",
+        "state": "not_applicable",
+        "required": false,
+        "assumed": "Assumed: a fixed supply that nobody can mint more of.",
+        "example": "e.g. fixed supply, nobody mints more"
+      },
+      {
+        "id": "token_rules",
+        "label": "Transfer rules",
+        "state": "not_applicable",
+        "required": false,
+        "assumed": "Assumed: plain transfers with no fee or limit.",
+        "example": "e.g. plain transfers, no fee"
+      }
+    ],
+    "judged": true,
+    "blockers": [],
+    "suggestions": []
+  }
+}

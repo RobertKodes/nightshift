@@ -1,0 +1,57 @@
+{
+  "checkedAt": "2026-10-22T16:54:23.261Z",
+  "status": 200,
+  "action": "job.open",
+  "intake": "job.open@job-1",
+  "title": "OWL LP-sync keeper: gap monitor and trade planner",
+  "request": {
+    "objective": "Write the off-chain LP-sync keeper library for Night Owl (OWL): TypeScript (Node 22, viem, plain fetch, no other runtime dependency), a read-only price-gap monitor first and a trade planner second, with tests.\n\nRead side, all with plain JSON-RPC and no API key beyond the RPC URLs passed in: (1) the Solana price of the coin: the PumpSwap pool of mint 8QtbrC9d3BezyCwzBFUQbNsWJGte7ckrZ7HWcn81pump (program pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA) read from the pool account (8-byte discriminator, bump u8, index u16, then creator, base mint, quote mint, lp mint, base vault, quote vault, each a 32-byte key) and the two vault token balances: price = quote vault balance / base vault balance (quote is wrapped SOL with 9 decimals, base has 6 decimals); before graduation the pump.fun bonding curve 26fbbjPUhTPVTyaiEUENhQBWPf2XhaRUAVh9z4evBHW9 (price = virtual SOL reserves / virtual token reserves, same decimals; 166-byte layout: 8-byte discriminator, five u64 reserves and supply, bool complete at offset 48); (2) the EVM price from the Uniswap v4 pool state by StateView slot0 on Ethereum, converted with SOL/ETH from a price source passed in as a function (the default medians two public APIs and rejects a stale or missing answer); (3) gap = EVM price / Solana price - 1 in basis points.\n\nPlan side: given the gap, the pool fees (1.00% pool and 0.25% hook on the EVM side; PumpSwap's LP and protocol fees plus the creator fee, passed in as numbers), the bridge fee and the gas, plan_trade returns the direction (buy EVM, bridge, sell Solana; or the reverse), the size that maximises expected profit under constant-product maths on both pools, the expected profit after costs, and returns null when the profit is below MIN_PROFIT_BPS, the size is above MAX_SIZE, either price is older than 30 seconds, or the pump coin has not graduated. It never signs or sends anything: it returns the planned calls as data that a separate executor would run, with the vault's caps respected as inputs.\n\nTests with recorded real answers (a graduated curve, a PumpSwap pool, a v4 slot0) served by a fake fetch, and property tests: the planner never returns a trade whose modelled profit is negative; the modelled profit matches a brute-force search within 1%; refusal cases. Provide a CLI \"gap\" that prints the two prices and the gap once. No secrets in code, no network calls in tests.",
+    "shape": "chain",
+    "steps": [
+      {
+        "skill": "scaffold-project"
+      },
+      {
+        "skill": "adversarial-review"
+      }
+    ],
+    "github": true
+  },
+  "response": {
+    "action": "job.open",
+    "kind": "other",
+    "plan": [
+      {
+        "title": "Build a working project from an empty tree — its layout, its build configuration, and the thing itself",
+        "short": "scaffold-project",
+        "skill": "scaffold-project",
+        "stage": 0
+      },
+      {
+        "title": "Audit them, as another agent",
+        "short": "review",
+        "skill": "adversarial-review",
+        "stage": 1
+      }
+    ],
+    "facts": [
+      {
+        "id": "token_name",
+        "label": "Token name",
+        "state": "not_applicable",
+        "required": false,
+        "example": "e.g. Signal"
+      },
+      {
+        "id": "token_symbol",
+        "label": "Token symbol",
+        "state": "not_applicable",
+        "required": false,
+        "example": "e.g. SIG"
+      }
+    ],
+    "judged": true,
+    "blockers": [],
+    "suggestions": []
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "checkedAt": "2026-10-22T16:53:52.605Z",
+  "status": 200,
+  "action": "launch.open",
+  "intake": "launch.open@launch-1",
+  "title": "OWL on Ethereum: the bridged token (Wormhole NTT spoke)",
+  "request": {
+    "objective": "The Ethereum end of one coin that also lives on Solana: Night Owl (OWL), a pump.fun coin whose Solana mint is 8QtbrC9d3BezyCwzBFUQbNsWJGte7ckrZ7HWcn81pump. Contract OmniSpokeToken, an ERC-20 for Wormhole Native Token Transfers in burning mode: the Solana side locks the coin, this side mints exactly what is locked and burns it when it goes back.\n\nToken facts: name Night Owl, symbol OWL, 6 decimals (the same as the Solana mint, so no rounding on the bridge), plain ERC-20 transfers with no fee, tax, limit, blocklist, pause or permit. Total supply: 0 at deployment, then only what the minter mints; a hard cap in the constructor, immutable CAP = 1000000000000000 base units (1,000,000,000 OWL, what exists on Solana), and mint reverts above it. Minting after launch is the point of this token and is allowed to exactly one address, the minter.\n\nRoles. The owner and creator is 0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5 (set in the constructor as owner). The minter starts as the zero address. The owner may call setMinter(address) while the token is not sealed, then seal() once, which permanently freezes the minter and removes every owner function (the owner can never change the minter again, and nothing else is owner-only). Wormhole's NttManager is set as the minter by the owner, then the token is sealed, in one sitting after the NTT CLI deploys the manager. Events: MinterSet(address), Sealed().\nInterface required by Wormhole NTT in burning mode: mint(address to, uint256 amount) callable only by the minter; burn(uint256 amount) burns the caller's own tokens; plus the standard ERC-20 views. No other function can create or destroy tokens, and burn can only burn the caller's own balance.\n\nFoundry tests: only the minter mints; mint above CAP reverts (test the exact boundary and a fuzz over many mints); setMinter and seal are owner-only; after seal the owner cannot change the minter and has no callable function; burn burns only the caller's balance; ERC-20 behaviour; no ETH is accepted. The contract holds no funds and has no dependencies on any outside address.",
+    "onchain": "evm_contracts",
+    "chainId": 1,
+    "owner": "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5"
+  },
+  "response": {
+    "action": "launch.open",
+    "kind": "contracts",
+    "plan": [
+      {
+        "title": "Build and test the contracts",
+        "short": "contracts",
+        "skill": "build-contract-project",
+        "stage": 0
+      },
+      {
+        "title": "Test them, as another agent",
+        "short": "tests",
+        "skill": "write-foundry-tests",
+        "stage": 1
+      },
+      {
+        "title": "Write what to deploy",
+        "short": "",
+        "stage": 1
+      },
+      {
+        "title": "Audit the math, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the permissions, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the economics, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the control flow, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Judge the audit: reproduce, merge and rank what was found",
+        "short": "judge",
+        "skill": "audit-judge",
+        "stage": 2
+      },
+      {
+        "title": "Deploy on Ethereum mainnet",
+        "short": "deploy"
+      }
+    ],
+    "facts": [
+      {
+        "id": "what",
+        "label": "What each contract does",
+        "state": "stated",
+        "required": false,
+        "example": "e.g. a vault: deposit ETH, withdraw after a lock"
+      },
+      {
+        "id": "access",
+        "label": "Who can call what",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: an owner who can change settings, and anyone for everything else.",
+        "example": "e.g. only the owner sets the fee; anyone deposits"
+      },
+      {
+        "id": "numbers",
+        "label": "Numbers the contracts enforce",
+        "state": "stated",
+        "required": false,
+        "assumed": "The builders will choose limits, ratios and durations and write them in the README. Fee rates and prices they will not choose: name them.",
+        "example": "e.g. 0.3% fee, 7-day lock, max 10 ETH per wallet"
+      },
+      {
+        "id": "upgrades",
+        "label": "Upgrades and pausing",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: not upgradeable and not pausable.",
+        "example": "e.g. not upgradeable; owner can pause"
+      },
+      {
+        "id": "dependencies",
+        "label": "Outside services and values",
+        "state": "unknown",
+        "required": false,
+        "assumed": "Assumed: none beyond standard libraries.",
+        "example": "e.g. Chainlink VRF subscription 1234, or: the owner sets the feed after launch"
+      },
+      {
+        "id": "recipient",
+        "label": "Who receives fees and payouts",
+        "state": "unknown",
+        "required": false,
+        "assumed": "Assumed: the launch's owner, the wallet that pays.",
+        "example": "e.g. 0x1f9a…c3e2, or: the wallet that pays"
+      },
+      {
+        "id": "token_name",
+        "label": "Token name",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. Signal"
+      },
+      {
+        "id": "token_symbol",
+        "label": "Token symbol",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. SIG"
+      },
+      {
+        "id": "token_supply",
+        "label": "Total supply",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. 1,000,000"
+      },
+      {
+        "id": "token_minting",
+        "label": "Minting after launch",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: a fixed supply that nobody can mint more of.",
+        "example": "e.g. fixed supply, nobody mints more"
+      },
+      {
+        "id": "token_rules",
+        "label": "Transfer rules",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: plain transfers with no fee or limit.",
+        "example": "e.g. plain transfers, no fee"
+      }
+    ],
+    "judged": true,
+    "blockers": [],
+    "suggestions": []
+  }
+}
