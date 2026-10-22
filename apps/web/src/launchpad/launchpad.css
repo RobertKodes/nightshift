@@ -4,7 +4,7 @@
 .lp-deck a { color: inherit; }
 .lp-h1 { margin: 4px 0 0; font: 400 clamp(40px, 8vw, 72px)/1 var(--serif); letter-spacing: -.02em; overflow-wrap: anywhere; }
 .lp-small { margin: 0; font-size: 13px; line-height: 1.5; color: var(--dim); }
-.lp-small code, .lp-dl code { font-size: 12px; }
+.lp-small code, .lp-dl code { font-size: 12px; white-space: nowrap; }
 .lp-link { padding: 0; border: 0; background: none; color: #cdbfff; font: 600 13px Inter, sans-serif; cursor: pointer; text-align: left; }
 .lp-link:hover { text-decoration: underline; }
 .lp-here { margin-left: 8px; padding: 2px 6px; border-radius: 999px; font: 600 9px var(--mono); font-style: normal; letter-spacing: .1em; vertical-align: 2px; background: rgba(184, 255, 74, .14); color: #b8ff4a; }
@@ -126,7 +126,9 @@
 .lp-links a { padding: 6px 12px; border: 1px solid var(--s-line); border-radius: 999px; font: 600 12.5px Inter, sans-serif; color: #cdbfff; }
 .lp-two { display: grid; gap: 14px; }
 .lp-col { display: grid; gap: 14px; align-content: start; min-width: 0; }
-@media (min-width: 1000px) { .lp-two { grid-template-columns: minmax(0, 1fr) 440px; align-items: start; } .lp-buybox { position: sticky; top: 84px; } }
+/* phones: the buy first, under the coin's numbers, so the swap's button at the bottom of the screen sits next to its form */
+.lp-two > .lp-buybox { order: -1; }
+@media (min-width: 1000px) { .lp-two { grid-template-columns: minmax(0, 1fr) 440px; align-items: start; } .lp-two > .lp-buybox { order: 0; position: sticky; top: 84px; } }
 .lp-buybox { display: grid; gap: 10px; min-width: 0; padding: 16px; border: 1px solid rgba(164, 139, 255, .35); border-radius: 14px; background: var(--s-bg); }
 .lp-buybox h3 { margin: 0; font: 600 17px Inter, sans-serif; }
 .lp-buybox .ms { grid-template-columns: minmax(0, 1fr) !important; }
