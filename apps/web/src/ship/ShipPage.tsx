@@ -185,6 +185,7 @@ export function ShipPage() {
               <br /><b className="sh-acc">{fmt(totals.perHour, 1)}</b> shift hours an hour{totals.onMissions ? <> · <b>{totals.onMissions}</b> out on missions</> : null}
             </p>
           ) : <p className="sh-line">{err ?? "Reading the crew from Ethereum…"}</p>}
+          {snap && <ShipLog snap={snap} now={now} />}
         </section>
 
         <section className="sh-hud sh-tools" aria-label="Find on the ship">
@@ -573,3 +574,20 @@ function ListView({ st, snap, matches, q, onOpen }: { st: ShipStatic | null; sna
   );
 }
 void CW; void CH;
+
+/** The ship's log: its latest real events (forges, missions leaving, the hourly shift-hours credit), newest first. */
+function ShipLog({ snap, now }: { snap: Snapshot; now: number }) {
+  const ms = (v: number) => (v > 1e12 ? v : v * 1000);
+  const rows: { at: number; text: string }[] = [
+    ...snap.watchers.map((w) => ({ at: ms(w.forgedAt), text: `Night Watcher #${w.n} forged · ${w.tierName}` })),
+    ...snap.frogs.filter((f) => f.mission && !f.mission.done).map((f) => ({ at: ms(f.mission!.since), text: `#${f.id} left on ${f.mission!.title}` })),
+    ...(snap.stakingAt ? [{ at: ms(snap.stakingAt), text: "Shift hours credited to the crew" }] : []),
+  ].filter((r) => r.at > 0 && r.at <= now + 60_000).sort((a, b) => b.at - a.at).slice(0, 4);
+  if (!rows.length) return null;
+  const ago = (t: number) => { const m = Math.max(0, Math.round((now - t) / 60_000)); return m < 1 ? "now" : m < 60 ? `${m}m` : m < 2880 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
+  return (
+    <ol className="sh-log" aria-label="Ship log">
+      {rows.map((r, i) => <li key={i}><time>{ago(r.at)}</time>{r.text}</li>)}
+    </ol>
+  );
+}

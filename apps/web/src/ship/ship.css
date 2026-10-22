@@ -159,3 +159,7 @@
 }
 @media (prefers-reduced-motion: reduce) { .sh-live, .sh-boot i { animation: none; } }
 .sh-card-top .sh-kicker { letter-spacing: .12em; font-size: 9.5px; white-space: nowrap; }
+/* the ship's log under the title: its latest real events */
+.sh-log { list-style: none; margin: 10px 0 0; padding: 8px 0 0; border-top: 1px solid rgba(184, 255, 74, .18); display: grid; gap: 3px; font: 500 11.5px/1.35 'JetBrains Mono', ui-monospace, monospace; color: #b9b4d3; }
+.sh-log time { display: inline-block; min-width: 3.4em; color: #b8ff4a; }
+@media (max-width: 700px) { .sh-log li:nth-child(n+3) { display: none; } }

@@ -2,6 +2,7 @@ import { BACK, FRONT, type Piece as FPiece, SPILL, coffee, driveCoil, furnace, h
 import { blink, fxLight, fxSolid, sparkle, watcherBack, watcherFront } from "./fx";
 import { type Ctx, HZ, P, RX, RY, alpha, disc, glow, rad } from "./iso";
 import { STATIC, WORLD_BOX, ring } from "./paint";
+import { Life } from "./life";
 import { Space } from "./space";
 import { type SpriteKey, Sprites } from "./sprites";
 import type { Pick, ShipStatic, Snapshot, Station } from "./types";
@@ -39,6 +40,10 @@ export class ShipScene {
   private tiles = new Map<string, Tile>();
   private tileQueue: string[] = [];
   private ents: Ent[] = [];
+  /** The walking, talking crew (an AI-town layer over the seated ship). */
+  private life = new Life(SEATS);
+  private walkable = new Map<number, string>();
+  private away = new Set<number>();
   private occ = new Map<number, Occ>();
   private empty = new Map<number, string>();
   private keyToSeat = new Map<string, number>();
@@ -120,8 +125,9 @@ export class ShipScene {
     const put = (seat: Seat, o: Occ | null, why?: string) => {
       if (o) { this.occ.set(seat.i, o); this.keyToSeat.set(String(o.key), seat.i); } else if (why) this.empty.set(seat.i, why);
     };
+    this.walkable.clear();
     for (const k of Object.keys(byStation) as Station[]) {
-      byStation[k].forEach((id, j) => { const seat = CREW_SEATS[k][j]; if (seat) put(seat, away.has(id) ? null : frog(id), away.get(id)); });
+      byStation[k].forEach((id, j) => { const seat = CREW_SEATS[k][j]; if (seat) { put(seat, away.has(id) ? null : frog(id), away.get(id)); if (!away.has(id)) this.walkable.set(seat.i, String(id)); } });
     }
     // the Captain's chair: #1, or The Captain once #1 is forged
     const captain = snap?.watchers.find((w) => w.n === 0);
@@ -485,6 +491,9 @@ export class ShipScene {
     this.drawPortrait(c);
     const devH = SH * z * d;
     const fxOn = this.quality >= 1 && devH > 22, big = devH > 70;
+    const ms = performance.now();
+    if (!this.still) this.life.step(ms, this.snap, this.walkable, (i) => this.onScreen(SEATS[i]!), this.quality >= 2 ? 24 : this.quality === 1 ? 10 : 0);
+    this.away = baked ? new Set() : this.life.away();
     let drawn = 0;
     this.jobs.length = 0;
     for (const e of this.ents) {
@@ -494,6 +503,7 @@ export class ShipScene {
       if (!F.noSeats) this.drawSeat(c, e.seat!, tt, devH, fxOn && !F.noFx, big, baked && !LIVE.has(e.seat!.kind) ? "overlay" : "live");
     }
     this.stats.drawn = drawn;
+    if (!F.noSeats && !this.still) this.drawWalkers(c, tt, ms, devH);
     // the characters' light and trait effects, over the scene in one pass
     const prev = c.globalCompositeOperation;
     const fine = this.quality >= 2 || big;
@@ -508,6 +518,7 @@ export class ShipScene {
     this.overFx(c, tt);
     c.setTransform(d, 0, 0, d, 0, 0);
     this.drawLabels(c, tt);
+    if (!this.still) this.drawBubbles(c, ms);
     this.grade(c);
   }
 
@@ -517,7 +528,8 @@ export class ShipScene {
    */
   private drawSeat(c: CanvasRenderingContext2D, s: Seat, t: number, devH: number, fxOn: boolean, big: boolean, mode: "live" | "bake" | "overlay" = "live") {
     const [bx, by] = P(s.x, s.y, s.z);
-    const o = this.occ.get(s.i);
+    // a frog out walking leaves its seat (live drawing only: a baked tile keeps it)
+    const o = mode === "live" && this.away.has(s.i) ? undefined : this.occ.get(s.i);
     const key = o ? String(o.key) : "";
     const dim = o && this.match ? !this.match(key) : this.match !== null && !o;
     if (mode === "overlay") {
@@ -942,6 +954,51 @@ export class ShipScene {
   }
 
   // ------------------------------------------------------------------ labels and grading, in CSS px
+  private onScreen(s: Seat) { const [x, y] = this.toScreen(...P(s.x, s.y, s.z)); return x > -30 && x < this.w + 30 && y > -30 && y < this.h + 30; }
+
+  /** The walkers: each hops along its route with a shadow under it, drawn over the floor. */
+  private drawWalkers(c: CanvasRenderingContext2D, t: number, ms: number, devH: number) {
+    for (const w of this.life.walkers) {
+      const o = this.occ.get(w.seat);
+      if (!o) continue;
+      const p = this.life.where(w, ms), [x, y] = P(p.x, p.y, w.z);
+      const hop = p.moving ? Math.abs(Math.sin(t * 9 + w.ph * 6.28)) * 6 : Math.sin(t * 2 + w.ph * 6.28) * 0.6;
+      const ww = SW * 0.92, hh = SH * 0.92;
+      c.fillStyle = "rgba(0,0,0,.35)"; c.beginPath(); c.ellipse(x, y + 1, ww * 0.26 * (1 - hop / 24), ww * 0.11, 0, 0, Math.PI * 2); c.fill();
+      this.sprites.draw(c, o.key, x - ww / 2, y - hh + 2 - hop, ww, hh, hh * this.cam.z * this.dpr, o.skin);
+      if (this.selected === String(o.key) || this.crew.has(String(o.key))) { c.strokeStyle = this.selected === String(o.key) ? "#ffffff" : "#b8ff4a"; c.lineWidth = 1.5 / this.cam.z; c.beginPath(); c.ellipse(x, y + 1, ww * 0.3, ww * 0.13, 0, 0, Math.PI * 2); c.stroke(); }
+      void devH;
+    }
+  }
+
+  /** Speech bubbles over the crew: short lines with the ship's live numbers, fading in and out. */
+  private drawBubbles(c: CanvasRenderingContext2D, ms: number) {
+    const z = this.cam.z;
+    if (z < 0.42) return;
+    const fs = Math.round(Math.max(10, Math.min(13, 9 + z * 2.4)));
+    c.font = `600 ${fs}px 'JetBrains Mono', ui-monospace, monospace`;
+    c.textBaseline = "middle";
+    c.textAlign = "left";
+    for (const b of this.life.bubbles) {
+      if (ms < b.from) continue;
+      let wx: number, wy: number;
+      if (b.walker) { const p = this.life.where(b.walker, ms); [wx, wy] = P(p.x, p.y, b.walker.z); }
+      else { const s = SEATS[b.seat!]!; if (this.away.has(s.i)) continue; [wx, wy] = P(s.x, s.y, s.z + (SEAT_LIFT[s.kind] ?? 0)); }
+      const [sx, sy0] = this.toScreen(wx, wy), sy = sy0 - SH * 0.92 * z - 8;
+      if (sx < -120 || sx > this.w + 120 || sy < -40 || sy > this.h + 40) continue;
+      const a = Math.min(1, (ms - b.from) / 220, (b.until - ms) / 320);
+      if (a <= 0) continue;
+      const tw = c.measureText(b.text).width, pw = tw + 16, ph = fs + 12;
+      c.globalAlpha = a;
+      c.fillStyle = "rgba(8,7,20,.9)"; c.strokeStyle = b.tone; c.lineWidth = 1.2;
+      c.beginPath(); c.roundRect(sx - pw / 2, sy - ph, pw, ph, 6); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(sx - 5, sy - 0.5); c.lineTo(sx, sy + 6); c.lineTo(sx + 5, sy - 0.5); c.closePath(); c.fill();
+      c.beginPath(); c.moveTo(sx - 5, sy); c.lineTo(sx, sy + 6); c.lineTo(sx + 5, sy); c.stroke();
+      c.fillStyle = "#ecebf3"; c.fillText(b.text, sx - tw / 2, sy - ph / 2);
+    }
+    c.globalAlpha = 1;
+  }
+
   private drawLabels(c: CanvasRenderingContext2D, t: number) {
     const z = this.cam.z;
     c.textBaseline = "middle";
