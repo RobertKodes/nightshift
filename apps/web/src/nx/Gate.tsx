@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BLUESKY_URL, Crescent, TELEGRAM_URL, X_URL, useSwarm } from "../landing/chrome";
+import { BLUESKY_URL, Crescent, TELEGRAM_URL, TIKTOK_URL, X_URL, useSwarm } from "../landing/chrome";
 import { Link, go } from "../router";
 import { NxIcon } from "./icons";
 import { ROOMS, WAYS, type Way } from "./map";
@@ -202,6 +202,7 @@ export function Gate() {
           <Link to="/story">The story</Link>
           <a href={X_URL} target="_blank" rel="noreferrer" aria-label="X">X</a>
           <a href={TELEGRAM_URL} target="_blank" rel="noreferrer" aria-label="Telegram">TG</a>
+          <a href={TIKTOK_URL} target="_blank" rel="noreferrer" aria-label="TikTok">TIKTOK</a>
         </nav>
         <InstallButton compact />
       </header>
@@ -236,7 +237,7 @@ export function Gate() {
 
       <footer className="nx-gate-foot">
         <span>{ov?.frogs ? `${ov.frogs.minted}/${ov.frogs.max} NIGHT FROGS` : "NIGHT FROGS onchain"} · {ov?.stakedPct != null ? `${ov.stakedPct.toFixed(1)}% of $SHIFT staked` : "$SHIFT on Ethereum"} · powered by the IMD swarm</span>
-        <nav><a href={X_URL} target="_blank" rel="noreferrer">X</a><a href={TELEGRAM_URL} target="_blank" rel="noreferrer">Telegram</a><a href={BLUESKY_URL} target="_blank" rel="noreferrer">Bluesky</a></nav>
+        <nav><a href={X_URL} target="_blank" rel="noreferrer">X</a><a href={TELEGRAM_URL} target="_blank" rel="noreferrer">Telegram</a><a href={TIKTOK_URL} target="_blank" rel="noreferrer">TikTok</a><a href={BLUESKY_URL} target="_blank" rel="noreferrer">Bluesky</a></nav>
       </footer>
       <NxTabs room={null} />
     </div>
