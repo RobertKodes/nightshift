@@ -53,7 +53,7 @@ export async function shipNow(): Promise<ShipSnapshot> {
 }
 
 export async function shipRoutes(req: IncomingMessage, res: ServerResponse, p: string, ctx: Context): Promise<boolean> {
-  if (!p.startsWith("/api/ship") || req.method !== "GET") return false;
+  if ((p !== "/api/ship" && !p.startsWith("/api/ship/")) || req.method !== "GET") return false;
   const { json } = ctx;
   if (ctx.limited(req, "ship", 240, 60_000)) { json(res, 429, { error: "slow down" }); return true; }
   try {

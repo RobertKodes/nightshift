@@ -118,3 +118,29 @@ describe("a wallet's crew", () => {
     expect(crewOf(s, C, { hours: 0, rank: null, companies: 0, baseSlots: 5, frogSlots: 2 })).toMatchObject({ frogs: [], slots: 5, forge: null });
   });
 });
+
+describe("the Ship's routes", () => {
+  const call = async (p: string, url = `http://x${p}`) => {
+    const { shipRoutes } = await import("./ship-routes.js");
+    let status = 0, body = "", headers: Record<string, string> = {};
+    const res = { writeHead: (s: number, h: Record<string, string>) => { status = s; headers = h; }, end: (b: string) => { body = b; } };
+    const ctx = { json: (_r: unknown, s: number, b: unknown) => { status = s; body = JSON.stringify(b); }, limited: () => false, url: new URL(url), companies: () => [] };
+    const handled = await shipRoutes({ method: "GET" } as never, res as never, p, ctx as never);
+    return { handled, status, body, headers };
+  };
+  it("serves the art and the table, cached for a day, and nothing else under another method", async () => {
+    const r = await call("/api/ship/art");
+    expect(r.status).toBe(200);
+    expect(r.headers["cache-control"]).toContain("max-age=86400");
+    const s = JSON.parse(r.body);
+    expect(s.frogs).toHaveLength(500);
+    expect(s.rules[s.frogs[0][10]].station).toBe("bridge");
+    const { shipRoutes } = await import("./ship-routes.js");
+    expect(await shipRoutes({ method: "POST" } as never, {} as never, "/api/ship", {} as never)).toBe(false);
+    expect(await shipRoutes({ method: "GET" } as never, {} as never, "/api/shipping", {} as never)).toBe(false);
+  });
+  it("refuses a crew read for something that is not a wallet", async () => {
+    const r = await call("/api/ship/crew", "http://x/api/ship/crew?wallet=nope");
+    expect(r.status).toBe(400);
+  });
+});

@@ -2,6 +2,11 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-22 · THE SHIP: every NIGHT FROG and Night Watcher, live
+- /ship is the NIGHTSHIFT ship as one live isometric scene: all 500 NIGHT FROGS and every forged Night Watcher at the station their traits fit, each drawn from its own onchain art and doing what its traits do: laser eyes fire, crowns sparkle, coffee steams, Night Watchers glow in their tier colour.
+- Tap a frog for its art, rarity, traits and what it earns an hour (its multiplier, crew boost and IMD seat), its missions and its holder. Sign in and the ship lights up your crew, flies to it and adds up your shift hours, with the best forge for your frogs.
+- Live from Ethereum: holders and rates, frogs out on missions, the forge's memorial wall of the frogs it burned, and the Night Watch radar drawing every open imdUSD loan. A list view shows the same crew as text.
+
 ## 2026-10-22 · The Launchpad: launch a coin on IMD, buy it from any chain
 - /launchpad lists every live IMD coin on Ethereum and Robinhood Chain with its price, market cap, liquidity and volume, the coins the swarm is building now, and a "Buy from any chain" button that opens the swap with that coin.
 - Launch your own at /launchpad/new: a short form builds IMD's coin request, IMD checks it for free, and you pay 0.5 IMD from your own wallet. The swarm builds, tests, audits and deploys it with its Uniswap v4 pool, and 1% of every trade goes to you. NIGHTSHIFT takes no launch fee and holds nothing.
