@@ -164,6 +164,10 @@ export class Town {
       }
     }
     out.sort((a, b) => a.score - b.score);
+    // the watch in view: the Captain and up to 8 Night Watchers (the wallet's first), the rest are counted
+    let seen = 0;
+    const kept = out.filter((m) => !m.tier || m.captain || ++seen <= 8);
+    out.length = 0; out.push(...kept);
     riders.sort((a, b) => a.score - b.score);
     // as many as the room has places for: its work spots and a dozen more for the ones on a break
     const work = this.def ? this.def.spots.filter((sp) => sp.kind === "work" || sp.kind === "hammer").length : 14;

@@ -507,7 +507,7 @@ const bridge: Build = (st) => {
   R.block(8, 3, 5, 3);
   R.hots.push({ r: [rx + 6, ry + 6, 70, 32], pick: () => ({ kind: "room", station: "bridge" }), label: "The radar: every open imdUSD loan worth a liquidation" });
   // the Night Watch stands its watch round the radar, each seat a plate in the floor
-  for (const [tx, ty, f] of [[8, 2, 0], [12, 2, 0], [7, 3, 2], [13, 3, 1], [7, 5, 2], [13, 5, 1], [9, 6, 3], [11, 6, 3]] as [number, number, Dir][]) {
+  for (const [tx, ty, f] of [[8, 2, 0], [12, 2, 0], [6, 4, 2], [14, 4, 1], [8, 7, 3], [12, 7, 3]] as [number, number, Dir][]) {
     R.spot(tx, ty, f, false, "watch");
     const cx = tx2x(tx) + 8, cy = ty2y(ty) + 12;
     R.p.ell(cx, cy, 8, 3, C.ink); R.p.ell(cx, cy, 7, 2, C.slate); R.p.ell(cx, cy - 1, 5, 1, C.fog); R.p.p(cx, cy, C.cyan);
