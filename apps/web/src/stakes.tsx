@@ -5,7 +5,7 @@ import { Icon } from "./Icon";
 import { api as session, authHeaders } from "./api";
 import { chooseWallet, knownWallet } from "./wallet";
 import { type Step, canBatch, sendSteps } from "./batch";
-import { useMyStakes } from "./games/staked";
+import { isClosedHere, markClosed, useMyStakes } from "./games/staked";
 import "./stakes.css";
 
 /**
@@ -101,6 +101,9 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
   const [step, setStep] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [ask, setAsk] = useState<Ask | null>(null);
+  // said once a cancel or refund lands, and a fresh read of the wallet's balance
+  const [done, setDone] = useState<string | null>(null);
+  const [fresh, setFresh] = useState(0);
   const [now, setNow] = useState(() => Date.now() / 1000);
   const seated = useRef(false), seat = useRef(onSeat);
   seat.current = onSeat;
@@ -119,7 +122,7 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     const t = setInterval(read, 30_000);
     void knownWallet().then(async (p) => { if (!p || !alive) return; const id = Number(await p.request({ method: "eth_chainId" }).catch(() => "0x1")); if (alive) setChainOk(id === 1); }).catch(() => {});
     return () => { alive = false; clearInterval(t); };
-  }, [address, token]);
+  }, [address, token, fresh]);
   const invited = new URLSearchParams(location.search).get("accept");
 
   const confirm = (title: string, lines: [string, string][]) => new Promise<boolean>((resolve) => setAsk({ title, lines, resolve }));
@@ -135,7 +138,7 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
   const known = useMyStakes();
   useEffect(() => {
     if (mineId) return;
-    const c = known.find((x) => x.game === game && !x.seat && (x.you === "A" || x.joining) && (x.status === "pending" || x.status === "open"));
+    const c = known.find((x) => x.game === game && !x.seat && (x.you === "A" || x.joining) && (x.status === "pending" || x.status === "open") && !isClosedHere(x.matchId));
     if (c) track(c.matchId);
   }, [known, mineId, game]);
 
@@ -145,7 +148,7 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     const load = async () => {
       setNow(Date.now() / 1000);
       const r = await games<{ challenges: ChallengeView[] }>(`challenges?game=${game}`).catch(() => null);
-      if (alive && r) setList(r.challenges);
+      if (alive && r) setList(r.challenges.filter((c) => !isClosedHere(c.matchId)));
       if (!mineId) return;
       const c = await games<ChallengeView>(`challenge/${mineId}`).catch(() => null);
       if (!alive || !c) return;
@@ -167,7 +170,7 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
   }, [game, mineId]);
 
   const run = async (label: string, f: () => Promise<void>) => {
-    setErr(null); setStep(label);
+    setErr(null); setDone(null); setStep(label);
     try { await f(); } catch (e) { setErr(errText(e)); } finally { setStep(null); }
   };
   /** The approval of exactly `stake` to the escrow, only if the allowance is short. */
@@ -232,7 +235,13 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     await mainnetOnly(w);
     const h = await w.writeContract({ account: a, chain: mainnet, address: ESCROW, abi: ABI, functionName: kind, args: [mineId] });
     if ((await rpc.waitForTransactionReceipt({ hash: h })).status !== "success") throw new Error(`The ${kind} failed.`);
+    markClosed(mineId);
+    // the server reads it from the receipt now, so every lobby drops it (it would trail the chain by ~30 s)
+    void games(`challenge/${mineId}/closed`, { tx: h }).catch(() => {});
+    setList((l) => l.filter((c) => c.matchId !== mineId));
     track(null);
+    setFresh((n) => n + 1);
+    setDone(`${kind === "cancel" ? "Challenge cancelled" : "Stake refunded"}: ${mine.amount} ${tokenLabel(mine.token)} is back in your wallet.`);
   });
 
   // the creator waits for a rival; a joiner (not player A) waits for the chain to confirm the join; then both for the table
@@ -273,6 +282,7 @@ export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, the
     <button type="button" className="sk-btn primary" disabled={!live || !!step || !!waiting || short_} onClick={() => void create()}><Icon name={live ? "swords" : "lock"} size={18} /><span>{step ?? (live ? "OPEN THE CHALLENGE" : "NOT OPEN YET")}</span></button>
     {step && <p className="sk-note" role="status">{step} Check your wallet app: it shows the contract {short(ESCROW)} and exactly {amount} {tokenLabel(token)}.</p>}
     {err && <p className="sk-err" role="alert">{err}</p>}
+    {done && !step && <p className="sk-note sk-good" role="status"><Icon name="check" size={13} /> {done}</p>}
 
     <div className="sk-row"><span className="sk-kicker">OPEN CHALLENGES</span><span className="sk-limits">{list.length || "none yet"}</span></div>
     {sorted.length ? <ul className="sk-list">{sorted.map((c) => <li key={c.matchId} className={c.matchId === invited ? "sk-invited" : undefined}>

@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Address, type Hex, concat, encodeAbiParameters, hashTypedData, keccak256, parseSignature, recoverAddress, recoverTypedDataAddress, stringToHex, toHex } from "viem";
+import { type Address, type Hex, concat, encodeAbiParameters, encodeEventTopics, hashTypedData, keccak256, parseSignature, recoverAddress, recoverTypedDataAddress, stringToHex, toHex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { beforeAll, describe, expect, it } from "vitest";
 import type * as EscrowModule from "./escrow.js";
@@ -28,6 +28,29 @@ function setup(o: { live?: boolean; now?: number } = {}) {
   const escrow = new E.Escrow({ file: join(mkdtempSync(join(tmpdir(), "escrow-")), "escrow.json"), client: f.client, signer, relay: f.relay, now: () => now });
   return { f, escrow, signer, sec: () => Math.floor(now / 1000), advance: (ms: number) => { now += ms; }, now: () => now };
 }
+
+describe("a cancel the player just mined", () => {
+  it("closes the challenge from its receipt before the follower reaches the block, and only for this match", async () => {
+    const { f, escrow, sec } = setup();
+    const r = await escrow.create(A, { game: "pinball", token: "IMD", amount: "2", name: "Pearl" });
+    const id = r.matchId as Hex;
+    f.open(id, E.TOKENS.IMD, 2n * IMD, E.GAMES.pinball, A, sec());
+    await escrow.sync();
+    expect(escrow.open()).toHaveLength(1);
+    const raw = (matchId: Hex, address: string = E.ESCROW) => ({ address, topics: encodeEventTopics({ abi: E.ESCROW_ABI, eventName: "Cancelled", args: { matchId } }) as Hex[], data: "0x" as Hex, blockNumber: f.s.block + 1n, transactionHash: `0x${"cd".repeat(32)}` as Hex, logIndex: 0 });
+    // a reverted tx, another match's cancel, or the event from another contract: still open
+    f.s.receipts.set(`0x${"01".repeat(32)}`, { status: "reverted", logs: [raw(id)] });
+    f.s.receipts.set(`0x${"02".repeat(32)}`, { status: "success", logs: [raw(`0x${"ee".repeat(32)}`)] });
+    f.s.receipts.set(`0x${"03".repeat(32)}`, { status: "success", logs: [raw(id, C)] });
+    for (const tx of ["01", "02", "03", "04"]) await escrow.closedBy(id, `0x${tx.repeat(32)}` as Hex);
+    expect(escrow.open()).toHaveLength(1);
+    // its own cancel, mined but not yet confirmed for the follower: closed at once
+    f.s.receipts.set(`0x${"05".repeat(32)}`, { status: "success", logs: [raw(id)] });
+    await escrow.closedBy(id, `0x${"05".repeat(32)}` as Hex);
+    expect(escrow.open()).toHaveLength(0);
+    expect(escrow.challenges.get(id.toLowerCase())?.closed?.kind).toBe("cancelled");
+  });
+});
 
 describe("game result signatures", () => {
   it("signs exactly the contract's hashResult digest (EIP-712, NightshiftGames v2, chain 1)", async () => {

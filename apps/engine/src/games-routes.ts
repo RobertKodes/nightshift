@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { formatUnits } from "viem";
+import { type Hex, formatUnits } from "viem";
 import { isAdmin } from "./admin.js";
 import { chess, STAKED_SHOW_MS, type TimeControl } from "./chess.js";
 import { createStaked as pinballStaked } from "./pinball.js";
@@ -149,7 +149,7 @@ export async function gamesRoutes(req: IncomingMessage, res: ServerResponse, p: 
       if (limited(req, "games-action", 60, 60_000)) return reply(429, { error: "Slow down" });
       return reply(200, await escrow.signature(result[1]!.toLowerCase(), owner));
     }
-    const route = /^\/api\/games\/challenge\/(0x[0-9a-fA-F]{64})(?:\/(accept|seat|signature))?$/.exec(p);
+    const route = /^\/api\/games\/challenge\/(0x[0-9a-fA-F]{64})(?:\/(accept|seat|signature|closed))?$/.exec(p);
     if (!route) return reply(404, { error: "No such games route" });
     const matchId = route[1]!.toLowerCase(), action = route[2];
     if (!MATCH_ID.test(matchId)) return reply(404, { error: "No such match" });
@@ -166,6 +166,14 @@ export async function gamesRoutes(req: IncomingMessage, res: ServerResponse, p: 
     }
     if (action === "seat") { escrow.poke(); return reply(200, l.seat(matchId, owner)); }
     if (action === "signature") return reply(200, await escrow.signature(matchId, owner));
+    // the player's own cancel or refund, just mined: read from its receipt so the lobbies drop it now
+    if (action === "closed") {
+      const b = await body(req, 500), tx = String(b.tx ?? "");
+      if (!/^0x[0-9a-fA-F]{64}$/.test(tx)) return reply(400, { error: "tx must be a transaction hash" });
+      await escrow.closedBy(matchId, tx as Hex);
+      const c = escrow.challenges.get(matchId);
+      return c ? reply(200, escrow.view(c, owner)) : reply(404, { error: "No such match" });
+    }
     return reply(404, { error: "No such games route" });
   } catch (err) {
     if (err instanceof GameError) return reply(err.status, { error: err.message });

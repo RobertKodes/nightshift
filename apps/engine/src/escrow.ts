@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Address, type Hex, type LocalAccount, formatUnits, getAddress, parseAbi, parseUnits, stringToHex } from "viem";
+import { type Address, type Hex, type LocalAccount, formatUnits, getAddress, parseAbi, parseEventLogs, parseUnits, stringToHex } from "viem";
 import { writeAtomic } from "./atomic.js";
 import { eth } from "./chain.js";
 import { CONTROLS } from "./chess.js";
@@ -99,6 +99,8 @@ export type Reader = {
   getBlockNumber(): Promise<bigint>;
   getLogs(a: { address: Address; events: typeof EVENTS; fromBlock: bigint; toBlock: bigint }): Promise<EscrowLog[]>;
   readContract(a: { address: Address; abi: typeof ESCROW_ABI; functionName: string; args?: readonly unknown[] }): Promise<unknown>;
+  /** A mined transaction, for a cancel or refund a player tells us about before the follower reaches its block. */
+  getTransactionReceipt?(a: { hash: Hex }): Promise<{ status: string; logs: { address: string; topics: readonly Hex[]; data: Hex; blockNumber: bigint | null; transactionHash: Hex | null; logIndex: number | null }[] }>;
 };
 export type RelayCall = { matchId: Hex; winner: Address; draw: boolean; deadline: bigint; signature: Hex };
 export type ChainState = { at: number; signer: string; paused: boolean; live: boolean; limits: Record<Token, { min: bigint; max: bigint }> };
@@ -402,6 +404,22 @@ export class Escrow {
       this.#save();
     }
     return { escrow: ESCROW, matchId: c.matchId, winner: getAddress(c.result.winner), draw: c.result.draw, deadline: c.result.deadline, signature: c.result.signature };
+  }
+
+  /**
+   * A cancel or refund the player just mined, read from its own receipt on chain: the challenge closes now,
+   * not ~30 s later when the follower's confirmed blocks reach it (its lobby and everyone else's showed it open
+   * until then). Only this match's Cancelled or Refunded event from GameEscrow counts; the follower applies it
+   * again later, harmlessly.
+   */
+  async closedBy(matchId: string, tx: Hex): Promise<void> {
+    const c = this.challenges.get(matchId.toLowerCase());
+    if (!c || c.closed || !this.o.client.getTransactionReceipt) return;
+    const r = await this.o.client.getTransactionReceipt({ hash: tx }).catch(() => null);
+    if (!r || r.status !== "success") return;
+    const logs = parseEventLogs({ abi: ESCROW_ABI, eventName: ["Cancelled", "Refunded"], logs: r.logs.filter((x) => lc(x.address) === ESCROW) as never });
+    for (const l of logs) if (lc((l.args as { matchId: string }).matchId) === c.matchId) await this.#apply({ eventName: l.eventName, args: l.args as Record<string, unknown>, blockNumber: l.blockNumber, transactionHash: l.transactionHash, logIndex: l.logIndex });
+    if (c.closed) this.#save();
   }
 
   /** Polls the chain every 10 s. */

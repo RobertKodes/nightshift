@@ -48,13 +48,27 @@ function alertReady(s: MyStake): void {
 }
 export const seatPath = (s: Pick<MyStake, "game" | "matchId">) => `/games/${s.game}?seat=${s.matchId}`;
 
+/**
+ * Matches this browser just cancelled or refunded: hidden at once everywhere, because the server reads the
+ * chain about 30 s behind (it waits for 2 blocks) and would show them as still open until then.
+ */
+const CLOSED = "ns-closed";
+const closed: Map<string, number> = (() => { try { return new Map(Object.entries(JSON.parse(sessionStorage.getItem(CLOSED) ?? "{}") as Record<string, number>)); } catch { return new Map(); } })();
+export const isClosedHere = (matchId: string): boolean => { const at = closed.get(matchId.toLowerCase()); return at !== undefined && Date.now() - at < 15 * 60_000; };
+export function markClosed(matchId: string): void {
+  closed.set(matchId.toLowerCase(), Date.now());
+  try { sessionStorage.setItem(CLOSED, JSON.stringify(Object.fromEntries(closed))); } catch { /* private window: this tab still knows */ }
+  st.list = st.list.filter((c) => !isClosedHere(c.matchId));
+  publish();
+}
+
 async function load(): Promise<void> {
   try {
     const r = await fetch("/api/games/mine", { headers: authHeaders() });
     if (!r.ok) return;
     const j = await r.json() as { matches: MyStake[]; now: number };
     st.skew = j.now - Date.now();
-    st.list = j.matches;
+    st.list = j.matches.filter((c) => !isClosedHere(c.matchId));
     for (const s of st.list) if (s.seat && !seated.has(s.matchId)) alertReady(s);
     publish();
   } catch { /* the next poll */ }

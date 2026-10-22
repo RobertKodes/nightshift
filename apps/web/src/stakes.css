@@ -15,6 +15,7 @@
 .sk-note a, .sk-result a { color: var(--sk-hi); }
 .sk-fine { font-size: 10px; }
 .sk-bad { color: var(--sk-bad); }
+.sk-good { color: #b8ff4a; }
 .sk-err { margin: 0; color: var(--sk-bad); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .sk-btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 0 16px; border: 1px solid var(--sk-line); background: rgba(124, 92, 255, .12); color: inherit; font: 700 12px "JetBrains Mono", ui-monospace, monospace; letter-spacing: .12em; cursor: pointer; text-align: center; }
 .sk-nc .sk-btn { border-radius: 10px; }

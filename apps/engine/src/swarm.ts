@@ -284,8 +284,8 @@ export async function forgeBuild(): Promise<Build[]> {
     const job = await admittedJob(p).catch(() => undefined);
     if (!job) return { key, title: o.title, stage: "paid, waiting for IMD to start it", job: null };
     const j = await fetch(`https://api.imd.fun/jobs/${job}`, { signal: AbortSignal.timeout(10_000) }).then((r) => r.json()).catch(() => null) as (Job & { job?: Job }) | null;
-    const st = String((j?.job ?? j)?.state ?? "").toLowerCase();
-    const stage = DONE.has(st) ? "built and audited, deploying" : ["failed", "cancelled", "canceled", "rejected", "blocked"].includes(st) ? "paused: ordered again soon" : "the swarm is building it";
+    const st = String((j?.job ?? j)?.state ?? "").toLowerCase(), live = LIVE.has(String((j?.job ?? j)?.launch?.status ?? "").toLowerCase());
+    const stage = live ? "live on Ethereum" : DONE.has(st) ? "built and audited, deploying" : ["failed", "cancelled", "canceled", "rejected", "blocked"].includes(st) ? "paused: ordered again soon" : "the swarm is building it";
     return { key, title: o.title, stage, job };
   }));
   build = { at: Date.now(), rows };

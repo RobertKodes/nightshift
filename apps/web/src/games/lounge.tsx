@@ -4,7 +4,7 @@ import { go, Link, useRoute } from "../router";
 import { useSession } from "../session";
 import { type ChallengeView, StakeResult, tokenLabel } from "../stakes";
 import { type LiveGame, LiveRow } from "./live";
-import { seatPath, useMyStakes } from "./staked";
+import { isClosedHere, seatPath, useMyStakes } from "./staked";
 import { nameOr } from "./handle";
 import "./lounge.css";
 
@@ -207,7 +207,7 @@ export function Lounge({ game, create = false, onSeat }: { game?: Game; create?:
     onSeat(g.game, r.match.id, r.player);
   });
   const open = (l?.open ?? []).filter((g) => !game || g.game === game);
-  const challenges = (l?.challenges ?? []).filter((c) => !game || c.game === game);
+  const challenges = (l?.challenges ?? []).filter((c) => (!game || c.game === game) && !isClosedHere(c.matchId));
   const stakes = useMyStakes().filter((c) => !game || c.game === game);
   const live = (l?.live ?? []).filter((g) => !game || g.game === game);
   const waiting = l ? (game === "pinball" ? l.waiting.pinball : game === "pool" ? l.waiting.pool ?? 0 : game === "poker" ? l.waiting.poker ?? 0 : game === "chess" ? Object.values(l.waiting.chess).reduce((a, b) => a + b, 0) : open.length) : 0;

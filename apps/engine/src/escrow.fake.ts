@@ -9,11 +9,13 @@ export function fakeChain(o: { signer: string; paused?: boolean }) {
     matches: new Map<string, OnChainMatch>(),
     logs: [] as EscrowLog[],
     relayed: [] as RelayCall[],
+    receipts: new Map<string, { status: string; logs: { address: string; topics: readonly Hex[]; data: Hex; blockNumber: bigint | null; transactionHash: Hex | null; logIndex: number | null }[] }>(),
   };
   const zero = "0x0000000000000000000000000000000000000000" as Address;
   const client: Reader = {
     getBlockNumber: async () => s.block,
     getLogs: async (a) => { if (a.address !== ESCROW) throw new Error("wrong address"); return s.logs.filter((l) => l.blockNumber! >= a.fromBlock && l.blockNumber! <= a.toBlock); },
+    getTransactionReceipt: async ({ hash }) => { const r = s.receipts.get(hash); if (!r) throw new Error("no receipt"); return r; },
     readContract: async (a) => {
       if (a.address !== ESCROW) throw new Error("wrong address");
       if (a.functionName === "signer") return s.signer;
