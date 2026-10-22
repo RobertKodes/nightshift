@@ -5,6 +5,7 @@ import { NxIcon } from "./nx/icons";
 import { Link } from "./router";
 import { Stat, rememberRoom } from "./station/Station";
 import { chooseWallet } from "./wallet";
+import { WatchGuide } from "./WatchGuide";
 import "./forge.css";
 import "./watch.css";
 
@@ -52,7 +53,7 @@ export function WatchPage() {
           <h1>Hold the dollar. <em>Keep the bonus.</em></h1>
           <p className="fg-lead">imdUSD is IMD's dollar, borrowed against staked IMD. When IMD falls and a loan drops under {b?.mat ?? 170}%, someone has to mark it and, {b ? num(b.lullHours) : 6} hours later, repay it: whoever does takes staked IMD worth {b?.bonusPct ?? 20}% more than the debt they repay. The Night Watch is the crew that does it, one seat per Night Watcher and the Captain's seat for NIGHT FROG #1 (The Captain's, once #1 is forged), each running its own bot with its own wallet, working in turn instead of racing.</p>
           <div className="fg-cta">
-            <a className="nx-btn nx-btn-acc" href="#pair"><NxIcon name="security" size={18} /> Take your seat</a>
+            <a className="nx-btn nx-btn-acc" href="#run"><NxIcon name="security" size={18} /> Set up my seat</a>
             <Link className="nx-btn" to="/forge">Forge a Night Watcher</Link>
           </div>
           <div className="st-stats">
@@ -65,6 +66,13 @@ export function WatchPage() {
       </header>
 
       <div className="st-body">
+        <WatchGuide mat={b?.mat ?? 170} lullHours={b?.lullHours ?? 6} />
+
+        <section id="pair" className="fg-sec">
+          <div className="fg-head"><span className="fg-kicker">Your seat</span><h2>Pair your seat</h2></div>
+          <SeatDesk />
+        </section>
+
         <section className="fg-sec">
           <div className="fg-head"><span className="fg-kicker">The watchlist</span><h2>Loans close to the line</h2></div>
           {!b ? <p className="st-empty">Reading the vault…</p> : b.watchlist.length === 0 ? (
@@ -114,11 +122,6 @@ export function WatchPage() {
           <p className="st-note">Each liquidation the crew can cover is split by the imdUSD each seat brings times its share weight, and never more than a seat holds. Marks rotate the same way, so a heavier seat marks more often (the marker takes 2% of the debt when the loan is liquidated). A seat keeps 16% of the debt it repays as bonus, 18% if it marked the loan too. The cut, a share of that bonus, goes in IMD to the NIGHTSHIFT FeeSplitter, which splits it like every fee: 40% to $SHIFT stakers and NIGHT FROGS holders, 20% to the dev wallet, 20% to the treasury, 20% burned as IMD. On $100 repaid, a Shift Lead keeps $14.40, a Night Boss $15.04 and the Captain $15.20.</p>
         </section>
 
-        <section id="pair" className="fg-sec">
-          <div className="fg-head"><span className="fg-kicker">Your seat</span><h2>Set up in three steps</h2></div>
-          <SeatDesk />
-        </section>
-
         <section className="fg-sec">
           <div className="nw-next">
             <span className="fg-kicker">What comes next · not built yet</span>
@@ -143,7 +146,6 @@ export function WatchPage() {
   );
 }
 
-const INSTALL = "curl -fsSL https://getnightshift.tech/nightwatch/install.sh | bash";
 type Held = { watcher: number; name: string; tier: string | null; weight: number; cutBps: number; paired: boolean; keeper: string | null; online: boolean; arrears: boolean };
 
 /**
@@ -157,7 +159,6 @@ function SeatDesk() {
   const [seat, setSeat] = useState<number | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
   const wallet = async () => createWalletClient({ chain: mainnet, transport: custom((await chooseWallet()) as never) });
   const check = async (addr?: string) => {
     setMsg(null); setBusy(true);
@@ -192,7 +193,6 @@ function SeatDesk() {
     } catch (e) { setMsg({ ok: false, text: (e as Error).message.split("\n")[0] ?? "failed" }); }
     setBusy(false);
   };
-  const copy = () => { void navigator.clipboard?.writeText(INSTALL).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }); };
   const state = (x: Held) => (!x.paired ? "not set up yet" : x.arrears ? "cut overdue: the bot pays it on its next pass" : x.online ? "bot online, on watch" : "paired, bot offline: start it");
   return (
     <div className="nw-desk">
@@ -212,13 +212,7 @@ function SeatDesk() {
           )}
         </li>
         <li>
-          <b>2 · Run one command</b>
-          <span>On the machine that will run the bot: a small VPS, or the box that runs your IMD worker (Linux or Mac, Node.js 20+). It installs the bot, makes a fresh keeper wallet that never leaves that machine, and prints your pairing link.</span>
-          <div className="nw-cmd"><code>{INSTALL}</code><button className="nx-btn" onClick={copy}>{copied ? "Copied" : "Copy"}</button></div>
-          <span className="fg-dim">Windows: use WSL, or <code>git clone https://github.com/RobertKodes/nightshift</code>, then <code>cd nightshift/nightwatch</code>, <code>npm install</code>, <code>node bot.mjs start</code>. Send the keeper wallet some ETH for gas (0.03 is plenty) and the imdUSD you want to liquidate with. <a href={REPO} target="_blank" rel="noreferrer">The bot's guide ↗</a></span>
-        </li>
-        <li>
-          <b>3 · Sign the link</b>
+          <b>2 · Sign the link</b>
           <span>Open the link the bot printed (it fills in the keeper below), pick the seat and sign with the wallet that holds it. Signing sends nothing and costs nothing. The bot sees it within seconds; <code>node bot.mjs doctor</code> checks everything, and it acts once you start it with <code>--execute</code>.</span>
           <label className="nw-field">Keeper wallet from the bot<input className="field mono" placeholder="0x…" value={keeper} onChange={(e) => setKeeper(e.target.value.trim())} /></label>
           <button className="nx-btn nx-btn-acc" onClick={() => void sign()} disabled={busy || !held?.length}>{busy ? "Check your wallet…" : seat === null ? "Check your wallet first" : `Sign and pair ${seatLabel(seat)}`}</button>

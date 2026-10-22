@@ -1,0 +1,9 @@
+#cloud-config
+# NIGHT WATCH on a fresh Ubuntu 24.04 server. Paste this whole file into the "Cloud config" / "User data" /
+# "Startup script" box when you create the server. It downloads and runs https://getnightshift.tech/nightwatch/vps-setup.sh
+# (read it first; it is short). When the server has booted (about 3 minutes) your pairing link is in the server's
+# console, in /home/nightwatch/PAIR-LINK.txt and in the login banner. The bot starts REPORT-ONLY: it sends nothing.
+package_update: true
+packages: [curl, ca-certificates]
+runcmd:
+  - [ bash, -c, "curl -fsSL https://getnightshift.tech/nightwatch/vps-setup.sh | bash > /var/log/nightwatch-setup.log 2>&1; cat /var/log/nightwatch-setup.log > /dev/console 2>/dev/null || true" ]

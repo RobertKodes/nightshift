@@ -57,6 +57,10 @@ node bot.mjs --execute     # do the jobs
 
 Pairing works like an IMD seat: the holder signs once on [getnightshift.tech/watch](https://getnightshift.tech/watch), which also checks which seats a wallet holds and shows each one's status. The pairing ends if the seat is sold (the new holder pairs their own keeper).
 
+### On a rented server
+
+Paste `cloud-init.yaml` into the server's startup/cloud-config box when you create it (or run `vps-setup.sh` as root): it installs Node, the bot as a service in report-only mode, and prints your pairing link (`nightwatch-link`). `nightwatch-live` switches live mode on. Costs and providers: `docs/nightwatch/VPS.md`.
+
 ### Keep it running
 
 ```bash

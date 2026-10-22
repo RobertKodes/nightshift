@@ -15,7 +15,7 @@ type Context = {
 
 const BOT = new URL("../../../nightwatch/", import.meta.url);
 /** The files the installer downloads; nothing else in the folder is served. */
-export const BOT_FILES = ["install.sh", "bot.mjs", "lib/chain.mjs", "lib/coordinator.mjs", "lib/plan.mjs", "package.json", "package-lock.json", ".env.example", "nightwatch.service", "README.md", "test/plan.test.mjs"];
+export const BOT_FILES = ["install.sh", "bot.mjs", "lib/chain.mjs", "lib/coordinator.mjs", "lib/plan.mjs", "package.json", "package-lock.json", ".env.example", "nightwatch.service", "README.md", "test/plan.test.mjs", "vps-setup.sh", "cloud-init.yaml", "test/vps.test.mjs"];
 
 const header = (req: IncomingMessage, k: string) => { const v = req.headers[k]; return Array.isArray(v) ? v[0] : v; };
 

@@ -50,3 +50,44 @@
 .nw-next { padding: 28px; border: 1px dashed color-mix(in srgb, var(--acc) 45%, transparent); border-radius: 18px; background: radial-gradient(circle at 85% 20%, color-mix(in srgb, #8b5cf6 14%, transparent), rgba(8, 7, 13, .55) 60%); }
 .nw-next h2 { margin: 6px 0 12px; }
 .nw-next p { max-width: 860px; line-height: 1.6; }
+
+/* the step-by-step guide (WatchGuide.tsx), mobile first */
+.nwg-flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; grid-template-columns: 1fr; counter-reset: none; }
+.nwg-flow li { position: relative; display: grid; gap: 4px; padding: 16px 16px 16px 58px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 14px; background: rgba(8, 7, 13, .55); }
+.nwg-flow li i { position: absolute; left: 14px; top: 14px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--acc) 18%, transparent); color: var(--acc); font: 600 15px var(--nx-mono, monospace); font-style: normal; }
+.nwg-flow li:not(:last-child)::after { content: "↓"; position: absolute; left: 24px; bottom: -14px; color: var(--acc); z-index: 1; font-size: 14px; }
+.nwg-flow b { font-size: 16px; }
+.nwg-flow span { color: var(--dim, #a9a3c4); font-size: 14px; line-height: 1.5; }
+.nwg-need { display: grid; gap: 10px; grid-template-columns: 1fr; }
+.nwg-need article { display: grid; gap: 4px; padding: 16px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 14px; background: rgba(8, 7, 13, .55); }
+.nwg-need span { color: var(--dim, #a9a3c4); font-size: 14px; line-height: 1.5; }
+.nwg-pick, .nwg-prov { display: grid; gap: 10px; grid-template-columns: 1fr; margin-bottom: 14px; }
+.nwg-pick button, .nwg-prov button { display: grid; gap: 4px; text-align: left; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); background: rgba(8, 7, 13, .55); color: inherit; font: inherit; cursor: pointer; }
+.nwg-pick button.on, .nwg-prov button.on { border-color: var(--acc); box-shadow: 0 0 22px color-mix(in srgb, var(--acc) 16%, transparent); }
+.nwg-pick em { font-style: normal; color: var(--acc); font: 600 12px var(--nx-mono, monospace); }
+.nwg-pick span, .nwg-prov small { color: var(--dim, #a9a3c4); font-size: 13px; }
+.nwg-prov { grid-template-columns: 1fr 1fr; }
+.nwg-lead { margin: 0 0 14px; max-width: 760px; line-height: 1.6; color: var(--dim, #a9a3c4); }
+.nwg-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.nwg-step { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding: 16px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 14px; background: rgba(8, 7, 13, .55); }
+.nwg-n { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--acc); color: #05040a; font: 700 14px var(--nx-mono, monospace); }
+.nwg-step > div { display: grid; gap: 8px; min-width: 0; }
+.nwg-step b { font-size: 16px; }
+.nwg-step p, .nwg-after p { margin: 0; line-height: 1.6; font-size: 14.5px; color: var(--dim, #a9a3c4); }
+.nwg-small { font-size: 13px !important; color: var(--faint, #6c6688) !important; }
+.nwg-step code, .nwg-after p code { font: 13px var(--nx-mono, monospace); color: #d8f9ff; background: rgba(255, 255, 255, .06); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+.nwg-cmd { display: flex; gap: 8px; align-items: flex-start; width: 100%; min-width: 0; }
+.nwg-cmd pre { flex: 1; min-width: 0; margin: 0; overflow-x: auto; padding: 12px 14px; border-radius: 10px; background: #05040a; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); }
+.nwg-cmd pre code { background: none; padding: 0; white-space: pre; font: 12.5px/1.6 var(--nx-mono, monospace); color: #d8f9ff; }
+.nwg-cmd .nx-btn { flex: none; }
+.nwg-after { display: grid; gap: 10px; margin-top: 22px; padding: 18px; border: 1px dashed color-mix(in srgb, var(--acc) 40%, transparent); border-radius: 14px; }
+.nwg-after h3 { margin: 10px 0 0; font-size: 16px; color: var(--acc); }
+.nwg-after h3:first-child { margin-top: 0; }
+@media (min-width: 720px) {
+  .nwg-flow { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .nwg-flow li { padding: 54px 14px 16px; }
+  .nwg-flow li:not(:last-child)::after { content: "→"; left: auto; right: -14px; bottom: auto; top: 22px; }
+  .nwg-need { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .nwg-pick { grid-template-columns: 1fr 1fr; }
+  .nwg-prov { max-width: 420px; }
+}
