@@ -5,6 +5,7 @@ import { isCdpSecret } from "@nightshift/x402";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { EDITABLE, SECRET_KEYS, adminToken, readSettings } from "./settings.js";
+import { swapSettings } from "./swap.js";
 import { socialLogin } from "./wallet-config.js";
 
 export const ADMIN = adminToken();
@@ -43,6 +44,8 @@ export async function setupState(engine: Engine) {
     DIGEST: config.digest ? "1" : "0", DIGEST_HOUR: String(config.digestHour), CHANGELOG_POST: config.changelogPost ? "1" : "0",
     // read live by /api/wallet-config: a saved change applies at once, never "pending a restart"
     WALLET_SOCIAL_LOGIN: socialLogin() ? "1" : "0",
+    // read live by the swap routes: a saved change applies at once
+    ...swapRunning(),
   };
   const shown: Record<string, string> = {};
   for (const k of EDITABLE) shown[k] = SECRET_KEYS.has(k) ? (saved[k] ? "set" : "") : (saved[k] ?? "");
@@ -102,9 +105,16 @@ export async function setupState(engine: Engine) {
   };
 }
 
+/** The multichain swap's settings as the swap routes read them now (swap.ts reads /setup on every request). */
+function swapRunning(): Record<string, string> {
+  const saved = readSettings(), s = swapSettings(saved);
+  return { SWAP_FEE_BPS: saved.SWAP_FEE_BPS === undefined ? "" : String(s.feeBps), SWAP_FEE_WALLET: saved.SWAP_FEE_WALLET === undefined ? "" : s.feeWallet, LIFI_INTEGRATOR: s.lifiIntegrator };
+}
+
 /** Settings that move money or trust: every change is announced, so a leaked admin token cannot act quietly. */
 export const ANNOUNCED = ["NIGHTSHIFT_MODE", "PLATFORM_TREASURY", "PLATFORM_DEV", "PLATFORM_FEE_BPS", "ETH_RPC", "SALES_RPC", "SALES_CHAIN_ID", "TOKEN_ADDRESS", "NFT_ADDRESS", "REQUIRE_AUTH",
-  "X402_FACILITATOR", "CDP_API_KEY_ID", "CDP_API_KEY_SECRET", "BETPOOL_ADDRESS", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS", "LAUNCH_NOTIFY", "PUBLIC_URL", "GUMROAD_CLIENT_ID", "GUMROAD_CLIENT_SECRET"];
+  "X402_FACILITATOR", "CDP_API_KEY_ID", "CDP_API_KEY_SECRET", "BETPOOL_ADDRESS", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS", "LAUNCH_NOTIFY", "PUBLIC_URL", "GUMROAD_CLIENT_ID", "GUMROAD_CLIENT_SECRET",
+  "SWAP_FEE_BPS", "SWAP_FEE_WALLET", "LIFI_INTEGRATOR"];
 
 /** Saved settings that differ from what runs now, by name: what a restart would apply. */
 export function pendingChanges(): string[] {
@@ -116,6 +126,8 @@ export function pendingChanges(): string[] {
     TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","), PUBLIC_URL: config.publicUrl, REQUIRE_AUTH: config.requireAuth ? "1" : "0",
     GUMROAD_CLIENT_ID: config.gumroad.clientId,
     WALLET_SOCIAL_LOGIN: socialLogin() ? "1" : "0",
+    // read live by the swap routes: a saved change applies at once
+    ...swapRunning(),
   };
   return EDITABLE.filter((k) => saved[k] !== undefined && (SECRET_KEYS.has(k) || running[k] === undefined || saved[k] !== running[k]));
 }
@@ -150,6 +162,12 @@ export function checkSetup(patch: Record<string, unknown>): string | null {
   if (bb && !/^\d{1,12}$/.test(bb)) return "BETPOOL_BLOCK is the contract's deploy block number";
   const sl = v("WALLET_SOCIAL_LOGIN");
   if (sl && sl !== "0" && sl !== "1") return "WALLET_SOCIAL_LOGIN is 1 (on) or 0 (off)";
+  const sf = v("SWAP_FEE_BPS");
+  if (sf && !(/^\d{1,3}$/.test(sf) && Number(sf) <= 100)) return "SWAP_FEE_BPS is a whole number of basis points from 0 to 100 (1%)";
+  const sw = v("SWAP_FEE_WALLET");
+  if (sw && !isAddress(sw)) return "SWAP_FEE_WALLET must be an address";
+  const li = v("LIFI_INTEGRATOR");
+  if (li && !/^[\w.-]{2,64}$/.test(li)) return "LIFI_INTEGRATOR is the integration name from portal.li.fi (letters, digits, . _ -)";
   const fac = v("X402_FACILITATOR");
   if (fac && fac !== "cdp" && fac !== "self") return "X402_FACILITATOR is cdp or self";
   // checked without ever being repeated back: a message names the field, never its value

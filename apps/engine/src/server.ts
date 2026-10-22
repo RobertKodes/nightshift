@@ -49,6 +49,7 @@ import { b2bBooks, deskLine, isB2b, marketTotals } from "./b2b.js";
 import { connectRoutes, ownerConnectRoutes } from "./connect-routes.js";
 import { CHANNELS } from "@nightshift/core";
 import { walletConfig } from "./wallet-config.js";
+import { swapRoutes } from "./swap.js";
 import { usdc } from "@nightshift/core";
 import { erc20Abi, getAddress } from "viem";
 import { serviceRoutes, useServices } from "./services/routes.js";
@@ -280,7 +281,8 @@ const CSP = [
   "font-src 'self' data: https://fonts.gstatic.com https://fonts.reown.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob:",
-  "connect-src 'self' https://ethereum-rpc.publicnode.com https://rpc.mevblocker.io https://eth.drpc.org https://mainnet.base.org https://sepolia.base.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org https://*.reown.com wss://*.reown.com https://api.web3modal.org https://api.web3modal.com https://rpc.wallet.coinbase.com https://www.walletlink.org wss://www.walletlink.org",
+  // the multichain swap (/swap) reads and sends through Robinhood Chain's and a Solana RPC; quotes go through our own /api/swap
+  "connect-src 'self' https://ethereum-rpc.publicnode.com https://rpc.mevblocker.io https://eth.drpc.org https://mainnet.base.org https://sepolia.base.org https://rpc.mainnet.chain.robinhood.com https://solana-rpc.publicnode.com wss://relay.walletconnect.com wss://relay.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org https://*.reown.com wss://*.reown.com https://api.web3modal.org https://api.web3modal.com https://rpc.wallet.coinbase.com https://www.walletlink.org wss://www.walletlink.org",
   "frame-src https://verify.walletconnect.com https://verify.walletconnect.org https://secure.walletconnect.com https://secure.walletconnect.org https://secure.reown.com",
   "worker-src 'self'", "manifest-src 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
 ].join("; ");
@@ -532,6 +534,8 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/locker/") && await lockerRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/bets/") && await betsRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if (prizesRoutes(req, res, p, { json, limited, owner, url })) return;
+      // the multichain swap: NIGHTSHIFT's fee for the signed-in wallet, LI.FI and Relay routes, transfer status
+      if (p.startsWith("/api/swap/") && await swapRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/forge") && await forgeRoutes(req, res, p, { json, limited, url, owner })) return;
       if ((p.startsWith("/api/watch") || p.startsWith("/nightwatch/")) && await watchRoutes(req, res, p, { json, body, limited, url })) return;
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
