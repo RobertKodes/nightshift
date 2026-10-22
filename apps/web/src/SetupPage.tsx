@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { TokenLaunch } from "./TokenLaunch";
 import { SwarmOrders } from "./SwarmOrders";
+import { OpenForge } from "./OpenForge";
 import { ImdOrders } from "./ImdOrders";
 import { FrogsAdmin } from "./FrogsAdmin";
 import { AfterLaunch } from "./AfterLaunch";
@@ -241,6 +242,11 @@ export function SetupPage() {
               <button className="btn primary" disabled={busy || blocks.length > 0} onClick={goLive}>Go live</button></>
           )}
         </div>
+      </section>
+
+      <section className="card">
+        <div className="card-h"><h3>Open the Forge (NIGHT WATCHERS)</h3><span className="faint" style={{ fontSize: 12 }}>one transaction from your dev wallet</span></div>
+        <OpenForge call={call} token={token} />
       </section>
 
       <section className="card">

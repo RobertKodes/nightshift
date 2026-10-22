@@ -6,6 +6,9 @@ import { config } from "./config.js";
 import { type Forged, forgeOn, forgedAll, tierInfo } from "./forge.js";
 import { type Button, telegramMedia } from "./social.js";
 
+/** The three NIGHT WATCHERS contracts IMD deployed (launches #2437, #2445, #2436): the only ones the Forge is switched on with. */
+export const FORGE_LIVE = { forge: "0xbdff33cffc3f617f808a6de012a2574dbf69d819", renderer: "0x053471879f65f6b4f644635fbdd798b9d7c5e1f5", skin: "0x8509cddf80cfc8cec4aaa3644b125de919da112e" } as const;
+
 /** Night Watchers that can ever be forged (The Captain, token 0, comes on top with frog #1). */
 export const WATCHERS = 50;
 

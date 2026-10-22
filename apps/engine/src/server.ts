@@ -24,11 +24,12 @@ import { buybacks, checkLaunch, completeContracts, holderStatus, launchBody, lau
 import { verifyShift } from "./shift-verify.js";
 import { DEV_WALLET, FIRST_BUYER } from "./shift-launch.js";
 import { CATALOG, checkOrder, orders, recordOrder } from "./orders.js";
-import { burnTotals, marketSnapshot } from "./community.js";
+import { burnTotals, marketSnapshot, toCommunity } from "./community.js";
 import { chessRoutes } from "./chess-routes.js";
 import { chess } from "./chess.js";
 import { gamesRoutes, live as gameLobby } from "./games-routes.js";
 import { forgeRoutes } from "./forge-routes.js";
+import { FORGE_LIVE } from "./forge-news.js";
 import { watchRoutes } from "./watch-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
 import { leagueRoutes } from "./league-routes.js";
@@ -51,7 +52,7 @@ import { CHANNELS } from "@nightshift/core";
 import { walletConfig } from "./wallet-config.js";
 import { swapRoutes } from "./swap.js";
 import { usdc } from "@nightshift/core";
-import { erc20Abi, getAddress } from "viem";
+import { erc20Abi, getAddress, parseAbi } from "viem";
 import { serviceRoutes, useServices } from "./services/routes.js";
 import { HOUSE_ID, liveHouseServices } from "./services/house.js";
 import { catalogItems } from "./services/catalog.js";
@@ -428,6 +429,17 @@ export function serve(engine: Engine) {
         if (p === "/api/admin/fairplay" && req.method === "GET") return json(res, 200, { flags: chess.flags() });
         if (p === "/api/admin/swarm" && req.method === "GET") return json(res, 200, { orders: await swarmOrders() });
         if (p === "/api/admin/swarm/check" && req.method === "POST") { const b = await body(req); try { return json(res, 200, await checkSwarmOrder(String(b.key ?? ""))); } catch (e) { return json(res, 400, { error: (e as Error).message }); } }
+        // the Forge goes live once the dev wallet connected IMD's art and identity layer to it (setRenderer, once)
+        if (p === "/api/admin/forge/open" && req.method === "POST") {
+          const F = FORGE_LIVE.forge as `0x${string}`, abi = parseAbi(["function renderer() view returns (address)", "function skin() view returns (address)"]);
+          const [r, s] = await Promise.all([eth.readContract({ address: F, abi, functionName: "renderer" }), eth.readContract({ address: F, abi, functionName: "skin" })]);
+          if (r.toLowerCase() !== FORGE_LIVE.renderer || s.toLowerCase() !== FORGE_LIVE.skin) return json(res, 409, { error: /^0x0{40}$/.test(r) ? "The forge has no art yet: send setRenderer from the dev wallet first." : `The forge points at another renderer (${r}). Not switching it on.` });
+          const first = config.forge.address.toLowerCase() !== F;
+          writeSettings({ FORGE_ADDRESS: F });
+          config.forge.address = F;
+          if (first) void toCommunity(["🔥🐸 <b>THE FORGE IS OPEN</b>", "", "NIGHT FROGS can evolve now. Burn 10 NIGHT FROGS + 2 $IMD (half of it burned) and forge 1 <b>Night Watcher</b>, Gen 2, fully onchain.", "", "I Shift Lead 10x · II Foreman 15x · III Supervisor 20x · IV Chief 30x · V Night Boss 40x (only 4) · and The Captain, a 1 of 1.", "", "You see your exact Night Watcher before you sign. Only 50 will ever exist. Every one is a seat in the Night Watch and opens the private Watch Room."].join("\n"), [[{ text: "🔥 Open the Forge", url: `${config.publicUrl}/forge` }]], "frog");
+          return json(res, 200, { ok: true, on: true, address: F });
+        }
         if (p === "/api/admin/swarm/placed" && req.method === "POST") {
           const b = await body(req);
           // a payment hash, or the job of an order paid on explorer.imd.fun (its link or id), checked at IMD
