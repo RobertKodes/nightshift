@@ -129,6 +129,8 @@
 /* phones: the buy first, under the coin's numbers, so the swap's button at the bottom of the screen sits next to its form */
 .lp-two > .lp-buybox { order: -1; }
 @media (min-width: 1000px) { .lp-two { grid-template-columns: minmax(0, 1fr) 440px; align-items: start; } .lp-two > .lp-buybox { order: 0; position: sticky; top: 84px; } }
+/* the embedded swap takes the same theme as /swap (its variables live on .docs there) */
+.lp-buybox { --s-acc: var(--acc, #a48bff); --s-acc-bg: var(--acc-soft, rgba(164, 139, 255, .14)); --s-line: var(--nx-line, rgba(255, 255, 255, .08)); --s-line2: var(--nx-line2, rgba(255, 255, 255, .14)); --s-bg: var(--nx-panel, #0e0d15); --s-bg2: var(--nx-panel2, rgba(255, 255, 255, .03)); --s-text: var(--nx-ink, #ecebf3); --s-dim: var(--nx-dim, #a49fbd); --s-faint: var(--nx-faint, #6f6a86); }
 .lp-buybox { display: grid; gap: 10px; min-width: 0; padding: 16px; border: 1px solid rgba(164, 139, 255, .35); border-radius: 14px; background: var(--s-bg); }
 .lp-buybox h3 { margin: 0; font: 600 17px Inter, sans-serif; }
 .lp-buybox .ms { grid-template-columns: minmax(0, 1fr) !important; }
