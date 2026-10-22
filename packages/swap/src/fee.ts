@@ -28,9 +28,9 @@ export function decideFee(o: { baseBps: number; session: string | null; sessionH
   const signedIn = o.session ? o.session.toLowerCase() : null;
   const holds = Boolean(o.wallet ? o.walletHolds : o.sessionHolds);
   if (base === 0) return { bps: 0, waived: false, reason: "off", note: "No NIGHTSHIFT fee on swaps.", holds, signedIn };
-  if (signedIn && o.sessionHolds) return { bps: 0, waived: true, reason: "holder", note: "No NIGHTSHIFT fee: you hold a NIGHT FROG.", holds: true, signedIn };
-  if (holds && o.wallet && o.wallet.toLowerCase() !== signedIn) return { bps: base, waived: false, reason: "sign-in", note: `This wallet holds a NIGHT FROG: sign in with it and the NIGHTSHIFT fee (${pct(base)}) is waived.`, holds, signedIn };
-  return { bps: base, waived: false, reason: "standard", note: `NIGHTSHIFT fee ${pct(base)}. NIGHT FROGS holders pay none.`, holds, signedIn };
+  if (signedIn && o.sessionHolds) return { bps: 0, waived: true, reason: "holder", note: "No NIGHTSHIFT fee: you hold a NIGHT FROG, a Night Watcher or 5M+ $SHIFT.", holds: true, signedIn };
+  if (holds && o.wallet && o.wallet.toLowerCase() !== signedIn) return { bps: base, waived: false, reason: "sign-in", note: `This wallet holds a NIGHT FROG, a Night Watcher or 5M+ $SHIFT: sign in with it and the NIGHTSHIFT fee (${pct(base)}) is waived.`, holds, signedIn };
+  return { bps: base, waived: false, reason: "standard", note: `NIGHTSHIFT fee ${pct(base)}. Holders of a NIGHT FROG, a Night Watcher or 5M+ $SHIFT pay none.`, holds, signedIn };
 }
 
 export type Provider = "lifi" | "relay";

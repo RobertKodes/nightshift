@@ -7,6 +7,7 @@ import {
 import { parseAbi } from "viem";
 import { eth } from "./chain.js";
 import { config } from "./config.js";
+import { launchState } from "./token.js";
 import { type SettingKey, readSettings } from "./settings.js";
 
 /**
@@ -31,17 +32,27 @@ export function swapSettings(saved: Partial<Record<SettingKey, string>> = readSe
   };
 }
 
-/** NIGHT FROGS (and NIGHT WATCHERS, once the forge is set) on Ethereum: the wallets that pay no swap fee. */
+/**
+ * The wallets that pay no swap fee, read on Ethereum: a NIGHT FROG, a NIGHT WATCHER (once the forge is set), or
+ * at least 5M $SHIFT, counting what is in the wallet and what it has staked in ShiftRewards.
+ */
 export const FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
+export const SHIFT = "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac";
+export const FREE_SHIFT = 5_000_000n * 10n ** 18n;
 const BALANCE = parseAbi(["function balanceOf(address) view returns (uint256)"]);
 export async function readHoldings(wallet: string): Promise<boolean> {
   const who = wallet as `0x${string}`;
   const forge = /^0x[0-9a-fA-F]{40}$/.test(config.forge.address) ? (config.forge.address as `0x${string}`) : null;
-  const [frogs, watchers] = await Promise.all([
-    eth.readContract({ address: (config.nft.address || FROGS) as `0x${string}`, abi: BALANCE, functionName: "balanceOf", args: [who] }),
-    forge ? eth.readContract({ address: forge, abi: BALANCE, functionName: "balanceOf", args: [who] }) : 0n,
+  const l = launchState(), rewards = (l?.contracts?.rewards ?? null) as `0x${string}` | null;
+  const token = (l?.contracts?.token || config.token.address || SHIFT) as `0x${string}`;
+  const read = (address: `0x${string}`) => eth.readContract({ address, abi: BALANCE, functionName: "balanceOf", args: [who] });
+  const [frogs, watchers, shift, staked] = await Promise.all([
+    read((config.nft.address || FROGS) as `0x${string}`),
+    forge ? read(forge) : 0n,
+    read(token).catch(() => 0n),
+    rewards ? read(rewards).catch(() => 0n) : 0n,
   ]);
-  return frogs + watchers > 0n;
+  return frogs + watchers > 0n || shift + staked >= FREE_SHIFT;
 }
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;

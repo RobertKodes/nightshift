@@ -29,7 +29,7 @@ describe("the route card", () => {
   it("says so when a holder pays no NIGHTSHIFT fee", () => {
     const w = fromLifi(fx("lifi-quote-eth-rh-imd"), req, { bps: 0, waived: true, note: "" });
     const html = renderToStaticMarkup(<RouteCard q={w} others={[]} pick={() => {}} preview={false} problems={[]} />);
-    expect(text(html)).toContain("NIGHTSHIFT fee None: you hold a NIGHT FROG");
+    expect(text(html)).toContain("NIGHTSHIFT fee None: you are a holder");
     expect(html).toContain('class="good"');
   });
   it("lists the other provider's route and a preview note", () => {

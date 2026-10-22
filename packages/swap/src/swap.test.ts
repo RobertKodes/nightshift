@@ -15,7 +15,7 @@ const req = (o: Partial<QuoteRequest>): QuoteRequest => ({ fromChain: "eth", toC
 
 describe("the fee waiver", () => {
   it("waives the fee for a signed-in NIGHT FROGS holder, on any chain", () => {
-    expect(decideFee({ baseBps: 25, session: ME, sessionHolds: true })).toMatchObject({ bps: 0, waived: true, reason: "holder", note: "No NIGHTSHIFT fee: you hold a NIGHT FROG." });
+    expect(decideFee({ baseBps: 25, session: ME, sessionHolds: true })).toMatchObject({ bps: 0, waived: true, reason: "holder", note: "No NIGHTSHIFT fee: you hold a NIGHT FROG, a Night Watcher or 5M+ $SHIFT." });
     // the holder signed in, quoting a Solana wallet: still waived (the session is who they are)
     expect(decideFee({ baseBps: 25, session: ME, sessionHolds: true, wallet: SOL_ME, walletHolds: false }).waived).toBe(true);
   });
@@ -26,7 +26,7 @@ describe("the fee waiver", () => {
     expect(decideFee({ baseBps: 25, session: "0x00000000000000000000000000000000000000aa", sessionHolds: false, wallet: ME, walletHolds: true }).bps).toBe(25);
   });
   it("charges everyone else the set fee, capped at 1%, and nothing when it is 0", () => {
-    expect(decideFee({ baseBps: 25, session: ME, sessionHolds: false })).toMatchObject({ bps: 25, reason: "standard", note: "NIGHTSHIFT fee 0.25%. NIGHT FROGS holders pay none." });
+    expect(decideFee({ baseBps: 25, session: ME, sessionHolds: false })).toMatchObject({ bps: 25, reason: "standard", note: "NIGHTSHIFT fee 0.25%. Holders of a NIGHT FROG, a Night Watcher or 5M+ $SHIFT pay none." });
     expect(decideFee({ baseBps: 5000, session: null, sessionHolds: false }).bps).toBe(100);
     expect(decideFee({ baseBps: Number.NaN, session: null, sessionHolds: false })).toMatchObject({ bps: 0, reason: "off" });
   });
@@ -92,7 +92,7 @@ describe("LI.FI routes", () => {
       Slippage: "1%",
     });
     const waived = routeRows(fromLifi(fx("lifi-quote-eth-rh-imd"), req({}), { bps: 0, waived: true, note: "" })).find((r) => r.k === "NIGHTSHIFT fee");
-    expect(waived?.v).toBe("None: you hold a NIGHT FROG");
+    expect(waived?.v).toBe("None: you are a holder");
   });
   it("asks for exactly the input amount on an ERC-20, and only to the Diamond", () => {
     const r = req({ fromChain: "base", toChain: "rh", fromToken: USDC_BASE, toToken: NATIVE_EVM, amount: "25000000" });

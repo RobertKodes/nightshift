@@ -56,7 +56,7 @@ export function routeRows(q: Quote): { k: string; v: string }[] {
   const out = Number(formatUnits(BigInt(q.toAmount), q.toToken.decimals)), inn = Number(formatUnits(BigInt(q.fromAmount), q.fromToken.decimals));
   const rate = inn > 0 ? out / inn : 0;
   const providerFees = q.fees.length ? q.fees.map((f) => `${f.name} ${usdText(f.usd)}`).join(", ") : "none listed";
-  const ns = q.nightshift.waived ? "None: you hold a NIGHT FROG" : q.nightshift.bps > 0 ? `${pct(q.nightshift.bps)}, ${usdText(q.nightshift.usd)}` : "None on this route";
+  const ns = q.nightshift.waived ? "None: you are a holder" : q.nightshift.bps > 0 ? `${pct(q.nightshift.bps)}, ${usdText(q.nightshift.usd)}` : "None on this route";
   return [
     { k: "Route", v: `${q.providerName}: ${via(q)}` },
     { k: "You get at least", v: `${amountText(q.toAmountMin, q.toToken.decimals)} ${q.toToken.symbol}` },

@@ -56,7 +56,7 @@ describe("the fee waiver, decided by the server per wallet", () => {
     expect(f.lifiCalls()[0]?.get("fee")).toBe("0");
     expect(f.relayCalls()[0]).not.toHaveProperty("appFees");
     const body = r.body as { fee: { waived: boolean; note: string }; quotes: { nightshift: { waived: boolean; note: string } }[] };
-    expect(body.fee).toMatchObject({ waived: true, note: "No NIGHTSHIFT fee: you hold a NIGHT FROG." });
+    expect(body.fee).toMatchObject({ waived: true, note: "No NIGHTSHIFT fee: you hold a NIGHT FROG, a Night Watcher or 5M+ $SHIFT." });
     expect(body.quotes.every((q) => q.nightshift.waived)).toBe(true);
   });
   it("never waives it for a holder's address typed by someone who is not signed in as it", async () => {
