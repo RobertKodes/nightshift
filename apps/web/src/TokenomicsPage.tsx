@@ -16,10 +16,10 @@ export function RuleBar() {
 
 const where = (bps: number): [string, string, string][] => [
   ["Selling $SHIFT", "5% of the sell", "From the first trade"],
-  ["Swap on NIGHTSHIFT", "0.3% of the swap", "Coming soon"],
+  ["Swap on NIGHTSHIFT", "0.25% of the swap, 0% for a NIGHT FROGS holder, a Night Watcher or 5M+ $SHIFT", "Live"],
   ["Company withdrawals (USDC)", `${bps / 100}% of the withdrawal (20% of it to the dev wallet, 80% to the treasury), 0% for $SHIFT and NIGHT FROGS holders`, "When companies go live"],
   ["Launchpad", "No launch fee: the creator pays IMD 0.5 IMD; buys through the swap carry the swap fee", "Live"],
-  ["Game Room", "5% of each pot", "Coming soon"],
+  ["Game Room", "5% of each pot (the winner gets 95%)", "Live"],
   ["IMD bot premium", "Paid in $SHIFT", "Coming soon"],
 ];
 
@@ -34,7 +34,7 @@ export function TokenomicsPage() {
     <div className="docs token-page tokenomics-page">
       <span className="eyebrow">TOKENOMICS</span>
       <h1>${sym}, in full. <em>Every number, every wallet, every rule.</em></h1>
-      <p className="lead">What ${sym} is made of, where every fee goes and what each wallet can and cannot do. The rules below are written into the contracts at launch: after that, nobody can change them, us included.</p>
+      <p className="lead">What ${sym} is made of, where every fee goes and what each wallet can and cannot do. The rules below are written into the contracts: nobody can change them, us included.</p>
 
       <nav className="toc" aria-label="On this page">
         {[["supply", "Supply"], ["rule", "The one rule"], ["sell", "What a sell pays"], ["where", "Where the rule applies"], ["launch", "Launch day"], ["rewards", "Staking and frogs"], ["powers", "Who can change what"], ["wallets", "Wallets and contracts"], ["risks", "Risks"]].map(([id, l]) => <a key={id} href={`#${id}`}>{l}</a>)}
@@ -82,7 +82,7 @@ export function TokenomicsPage() {
         <li><b>The first buy.</b> On launch night the treasury bought 81.49M $SHIFT for 0.91 ETH (<a href="https://etherscan.io/tx/0xf5a5ac372ea3fa89cc2f05372263b201e722da06c17f4ed07dc2c46bd5dcddfa" target="_blank" rel="noreferrer">the transaction</a>), which opened trading to everyone.</li>
         <li><b>Trading opens with one buy.</b> Until the treasury wallet {TREASURY_WALLET.slice(0, 6)}…{TREASURY_WALLET.slice(-4)} makes the first buy, the hook refuses every other swap. This stops bots from buying the first block. The moment that buy lands, trading opens to everyone, for good: nobody can close it again.</li>
         <li><b>Checked before it opens.</b> Between deploy and that first buy, NIGHTSHIFT checks the contracts on chain against this page. If anything is wrong, the first buy never happens and nobody can trade.</li>
-        <li><b>The contract address</b> is published here, on Telegram and on X only after trading opens. Anything earlier is fake.</li>
+        <li><b>The contract address</b> is published here, on Telegram and on X. Check any other address against this page.</li>
       </ul>
 
       <h2 id="rewards" className="guide-h2">Staking and NIGHT FROGS</h2>

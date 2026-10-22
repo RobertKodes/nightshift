@@ -162,7 +162,7 @@ export function SwapPage() {
     <div className="docs token-page swap-page">
       <span className="eyebrow">LIVE · ETHEREUM · BASE · ROBINHOOD CHAIN · SOLANA · XRP</span>
       <h1>NIGHTSHIFT Swap. <em>Five chains, your own wallet.</em></h1>
-      <p className="lead">Swap between Ethereum, Base, Robinhood Chain and Solana, and into XRP on the XRP Ledger. LI.FI and Relay find the route; your wallet signs every step; NIGHTSHIFT holds nothing. NIGHT FROGS holders pay no NIGHTSHIFT fee.</p>
+      <p className="lead">Swap between Ethereum, Base, Robinhood Chain and Solana, and into XRP on the XRP Ledger. LI.FI and Relay find the route; your wallet signs every step; NIGHTSHIFT holds nothing. Holders of a NIGHT FROG, a Night Watcher or 5M+ $SHIFT pay no NIGHTSHIFT fee.</p>
 
       <div className="ms-modes" role="tablist" aria-label="Swap">
         <button type="button" role="tab" aria-selected={mode === "any"} className={mode === "any" ? "on" : ""} onClick={() => setMode("any")}>Any chain</button>
@@ -178,7 +178,7 @@ export function SwapPage() {
       <h2>How it works</h2>
       <ul className="frogs-util">
         <li><b>Two route finders, asked at once</b>LI.FI (bridges and exchanges across Ethereum, Base, Robinhood Chain and Solana) and Relay (the same chains plus native XRP). The route that delivers more after every fee comes first; the other one sits beside it.</li>
-        <li><b>Fees, apart</b>the provider's own fees (LI.FI's 0.25% service fee, bridge and relayer fees) and NIGHTSHIFT's fee are shown on separate lines before you sign. Signed in with a wallet that holds a NIGHT FROG or a Night Watcher, NIGHTSHIFT's fee is 0 on every chain.</li>
+        <li><b>Fees, apart</b>the provider's own fees (LI.FI's 0.25% service fee, bridge and relayer fees) and NIGHTSHIFT's fee are shown on separate lines before you sign. Signed in with a wallet that holds a NIGHT FROG, a Night Watcher or 5M+ ${sym}, NIGHTSHIFT's fee is 0 on every chain.</li>
         <li><b>Checked before you sign</b>the page only signs calls to the LI.FI and Relay contracts pinned in its code, shows each one with its address, simulates every transaction first, and allows a token exactly the amount you swap, never unlimited.</li>
         <li><b>Followed to the end</b>after you send, the page follows the transfer with the provider until it lands on the other chain, with both transactions linked.</li>
         <li><b>XRP</b>into XRP works now: you type your XRP Ledger address. Out of XRP is coming: it needs an XRP Ledger wallet in the page and a tested payment to the provider's XRPL account.</li>

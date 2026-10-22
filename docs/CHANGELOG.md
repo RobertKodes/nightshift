@@ -2,6 +2,10 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-22 · The site text matches what is live
+- The whitepaper, tokenomics, front page and menus now say what is live: the Forge and the Watch Room, the multichain swap with its 0.25% fee (none for NIGHT FROG or Night Watcher holders, or 5M+ $SHIFT), the Game Room's four games with 95% to the winner, and staking locks from 0 to 730 days.
+- Swap and staking got their own entries in the page index that AI agents read at /llms.txt.
+
 ## 2026-10-22 · THE SHIP: every NIGHT FROG and Night Watcher, live
 - /ship is the NIGHTSHIFT ship as one live isometric scene: all 500 NIGHT FROGS and every forged Night Watcher at the station their traits fit, each drawn from its own onchain art and doing what its traits do: laser eyes fire, crowns sparkle, coffee steams, Night Watchers glow in their tier colour.
 - Tap a frog for its art, rarity, traits and what it earns an hour (its multiplier, crew boost and IMD seat), its missions and its holder. Sign in and the ship lights up your crew, flies to it and adds up your shift hours, with the best forge for your frogs.

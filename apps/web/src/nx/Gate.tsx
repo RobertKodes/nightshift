@@ -95,9 +95,9 @@ function BurnBar({ ov }: { ov: Overview | null }) {
 
 /** What is new on the station right now, one tap each: kept short, and taken down when it is no longer new. */
 const NEW_NOW = [
-  { to: "/forge", tag: "GEN 2 · WAITING FOR IMD", title: "Night Watchers", line: "10 NIGHT FROGS + 2 IMD forge 1 Night Watcher: more shift hours and a Night Watch seat.", acc: "#b8ff4a" },
-  { to: "/watch", tag: "WITH imdUSD", title: "The Night Watch", line: "Run a bot that keeps imdUSD safe and earns the liquidation bonus. One command to set up.", acc: "#4ad8ff" },
-  { to: "/games/poker", tag: "NEW GAME", title: "NIGHT POKER", line: "Heads-up Hold'em, free or staked in $SHIFT and IMD, and free tables up to six.", acc: "#ff5ca8" },
+  { to: "/forge", tag: "GEN 2 · FORGE OPEN", title: "Night Watchers", line: "10 NIGHT FROGS + 2 IMD forge 1 Night Watcher: more shift hours and a Night Watch seat.", acc: "#b8ff4a" },
+  { to: "/watch", tag: "WITH imdUSD", title: "The Night Watch", line: "Run a bot that keeps imdUSD safe and earns the liquidation bonus. A step-by-step guide, report-only first.", acc: "#4ad8ff" },
+  { to: "/games/poker", tag: "GAME ROOM", title: "NIGHT POKER", line: "Heads-up Hold'em, free or staked in $SHIFT and IMD, and free tables up to six.", acc: "#ff5ca8" },
 ];
 function NewNow() {
   return (
@@ -128,7 +128,7 @@ function TokenDeck({ ov }: { ov: Overview | null }) {
     <section className="nx-deck" aria-label="$SHIFT">
       <div className="nx-deck-go">
         <Link to="/swap" className="nx-deck-btn swap"><NxIcon name="swap" size={20} /><span><b>Swap $SHIFT</b><small>ETH ⇄ $SHIFT, in one tap</small></span></Link>
-        <Link to="/stake" className="nx-deck-btn stake"><NxIcon name="stake" size={20} /><span><b>Stake $SHIFT</b><small>No lock · withdraw any time</small></span></Link>
+        <Link to="/stake" className="nx-deck-btn stake"><NxIcon name="stake" size={20} /><span><b>Stake $SHIFT</b><small>Lock 0 to 730 days · unstake when unlocked</small></span></Link>
       </div>
       <dl className="nx-deck-stats">
         {cells.map((c) => (

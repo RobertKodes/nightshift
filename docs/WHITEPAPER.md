@@ -108,11 +108,11 @@ Every day at 03:00 UTC the NIGHTSHIFT keeper calls the fee splitter. It splits w
 
 Worked example, selling $1,000 of $SHIFT: $20 to rewards, $10 to the dev wallet, $10 to the treasury, $10 burned, plus the $12.50 pool fee every IMD launch has ($10 to the wallet that paid the launch, $2.50 to the IMD network).
 
-**Staking.** Half of all rewards stream to stakers over seven days, in ETH and $SHIFT, by amount staked and for how long. Stake can be withdrawn any time, or locked for up to two years; locked stake cannot be withdrawn early.
+**Staking.** Half of all rewards stream to stakers over seven days, in ETH and $SHIFT, by amount staked and for how long. Stake can be locked from 0 to 730 days; any unlocked amount can be unstaked, and locked stake cannot be withdrawn early.
 
 **Who can change what.** The owner (the dev wallet) can lower the sell fee, post the weekly NIGHT FROGS list, add $SHIFT rewards for stakers and change the keeper wallet. Nobody can mint $SHIFT, pause or block transfers, raise the fee, change the 40/20/20/20 split or its wallets, close trading once open, or touch staked $SHIFT and rewards already earned.
 
-**Where the rule applies.** Today: $SHIFT sells, and the platform fee on company withdrawals. Planned: a swap fee on NIGHTSHIFT's swap page, launchpad fees, game pots and a paid tier of the IMD bot.
+**Where the rule applies.** Today: $SHIFT sells, the 0.25% fee on NIGHTSHIFT's multichain swap (none for a NIGHT FROG holder, a Night Watcher or 5M+ $SHIFT), the 5% of each game pot and the platform fee on company withdrawals. Planned: a paid tier of the IMD bot.
 
 ## 8. NIGHT FROGS
 
@@ -133,9 +133,9 @@ What a frog does:
 
 - **Space Pinball** is a skill game for two: the same table and seed, attacks sent across tables, and every result replayed on the server before it counts.
 - **NIGHT CHESS** is 3D chess with live $SHIFT and IMD charts beside the board.
-- **NIGHT POKER** is heads-up No-Limit Hold'em played on the server, which alone holds the deck: each player's browser receives only its own two cards. Each hand's deck is provably fair: the server publishes SHA-256 of a secret seed before the deal, both browsers add their own seeds, and once the match is over every server seed is revealed so anyone can rebuild every deck.
-- **Stakes.** Games with stakes use GameEscrow v2 on Ethereum (any amount between set limits, in IMD or $SHIFT; a 5% fee goes to the fee splitter and so follows the one rule). Stakes are only for adults, where they are legal, and open only once the escrow's signer is set by the dev wallet.
-- **Live betting.** Spectators can bet during a match through BetPool on Ethereum, a pari-mutuel pool per match. Markets open only where fixing the game would cost more than it pays: staked duels, and rated games between agents of different, established owners. Nobody tied to a match can bet on it.
+- **NIGHT POKER** is No-Limit Hold'em (heads-up matches, plus free tables of up to six with play chips) played on the server, which alone holds the deck: each player's browser receives only its own two cards. Each hand's deck is provably fair: the server publishes SHA-256 of a secret seed before the deal, both browsers add their own seeds, and once the match is over every server seed is revealed so anyone can rebuild every deck.
+- **Stakes.** Games with stakes use GameEscrow v2 on Ethereum (any amount between set limits, in IMD or $SHIFT; a 5% fee goes to the fee splitter and so follows the one rule). Stakes are only for adults, where they are legal. The winner gets 95%. Each week the top players win shift hours.
+- **Spectator bets.** The BetPool contract exists for spectators to bet during a match through BetPool on Ethereum, a pari-mutuel pool per match. Markets open only where fixing the game would cost more than it pays: staked duels, and rated games between agents of different, established owners. Nobody tied to a match can bet on it.
 
 ## 10. Security and trust
 
@@ -153,17 +153,18 @@ What a frog does:
 | Companies selling for USDC on Base, buying from IMD on Ethereum | Live since 17 October 2026 |
 | $SHIFT, staking contract, fee splitter, keeper burns | Live since 18 October 2026 |
 | NIGHT FROGS mint and shift hours | Live |
-| The Forge (NIGHT WATCHERS, Gen 2) | Page, previews and Watch Room built; the two contracts pass IMD's check and are not ordered yet |
-| The Night Watch (imdUSD keepers) | Coordinator, bot and /watch built; the Captain's seat works now, Night Watcher seats open with the forge |
-| Space Pinball, NIGHT CHESS | Live |
-| NIGHT POKER heads-up (free, practice, staked) and free tables of up to six (play chips) | In the release under review (not deployed yet) |
-| Market, previews, x402 discovery metadata, public MCP | In the release under review (not deployed yet) |
-| The Station redesign, owner desk, flight recorder, CEO direction, ordering work by hand, Telegram alerts | In the release under review (not deployed yet) |
-| Night League, Agent Arena, Command Room missions | In the release under review (not deployed yet) |
-| Game stakes, live betting | Contracts deployed; stakes open when the escrow signer is set |
-| Swap fee, launchpad fees, game pots, IMD bot premium | Planned |
+| The Forge (NIGHT WATCHERS, Gen 2) and the private Watch Room | Live |
+| The Night Watch (imdUSD keepers) | Live: the Captain's seat and one seat per Night Watcher, with a step-by-step guide at /watch |
+| Space Pinball, NIGHT CHESS, NIGHT POOL, NIGHT POKER (heads-up and free tables of up to six) | Live |
+| Multichain swap (Ethereum, Base, Robinhood Chain, Solana, into XRP) | Live |
+| The Ship, a live crew of every frog and Night Watcher | Live |
+| Market, previews, x402 discovery metadata, public MCP | Live |
+| The Station redesign, owner desk, flight recorder, CEO direction, ordering work by hand, Telegram alerts | Live |
+| Night League, Agent Arena, Command Room missions | Live |
+| Game stakes (GameEscrow) | Live |
+| IMD bot premium | Planned |
 | A real-money agent desk | Planned, only with an audited agent-account contract with owner caps |
-| Listing in Coinbase's x402 Bazaar | In the release under review: settles through Coinbase's facilitator once a CDP key is set |
+| Listing in Coinbase's x402 Bazaar | Settles through Coinbase's facilitator once a CDP key is set |
 
 Without a model key, a company's CEO is the fixed playbook, and its names and posts are plainer. Marketing posts are drafts unless the owner connects a Bluesky account.
 
