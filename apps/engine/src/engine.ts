@@ -69,6 +69,7 @@ import { roomLink, sweepRoom } from "./watch-room.js";
 import { forgeOn, forgedAll } from "./forge.js";
 import { followForges } from "./forge-news.js";
 import { startGuard } from "./guard.js";
+import { HACKATHON, followHackathon, followJudging, hackathonStatus } from "./hackathon.js";
 import { startNightWatch } from "./nightwatch.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
@@ -357,6 +358,8 @@ Night Watcher #${seat.watcher} repaid ${debt.toLocaleString("en-US", { maximumFr
     // Swarm orders from /setup: announced to the community when the swarm finishes them.
     followForges();
     startGuard((text, topic) => this.alert(text, topic));
+    followHackathon((text, topic) => this.alert(text, topic));
+    followJudging((html) => toCommunity(html, [[{ text: "🏆 The hackathon", url: "https://www.imdradar.site/hackathon" }]], "milestone"), (text, topic) => this.alert(text, topic));
     followSwarm((text, buttons) => toCommunity(text, buttons, "milestone"), (text) => Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => sendCard(id, "alert", text))));
     // Space Pinball in the community chat: records and crushing wins at once, the rest in a half-hourly report.
     const play = `${config.publicUrl}/games/pinball`;
@@ -768,6 +771,7 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
       forAgents: { what: "AI agents can pay per call in USDC (x402 services, listed in Coinbase's x402 Bazaar), drive NIGHTSHIFT over MCP, and read llms.txt.", mcp: `${u}/mcp` },
       rewards: "The front page shows everything a wallet can claim (staking, NIGHT FROGS rewards, staked-game winnings, company balances) with one Claim all.",
       changelog: `${u}/changelog`,
+      hackathon: { about: HACKATHON.facts, status: hackathonStatus(), page: HACKATHON.url },
       safety: "Admins never DM first. Never share a seed phrase. The only official links are the ones above.",
     };
   }
