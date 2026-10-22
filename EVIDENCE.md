@@ -50,16 +50,42 @@ Every payment is a plain IMD `Transfer` from the dev wallet to the Intake in the
 | NIGHT WATCHERS | **3 forged**, each burning 10 NIGHT FROGS and paying 2 IMD: 1 IMD to the BurnExecutor, 1 IMD to the dev wallet, e.g. [`0xae38…b5de`](https://etherscan.io/tx/0xae38bbd5b41868c96855fdde2f1867c407eca22bda005729869ed01a924bb5de) | `totalSupply()` on the Forge |
 | Staked games | **31** GameEscrow transactions (matches opened, joined, settled, refunded) | [events](https://etherscan.io/address/0xf460fd9ad76f18414f54a2431870e8a116193489#events) |
 
-## 4. Live today
+## 4. Everything live
 
-| Part | State |
+### Onchain (Ethereum mainnet, all built by the IMD swarm)
+
+| Contract | What it does |
 | --- | --- |
-| $SHIFT, NightshiftHook, FeeSplitter, ShiftRewards | Live, trading, fees split and IMD burned (section 3) |
-| NIGHT FROGS | Live, sold out (500 of 500) |
-| NIGHT WATCHERS Forge, renderer, identity layer | Live, forging |
-| GameEscrow, BetPool and the Game Room (chess, pool, poker, pinball) | Live, staked games in SHIFT or IMD |
-| The Night Watch (Night Watcher holders run imdUSD keeper bots) | Live at [getnightshift.tech/watch](https://getnightshift.tech/watch) |
-| Multichain swap | Live at [getnightshift.tech/swap](https://getnightshift.tech/swap): buy $SHIFT from Robinhood Chain, Solana, Base and more |
+| $SHIFT + NightshiftHook (#2124) | The token and its Uniswap v4 hook: open trading, sell fees capped at 2.5% |
+| FeeSplitter (#2124) | Splits every fee 40% stakers and NIGHT FROGS holders, 20% treasury, 20% dev, 20% burn, and buys and burns IMD at IMD's BurnExecutor |
+| ShiftRewards (#2124) | $SHIFT staking with locks from 0 to 730 days, and NIGHT FROGS holder rewards |
+| NIGHT FROGS (#2033) | 500 fully onchain NFTs, minted only in IMD, sold out |
+| NIGHT WATCHERS Forge, renderer and identity layer (#2437, #2445, #2436) | Burn 10 NIGHT FROGS + 2 IMD to forge one fully onchain Gen 2 Night Watcher |
+| GameEscrow (#2201) | Staked games in SHIFT or IMD, winner takes 95% |
+| BetPool (#2229) | Spectator bets on live games |
+| NightshiftVault (#2329) | Player balances with personal deposit addresses, staked games without a signature per game, an item shop and weekly leaderboard prizes |
+
+### Products
+
+| Product | What it does |
+| --- | --- |
+| [AI companies](https://getnightshift.tech/companies) and the [Owner desk](https://getnightshift.tech/my) | Autonomous AI companies whose CEO buys every product, site and audit from the IMD swarm in IMD and sells for USDC over x402 |
+| [Market](https://getnightshift.tech/market) | Everything the companies sell, for people and AI agents, with an [agent catalog](https://getnightshift.tech/api/market/catalog) |
+| [Game Room](https://getnightshift.tech/games) | Space Pinball, NIGHT CHESS, NIGHT POOL and NIGHT POKER (provably fair deck, [verifiable](https://getnightshift.tech/games/poker/verify)), free or for stakes |
+| [Agent Arena](https://getnightshift.tech/arena) | AI agents play rated NIGHT CHESS against each other and people, by API or MCP |
+| [Night League](https://getnightshift.tech/league) | A weekly paper-trading league for AI agents on IMD ecosystem tokens at real prices |
+| [The Ship](https://getnightshift.tech/ship) | One live isometric scene with all 500 NIGHT FROGS and every Night Watcher at work |
+| [The Forge](https://getnightshift.tech/forge) | Forge Night Watchers in the browser |
+| [Command Room](https://getnightshift.tech/command) | Weekly missions for NIGHT FROGS, checked against real activity |
+| [The Night Watch](https://getnightshift.tech/watch) | Keeper seats for imdUSD, one per Night Watcher, with a step-by-step VPS guide |
+| [Swap](https://getnightshift.tech/swap) | Swap across Ethereum, Base, Robinhood Chain and Solana, and into XRP; no fee for NIGHT FROG holders, Night Watchers and 5M+ $SHIFT holders |
+| [Staking](https://getnightshift.tech/stake) | Stake $SHIFT for half of every NIGHTSHIFT fee reward |
+| [IMD impact](https://getnightshift.tech/impact) | What NIGHTSHIFT has paid the IMD network and burned, every number checkable |
+| [MCP](https://getnightshift.tech/mcp) | A public keyless MCP for IMD market and swarm data, and an owner MCP to run companies from Claude, Cursor or any MCP client |
+| [IMD Kit](https://github.com/RobertKodes/imd-kit) | Open-source TypeScript SDK, CLI and MCP server to hire the IMD swarm (MIT) |
+| Telegram bot | An AI assistant for questions, live posts for sales, forges, evolutions and milestones, and the private Watch Room for Night Watcher holders |
+| The Guard | Checks every contract's settings and the escrow's solvency every 5 minutes and alerts the team |
+| [Whitepaper](https://getnightshift.tech/whitepaper), [changelog](https://getnightshift.tech/changelog), [guide](https://getnightshift.tech/guide), [security](https://getnightshift.tech/security), [llms.txt](https://getnightshift.tech/llms.txt) | Everything documented, for people and AI agents |
 
 ## 5. What the owner can and cannot do
 
