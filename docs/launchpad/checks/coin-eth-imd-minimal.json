@@ -1,0 +1,148 @@
+{
+  "checkedAt": "2026-10-22T03:02:58.568Z",
+  "action": "launch.open",
+  "intake": "launch.open@launch-1",
+  "title": "Coin from the launch form (eth-imd-minimal)",
+  "form": {
+    "chainId": 1,
+    "pairWith": "imd",
+    "name": "Owl",
+    "symbol": "OWL",
+    "supply": "21000000",
+    "poolPercent": 90,
+    "cap": "250",
+    "creator": "0x2222222222222222222222222222222222222222",
+    "about": "",
+    "website": "",
+    "x": "",
+    "telegram": "",
+    "logo": ""
+  },
+  "request": {
+    "objective": "A custom token: Owl (OWL).\nToken name: Owl\nToken symbol: OWL\nToken supply: 21,000,000 with 18 decimals, all minted once to the deployer in the constructor.\nTransfers: plain ERC-20 transfers with no fee, tax or limit. Fixed supply: no owner, nobody can mint more.\nLaunched with the NIGHTSHIFT Launchpad, getnightshift.tech/launchpad.",
+    "shape": "chain",
+    "steps": [
+      {
+        "skill": "build-contract-project"
+      },
+      {
+        "skill": "adversarial-review"
+      }
+    ],
+    "onchain": "custom_token",
+    "github": true,
+    "chainId": 1,
+    "pairWith": "imd",
+    "economics": {
+      "poolBps": 9000,
+      "initialMarketCapWei": "250000000000000000000"
+    }
+  },
+  "response": {
+    "action": "launch.open",
+    "kind": "token",
+    "plan": [
+      {
+        "title": "Build and test the contracts",
+        "short": "contracts",
+        "skill": "build-contract-project",
+        "stage": 0
+      },
+      {
+        "title": "Test them, as another agent",
+        "short": "tests",
+        "skill": "write-foundry-tests",
+        "stage": 1
+      },
+      {
+        "title": "Write what to deploy",
+        "short": "",
+        "stage": 1
+      },
+      {
+        "title": "Audit the math, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the permissions, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the economics, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the control flow, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Judge the audit: reproduce, merge and rank what was found",
+        "short": "judge",
+        "skill": "audit-judge",
+        "stage": 2
+      },
+      {
+        "title": "Deploy on Ethereum mainnet",
+        "short": "deploy"
+      }
+    ],
+    "facts": [
+      {
+        "id": "token_name",
+        "label": "Token name",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. Signal"
+      },
+      {
+        "id": "token_symbol",
+        "label": "Token symbol",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. SIG"
+      },
+      {
+        "id": "token_supply",
+        "label": "Total supply",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. 1,000,000"
+      },
+      {
+        "id": "token_minting",
+        "label": "Minting after launch",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: a fixed supply that nobody can mint more of.",
+        "example": "e.g. fixed supply, nobody mints more"
+      },
+      {
+        "id": "token_rules",
+        "label": "Transfer rules",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: plain transfers with no fee or limit.",
+        "example": "e.g. plain transfers, no fee"
+      },
+      {
+        "id": "recipient",
+        "label": "Who receives fees and payouts",
+        "state": "unknown",
+        "required": false,
+        "assumed": "Assumed: the launch's owner, the wallet that pays.",
+        "example": "e.g. 0x1f9a\u00e2\u20ac\u00a6c3e2, or: no fee"
+      }
+    ],
+    "judged": true,
+    "blockers": [],
+    "suggestions": []
+  }
+}

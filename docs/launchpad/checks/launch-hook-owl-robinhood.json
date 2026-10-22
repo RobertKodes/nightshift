@@ -1,0 +1,204 @@
+{
+  "checkedAt": "2026-10-22T03:36:12.292Z",
+  "ms": 511,
+  "action": "launch.open",
+  "intake": "launch.open@launch-1",
+  "title": "OWL with the NIGHTSHIFT Launch Hook",
+  "request": {
+    "objective": "Launch Night Owl (OWL) on Robinhood Chain with its own token and the NightshiftLaunchHook on its OWL/ETH Uniswap v4 pool.\n\nTOKEN (customToken): a plain ERC-20 named Night Owl, symbol OWL, total supply 1,000,000,000 with 18 decimals, minted once and whole in the constructor. No owner, no mint after launch, no burn by anyone but a holder of their own tokens, no transfer fee, no blocklist, no pause, no permit needed.\n\nHOOK: NightshiftLaunchHook, immutable, no owner and no admin functions, no backend signer, no oracle, no upgrade. It holds no funds between swaps. Its only parameters, fixed in the constructor: the PoolManager, FEE_TO = 0x1119d5df2f046bc2d3c0f6279ef2e9ce49422d44 (the NIGHTSHIFT FeeSplitter, which accepts ETH), SNIPER_WINDOW = 60 seconds, SNIPER_START_BPS = 5000, FEE_BPS = 25.\n1. launchedAt = block.timestamp in afterInitialize; the hook serves exactly one pool, the launch's OWL/ETH pool, and reverts for any other pool.\n2. Anti-sniper fee: a buy (ETH in, OWL out) made at elapsed = block.timestamp - launchedAt < 60 seconds pays an extra sniper fee of SNIPER_START_BPS x (60 - elapsed) / 60 basis points of its ETH input (50% in the launch second, falling linearly to 0 at 60 seconds). Sells pay no sniper fee. Exact-input and exact-output buys are both charged on their ETH amount.\n3. NIGHTSHIFT fee: every swap after the window, buy or sell, pays FEE_BPS = 0.25% of its ETH amount (input for buys, output for sells).\n4. Both fees are taken in ETH through beforeSwap/afterSwap return deltas and sent to FEE_TO in the same swap with PoolManager take; emit FeeTaken(address indexed sender, bool buy, uint256 sniperFee, uint256 fee). Nothing is kept in the hook. The pool's own LP fee is the launch factory's and is not changed.\n5. Swaps must work through the Uniswap v4 Universal Router (V4_SWAP, SWAP_EXACT_IN_SINGLE and SWAP_EXACT_OUT_SINGLE) with empty hookData and be quotable by the V4 Quoter, so routers and cross-chain intent solvers (Relay, LI.FI) can buy from any chain.\n6. Views: launchedAt(), sniperBps() (the fee a buy would pay now, 0 after the window), FEE_TO(), FEE_BPS().\n\nTrading opens to everyone at launch: no allowlist and no first-buyer gate. Foundry tests on a real v4-core PoolManager: the sniper fee at 0, 1, 30, 59 and 60 seconds; the 0.25% fee on buys and sells after the window; exact-input and exact-output; fees arrive at FEE_TO; no ETH or token stays in the hook; any other pool reverts; fuzz on amounts and times. The owner of the launch is 0x2222222222222222222222222222222222222222; the hook has no owner functions.",
+    "shape": "chain",
+    "references": [
+      "uniswap-v4-hooks",
+      "uniswap-v4-security"
+    ],
+    "steps": [
+      {
+        "skill": "build-contract-project"
+      },
+      {
+        "skill": "adversarial-review"
+      }
+    ],
+    "onchain": "univ4_hook",
+    "customToken": true,
+    "chainId": 4663,
+    "pairWith": "eth",
+    "owner": "0x2222222222222222222222222222222222222222",
+    "economics": {
+      "poolBps": 9000
+    }
+  },
+  "response": {
+    "action": "launch.open",
+    "kind": "hook",
+    "plan": [
+      {
+        "title": "Build and test the contracts",
+        "short": "contracts",
+        "skill": "build-contract-project",
+        "stage": 0
+      },
+      {
+        "title": "Test them, as another agent",
+        "short": "tests",
+        "skill": "write-foundry-tests",
+        "stage": 1
+      },
+      {
+        "title": "Write what to deploy",
+        "short": "",
+        "stage": 1
+      },
+      {
+        "title": "Audit the math, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the permissions, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the economics, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Audit the control flow, as a specialist agent",
+        "short": "audit",
+        "skill": "audit-specialist",
+        "stage": 1
+      },
+      {
+        "title": "Judge the audit: reproduce, merge and rank what was found",
+        "short": "judge",
+        "skill": "audit-judge",
+        "stage": 2
+      },
+      {
+        "title": "Deploy on Robinhood Chain",
+        "short": "deploy"
+      }
+    ],
+    "facts": [
+      {
+        "id": "fee_rule",
+        "label": "The fee rule",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: the pool's own fee, unchanged by the hook.",
+        "example": "e.g. 0.05%, rising to 1% when volatile"
+      },
+      {
+        "id": "fee_destination",
+        "label": "Where fees go",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: fees stay with liquidity providers.",
+        "example": "e.g. half to the pool creator"
+      },
+      {
+        "id": "admin",
+        "label": "Who can change it",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: nobody can change it after deployment.",
+        "example": "e.g. nobody after deployment"
+      },
+      {
+        "id": "dependencies",
+        "label": "Outside services and values",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: none beyond standard libraries.",
+        "example": "e.g. Chainlink VRF subscription 1234, or: the owner sets the feed after launch"
+      },
+      {
+        "id": "token_name",
+        "label": "Token name",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. Signal"
+      },
+      {
+        "id": "token_symbol",
+        "label": "Token symbol",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. SIG"
+      },
+      {
+        "id": "token_supply",
+        "label": "Total supply",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. 1,000,000"
+      },
+      {
+        "id": "token_minting",
+        "label": "Minting after launch",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: a fixed supply that nobody can mint more of.",
+        "example": "e.g. fixed supply, nobody mints more"
+      },
+      {
+        "id": "token_rules",
+        "label": "Transfer rules",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: plain transfers with no fee or limit.",
+        "example": "e.g. plain transfers, no fee"
+      },
+      {
+        "id": "pools",
+        "label": "Which pool: the one this launch opens for its new token, with the hook attached",
+        "state": "fixed",
+        "required": false
+      },
+      {
+        "id": "callbacks",
+        "label": "When the hook acts: when its pool opens, as every launch hook must, and on each swap if it takes a fee, plus whatever else you describe",
+        "state": "fixed",
+        "required": false
+      },
+      {
+        "id": "hook_fee",
+        "label": "Hook fee: any fee the hook takes is taken in ETH on each swap, unless you ask otherwise. When the pool is short of ETH, the hook holds it as a claim and collects it later",
+        "state": "fixed",
+        "required": false
+      },
+      {
+        "id": "own_token",
+        "label": "Your token: written to your request, minted once and whole to the launch factory, with nothing minted after launch, and every transfer moving exactly what it is asked to. Fees on buys and sells are the hook's",
+        "state": "fixed",
+        "required": false
+      },
+      {
+        "id": "token_split",
+        "label": "Split: 10% to the swarm, the other 90% is yours: 90% into the pool",
+        "state": "fixed",
+        "required": false
+      },
+      {
+        "id": "token_pool",
+        "label": "Pool: paired with ETH, opening at a 10 ETH market cap",
+        "state": "fixed",
+        "required": false
+      },
+      {
+        "id": "token_trading_fee",
+        "label": "Trading fee: 1.25% of every trade: 1% to you, 0.25% to IMD, claimable any time. The hook's own fee, if it takes one, is on top; \"no fees\" means the hook takes none",
+        "state": "fixed",
+        "required": false
+      }
+    ],
+    "judged": true,
+    "blockers": [],
+    "suggestions": []
+  }
+}

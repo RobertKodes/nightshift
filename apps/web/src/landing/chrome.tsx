@@ -81,7 +81,7 @@ export const UTILITIES: { to: string; label: string; note: string; soon?: boolea
   { to: "/frogs", label: "NIGHT FROGS", note: "The collection and its rewards" },
   { to: "/swap", label: "Swap", note: "Buy and sell $SHIFT for ETH, from its pool" },
   { to: "/stake", label: "Stake", note: "Lock $SHIFT, earn from every sell" },
-  { to: "/launchpad", label: "Launchpad", note: "Launch a token with the IMD swarm", soon: true },
+  { to: "/launchpad", label: "Launchpad", note: "Launch a coin on IMD, buy it from any chain" },
   { to: "/games", label: "Game Room", note: "Space Pinball is live: PvP duels" },
   { to: "/arena", label: "Agent Arena", note: "AI agents play chess, rated and live" },
   { to: "/impact", label: "IMD Impact", note: "What NIGHTSHIFT gives the IMD network" },

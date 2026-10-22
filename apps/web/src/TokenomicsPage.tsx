@@ -18,7 +18,7 @@ const where = (bps: number): [string, string, string][] => [
   ["Selling $SHIFT", "5% of the sell", "From the first trade"],
   ["Swap on NIGHTSHIFT", "0.3% of the swap", "Coming soon"],
   ["Company withdrawals (USDC)", `${bps / 100}% of the withdrawal (20% of it to the dev wallet, 80% to the treasury), 0% for $SHIFT and NIGHT FROGS holders`, "When companies go live"],
-  ["Launchpad", "A launch fee, lower when paid in $SHIFT", "Coming soon"],
+  ["Launchpad", "No launch fee: the creator pays IMD 0.5 IMD; buys through the swap carry the swap fee", "Live"],
   ["Game Room", "5% of each pot", "Coming soon"],
   ["IMD bot premium", "Paid in $SHIFT", "Coming soon"],
 ];

@@ -22,7 +22,7 @@ const DETAIL_BUDGET = 24;
 const UNPRICED_SHOWN = 60;
 const GECKO = "https://api.geckoterminal.com/api/v2";
 
-export type Market = { priceUsd: number; mcapUsd: number | null; liquidityUsd: number; volume24: number; change1h: number; change24h: number; buys24: number; sells24: number; quote: string; pair: string; url: string; image: string | null };
+export type Market = { symbol: string; name: string; priceUsd: number; mcapUsd: number | null; liquidityUsd: number; volume24: number; change1h: number; change24h: number; buys24: number; sells24: number; quote: string; pair: string; url: string; image: string | null };
 export type BoardRow = {
   launchNumber: number; id: string; kind: string; chainId: LaunchChainId; chain: ChainKey; token: string;
   name: string; symbol: string | null; createdAt: string; logo: string | null; ours: boolean; market: Market | null;
@@ -94,7 +94,7 @@ const market = (p: DexPair | undefined): Market | null => {
   const price = Number(p?.priceUsd ?? 0);
   if (!p || !(price > 0)) return null;
   return {
-    priceUsd: price, mcapUsd: p.marketCap ?? p.fdv ?? null, liquidityUsd: p.liquidity?.usd ?? 0, volume24: p.volume?.h24 ?? 0,
+    symbol: p.baseToken.symbol.slice(0, 16), name: p.baseToken.name.slice(0, 40), priceUsd: price, mcapUsd: p.marketCap ?? p.fdv ?? null, liquidityUsd: p.liquidity?.usd ?? 0, volume24: p.volume?.h24 ?? 0,
     change1h: p.priceChange?.h1 ?? 0, change24h: p.priceChange?.h24 ?? 0, buys24: p.txns?.h24?.buys ?? 0, sells24: p.txns?.h24?.sells ?? 0,
     quote: p.quoteToken.symbol, pair: p.pairAddress, url: p.url, image: https(p.info?.imageUrl) ?? null,
   };
@@ -231,7 +231,7 @@ export function launchpadService(d: LaunchpadDeps) {
         id: rec.id, launchNumber: rec.launchNumber, kind: rec.kind, status: rec.status, chainId: rec.chainId, chain: ck, createdAt: rec.createdAt, parkedReason: rec.parkedReason ?? null, repo: https(rec.sourceRepoUrl ?? undefined) ?? null,
         token, contracts: (rec.artifacts ?? []).map((a) => ({ role: a.role, name: a.name, address: a.address.toLowerCase() })),
         checks: (rec.admissionChecks ?? []).map((c) => ({ name: c.name, status: c.status, detail: c.detail.slice(0, 300) })),
-        economics: econ?.poolBps ? { poolPct: econ.poolBps / 100, creatorPct: Math.max(0, 90 - econ.poolBps / 100), swarmPct: 10, cap: econ.initialMarketCapWei ?? null, pairedWith } : null,
+        economics: econ?.poolBps ? { poolPct: econ.poolBps / 100, creatorPct: Math.max(0, (9_000 - econ.poolBps) / 100), swarmPct: 10, cap: econ.initialMarketCapWei ?? null, pairedWith } : null,
         requester: rec.requester ?? null, poolFeeBps: rec.poolFee ? rec.poolFee / 100 : null, pool, logo: logoOf(rec), ours: oursOf(rec),
       } : null,
       coin, market: m,

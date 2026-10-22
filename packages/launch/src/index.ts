@@ -65,7 +65,7 @@ export type LaunchForm = {
   poolPercent: number;
   /** Opening market cap in the paired currency, e.g. "2" (ETH) or "2500" (IMD). */
   cap: string;
-  /** The creator's wallet: it pays, so IMD makes it the launch's requester (1% of every trade); the rest of its share goes here too. */
+  /** The creator's wallet: it pays, so IMD makes it the launch's requester (1% of every trade); the share it keeps goes here. Needed in the form only when it keeps a share. */
   creator: string;
   about: string;
   website: string;
@@ -109,7 +109,9 @@ export function formProblems(f: LaunchForm): Problem[] {
       if (v < lo || v > hi) out.push({ field: "cap", text: `An opening market cap between ${Number(pair.min).toLocaleString("en-US")} and ${Number(pair.max).toLocaleString("en-US")} ${pair.symbol}.` });
     }
   }
-  if (!ADDRESS.test(f.creator.trim()) || /^0x0{40}$/i.test(f.creator.trim())) out.push({ field: "creator", text: "Connect the wallet that launches and pays: it is the launch's requester." });
+  // the creator's wallet is in the request only when it keeps part of the supply; otherwise the wallet that pays is the creator
+  const creator = f.creator.trim();
+  if ((creator || f.poolPercent < 90) && (!ADDRESS.test(creator) || /^0x0{40}$/i.test(creator))) out.push({ field: "creator", text: f.poolPercent < 90 ? "Connect the creator's wallet: the share you keep goes to it." : "That is not a wallet address." });
   if (f.about.trim().length > 280 || !oneLine(f.about)) out.push({ field: "about", text: "What it is, in one line of up to 280 characters." });
   if (f.website.trim() && !link(f.website.trim(), /\./)) out.push({ field: "website", text: "A website starting with https://" });
   if (f.x.trim() && !link(f.x.trim(), /^(www\.)?(x|twitter)\.com$/)) out.push({ field: "x", text: "An X link: https://x.com/yourname" });
@@ -179,9 +181,9 @@ export function refuseBody(body: unknown, f: LaunchForm, payer: string): string 
   let mine: LaunchBody;
   try { mine = launchBody(f); } catch (e) { return `Refused: ${(e as Error).message}`; }
   if (JSON.stringify(body) !== JSON.stringify(mine)) return "Refused: the launch request is not the one your form builds.";
-  if (payer.toLowerCase() !== f.creator.trim().toLowerCase()) return "Refused: the wallet that pays is not the creator named in the form. Connect the creator's wallet.";
   const to = mine.economics.remainderTo;
-  if (to && to !== payer.toLowerCase()) return "Refused: the rest of the supply would go to another wallet.";
+  if (to && to !== payer.toLowerCase()) return "Refused: the share you keep would go to another wallet than the one paying. Connect the creator's wallet and check again.";
+  if (f.creator.trim() && payer.toLowerCase() !== f.creator.trim().toLowerCase()) return "Refused: the wallet that pays is not the creator named in the form. Connect the creator's wallet.";
   return null;
 }
 

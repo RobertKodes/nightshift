@@ -1,0 +1,85 @@
+{
+  "checkedAt": "2026-10-22",
+  "action": "launch.open",
+  "title": "A coin on Base (8453): refused, Base is not open at IMD",
+  "request": {
+    "objective": "A custom token: Night Owl (OWL).\nToken name: Night Owl\nToken symbol: OWL\nToken supply: 1,000,000,000 with 18 decimals, all minted once to the deployer in the constructor.\nTransfers: plain ERC-20 transfers with no fee, tax or limit. Fixed supply: no owner, nobody can mint more.\nWhat it does: A community token for night-shift workers.\nWebsite: https://example.org\nX: https://x.com/example\nLogo: a white owl on a dark navy circle, neon cyan eyes.",
+    "shape": "chain",
+    "steps": [
+      {
+        "skill": "build-contract-project"
+      },
+      {
+        "skill": "adversarial-review"
+      }
+    ],
+    "onchain": "custom_token",
+    "github": true,
+    "chainId": 8453,
+    "economics": {
+      "poolBps": 8800,
+      "initialMarketCapWei": "10000000000000000000",
+      "remainderTo": "0x2222222222222222222222222222222222222222"
+    }
+  },
+  "response": {
+    "action": "launch.open",
+    "kind": "token",
+    "plan": [],
+    "facts": [
+      {
+        "id": "token_name",
+        "label": "Token name",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. Signal"
+      },
+      {
+        "id": "token_symbol",
+        "label": "Token symbol",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. SIG"
+      },
+      {
+        "id": "token_supply",
+        "label": "Total supply",
+        "state": "stated",
+        "required": true,
+        "example": "e.g. 1,000,000"
+      },
+      {
+        "id": "token_minting",
+        "label": "Minting after launch",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: a fixed supply that nobody can mint more of.",
+        "example": "e.g. fixed supply, nobody mints more"
+      },
+      {
+        "id": "token_rules",
+        "label": "Transfer rules",
+        "state": "stated",
+        "required": false,
+        "assumed": "Assumed: plain transfers with no fee or limit.",
+        "example": "e.g. plain transfers, no fee"
+      },
+      {
+        "id": "recipient",
+        "label": "Who receives fees and payouts",
+        "state": "unknown",
+        "required": false,
+        "assumed": "Assumed: the launch's owner, the wallet that pays.",
+        "example": "e.g. 0x1f9a\u2026c3e2, or: no fee"
+      }
+    ],
+    "judged": true,
+    "blockers": [
+      {
+        "code": "invalid_input",
+        "detail": "Base (8453) is not open for launches; launches open on Sepolia (11155111), Ethereum mainnet (1), Robinhood Chain (4663)"
+      }
+    ],
+    "suggestions": []
+  }
+}

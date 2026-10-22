@@ -92,6 +92,9 @@ describe("the launch request the form builds", () => {
     expect(bad({ cap: "1001" })).toEqual(["cap"]);
     expect(bad({ pairWith: "imd", cap: "100" })).toEqual(["cap"]);
     expect(bad({ creator: "0x0000000000000000000000000000000000000000" })).toEqual(["creator"]);
+    // the wallet is needed in the form only when the creator keeps a share (it receives it); at 90% the payer is the creator
+    expect(bad({ creator: "" })).toEqual([]);
+    expect(bad({ creator: "", poolPercent: 80 })).toEqual(["creator"]);
     expect(bad({ x: "https://evil.example/x.com" })).toEqual(["x"]);
     expect(bad({ telegram: "http://t.me/a" })).toEqual(["telegram"]);
     expect(bad({ chainId: 8453 as never })).toEqual(["chainId"]);
@@ -99,9 +102,13 @@ describe("the launch request the form builds", () => {
   it("is signed only when it is exactly the form's body and the payer is the creator", () => {
     const b = launchBody({ ...FORM, poolPercent: 70 });
     expect(refuseBody(b, { ...FORM, poolPercent: 70 }, ME)).toBeNull();
-    expect(refuseBody(b, { ...FORM, poolPercent: 70 }, "0x3333333333333333333333333333333333333333")).toMatch(/not the creator/);
+    expect(refuseBody(b, { ...FORM, poolPercent: 70 }, "0x3333333333333333333333333333333333333333")).toMatch(/another wallet than the one paying/);
+    expect(refuseBody(launchBody(FORM), FORM, "0x3333333333333333333333333333333333333333")).toMatch(/not the creator/);
     expect(refuseBody({ ...b, economics: { ...b.economics, remainderTo: "0x3333333333333333333333333333333333333333" } }, { ...FORM, poolPercent: 70 }, ME)).toMatch(/not the one your form builds/);
     expect(refuseBody({ ...b, chainId: 4663 }, { ...FORM, poolPercent: 70 }, ME)).toMatch(/not the one your form builds/);
+    // a fair launch (90% in the pool) names no wallet: whoever pays is the creator
+    const fair = { ...FORM, creator: "" };
+    expect(refuseBody(launchBody(fair), fair, "0x3333333333333333333333333333333333333333")).toBeNull();
   });
 });
 

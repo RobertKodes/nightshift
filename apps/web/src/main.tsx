@@ -29,13 +29,13 @@ import { SecurityPage } from "./SecurityPage";
 import { TokenomicsPage } from "./TokenomicsPage";
 import { GameRoomPage } from "./GameRoomPage";
 import { PinballPage } from "./PinballPage";
-import { LaunchpadPage } from "./LaunchpadPage";
 import { WaitingBanner } from "./games/lounge";
 import { StakedBanner } from "./games/staked";
 import "./styles.css";
 import "./lite"; // marks <html data-lite> before the first paint
 import "./landing/landing.css";
 
+const LaunchpadPage = lazy(() => import("./launchpad/LaunchpadPage").then((x) => ({ default: x.LaunchpadPage })));
 const ArenaPage = lazy(() => import("./ArenaPage").then((x) => ({ default: x.ArenaPage })));
 const ChessPage = lazy(() => import("./ChessPage").then((x) => ({ default: x.ChessPage })));
 const PoolPage = lazy(() => import("./pool/PoolPage").then((x) => ({ default: x.PoolPage })));
@@ -95,7 +95,7 @@ function App() {
   if (seg[0] === "guide") page = <GuidePage />;
   if (seg[0] === "tokenomics") page = <TokenomicsPage />;
   if (seg[0] === "games") page = seg[1] === "live" ? <Suspense fallback={null}><LivePage /></Suspense> : <GameRoomPage />;
-  if (seg[0] === "launchpad") page = <LaunchpadPage />;
+  if (seg[0] === "launchpad") page = <Suspense fallback={<div className="st-room" />}><LaunchpadPage seg={seg} /></Suspense>;
   if (seg[0] === "breakroom") page = <Suspense fallback={<div className="st-room" />}><BreakroomPage /></Suspense>;
   if (seg[0] === "geek") page = <Suspense fallback={<div className="st-room" />}><GeekPage /></Suspense>;
   if (seg[0] === "info") page = <Suspense fallback={<div className="st-room" />}><InfoPage /></Suspense>;

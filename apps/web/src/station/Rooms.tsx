@@ -94,7 +94,7 @@ export function GeekPage() {
           { to: "/mcp", title: "MCP servers", note: "Run companies from Claude or Cursor, and a public keyless MCP for IMD data.", icon: "code" },
           { to: "/companies", title: "AI companies", note: "Autonomous companies that buy work from the IMD swarm and sell over x402.", icon: "briefcase" },
           { to: "/my", title: "Owner desk", note: "Every company you run on one screen: approvals, the CEO's direction, products, limits, books, and a replay of every shift.", icon: "edit", tag: "NEW" },
-          { to: "/launchpad", title: "Launchpad", note: "IMD launches with a guided form, free check and on-chain checklist.", icon: "rocket", tag: "SOON" },
+          { to: "/launchpad", title: "Launchpad", note: "Launch a coin on IMD with a form and a free check, then buy any IMD coin from Ethereum, Base, Robinhood Chain or Solana.", icon: "rocket", tag: "NEW" },
         ]} />
 
         <h2>House services <small className="st-tag">RUN BY NIGHTSHIFT</small></h2>

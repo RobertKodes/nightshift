@@ -123,6 +123,7 @@ a.nx-btn-acc, a.nx-btn-acc:visited, a.nx-btn-acc:hover, .nx-btn-acc .nx-ic { col
 .nx-shell .st-tile-tx b { font-family: var(--nx-ui); }
 .nx-shell .st-tile-tx b i, .nx-shell .st-tag { border-radius: 0; background: var(--acc-soft); color: var(--acc); }
 .nx-shell .st-cta { border-radius: 0; border: 0; background: var(--acc); color: #05040c; font-family: var(--nx-ui); clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
+.nx-shell .st-cta.ghost { background: transparent; color: var(--acc); box-shadow: inset 0 0 0 1px var(--acc-line); }
 .nx-shell .st-panel h3 { font-family: var(--nx-ui); }
 .nx-shell .st-note a, .nx-shell .st-panel a, .nx-shell .st-table a, .nx-shell .st-empty a, .nx-shell .st-link { color: var(--acc); }
 .nx-shell .st-mission > span { color: var(--acc); }
