@@ -115,7 +115,7 @@
 .sh-debug { position: absolute; z-index: 9; left: 18px; bottom: 70px; padding: 4px 8px; background: rgba(0, 0, 0, .6); font: 600 11px var(--nx-mono); color: #b8ff4a; }
 
 /* the list */
-.sh-list { position: absolute; inset: 0; overflow-y: auto; padding: 150px max(16px, calc(50% - 560px)) 90px; }
+.sh-list { position: absolute; inset: 0; overflow-y: auto; padding: 236px max(16px, calc(50% - 560px)) 90px; }
 .sh-list-h { font: 700 18px var(--nx-ui); margin: 0 0 12px; }
 .sh-list ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
 .sh-list li button { --tc: #a7a2c3; width: 100%; display: grid; grid-template-columns: 56px 1fr auto; grid-template-rows: auto auto auto; column-gap: 12px; align-items: center; padding: 8px 10px; text-align: left;
@@ -153,7 +153,7 @@
   .sh-art { width: 96px; height: 96px; }
   .sh-panel h2 { font-size: 18px; }
   .sh-toast { top: auto; bottom: 120px; }
-  .sh-list { padding-top: 130px; padding-bottom: 120px; }
+  .sh-list { padding-top: 118px; padding-bottom: 130px; }
   .sh-list ul { grid-template-columns: 1fr; }
   .sh-loading { bottom: 120px; }
 }

@@ -497,3 +497,12 @@ html[data-lite] .arc .arc-stage::before { filter: none; opacity: .6; }
 /* the companies page: the upgrade note */
 .co-upgrade { display: grid; gap: 4px; margin: 0 0 18px; padding: 12px 16px; border: 1px solid color-mix(in srgb, #ffc861 55%, transparent); background: color-mix(in srgb, #ffc861 8%, transparent); color: var(--text); font-size: 14px; line-height: 1.45; }
 .co-upgrade b { color: #ffc861; font: 600 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+/* the way to THE SHIP from the NIGHT FROGS page */
+.frogs-ship { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 6px 16px; margin: 18px 0 22px; padding: 14px 18px; text-decoration: none; color: #f3f1ff;
+  background: linear-gradient(100deg, rgba(184, 255, 74, .12), rgba(74, 216, 255, .06) 60%, transparent); border: 1px solid rgba(184, 255, 74, .4);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px)); }
+.frogs-ship b { font: 700 12px "JetBrains Mono", monospace; letter-spacing: .16em; color: #b8ff4a; }
+.frogs-ship span { font-size: 14px; color: #c9c5e0; }
+.frogs-ship i { font-style: normal; font-weight: 700; color: #b8ff4a; white-space: nowrap; }
+.frogs-ship:hover { border-color: #b8ff4a; }
+@media (max-width: 640px) { .frogs-ship { grid-template-columns: 1fr; } }

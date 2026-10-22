@@ -158,6 +158,7 @@ export function ForgePage() {
           <div className="fg-cta">
             <a className="nx-btn nx-btn-acc" href="#bench"><NxIcon name="forge" size={18} /> Start forging</a>
             <a className="nx-btn" href="#perks">What you get</a>
+            <Link to="/ship" className="nx-btn"><NxIcon name="frogs" size={18} /> See the crew on the Ship</Link>
           </div>
           <div className="st-stats">
             <Stat label="The forge" value={open ? "OPEN" : "WAITING FOR IMD"} note={open ? "10 frogs in, 1 Night Watcher out" : "the IMD swarm builds the 3 contracts"} />

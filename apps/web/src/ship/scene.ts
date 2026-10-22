@@ -250,6 +250,7 @@ export class ShipScene {
         this.clamp(); this.dirty = true;
         return;
       }
+      if (e.pointerType === "mouse") { this.space.lean = { x: (e.offsetX / this.w) * 2 - 1, y: (e.offsetY / this.h) * 2 - 1 }; }
       if (e.pointerType === "mouse" && performance.now() - this.lastPick > 40) {
         this.lastPick = performance.now();
         const p = this.pick(e.offsetX, e.offsetY);
@@ -514,6 +515,7 @@ export class ShipScene {
       if (!o) return;
       const r = this.occRect(s), sel = this.selected === key;
       if (this.crew.has(key) || sel) this.marker(c, s, sel ? "#ffffff" : "#b8ff4a", t);
+      else if (this.match && !dim) this.found(c, s);
       if (this.isHover(o) && !sel) disc(c, s.x, s.y, s.z, 0.55, null, "rgba(255,255,255,.6)", 1.5 / this.cam.z);
       if (fxOn && !dim) this.jobs.push({ r, o, spill: SPILL[s.kind] ?? null });
       return;
@@ -530,6 +532,7 @@ export class ShipScene {
       r.y += bob;
       const sel = this.selected === key;
       if (mode === "live" && (this.crew.has(key) || sel)) this.marker(c, s, sel ? "#ffffff" : "#b8ff4a", t);
+      else if (mode === "live" && this.match && !dim) this.found(c, s);
       if (o.kind === "watcher" && fxOn) watcherBack(c, r, o.tier, o.color, t, o.ph);
       if (!this.F.noSprites) this.sprites.draw(c, o.key, r.x, r.y, r.w, r.h, mode === "bake" ? devH * (r.h / SH) : r.h * this.cam.z * this.dpr, o.skin);
       if (mode === "live") {
@@ -610,6 +613,14 @@ export class ShipScene {
   }
   private onWatch(n: number) { return Boolean(this.snap?.watchers.find((w) => w.n === n)?.watch.online); }
 
+  /** A filter's match: a ring of the station's light under it. */
+  private found(c: CanvasRenderingContext2D, s: Seat) {
+    const prev = c.globalCompositeOperation; c.globalCompositeOperation = "lighter";
+    const [x, y] = P(s.x, s.y, s.z);
+    glow(c, x, y, 46, "#4ad8ff", 0.5, 0.5);
+    disc(c, s.x, s.y, s.z, 0.62, null, "rgba(160,240,255,.8)", 1.5 / Math.max(0.4, this.cam.z));
+    c.globalCompositeOperation = prev;
+  }
   private marker(c: CanvasRenderingContext2D, s: Seat, col: string, t: number) {
     const k = this.still ? 1 : 0.75 + 0.25 * Math.sin(t * 4);
     const prev = c.globalCompositeOperation; c.globalCompositeOperation = "lighter";
@@ -846,7 +857,7 @@ export class ShipScene {
     for (const r of ROOMS) {
       const lab = this.labels[r.key];
       if (!lab) continue;
-      const [wx, wy] = P(r.label[0], r.label[1], r.key === "bridge" ? 4.4 : 3.2);
+      const [wx, wy] = P(r.label[0], r.label[1], r.key === "bridge" ? 4.4 : r.key === "engine" ? 6.9 : r.key === "forge" ? 6.7 : r.key === "drive" ? 5.3 : 3.2);
       const [x, y] = this.toScreen(wx, wy);
       if (x < -200 || x > this.w + 200 || y < -60 || y > this.h + 60) continue;
       const s = Math.max(0.78, Math.min(1.05, 0.7 + z * 0.4));

@@ -5,6 +5,7 @@ import { inUsd, useImdUsd } from "./price";
 import { type Hex, createPublicClient, createWalletClient, custom, erc20Abi, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
+import { go } from "./router";
 import { type Step, canBatch, sendSteps } from "./batch";
 
 const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
@@ -87,6 +88,7 @@ export function FrogsPage() {
       <span className="eyebrow">THE COLLECTION</span>
       <h1>NIGHT FROGS. <em>The crew of the 3 AM shift.</em></h1>
       <p className="lead">500 frogs that work the night shift on the NIGHTSHIFT ship while the founders sleep. Tired, caffeinated, a little dangerous, always shipping. Drawn, coded and audited by the IMD swarm, and stored fully onchain: no server, no IPFS, the art lives in the contract.</p>
+      <a className="frogs-ship" href="/ship" onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go("/ship"); }}><b>THE SHIP · LIVE</b><span>All 500 frogs and every Night Watcher at work on the ship, drawn from their onchain art: find yours, see what it earns an hour.</span><i>Board the ship →</i></a>
 
       <section className="tkn-card frogs-mint">
         <div className="tkn-head">

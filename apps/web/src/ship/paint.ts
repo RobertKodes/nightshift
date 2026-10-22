@@ -273,6 +273,38 @@ function fittings(c: Ctx, len: number, h: number, r: Room, y0: number) {
 
 for (const d of DECO) piece(bbox(-0.4, d.y0, d.room.z, 0, d.y1, WALL + 0.1, 10), (c) => portWall(c, d.y0, d.y1, d.room));
 
+/**
+ * Light through the windows: each opening throws a patch of moonlight on the floor in front of it and a faint
+ * shaft through the air down to it (the light falls at 45 degrees, so a window at height z lands z tiles in).
+ */
+function shafts(c: Ctx, wins: { a: V3; b: V3; z0: number; z1: number; dir: [number, number] }[], col: string, k: number) {
+  const prev = c.globalCompositeOperation; c.globalCompositeOperation = "lighter";
+  for (const w of wins) {
+    const [dx, dy] = w.dir, fz = w.a[2];
+    const f = (p: V3, z: number): V3 => [p[0] + dx * (z - fz), p[1] + dy * (z - fz), fz];
+    const A0 = f(w.a, w.z0), B0 = f(w.b, w.z0), A1 = f(w.a, w.z1), B1 = f(w.b, w.z1);
+    // the patch on the floor
+    const [px, py] = P(...A0), [qx, qy] = P(...A1);
+    poly(c, [A0, B0, B1, A1], lin(c, [px, py], [qx, qy], [[0, alpha(col, 0.16 * k)], [1, alpha(col, 0.03 * k)]]));
+    // the shaft through the air, from the window's lower edge to the patch's far edge
+    const top0: V3 = [w.a[0], w.a[1], w.z1], top1: V3 = [w.b[0], w.b[1], w.z1];
+    const [sx0, sy0] = P(...top0), [sx1, sy1] = P(...A1);
+    poly(c, [top0, top1, B1, A1], lin(c, [sx0, sy0], [sx1, sy1], [[0, alpha(col, 0.07 * k)], [1, alpha(col, 0)]]));
+  }
+  c.globalCompositeOperation = prev;
+}
+for (const d of DECO) {
+  const r = d.room, len = d.y1 - d.y0;
+  const list = windows(len, r).map(([u, v, w, h]) => ({ a: [0, d.y0 + u, r.z] as V3, b: [0, d.y0 + u + w, r.z] as V3, z0: WALL - v - h, z1: WALL - v, dir: [1, 0.35] as [number, number] }));
+  piece(bbox(0, d.y0, r.z, 4.5, d.y1 + 1.5, WALL, 10), (c) => shafts(c, list, "#c4b4ff", r.key === "engine" || r.key === "forge" ? 0.6 : 1));
+}
+// the bow's long window: starlight falling aft onto the bridge
+{
+  const len = W - 2 * CHAMFER, n = 8, w = (len - 0.8 - 7 * 0.28) / n;
+  const list = Array.from({ length: n }, (_, k) => ({ a: [CHAMFER + 0.4 + k * (w + 0.28), 0, 0.5] as V3, b: [CHAMFER + 0.4 + k * (w + 0.28) + w, 0, 0.5] as V3, z0: WALL - 0.42 - 2.05, z1: WALL - 0.42, dir: [0.3, 1] as [number, number] }));
+  piece(bbox(CHAMFER, 0, 0.5, W, 5, WALL, 10), (c) => shafts(c, list, "#9debff", 0.8));
+}
+
 // the bow: the port chamfer (facing the camera) and the long bow wall, a panorama window each
 {
   const z0 = 0.5, h = WALL - z0;
@@ -395,6 +427,22 @@ piece(bbox(0, L, BEVEL, W + 0.4, L + 0.4, 0.1, 10), (c) => {
   poly(c, [[0, y, 0], [W + 0.4, y, 0], [W + 0.4, y, KEEL], [1.5, y, KEEL]], lin(c, P(16, y, 0), P(16, y, KEEL), [[0, "#24214c"], [1, "#14122c"]]));
   poly(c, [[1.5, y, KEEL], [W + 0.4, y, KEEL], [W - 1.2, y, BEVEL], [3, y, BEVEL]], "#0f0d22");
   plane(c, "wallY", [0, y, 0], () => { plating(c, W + 0.4, -KEEL, 2.6, 21); });
+});
+
+// ---- hull detail on the starboard face: a lit strip under the lip, vents, a docking light row
+piece(bbox(W, 0, KEEL, W + 0.5, L + 0.5, 0.5, 10), (c) => {
+  const x = W + 0.41;
+  line(c, [x, CHAMFER + 0.5, -0.08], [x, 20, -0.08], "rgba(74,216,255,.55)", 1.2);
+  line(c, [x, 20, -0.08], [x, 36.6, -0.08], "rgba(169,139,255,.55)", 1.2);
+  line(c, [x, 53.4, -0.08], [x, L + 0.4, -0.08], "rgba(255,181,71,.5)", 1.2);
+  // vents
+  for (let y = 24; y < L - 2; y += 9.5) {
+    if (y > 34 && y < 55) continue;
+    poly(c, [[x, y, -1.15], [x, y + 2.2, -1.15], [x, y + 2.2, -1.65], [x, y, -1.65]], "#0b0a1a");
+    for (let k = 1; k < 6; k++) line(c, [x, y + k * 0.37, -1.18], [x, y + k * 0.37, -1.62], "rgba(120,110,200,.35)", 1);
+  }
+  // the landing lights round the hangar door
+  for (let y = 37.2; y < 53; y += 1.3) { const [a, b] = P(x, y, -0.45); c.fillStyle = "rgba(184,255,74,.85)"; c.fillRect(a - 1.5, b - 1, 3, 2); }
 });
 
 // ---- the starboard wing, down-right of the hull, and the engines at the stern

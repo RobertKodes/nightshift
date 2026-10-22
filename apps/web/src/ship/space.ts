@@ -13,6 +13,10 @@ export class Space {
   private moon: HTMLCanvasElement | null = null;
   private size = "";
   private layers: { f: number; stars: Star[] }[];
+  private planet: HTMLCanvasElement | null = null;
+  /** The pointer, -1..1 across the view: the backdrop leans a few pixels with it. */
+  lean = { x: 0, y: 0 };
+  private eased = { x: 0, y: 0 };
 
   constructor() {
     const g = rng(42);
@@ -35,6 +39,8 @@ export class Space {
     blob(w * 0.9, h * 0.85, Math.max(w, h) * 0.5, "rgba(255,92,168,.07)");
     blob(w * 0.75, h * 0.1, Math.max(w, h) * 0.35, "rgba(74,216,255,.06)");
     blob(w * 0.3, h * 0.95, Math.max(w, h) * 0.4, "rgba(124,92,255,.08)");
+    blob(w * 0.55, h * 0.45, Math.max(w, h) * 0.3, "rgba(255,92,168,.04)");
+    blob(w * 0.05, h * 0.6, Math.max(w, h) * 0.25, "rgba(74,216,255,.05)");
     this.wash = c;
     // the moon: a crescent, lit from the right, with a faint ring of atmosphere
     const m = document.createElement("canvas"), R = 150;
@@ -52,6 +58,30 @@ export class Space {
     for (let k = 0; k < 14; k++) { const a = -1.1 + g() * 2.2, d = R * (0.72 + g() * 0.24); mx.fillStyle = `rgba(40,30,90,${0.15 + g() * 0.2})`; mx.beginPath(); mx.arc(o + Math.cos(a) * d, o + Math.sin(a) * d, 3 + g() * 9, 0, Math.PI * 2); mx.fill(); }
     mx.restore();
     this.moon = m;
+    // a ringed gas giant, far off
+    const p = document.createElement("canvas"), PR = 120;
+    p.width = PR * 5; p.height = PR * 3;
+    const px = p.getContext("2d")!, ox = PR * 2.5, oy = PR * 1.5;
+    const ring = (back: boolean) => {
+      px.save(); px.translate(ox, oy); px.rotate(-0.32); px.scale(1, 0.24);
+      px.beginPath(); px.arc(0, 0, PR * 2.1, back ? Math.PI : 0, back ? Math.PI * 2 : Math.PI);
+      px.arc(0, 0, PR * 1.45, back ? Math.PI * 2 : Math.PI, back ? Math.PI : 0, true); px.closePath();
+      const rg = px.createRadialGradient(0, 0, PR * 1.45, 0, 0, PR * 2.1);
+      rg.addColorStop(0, "rgba(255,170,210,.0)"); rg.addColorStop(0.2, "rgba(255,170,210,.35)"); rg.addColorStop(0.55, "rgba(200,170,255,.22)"); rg.addColorStop(0.8, "rgba(255,190,230,.3)"); rg.addColorStop(1, "rgba(255,170,210,0)");
+      px.fillStyle = rg; px.fill(); px.restore();
+    };
+    ring(true);
+    px.save(); px.beginPath(); px.arc(ox, oy, PR, 0, Math.PI * 2); px.clip();
+    const body = px.createLinearGradient(ox - PR, oy - PR, ox + PR, oy + PR);
+    body.addColorStop(0, "#5a2a6e"); body.addColorStop(0.45, "#2a1446"); body.addColorStop(1, "#0a0618");
+    px.fillStyle = body; px.fillRect(0, 0, p.width, p.height);
+    for (let k = 0; k < 9; k++) { px.fillStyle = k % 2 ? "rgba(255,140,200,.07)" : "rgba(120,90,220,.08)"; px.fillRect(0, oy - PR + k * (PR / 4.5) + Math.sin(k) * 6, p.width, PR / 9); }
+    const sh = px.createRadialGradient(ox - PR * 0.5, oy - PR * 0.45, PR * 0.2, ox + PR * 0.2, oy + PR * 0.2, PR * 1.3);
+    sh.addColorStop(0, "rgba(0,0,0,0)"); sh.addColorStop(1, "rgba(3,2,10,.85)");
+    px.fillStyle = sh; px.fillRect(0, 0, p.width, p.height);
+    px.restore();
+    ring(false);
+    this.planet = p;
   }
 
   /** Draws the backdrop in CSS px (the context is scaled by dpr); `cx, cy` is the camera centre in world px. */
@@ -62,9 +92,13 @@ export class Space {
     const s = Math.min(1.2, 0.55 + zoom * 0.5);
     // the moon drifts a little against the camera
     const mxp = w * 0.14 - cx * zoom * 0.012, myp = h * 0.2 - cy * zoom * 0.012;
-    c.globalAlpha = 0.95; c.drawImage(this.moon!, mxp - 180 * s, myp - 180 * s, 360 * s, 360 * s); c.globalAlpha = 1;
+    this.eased.x += (this.lean.x - this.eased.x) * 0.06; this.eased.y += (this.lean.y - this.eased.y) * 0.06;
+    const lx = still ? 0 : this.eased.x, ly = still ? 0 : this.eased.y;
+    c.globalAlpha = 0.95; c.drawImage(this.moon!, mxp - 180 * s - lx * 6, myp - 180 * s - ly * 4, 360 * s, 360 * s); c.globalAlpha = 1;
+    const ppx = w * 0.88 - cx * zoom * 0.02 - lx * 10, ppy = h * 0.86 - cy * zoom * 0.02 - ly * 6, ps = 0.55 + zoom * 0.25;
+    c.globalAlpha = 0.8; c.drawImage(this.planet!, ppx - 300 * ps, ppy - 180 * ps, 600 * ps, 360 * ps); c.globalAlpha = 1;
     for (const L of this.layers) {
-      const ox = -cx * zoom * L.f, oy = -cy * zoom * L.f;
+      const ox = -cx * zoom * L.f - lx * L.f * 300, oy = -cy * zoom * L.f - ly * L.f * 200;
       for (const st of L.stars) {
         let x = (st.x + ox) % TILE, y = (st.y + oy) % TILE;
         if (x < 0) x += TILE; if (y < 0) y += TILE;
