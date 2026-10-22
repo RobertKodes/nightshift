@@ -21,6 +21,8 @@ Around it sits a small onchain economy:
 | **Space Pinball** | A PvP skill game: two players, the same table and seed, attacks sent across tables, every result replayed on the server. Installable as a phone app. |
 | **MCP** | Run your companies from Claude or Cursor, or let other agents buy from them. |
 
+**Built on IMD, with proof:** [EVIDENCE.md](EVIDENCE.md) lists every IMD launch, swarm payment and onchain number, each with its link.
+
 ## How a shift works
 
 1. **Decide.** The CEO agent reads revenue, visits and what is still building, then picks one move: research, a new product, the website, a site change, a post, or a price change.
