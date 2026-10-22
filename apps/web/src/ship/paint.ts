@@ -152,6 +152,12 @@ function pattern(c: Ctx, r: Room) {
     for (let k = 0; k < 26; k++) { const a = g() * Math.PI * 2, d = 2.6 + g() * 3.5; line(c, [FURNACE.x + d * Math.cos(a), FURNACE.y + d * Math.sin(a), z], [FURNACE.x + (d + 0.6 + g()) * Math.cos(a + 0.2), FURNACE.y + (d + 0.6 + g()) * Math.sin(a + 0.2), z], `rgba(255,110,40,${0.1 + g() * 0.2})`, 1); }
   } else if (r.key === "drive") {
     for (let x = 16; x < 32; x += 4) line(c, [x, 76, z], [x, 88, z], "rgba(139,108,255,.12)", 2);
+    // power conduits from the coils to the stern, where the engines are
+    for (const [x, y] of [[20.2, 80.0], [24.4, 82.4], [28.4, 84.6]] as const) {
+      poly(c, [[x - 0.22, y, z], [x + 0.22, y, z], [x + 0.22, L, z], [x - 0.22, L, z]], "#1a1640");
+      line(c, [x, y + 1.4, z], [x, L, z], "rgba(164,139,255,.75)", 1.4);
+      line(c, [x, y + 1.4, z], [x, L, z], "rgba(164,139,255,.18)", 5);
+    }
   } else if (r.key === "offices" && false) {
     for (let c0 = 0; c0 < 5; c0++) poly(c, [[16.4 + c0 * 2.95, 20.6, z], [18.3 + c0 * 2.95, 20.6, z], [18.3 + c0 * 2.95, 35.2, z], [16.4 + c0 * 2.95, 35.2, z]], "rgba(169,139,255,.05)");
   }
@@ -440,7 +446,7 @@ piece(bbox(W, 0, KEEL, W + 0.5, L + 0.5, 0.5, 10), (c) => {
   line(c, [x, 53.4, -0.08], [x, L + 0.4, -0.08], "rgba(255,181,71,.5)", 1.2);
   // vents
   for (let y = 24; y < L - 2; y += 9.5) {
-    if (y > 34 && y < 55) continue;
+    if (y < 55) continue;
     poly(c, [[x, y, -1.15], [x, y + 2.2, -1.15], [x, y + 2.2, -1.65], [x, y, -1.65]], "#0b0a1a");
     for (let k = 1; k < 6; k++) line(c, [x, y + k * 0.37, -1.18], [x, y + k * 0.37, -1.62], "rgba(120,110,200,.35)", 1);
   }

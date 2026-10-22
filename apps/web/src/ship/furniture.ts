@@ -258,6 +258,13 @@ export function driveCoil(c: Ctx, x: number, y: number) {
   cylinder(c, x, y, 4.0, 0.95, 0.3, "#2a2656", "#4a4590", "rgba(139,108,255,.8)");
 }
 
+/** A small holo projector on a pedestal (the bridge's side displays). */
+export function holoPedestal(c: Ctx, col: string) {
+  disc(c, 0, 0, 0, 0.75, "rgba(0,0,0,.4)");
+  cylinder(c, 0, 0, 0, 0.6, 0.55, lin(c, P(-0.6, 0.6, 0), P(0.6, -0.6, 0), [[0, "#0e1a30"], [0.5, "#2a4470"], [1, "#0e1a30"]]), "#0b1424", col);
+  disc(c, 0, 0, 0.55, 0.32, col, undefined);
+}
+
 /** The coffee machine at the breakroom wall. */
 export function coffee(c: Ctx, x: number, y: number) {
   fbox(c, x, y, 0, 0.6, 0.35, 1.7, "#2a1428", lin(c, P(x, y, 1.7), P(x, y, 0), [[0, "#3a1a32"], [1, "#160a14"]]), "rgba(255,92,168,.9)");

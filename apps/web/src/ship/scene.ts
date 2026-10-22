@@ -1,4 +1,4 @@
-import { BACK, FRONT, type Piece as FPiece, SPILL, coffee, driveCoil, furnace, radarTable, reactor } from "./furniture";
+import { BACK, FRONT, type Piece as FPiece, SPILL, coffee, driveCoil, furnace, holoPedestal, radarTable, reactor } from "./furniture";
 import { blink, fxLight, fxSolid, sparkle, watcherBack, watcherFront } from "./fx";
 import { type Ctx, HZ, P, RX, RY, alpha, disc, glow, rad } from "./iso";
 import { STATIC, WORLD_BOX, ring } from "./paint";
@@ -25,6 +25,7 @@ export type SceneStats = { fps: number; frameMs: number; drawn: number; tiles: n
 export type Labels = Partial<Record<RoomKey, { title: string; line: string }>>;
 
 const SEAT_SCALE: Partial<Record<Seat["kind"], number>> = { throne: 1.3, plinth: 1.15, watch: 1.06, pod: 0.98 };
+const PEG = { x: 6.3, y: 12.8 }, CHART = { x: 25.7, y: 12.2 };
 /** The drive room's three coils, one per engine. */
 const DRIVE: [number, number][] = [[20.2, 80.0], [24.4, 82.4], [28.4, 84.6]];
 /** Seats always drawn live (their glows and rings move): the Night Watch, the Captain's chair, the Night Boss plinths. */
@@ -97,6 +98,9 @@ export class ShipScene {
     prop("furnace", FURNACE.x, FURNACE.y, 0, FURNACE.x + FURNACE.y + 1, [-140, -220, 170, 130], (c) => furnace(c, 0, 0));
     for (const [i, [x, y]] of DRIVE.entries()) prop(`drive${i}`, x, y, 0, x + y, [-90, -170, 90, 60], (c) => driveCoil(c, 0, 0));
     prop("coffee", 1.0, 36.9, 0, 37.9, [-50, -70, 50, 30], (c) => coffee(c, 0, 0));
+    // the bridge's side displays: the imdUSD vault's numbers (port) and a star chart (starboard)
+    prop("peg", PEG.x, PEG.y, 0.5, PEG.x + PEG.y, [-40, -30, 40, 24], (c) => holoPedestal(c, "rgba(74,216,255,.9)"));
+    prop("chart", CHART.x, CHART.y, 0.5, CHART.x + CHART.y, [-40, -30, 40, 24], (c) => holoPedestal(c, "rgba(164,139,255,.9)"));
     this.ents.sort((a, b) => a.depth - b.depth);
   }
 
@@ -650,6 +654,8 @@ export class ShipScene {
   private propFx(c: CanvasRenderingContext2D, key: string, t: number) {
     const prev = c.globalCompositeOperation;
     if (key === "radar") this.radar(c, t);
+    else if (key === "peg") this.pegBoard(c, t);
+    else if (key === "chart") this.starChart(c, t);
     else if (key === "furnace") this.furnaceFx(c, t);
     else if (key === "reactor") {
       // the plasma column in the glass, bands of light climbing it, the glow round the chamber
@@ -732,6 +738,44 @@ export class ShipScene {
       c.fillText(radar ? `IMDUSD VAULT · ${radar.loans.length} LOANS` : "RADAR OFFLINE · NO VAULT READ YET", cx, cy + R * RY + 14);
       if (radar) { c.fillStyle = "rgba(255,110,130,.85)"; c.fillText(`${radar.mat}% LIQUIDATION LINE`, cx, cy + R * RY + 24); }
     }
+  }
+
+  /** The imdUSD vault in numbers, over the bridge's port projector: what the Night Watch protects. */
+  private pegBoard(c: CanvasRenderingContext2D, t: number) {
+    const [x, y] = P(PEG.x, PEG.y, 1.15), r = this.snap?.radar ?? null, w = 92, h = 52, k = this.still ? 1 : 0.85 + 0.15 * Math.sin(t * 2.2);
+    const prev = c.globalCompositeOperation; c.globalCompositeOperation = "lighter";
+    const [bx, by] = P(PEG.x, PEG.y, 0.5 + 0.55);
+    c.fillStyle = c.createLinearGradient(0, by, 0, y - h);
+    (c.fillStyle as CanvasGradient).addColorStop(0, "rgba(74,216,255,.22)"); (c.fillStyle as CanvasGradient).addColorStop(1, "rgba(74,216,255,0)");
+    c.beginPath(); c.moveTo(bx - 10, by); c.lineTo(x - w / 2, y); c.lineTo(x + w / 2, y); c.lineTo(bx + 10, by); c.closePath(); c.fill();
+    c.fillStyle = `rgba(74,216,255,${0.1 * k})`; c.fillRect(x - w / 2, y - h, w, h);
+    c.strokeStyle = `rgba(120,230,255,${0.7 * k})`; c.lineWidth = 0.8; c.strokeRect(x - w / 2, y - h, w, h);
+    for (let yy = y - h; yy < y; yy += 2.5) { c.fillStyle = "rgba(74,216,255,.04)"; c.fillRect(x - w / 2, yy, w, 1); }
+    c.globalCompositeOperation = prev;
+    if (this.cam.z < 0.6) return;
+    c.textAlign = "left"; c.fillStyle = `rgba(200,245,255,${k})`;
+    c.font = "700 5px 'JetBrains Mono', monospace"; c.fillText("IMDUSD VAULT · LIVE", x - w / 2 + 5, y - h + 8);
+    if (!r) { c.font = "600 5px 'JetBrains Mono', monospace"; c.fillText("not read yet", x - w / 2 + 5, y - h + 20); return; }
+    c.font = "700 11px 'JetBrains Mono', monospace"; c.fillStyle = r.peg !== null && Math.abs(r.peg - 1) > 0.02 ? "#ffc46b" : "#b8ff4a";
+    c.fillText(r.peg === null ? "peg —" : `${r.peg.toFixed(4)}`, x - w / 2 + 5, y - h + 21);
+    c.fillStyle = "rgba(200,245,255,.85)"; c.font = "600 4.6px 'JetBrains Mono', monospace";
+    c.fillText(`${Math.round(r.totalDebt).toLocaleString("en-US")} owed · ${r.loans.length} loans`, x - w / 2 + 5, y - h + 30);
+    c.fillText(`liquidation under ${r.mat}% · bonus ${r.bonusPct}%`, x - w / 2 + 5, y - h + 37);
+    if (r.stale.length) { c.fillStyle = "rgba(255,196,107,.9)"; c.fillText(`stale: ${r.stale.join(", ")}`.slice(0, 34), x - w / 2 + 5, y - h + 45); }
+  }
+
+  /** A star chart over the starboard projector: a slowly turning globe of the route (decoration). */
+  private starChart(c: CanvasRenderingContext2D, t: number) {
+    const [x, y] = P(CHART.x, CHART.y, 1.7), R = 24, a = this.still ? 0.4 : t * 0.35;
+    const prev = c.globalCompositeOperation; c.globalCompositeOperation = "lighter";
+    glow(c, x, y, R * 1.6, "#a48bff", 0.3);
+    c.strokeStyle = "rgba(190,170,255,.6)"; c.lineWidth = 0.8;
+    c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.stroke();
+    for (let k = 0; k < 4; k++) { const rx = Math.abs(Math.cos(a + (k * Math.PI) / 4)) * R; c.beginPath(); c.ellipse(x, y, rx, R, 0, 0, Math.PI * 2); c.stroke(); }
+    for (const f of [-0.5, 0, 0.5]) { c.beginPath(); c.ellipse(x, y + f * R, R * Math.sqrt(1 - f * f), R * 0.18, 0, 0, Math.PI * 2); c.stroke(); }
+    const ox = x + Math.cos(a * 2.2) * R * 1.35, oy = y + Math.sin(a * 2.2) * R * 0.35;
+    glow(c, ox, oy, 6, "#b8ff4a", 0.9);
+    c.globalCompositeOperation = prev;
   }
 
   private furnaceFx(c: CanvasRenderingContext2D, t: number) {
