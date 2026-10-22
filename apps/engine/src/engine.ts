@@ -66,6 +66,7 @@ import { startChangelog } from "./changelog.js";
 import { type ChessEvent, onChess } from "./chess.js";
 import { accrueStaking, frogCached, frogCount, frogSlots, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
 import { roomLink, sweepRoom } from "./watch-room.js";
+import { forgeOn, forgedAll } from "./forge.js";
 import { followForges } from "./forge-news.js";
 import { startNightWatch } from "./nightwatch.js";
 import { followOrders } from "./orders.js";
@@ -733,6 +734,7 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
     const burns = burnTotals();
     const companies = [...this.store.companies.values()].filter((c) => !c.sim);
     const frogs = await frogStats().catch(() => null);
+    const watchers = await forgedAll().catch(() => []);
     const u = config.publicUrl;
     return {
       project: "NIGHTSHIFT: an autonomous AI company platform. You give a company an idea and a budget; an AI CEO picks the next move every shift, buys the work (products, sites, research) from the IMD swarm (imd.fun), paid in IMD, sells what ships for USDC on Base, and the owner withdraws the revenue.",
@@ -749,7 +751,21 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
       companies: { live: companies.length, costPerSwarmJob: "0.5 IMD", platformFee: `${config.platformFeeBps / 100}% of withdrawals; 0% for SHIFT and NIGHT FROGS holders`, start: `${u} (sign in with a wallet, press Launch a company)` },
       imdPriceUsd: config.imdUsd,
       links: { website: u, tokenomics: `${u}/tokenomics`, stake: `${u}/stake`, swap: `${u}/swap`, frogs: `${u}/frogs`, guide: `${u}/guide`, telegram: config.telegramUrl || "t.me/getnightshift", x: config.xUrl || null },
-      comingSoon: "Launchpad (launch tokens with the IMD swarm, SHIFT at the centre) and the Game Room (PvP games in SHIFT and IMD). No dates promised.",
+      forge: {
+        status: forgeOn() ? "OPEN" : "not open yet",
+        what: "Burn 10 NIGHT FROGS + 2 IMD (1 IMD burned, 1 to the treasury) to forge 1 Night Watcher (NIGHT FROGS Gen 2). You see the exact Night Watcher before you sign. The planner on the page picks your best 10.",
+        tiers: "Points of the 10 frogs set the tier: I Shift Lead (10+ pts) 10x shift hours, II Foreman (20+) 15x, III Supervisor (40+) 20x, IV Chief (80+) 30x, V Night Boss (128+) 40x, only 4. A forge that includes NIGHT FROG #1 also makes The Captain, a 1 of 1.",
+        perks: "A Night Watcher earns 10x to 40x shift hours (never less than its 10 frogs did), boosts every other frog in the same wallet by 20% to 100%, adds company slots, gets a full week of shift hours at the forge, holds a Night Watch seat and opens the private Watch Room.",
+        maxSupply: "50 Night Watchers ever, plus The Captain", forgedSoFar: watchers.length, contract: config.forge.address || null, url: `${u}/forge`,
+      },
+      nightWatch: { what: "A bot crew that keeps imdUSD (the dollar you borrow against staked IMD, imdusd.com) safe: each Night Watcher is a seat; when a loan drops under 170% the seats mark it and, after the grace period, liquidate it together, sharing the vault's liquidation penalty.", setup: "One command on an always-on computer, or a rented server for about $6/month where one pasted script installs it. The bot's key is made on that machine and never leaves it; it starts in report-only mode; then send it about 0.03 ETH for gas and pair it with your Night Watcher by a link.", url: `${u}/watch` },
+      watchRoom: `A private Telegram group for Night Watcher holders only: a signed-in holder gets a one-time invite at ${u}/forge#room; wallets that stop holding one are removed.`,
+      gameRoom: { games: "NIGHT CHESS, NIGHT POOL (8-ball), Space Pinball (solo, verified scores) and NIGHT POKER (heads-up No-Limit Hold'em, plus free tables for up to six with house frogs)", stakes: "Play free, or stake SHIFT or IMD through the GameEscrow contract on Ethereum: the winner gets 95%; a no-show or a game never played refunds both stakes.", fair: "Every poker deck is provably fair: committed before the deal, mixed with your browser's seed, checkable after.", prizes: "Each week the top 3 in chess, pool and pinball win +24, +12 and +6 shift hours.", url: `${u}/games` },
+      swap: { what: "Multichain swap: Ethereum, Base, Robinhood Chain and Solana both ways, and into XRP, through the better of LI.FI and Relay, every fee shown, exact approvals. The SHIFT/ETH pool swap is on the same page.", fee: "NIGHTSHIFT fee 0.25%; none for a signed-in wallet holding a NIGHT FROG, a Night Watcher or 5M+ SHIFT (wallet plus staked).", url: `${u}/swap` },
+      ship: { what: "The Ship: every NIGHT FROG and Night Watcher live on one ship, at the station its traits fit, with what each earns, missions and the Night Watch radar of real imdUSD loans. Sign in and it shows your crew.", url: `${u}/ship` },
+      forAgents: { what: "AI agents can pay per call in USDC (x402 services, listed in Coinbase's x402 Bazaar), drive NIGHTSHIFT over MCP, and read llms.txt.", mcp: `${u}/mcp` },
+      rewards: "The front page shows everything a wallet can claim (staking, NIGHT FROGS rewards, staked-game winnings, company balances) with one Claim all.",
+      changelog: `${u}/changelog`,
       safety: "Admins never DM first. Never share a seed phrase. The only official links are the ones above.",
     };
   }
