@@ -2,12 +2,12 @@ import {
   CHAINS, type ChainKey, IMD_RH, PINNED, type Quote, type QuoteRequest, SHIFT_TOKEN, type Token, XRPL_SOURCE_SOON, amountText, etaText, isNative, nativeToken, sameAddress, usdText, validAddress,
 } from "@nightshift/swap";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { formatUnits, parseUnits } from "viem";
+import { type Address, erc20Abi, formatUnits, parseUnits } from "viem";
 import { useSession } from "../session";
 import { chooseSolana, chooseWallet, knownWallet } from "../wallet";
 import { type FeeInfo, swapApi } from "./api";
 import { RouteCard } from "./RouteCard";
-import { balanceOf, recheck, runEvm, runSvm } from "./run";
+import { balanceOf, evmRpc, recheck, runEvm, runSvm } from "./run";
 import { TokenLogo, TokenSheet, shortAddr } from "./TokenSheet";
 import "./mswap.css";
 
@@ -25,6 +25,32 @@ const loadSent = (): Sent | null => { try { const s = JSON.parse(localStorage.ge
 const saveSent = (s: Sent | null) => { try { if (s) localStorage.setItem(KEY, JSON.stringify(s)); else localStorage.removeItem(KEY); } catch { /* private window */ } };
 const toUnits = (v: string, d: number) => { try { return v && Number(v) > 0 ? parseUnits(v, d) : 0n; } catch { return 0n; } };
 
+/** A swap opened for one token: `?to=eth:0x…&from=base` on /swap, or the launchpad's token page. */
+export type Preset = { to: { chain: ChainKey; address: string }; from?: ChainKey };
+export function presetFromUrl(search = location.search): Preset | null {
+  const q = new URLSearchParams(search), to = (q.get("to") ?? "").split(":");
+  const chain = to[0] as ChainKey, address = to[1] ?? "", from = q.get("from") as ChainKey | null;
+  if (!(chain in CHAINS) || kind(chain) !== "evm" || !validAddress(chain, address)) return null;
+  return { to: { chain, address: address.toLowerCase() }, from: from && from in CHAINS && from !== "xrpl" ? from : undefined };
+}
+/**
+ * The token a preset names: from the provider's list when it is there, otherwise read on chain (symbol,
+ * name, decimals) and marked unverified, as a token found by its address in the token sheet is.
+ */
+export async function presetToken(p: Preset): Promise<Token | null> {
+  const listed = await swapApi.tokens(p.to.chain, p.to.address).then((t) => t.find((x) => sameAddress(x.address, p.to.address)) ?? null).catch(() => null);
+  if (listed) return listed;
+  const c = p.to.chain as "eth" | "base" | "rh", a = p.to.address as Address;
+  try {
+    const [symbol, name, decimals] = await Promise.all([
+      evmRpc(c).readContract({ address: a, abi: erc20Abi, functionName: "symbol" }),
+      evmRpc(c).readContract({ address: a, abi: erc20Abi, functionName: "name" }),
+      evmRpc(c).readContract({ address: a, abi: erc20Abi, functionName: "decimals" }),
+    ]);
+    return { chain: p.to.chain, address: p.to.address, symbol: String(symbol).slice(0, 16), name: String(name).slice(0, 40), decimals: Number(decimals), verified: false };
+  } catch { return null; }
+}
+
 /** ETH and $SHIFT on Ethereum: the pool's own swap is the default there. */
 export const isPoolPair = (a: Side, b: Side) => a.chain === "eth" && b.chain === "eth" && ((isNative("eth", a.token.address) && sameAddress(b.token.address, SHIFT_TOKEN)) || (sameAddress(a.token.address, SHIFT_TOKEN) && isNative("eth", b.token.address)));
 
@@ -33,10 +59,26 @@ export const isPoolPair = (a: Side, b: Side) => a.chain === "eth" && b.chain ===
  * LI.FI and Relay through the engine, NIGHTSHIFT's fee decided there for the signed-in wallet, every route checked
  * again here before the visitor's own wallet signs it, then followed until it arrives.
  */
-export function MultiSwap({ onPool }: { onPool: (side: "buy" | "sell") => void }) {
+export function MultiSwap({ onPool, preset: given }: { onPool: (side: "buy" | "sell") => void; preset?: Preset | null }) {
   const session = useSession();
-  const [from, setFrom] = useState<Side>({ chain: "eth", token: nativeToken("eth") });
+  // the token this swap was opened for: given by the page, or named in the address (/swap?to=eth:0x…)
+  const [preset] = useState<Preset | null>(() => (given === undefined ? presetFromUrl() : given));
+  const [from, setFrom] = useState<Side>(() => { const c = preset?.from ?? "eth"; return { chain: c, token: nativeToken(c) }; });
   const [to, setTo] = useState<Side>({ chain: "rh", token: PINNED.find((t) => t.address === IMD_RH)! });
+  const [presetNote, setPresetNote] = useState<string | null>(null);
+  // a swap opened for one token (a launchpad coin): that token on the "you get" side
+  useEffect(() => {
+    if (!preset) return;
+    let on = true;
+    setPresetNote("Loading the token…");
+    void presetToken(preset).then((t) => {
+      if (!on) return;
+      if (!t) { setPresetNote(`No token at ${shortAddr(preset.to.address)} on ${CHAINS[preset.to.chain].name}.`); return; }
+      setTo({ chain: t.chain, token: t });
+      setPresetNote(t.verified ? null : `${t.symbol} is not on the provider's verified list: check its address ${shortAddr(t.address)} before you swap.`);
+    });
+    return () => { on = false; };
+  }, [preset?.to.chain, preset?.to.address]);
   const [amount, setAmount] = useState("");
   const [slip, setSlip] = useState(0.01);
   const [evm, setEvm] = useState<string | null>(null);
@@ -236,6 +278,7 @@ export function MultiSwap({ onPool }: { onPool: (side: "buy" | "sell") => void }
         {feeLine}
         <button type="button" className="ns-cta sm app-cta ms-go" disabled={!button.go} onClick={button.go ?? undefined}>{button.text}</button>
         {from.chain === "xrpl" && <p className="ms-fine">{XRPL_SOURCE_SOON}</p>}
+        {presetNote && <p className="ms-fine">{presetNote}</p>}
         {qErr && !step && <p className="bad ms-msg">{qErr}</p>}
         {err && <p className="bad ms-msg">{err}</p>}
       </section>

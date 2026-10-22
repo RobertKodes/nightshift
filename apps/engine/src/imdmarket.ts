@@ -21,9 +21,10 @@ export type Market = {
   tokens: Quote[];
 };
 
-type DexPair = {
-  chainId: string; pairAddress: string; url: string; baseToken: { address: string; name: string; symbol: string }; quoteToken: { symbol: string };
-  priceUsd?: string; liquidity?: { usd?: number }; volume?: { h24?: number }; priceChange?: { h1?: number; h24?: number };
+export type DexPair = {
+  chainId: string; dexId?: string; pairAddress: string; url: string; baseToken: { address: string; name: string; symbol: string }; quoteToken: { address?: string; symbol: string };
+  priceUsd?: string; priceNative?: string; liquidity?: { usd?: number }; volume?: { h24?: number }; priceChange?: { h1?: number; h24?: number };
+  marketCap?: number; fdv?: number; pairCreatedAt?: number; txns?: { h24?: { buys?: number; sells?: number } }; info?: { imageUrl?: string };
 };
 
 const get = async <T,>(url: string): Promise<T> => {
@@ -53,11 +54,11 @@ export async function imdLaunches(fetchJson = get): Promise<Launch[]> {
   return launchCache?.list ?? list;
 }
 
-/** The deepest pair per token, from DexScreener's batch endpoint (30 tokens a call). */
-export async function dexQuotes(addresses: string[], fetchJson = get): Promise<Map<string, DexPair>> {
+/** The deepest pair per token, from DexScreener's batch endpoint (30 tokens a call), on Ethereum unless another DexScreener chain is named ("robinhood"). */
+export async function dexQuotes(addresses: string[], fetchJson = get, chain = "ethereum"): Promise<Map<string, DexPair>> {
   const best = new Map<string, DexPair>();
   for (let i = 0; i < addresses.length; i += 30) {
-    const pairs = await fetchJson<DexPair[]>(`https://api.dexscreener.com/tokens/v1/ethereum/${addresses.slice(i, i + 30).join(",")}`).catch(() => [] as DexPair[]);
+    const pairs = await fetchJson<DexPair[]>(`https://api.dexscreener.com/tokens/v1/${chain}/${addresses.slice(i, i + 30).join(",")}`).catch(() => [] as DexPair[]);
     for (const p of Array.isArray(pairs) ? pairs : []) {
       const k = p.baseToken.address.toLowerCase();
       if ((p.liquidity?.usd ?? 0) > (best.get(k)?.liquidity?.usd ?? -1)) best.set(k, p);

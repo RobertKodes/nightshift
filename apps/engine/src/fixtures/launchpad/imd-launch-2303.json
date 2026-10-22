@@ -1,0 +1,261 @@
+{
+ "merkleRoot": "0xbc38e3a3baefe02a2b965fe8c82e600963ea9684bcd4edc008f96440a1cf0f5c",
+ "id": "8122e3ef-fedd-466b-b884-ac647119946f",
+ "launchNumber": 2303,
+ "kind": "univ4_hook",
+ "status": "live",
+ "chainId": 4663,
+ "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2303-review-launch-token-named",
+ "sourceCommit": "793513141b37fa52419c18a1398070e462badd1b",
+ "parkedReason": null,
+ "artifactCount": 3,
+ "manifestHash": "9cdc1948cde257e7f5c662700efb8bd2bba27a8cefec26eff67e86e4099fd9cf",
+ "attestationHash": "9a2d686366cd286daf26b91ebb30b306d8fbbfe46396d9a2062cf6b489a323b0",
+ "attestation": {
+  "treeHash": "51f40cab908453ac0cca9e0c25e5d39e67835415",
+  "verifierVersion": "0.1.0+6a374fcd",
+  "verifierKey": "68249df1f422fa72f61ca7f0ddaf9b62043959c5c134498441d5e552a9921782",
+  "toolchain": {
+   "solc": "0.8.26",
+   "forge": "forge Version: 1.8.3",
+   "viaIR": true,
+   "optimizer": true,
+   "evmVersion": "cancun",
+   "bytecodeHash": "none",
+   "optimizerRuns": 200
+  },
+  "contracts": [
+   {
+    "name": "PulseTreasury",
+    "path": "src/PulseTreasury.sol",
+    "abiHash": "be258068089c45aebf65e672038bb2e21a32dbf117cb93f00b2ee4c2f81da024",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "cda5b2d4627dda3b01f0c39408090b060adba3375bdb48ef1e72730350124446",
+    "creationCodeHash": "f982a453776c1b6ce002702d2730f232d0ed1dcf38e5546485c6ff9d47a46511",
+    "deployedCodeHash": "880c3111cbd91df909d7126cbf260a7f28f18b4ed6ef8e0a6f996538f445442d",
+    "creationCodeBytes": 6604,
+    "deployedCodeBytes": 5709
+   },
+   {
+    "name": "QuoteCalibration",
+    "path": "src/QuoteCalibration.sol",
+    "abiHash": "518674ab2b227e5f11e9084f615d57663cde47bce1ba168b4c19c7ee22a73d70",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "90b6ed19ae5a45aa009cb90866189aa11003dbb9f550e1029461c7a1dbc4e59c",
+    "creationCodeHash": "796634aa970ab164beb2be298b3ab1452786d411f081573a00c42fddcc896c48",
+    "deployedCodeHash": "19735bdf4d52c6f889cfd85f70fad899c9f4372c41ff8aa853bf043831e21b36",
+    "creationCodeBytes": 44,
+    "deployedCodeBytes": 16
+   },
+   {
+    "name": "SequencerHook",
+    "path": "src/SequencerHook.sol",
+    "abiHash": "92e210eb46f966303e0cadbdfb69df806bb59f49431e7c983d0c1fcd56646975",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "4f2db5880e345f2de3af79f0e0e7c9208790a23c4f497bca4ecd57d600edf41b",
+    "creationCodeHash": "39bf4672a306cd16f2d7a894d42ecb574d525cc43ac342eaee13245a21e1e05e",
+    "deployedCodeHash": "f0fcfefab638045a54c709e2653487ff821d0b744813eb1d89d7366e152e5bde",
+    "creationCodeBytes": 10432,
+    "deployedCodeBytes": 9484
+   },
+   {
+    "name": "SequencerState",
+    "path": "src/SequencerState.sol",
+    "abiHash": "518674ab2b227e5f11e9084f615d57663cde47bce1ba168b4c19c7ee22a73d70",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "08bad15e718a7b1de281903a8e9cd22b1cf0cf52bb55fdc5c230baedff6b8ce0",
+    "creationCodeHash": "796634aa970ab164beb2be298b3ab1452786d411f081573a00c42fddcc896c48",
+    "deployedCodeHash": "19735bdf4d52c6f889cfd85f70fad899c9f4372c41ff8aa853bf043831e21b36",
+    "creationCodeBytes": 44,
+    "deployedCodeBytes": 16
+   },
+   {
+    "name": "SequencerToken",
+    "path": "src/SequencerToken.sol",
+    "abiHash": "fc4fab013a5168c8b768eb9277ce85fdc9e5b2f94f8e2cd48f4dc0499e4c63d4",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "dc146a86ebfe79b0cbacea325ad14844a5be0c48006ce3253b8fa353dfc6d9d3",
+    "creationCodeHash": "8fac163a585e15c7fe01fe839eb8ce92e3252103b86513058276ff8e9306e6fb",
+    "deployedCodeHash": "ea8b839f0f1a4b0661697e484926fb5ea2951718f7aa0624edfd2bc4bfdd5dc4",
+    "creationCodeBytes": 1294,
+    "deployedCodeBytes": 1186
+   }
+  ],
+  "manifest": {
+   "hook": {
+    "contract": "SequencerHook",
+    "permissions": [
+     "beforeInitialize",
+     "afterInitialize",
+     "afterSwap"
+    ],
+    "constructorArgs": [
+     "$poolManager",
+     "$token",
+     "$factory",
+     "1250000000000000",
+     "12500000000000000",
+     "62500000000000000"
+    ]
+   },
+   "kind": "univ4_hook",
+   "pool": {
+    "fee": 12500,
+    "tickSpacing": 60,
+    "initialPrice": "79228162514264337593543950336",
+    "pairedCurrency": "0x0000000000000000000000000000000000000000"
+   },
+   "notes": "Robinhood Chain (4663), IDM/ETH, pairWith eth. Describes the accepted Foundry project at the repository root, imported from https://github.com/discodirector/idm-hook at 69cddfddd0e0bf5903e3e19eab38aebc70285e3a with the accepted launch adaptations. Deploy SequencerToken and SequencerHook. The token has no constructor arguments. Hook arguments, in ABI order: PoolManager, launch token, launch factory, hat, glitch, snare. The three thresholds are ETH wei from QuoteCalibration (0.00125, 0.0125, 0.0625 ETH); retained for ABI compatibility, they are unused by the v2 relative classification. Resolve $poolManager, $token and $factory before mining the hook CREATE2 salt with flags 0x3040. All enabled callbacks require the PoolManager. Both initialization callbacks validate the factory sender, sorted pair containing the launch token, this hook, fee 12500 and tick spacing 60; afterInitialize binds the paired currency and pool ID once and seeds the sequencer. This manifest pairs native ETH as currency0 with IDM as currency1. afterSwap uses actual swap deltas and the post-swap tick to update the two packed state words and emit sequencer events; it returns zero delta. The hook has no owner, signer, admin, upgrade path, hook fee, LP-fee override, return-delta permissions or fund handling. Liquidity callbacks are disabled, leaving factory fee collection unaffected. The pool's LP fee is 1.25%; zero-fee describes the hook only. SPEC.md section 3, the packed state layout, ABI and Solidity test vectors are unchanged by this manifest. initialPrice is the required nominal 1:1 sqrtPriceX96; the deployer derives the actual opening price from the separate launch policy's 10 ETH opening market cap and the deployed token address. PulseTreasury is separate and is not deployed by this manifest. Verified Robinhood hook/token addresses, pool ID and launch transaction receipts are not present in the supplied project; its Sepolia deployment records are not evidence for chain 4663. No transaction was broadcast for this manifest. Robinhood deployment and verification evidence remain pending the launch service's deployment step; no deployed address or receipt is claimed here.",
+   "token": {
+    "name": "Intelligent Dance Market",
+    "symbol": "IDM",
+    "contract": "SequencerToken",
+    "decimals": 18
+   }
+  },
+  "manifestError": null
+ },
+ "attestationFailure": null,
+ "deployFailure": null,
+ "policyVersion": 30,
+ "economics": {
+  "poolBps": 9000
+ },
+ "poolFee": 12500,
+ "requester": "0x9ef17a987cb4a2355ec2782785d79d3db4b5fa8a",
+ "admissionChecks": [
+  {
+   "name": "provenance",
+   "detail": "9 node(s) accepted at 79351314",
+   "status": "passed"
+  },
+  {
+   "name": "findings",
+   "detail": "9 accepted submission(s), no unresolved blocking findings",
+   "status": "passed"
+  },
+  {
+   "name": "independent_review",
+   "detail": "1 independent review(s)",
+   "status": "passed"
+  },
+  {
+   "name": "bytecode",
+   "detail": "5 contract(s) clean and reproducible",
+   "status": "passed"
+  },
+  {
+   "name": "manifest",
+   "detail": "IDM on SequencerHook, flags 0x3040",
+   "status": "passed"
+  },
+  {
+   "name": "protected_invariants",
+   "detail": "invariants-1088d95c9ece: Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 1.26ms (1.64ms CPU time)",
+   "status": "passed"
+  },
+  {
+   "name": "economics",
+   "detail": "459 allocation(s), root 0xbc38e3a3",
+   "status": "passed"
+  }
+ ],
+ "assurances": [],
+ "logo": {
+  "jobId": "8294c4c2-f43d-4c50-a6e4-0be3d1eb3e1e",
+  "state": "completed",
+  "hash": "3e17b4bbdf35851cbf8cc0e83415a9f777a688bea76267780acc1d10dbf1b16a",
+  "cleared": null,
+  "link": null
+ },
+ "seeded": {
+  "pools": [
+   {
+    "fee": 12500,
+    "hooks": "0x4ebe25e5b6493194a58ac8b62bb13b38156f7040",
+    "currency0": "0x0000000000000000000000000000000000000000",
+    "currency1": "0x4fe9f3823791c8b187b81ab8b7398d793fed28f6",
+    "tickSpacing": 60
+   }
+  ],
+  "launched": [
+   {
+    "hook": "0x4ebe25e5b6493194a58ac8b62bb13b38156f7040",
+    "token": "0x4fe9f3823791c8b187b81ab8b7398d793fed28f6",
+    "factory": "0xa25b02a1e93903b790e6aaf7da1b8b8d50294645",
+    "distributor": "0x8d2435960178c622cb4a9ada17cb828a0ea6166d",
+    "launchNumber": 2303
+   }
+  ],
+  "positions": [
+   {
+    "factory": "0xa25b02a1e93903b790e6aaf7da1b8b8d50294645",
+    "tickLower": -887220,
+    "tickUpper": 184200,
+    "launchNumber": 2303
+   }
+  ]
+ },
+ "createdAt": "2026-10-20T16:04:59.168Z",
+ "updatedAt": "2026-10-20T16:07:42.091Z",
+ "jobs": [
+  {
+   "id": "18ac1075-a6ce-4487-83f3-17e3d795c1f1",
+   "objective": "Review and launch the token named Intelligent Dance Market with token symbol IDM, from https://github.com/discodirector/idm-hook at 69cddfddd0e0bf5903e3e19eab38aebc70285e3a on Robinhood Chain 4663 with its immutable zero-fee Uniswap v4 sequencer hook. Preserve SPEC.md section 3, the two packed state words, ABI and Solidity test vectors exactly. Use the imported Foundry project (repository root) and its launch.json. No owner, signer, upgrade, fee, return delta or fund handling in the hook. Pair IDM with native ETH (IDM/ETH, pairWith eth) and provide verified deployed hook/token/pool addresses and launch receipts.",
+   "state": "completed",
+   "attachedAt": "2026-10-20T16:04:59.168Z"
+  }
+ ],
+ "artifacts": [
+  {
+   "role": "distributor",
+   "name": "MerkleDistributor",
+   "address": "0x8d2435960178c622cb4a9ada17cb828a0ea6166d",
+   "creationCodeHash": "f1c21108732a73286b1030e87fbba14c806905275dde6fce012f2c0ca19e30b9",
+   "txHash": "0x0d8422d441fb766e74ce291f728745f08533767547ebf032215f1e417b43a13d",
+   "blockNumber": 93576944,
+   "verifiedAt": null,
+   "verifyFailure": null
+  },
+  {
+   "role": "hook",
+   "name": "SequencerHook",
+   "address": "0x4ebe25e5b6493194a58ac8b62bb13b38156f7040",
+   "creationCodeHash": "39bf4672a306cd16f2d7a894d42ecb574d525cc43ac342eaee13245a21e1e05e",
+   "txHash": "0x0d8422d441fb766e74ce291f728745f08533767547ebf032215f1e417b43a13d",
+   "blockNumber": 93576944,
+   "verifiedAt": "2026-10-20T16:08:16.208Z",
+   "verifyFailure": null
+  },
+  {
+   "role": "token",
+   "name": "SequencerToken",
+   "address": "0x4fe9f3823791c8b187b81ab8b7398d793fed28f6",
+   "creationCodeHash": "8fac163a585e15c7fe01fe839eb8ce92e3252103b86513058276ff8e9306e6fb",
+   "txHash": "0x0d8422d441fb766e74ce291f728745f08533767547ebf032215f1e417b43a13d",
+   "blockNumber": 93576944,
+   "verifiedAt": "2026-10-20T16:08:05.661Z",
+   "verifyFailure": null
+  }
+ ]
+}

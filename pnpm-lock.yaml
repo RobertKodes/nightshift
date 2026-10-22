@@ -43,6 +43,9 @@ importers:
       '@nightshift/imd':
         specifier: workspace:*
         version: link:../../packages/imd
+      '@nightshift/launch':
+        specifier: workspace:*
+        version: link:../../packages/launch
       '@nightshift/ledger':
         specifier: workspace:*
         version: link:../../packages/ledger
@@ -86,6 +89,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@nightshift/launch':
+        specifier: workspace:*
+        version: link:../../packages/launch
       '@nightshift/swap':
         specifier: workspace:*
         version: link:../../packages/swap
@@ -171,6 +177,8 @@ importers:
       viem:
         specifier: ^2.21.54
         version: 2.57.7(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.7)
+
+  packages/launch: {}
 
   packages/ledger: {}
 

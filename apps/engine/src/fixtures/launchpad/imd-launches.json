@@ -1,0 +1,462 @@
+{
+ "count": 10,
+ "launches": [
+  {
+   "id": "7b3da6ae-7b9b-4c39-851b-154c41433898",
+   "launchNumber": 2448,
+   "kind": "univ4_hook",
+   "status": "admitted",
+   "chainId": 4663,
+   "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2448-launch-test-test-uniswap",
+   "sourceCommit": "9d10e13fdf142f542fad136a18d0cf3e42b9997b",
+   "parkedReason": null,
+   "artifactCount": 0,
+   "artifacts": [],
+   "seeded": null,
+   "createdAt": "2026-10-22T02:35:50.404Z",
+   "updatedAt": "2026-10-22T02:37:18.847Z"
+  },
+  {
+   "id": "9c2520b0-2497-443c-9020-b6c06b59fd65",
+   "launchNumber": 2445,
+   "kind": "evm_contracts",
+   "status": "live",
+   "chainId": 1,
+   "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2445-build-deploy-nightwatchrenderer-ethereum",
+   "sourceCommit": "1da7b703bc4c6b1632a53c1d18f9a5abdc2d197b",
+   "parkedReason": null,
+   "artifactCount": 1,
+   "artifacts": [
+    {
+     "role": "other",
+     "name": "NightWatchRenderer",
+     "address": "0x053471879f65f6b4f644635fbdd798b9d7c5e1f5",
+     "txHash": "0x51c4958e00e590e9eb98bca315a7a8d094624257c704628f2aa9ec6062b23125",
+     "blockNumber": 26244896
+    }
+   ],
+   "seeded": null,
+   "createdAt": "2026-10-22T01:33:39.608Z",
+   "updatedAt": "2026-10-22T01:34:40.052Z"
+  },
+  {
+   "id": "b61c6ff3-7675-438a-9129-3389540241ee",
+   "launchNumber": 2444,
+   "kind": "custom_token",
+   "status": "live",
+   "chainId": 4663,
+   "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2444-jury",
+   "sourceCommit": "fd1cd2345ec94835a1d6a45e3c1e6ca68fac5978",
+   "parkedReason": null,
+   "artifactCount": 3,
+   "artifacts": [
+    {
+     "role": "token",
+     "name": "JuryToken",
+     "address": "0xe4090ec50d430220da4e89e5a7809c93300e1f38",
+     "txHash": "0xe0ee1d923adc2b80b12c82ef21f0e6144bc691fb9ca1a18ccc76fc27389d9736",
+     "blockNumber": 94701926
+    },
+    {
+     "role": "distributor",
+     "name": "MerkleDistributor",
+     "address": "0x7efd1e5ba536f9b73ca53776ea31e8ba745203af",
+     "txHash": "0xe0ee1d923adc2b80b12c82ef21f0e6144bc691fb9ca1a18ccc76fc27389d9736",
+     "blockNumber": 94701926
+    },
+    {
+     "role": "hook",
+     "name": "PoolInitializationGuard",
+     "address": "0x19bec7c2e1b2aadaf67b259744751a9960d66000",
+     "txHash": "0xe0ee1d923adc2b80b12c82ef21f0e6144bc691fb9ca1a18ccc76fc27389d9736",
+     "blockNumber": 94701926
+    }
+   ],
+   "seeded": {
+    "pools": [
+     {
+      "fee": 12500,
+      "hooks": "0x19bec7c2e1b2aadaf67b259744751a9960d66000",
+      "currency0": "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127",
+      "currency1": "0xe4090ec50d430220da4e89e5a7809c93300e1f38",
+      "tickSpacing": 60
+     }
+    ],
+    "launched": [],
+    "positions": [
+     {
+      "factory": "0x9c9d2fcb75c2c132c0ac0c42df3819a42347265e",
+      "tickLower": -887220,
+      "tickUpper": 128940,
+      "launchNumber": 2444
+     }
+    ]
+   },
+   "createdAt": "2026-10-22T00:33:20.378Z",
+   "updatedAt": "2026-10-22T00:33:41.613Z"
+  },
+  {
+   "id": "0322d00f-8972-4573-9676-67988f1c9b33",
+   "launchNumber": 2422,
+   "kind": "univ4_hook",
+   "status": "parked",
+   "chainId": 1,
+   "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2422-mad-ethereum-custom-token",
+   "sourceCommit": "09a61c7f3023f920655bbabe7a3855c2e6a7598a",
+   "parkedReason": "protected_invariants: invariants-73ed8099aa3b: [FAIL: the hook refused PoolManager.initialize from the launch factory on the launch's pool: name the factory with $factory, and accept the pool it opens (the launch token, the paired currency, the manifest's fee and tick spacing)] test_initializesFromTheLaunchFactory() (gas: 76658); [FAIL: the hook refused PoolManager.initialize from the launch factory on the launch's pool: name the factory with $factory, and accept the pool it opens (the launch token, the paired currency, the manifest's fee and tick spacing)] test_initializesFromTheLaunchFactory() (gas: 76658)",
+   "artifactCount": 0,
+   "artifacts": [],
+   "seeded": null,
+   "createdAt": "2026-10-22T00:48:32.102Z",
+   "updatedAt": "2026-10-22T00:50:17.576Z"
+  },
+  {
+   "id": "d545b1c4-f052-449e-81b4-06d9ed677af1",
+   "launchNumber": 2321,
+   "kind": "univ4_hook",
+   "status": "live",
+   "chainId": 1,
+   "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2321-src-inkhook-sol",
+   "sourceCommit": "620960b344306b3469330eb0a6f9fb2a48c329a5",
+   "parkedReason": null,
+   "artifactCount": 3,
+   "artifacts": [
+    {
+     "role": "hook",
+     "name": "InkHook",
+     "address": "0x8fb4228579feca76d35f8fe361209cffe58c60c4",
+     "txHash": "0xa4d254ca8affc1da17b3cb012175cf2193f02980bba0d1a1929f67767b58b354",
+     "blockNumber": 26235399
+    },
+    {
+     "role": "token",
+     "name": "LaunchToken",
+     "address": "0x8eeacfe4510dc2b527d2d0fbbea9aeb84139acb2",
+     "txHash": "0xa4d254ca8affc1da17b3cb012175cf2193f02980bba0d1a1929f67767b58b354",
+     "blockNumber": 26235399
+    },
+    {
+     "role": "distributor",
+     "name": "MerkleDistributor",
+     "address": "0x654a511b151d6e7b5624d0a0e035bef7c122a3d4",
+     "txHash": "0xa4d254ca8affc1da17b3cb012175cf2193f02980bba0d1a1929f67767b58b354",
+     "blockNumber": 26235399
+    }
+   ],
+   "seeded": {
+    "pools": [
+     {
+      "fee": 12500,
+      "hooks": "0x8fb4228579feca76d35f8fe361209cffe58c60c4",
+      "currency0": "0x8eeacfe4510dc2b527d2d0fbbea9aeb84139acb2",
+      "currency1": "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7",
+      "tickSpacing": 60
+     }
+    ],
+    "launched": [
+     {
+      "hook": "0x8fb4228579feca76d35f8fe361209cffe58c60c4",
+      "token": "0x8eeacfe4510dc2b527d2d0fbbea9aeb84139acb2",
+      "factory": "0x12c63b581d07093f6126bc02263c58f7eadaa96f",
+      "distributor": "0x654a511b151d6e7b5624d0a0e035bef7c122a3d4",
+      "launchNumber": 2321
+     }
+    ],
+    "positions": [
+     {
+      "factory": "0x12c63b581d07093f6126bc02263c58f7eadaa96f",
+      "tickLower": -128940,
+      "tickUpper": 887220,
+      "launchNumber": 2321
+     }
+    ]
+   },
+   "createdAt": "2026-10-20T17:49:05.453Z",
+   "updatedAt": "2026-10-20T17:50:39.223Z"
+  },
+  {
+   "id": "8122e3ef-fedd-466b-b884-ac647119946f",
+   "launchNumber": 2303,
+   "kind": "univ4_hook",
+   "status": "live",
+   "chainId": 4663,
+   "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2303-review-launch-token-named",
+   "sourceCommit": "793513141b37fa52419c18a1398070e462badd1b",
+   "parkedReason": null,
+   "artifactCount": 3,
+   "artifacts": [
+    {
+     "role": "distributor",
+     "name": "MerkleDistributor",
+     "address": "0x8d2435960178c622cb4a9ada17cb828a0ea6166d",
+     "txHash": "0x0d8422d441fb766e74ce291f728745f08533767547ebf032215f1e417b43a13d",
+     "blockNumber": 93576944
+    },
+    {
+     "role": "hook",
+     "name": "SequencerHook",
+     "address": "0x4ebe25e5b6493194a58ac8b62bb13b38156f7040",
+     "txHash": "0x0d8422d441fb766e74ce291f728745f08533767547ebf032215f1e417b43a13d",
+     "blockNumber": 93576944
+    },
+    {
+     "role": "token",
+     "name": "SequencerToken",
+     "address": "0x4fe9f3823791c8b187b81ab8b7398d793fed28f6",
+     "txHash": "0x0d8422d441fb766e74ce291f728745f08533767547ebf032215f1e417b43a13d",
+     "blockNumber": 93576944
+    }
+   ],
+   "seeded": {
+    "pools": [
+     {
+      "fee": 12500,
+      "hooks": "0x4ebe25e5b6493194a58ac8b62bb13b38156f7040",
+      "currency0": "0x0000000000000000000000000000000000000000",
+      "currency1": "0x4fe9f3823791c8b187b81ab8b7398d793fed28f6",
+      "tickSpacing": 60
+     }
+    ],
+    "launched": [
+     {
+      "hook": "0x4ebe25e5b6493194a58ac8b62bb13b38156f7040",
+      "token": "0x4fe9f3823791c8b187b81ab8b7398d793fed28f6",
+      "factory": "0xa25b02a1e93903b790e6aaf7da1b8b8d50294645",
+      "distributor": "0x8d2435960178c622cb4a9ada17cb828a0ea6166d",
+      "launchNumber": 2303
+     }
+    ],
+    "positions": [
+     {
+      "factory": "0xa25b02a1e93903b790e6aaf7da1b8b8d50294645",
+      "tickLower": -887220,
+      "tickUpper": 184200,
+      "launchNumber": 2303
+     }
+    ]
+   },
+   "createdAt": "2026-10-20T16:04:59.168Z",
+   "updatedAt": "2026-10-20T16:07:42.091Z"
+  },
+  {
+   "id": "cdc4889e-f66e-4f0c-bb2f-f1a7f729f598",
+   "launchNumber": 2152,
+   "kind": "evm_project",
+   "status": "live",
+   "chainId": 11155111,
+   "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2152-workflow-contract-stage-context",
+   "sourceCommit": "f27a482805c941e6e086a94ec46e1121ba896984",
+   "parkedReason": null,
+   "artifactCount": 6,
+   "artifacts": [
+    {
+     "role": "token",
+     "name": "LaunchToken",
+     "address": "0xe38529515da53bad2951060f7c43e8f3458990e5",
+     "txHash": "0x3c4e2133da772ea0020b1457ed568c3c7828c8417d746efab791793fada2a368",
+     "blockNumber": 11940160
+    },
+    {
+     "role": "other",
+     "name": "LockerFarm",
+     "address": "0x21f47f330d99cd1ce97a6fb9553126ed58a18fc0",
+     "txHash": "0x3c4e2133da772ea0020b1457ed568c3c7828c8417d746efab791793fada2a368",
+     "blockNumber": 11940160
+    },
+    {
+     "role": "other",
+     "name": "LockerFarmFactory",
+     "address": "0xefea131b90183150eac7c53b51a1dc995e2f78f9",
+     "txHash": "0x3c4e2133da772ea0020b1457ed568c3c7828c8417d746efab791793fada2a368",
+     "blockNumber": 11940160
+    },
+    {
+     "role": "other",
+     "name": "LockerTreasury",
+     "address": "0xbc0bdf9b4a3c1b7dcea14aa5d55d9187bfadc73a",
+     "txHash": "0x3c4e2133da772ea0020b1457ed568c3c7828c8417d746efab791793fada2a368",
+     "blockNumber": 11940160
+    },
+    {
+     "role": "distributor",
+     "name": "MerkleDistributor",
+     "address": "0x3b3c990965c5d460ede913acbaa9c05907e605b1",
+     "txHash": "0x3c4e2133da772ea0020b1457ed568c3c7828c8417d746efab791793fada2a368",
+     "blockNumber": 11940160
+    },
+    {
+     "role": "hook",
+     "name": "PoolInitializationGuard",
+     "address": "0xa0602cb30558d5dd17415b6268a4feea3a0ca000",
+     "txHash": "0x3c4e2133da772ea0020b1457ed568c3c7828c8417d746efab791793fada2a368",
+     "blockNumber": 11940160
+    }
+   ],
+   "seeded": {
+    "pools": [
+     {
+      "fee": 12500,
+      "hooks": "0xa0602cb30558d5dd17415b6268a4feea3a0ca000",
+      "currency0": "0x0000000000000000000000000000000000000000",
+      "currency1": "0xe38529515da53bad2951060f7c43e8f3458990e5",
+      "tickSpacing": 60
+     }
+    ],
+    "launched": [],
+    "positions": [
+     {
+      "factory": "0x84cf2bc1dc2af577dba5d62e26f90d041ca38f7a",
+      "tickLower": -887220,
+      "tickUpper": 177240,
+      "launchNumber": 2152
+     }
+    ]
+   },
+   "createdAt": "2026-10-18T09:23:47.062Z",
+   "updatedAt": "2026-10-18T09:24:50.538Z"
+  },
+  {
+   "id": "ba3c2a45-99a6-446b-91ab-a839869a08a5",
+   "launchNumber": 2124,
+   "kind": "univ4_hook",
+   "status": "live",
+   "chainId": 1,
+   "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2124-launch-nightshift-shift-platform",
+   "sourceCommit": "9f3e16007ca31848b48475b2a58d57b44b40077c",
+   "parkedReason": null,
+   "artifactCount": 3,
+   "artifacts": [
+    {
+     "role": "distributor",
+     "name": "MerkleDistributor",
+     "address": "0x0d4dd35026087e720033786578a7e718c8b34897",
+     "txHash": "0x7066ea4c4d8f3a90b30f846925d41a989b851d9becc996065d69a2734a5766c1",
+     "blockNumber": 26215851
+    },
+    {
+     "role": "hook",
+     "name": "NightshiftHook",
+     "address": "0x42ebcf86e3ab0445ba0362f911a7e8fad6ace0cc",
+     "txHash": "0x7066ea4c4d8f3a90b30f846925d41a989b851d9becc996065d69a2734a5766c1",
+     "blockNumber": 26215851
+    },
+    {
+     "role": "token",
+     "name": "ShiftToken",
+     "address": "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac",
+     "txHash": "0x7066ea4c4d8f3a90b30f846925d41a989b851d9becc996065d69a2734a5766c1",
+     "blockNumber": 26215851
+    }
+   ],
+   "seeded": {
+    "pools": [
+     {
+      "fee": 12500,
+      "hooks": "0x42ebcf86e3ab0445ba0362f911a7e8fad6ace0cc",
+      "currency0": "0x0000000000000000000000000000000000000000",
+      "currency1": "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac",
+      "tickSpacing": 60
+     }
+    ],
+    "launched": [
+     {
+      "hook": "0x42ebcf86e3ab0445ba0362f911a7e8fad6ace0cc",
+      "token": "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac",
+      "factory": "0x12c63b581d07093f6126bc02263c58f7eadaa96f",
+      "distributor": "0x0d4dd35026087e720033786578a7e718c8b34897",
+      "launchNumber": 2124
+     }
+    ],
+    "positions": [
+     {
+      "factory": "0x12c63b581d07093f6126bc02263c58f7eadaa96f",
+      "tickLower": -887220,
+      "tickUpper": 184200,
+      "launchNumber": 2124
+     }
+    ]
+   },
+   "createdAt": "2026-10-18T00:25:34.304Z",
+   "updatedAt": "2026-10-18T00:26:14.268Z"
+  },
+  {
+   "id": "b81f8d6e-ebc0-4eb0-9307-d22cf765bea4",
+   "launchNumber": 944,
+   "kind": "evm_project",
+   "status": "live",
+   "chainId": 1,
+   "sourceRepoUrl": "https://github.com/identity-md-launches/launch-944-emberevo-token-symbol-embeo",
+   "sourceCommit": "cecf25b92d44568f8a0f81c34f4b634df905d1e5",
+   "parkedReason": null,
+   "artifactCount": 3,
+   "artifacts": [
+    {
+     "role": "token",
+     "name": "LaunchToken",
+     "address": "0x2b82cdeb8477415d541799abb0cc48044c8ea5f3",
+     "txHash": "0xd926c03bafe9e92252b37f44a0ea7bf1116f5c8a8cefb2aee7a3d28363d6aa09",
+     "blockNumber": 26143156
+    },
+    {
+     "role": "distributor",
+     "name": "MerkleDistributor",
+     "address": "0xc8d942d66e283c16de56bee61e2b508134aca5d8",
+     "txHash": "0xd926c03bafe9e92252b37f44a0ea7bf1116f5c8a8cefb2aee7a3d28363d6aa09",
+     "blockNumber": 26143156
+    },
+    {
+     "role": "hook",
+     "name": "PoolInitializationGuard",
+     "address": "0x784ff9a3ac5d88a30bfff6f7f2a270161fbe6000",
+     "txHash": "0xd926c03bafe9e92252b37f44a0ea7bf1116f5c8a8cefb2aee7a3d28363d6aa09",
+     "blockNumber": 26143156
+    }
+   ],
+   "seeded": {
+    "pools": [
+     {
+      "fee": 12500,
+      "hooks": "0x784ff9a3ac5d88a30bfff6f7f2a270161fbe6000",
+      "currency0": "0x0000000000000000000000000000000000000000",
+      "currency1": "0x2b82cdeb8477415d541799abb0cc48044c8ea5f3",
+      "tickSpacing": 60
+     }
+    ],
+    "launched": [],
+    "positions": [
+     {
+      "factory": "0xff03410d0fe5fa8f7f59f743de35e333d9857120",
+      "tickLower": -887220,
+      "tickUpper": 184200,
+      "launchNumber": 944
+     }
+    ]
+   },
+   "createdAt": "2026-10-07T21:19:08.818Z",
+   "updatedAt": "2026-10-07T21:20:03.450Z"
+  },
+  {
+   "id": "9be02b21-38b2-40b4-ae03-acefa2b11a75",
+   "launchNumber": 782,
+   "kind": "evm_contracts",
+   "status": "live",
+   "chainId": 4663,
+   "sourceRepoUrl": "https://github.com/identity-md-launches/launch-782-robinhood-end-layerzero-v2",
+   "sourceCommit": "118805600502a48364b4ddfcbd7d994020ae1863",
+   "parkedReason": null,
+   "artifactCount": 1,
+   "artifacts": [
+    {
+     "role": "other",
+     "name": "ZeroToOne",
+     "address": "0xb7c3ab1304513eb87699a33670cc79a3d7840517",
+     "txHash": "0x2d0d92518cd6f258640dd64481979b11b35dc1079a6b7af1cc6ae6ecb99032eb",
+     "blockNumber": 81398566
+    }
+   ],
+   "seeded": null,
+   "createdAt": "2026-10-06T05:50:27.870Z",
+   "updatedAt": "2026-10-06T05:50:55.863Z"
+  }
+ ]
+}

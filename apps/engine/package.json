@@ -13,6 +13,7 @@
     "@modelcontextprotocol/sdk": "1.32.1",
     "@nightshift/core": "workspace:*",
     "@nightshift/imd": "workspace:*",
+    "@nightshift/launch": "workspace:*",
     "@nightshift/ledger": "workspace:*",
     "@nightshift/llm": "workspace:*",
     "@nightshift/swap": "workspace:*",

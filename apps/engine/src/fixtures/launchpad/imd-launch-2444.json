@@ -1,0 +1,187 @@
+{
+ "merkleRoot": "0xa2075e21af245a076747f3631694f5b29a0ab1b03e5bf32aa61db2e1e7f9b2fd",
+ "id": "b61c6ff3-7675-438a-9129-3389540241ee",
+ "launchNumber": 2444,
+ "kind": "custom_token",
+ "status": "live",
+ "chainId": 4663,
+ "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2444-jury",
+ "sourceCommit": "fd1cd2345ec94835a1d6a45e3c1e6ca68fac5978",
+ "parkedReason": null,
+ "artifactCount": 3,
+ "manifestHash": "d14ad3856b0ce008b2a4a80216d92bb36814bc20e45713194a1c8e631d7e8454",
+ "attestationHash": "91f5dbf60992c8535aae70ee545033752c146129f65f3be5e9ca786ffa92b7cb",
+ "attestation": {
+  "treeHash": "5f3ca8945ad4ef4e755067a8f55e4eee2b5b5c34",
+  "verifierVersion": "0.1.0+560ab6a2",
+  "verifierKey": "68249df1f422fa72f61ca7f0ddaf9b62043959c5c134498441d5e552a9921782",
+  "toolchain": {
+   "solc": "0.8.26",
+   "forge": "forge Version: 1.8.3",
+   "viaIR": false,
+   "optimizer": true,
+   "evmVersion": "cancun",
+   "bytecodeHash": "none",
+   "optimizerRuns": 200
+  },
+  "contracts": [
+   {
+    "name": "JuryToken",
+    "path": "src/JuryToken.sol",
+    "abiHash": "21016f104794fde830ce2e204c26cebc3973a99a2b70a21be175f1ca242336da",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "cf78ebd0db2bdd5802ec963f898e12f7de6b69ec4270ad11948d75640ede4fc2",
+    "creationCodeHash": "b7ab7ca07cd8d14fe7440d5086455231d20e628b06616a5a444554428e305561",
+    "deployedCodeHash": "caec8f627aca44dbe0497bb294bb3dae2ee1b2ed88d9594e694ad16cb0b672e7",
+    "creationCodeBytes": 3283,
+    "deployedCodeBytes": 2136
+   }
+  ],
+  "manifest": {
+   "kind": "custom_token",
+   "pool": {
+    "fee": 12500,
+    "tickSpacing": 60,
+    "initialPrice": "79228162514264337593543950336",
+    "pairedCurrency": "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127"
+   },
+   "notes": "JuryToken is a fixed-supply ERC-20 named JURY with symbol JURY and 18 decimals. Its constructor takes no arguments and mints all 1,000,000,000 tokens once to msg.sender, the launch factory. It has no owner, further minting, privileged controls or transfer fees. There are no application contracts. The pool pairs with IMD. initialPrice records provenance only; the deployer derives the opening price from initialMarketCapWei and totalSupply.",
+   "token": {
+    "name": "JURY",
+    "symbol": "JURY",
+    "contract": "JuryToken",
+    "decimals": 18,
+    "totalSupply": "1000000000000000000000000000",
+    "constructorArgs": []
+   },
+   "contracts": [],
+   "economics": {
+    "poolBps": 8800,
+    "remainderTo": "0xeeaf04a41ac45a605e30dc6a41a44e6f75ddf8b6",
+    "initialMarketCapWei": "2500000000000000000000"
+   }
+  },
+  "manifestError": null
+ },
+ "attestationFailure": null,
+ "deployFailure": null,
+ "policyVersion": 36,
+ "economics": {
+  "poolBps": 8800,
+  "remainderTo": "0xeeaf04a41ac45a605e30dc6a41a44e6f75ddf8b6",
+  "initialMarketCapWei": "2500000000000000000000"
+ },
+ "poolFee": 12500,
+ "requester": "0xeeaf04a41ac45a605e30dc6a41a44e6f75ddf8b6",
+ "admissionChecks": [
+  {
+   "name": "provenance",
+   "detail": "8 node(s) accepted at fd1cd234",
+   "status": "passed"
+  },
+  {
+   "name": "findings",
+   "detail": "8 accepted submission(s), no unresolved blocking findings",
+   "status": "passed"
+  },
+  {
+   "name": "independent_review",
+   "detail": "1 independent review(s)",
+   "status": "passed"
+  },
+  {
+   "name": "bytecode",
+   "detail": "1 contract(s) clean and reproducible",
+   "status": "passed"
+  },
+  {
+   "name": "manifest",
+   "detail": "JURY: 8800 bps to the pool at 2500000000000000000000 minor units of 0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127, 0 contracts",
+   "status": "passed"
+  },
+  {
+   "name": "protected_invariants",
+   "detail": "invariants-1378e7d86913: Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 506.47\u00b5s (308.42\u00b5s CPU time)",
+   "status": "passed"
+  },
+  {
+   "name": "economics",
+   "detail": "454 allocation(s), root 0xa2075e21",
+   "status": "passed"
+  }
+ ],
+ "assurances": [],
+ "logo": {
+  "jobId": "2b35d1bb-6e73-4af5-a077-48eac1d64fe1",
+  "state": "completed",
+  "hash": "ba2200d4c30707ed49941abe47e75be04142c92fad94987200e5bc2389a3886a",
+  "cleared": null,
+  "link": null
+ },
+ "seeded": {
+  "pools": [
+   {
+    "fee": 12500,
+    "hooks": "0x19bec7c2e1b2aadaf67b259744751a9960d66000",
+    "currency0": "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127",
+    "currency1": "0xe4090ec50d430220da4e89e5a7809c93300e1f38",
+    "tickSpacing": 60
+   }
+  ],
+  "launched": [],
+  "positions": [
+   {
+    "factory": "0x9c9d2fcb75c2c132c0ac0c42df3819a42347265e",
+    "tickLower": -887220,
+    "tickUpper": 128940,
+    "launchNumber": 2444
+   }
+  ]
+ },
+ "createdAt": "2026-10-22T00:33:20.378Z",
+ "updatedAt": "2026-10-22T00:33:41.613Z",
+ "jobs": [
+  {
+   "id": "ff4613b5-2892-432d-bc59-eb1215e0fef8",
+   "objective": "A custom token: JURY (JURY).\nToken name: JURY\nToken symbol: JURY\nToken supply: 1,000,000,000 with 18 decimals, all minted once to the deployer in the constructor.",
+   "state": "completed",
+   "attachedAt": "2026-10-22T00:33:20.378Z"
+  }
+ ],
+ "artifacts": [
+  {
+   "role": "token",
+   "name": "JuryToken",
+   "address": "0xe4090ec50d430220da4e89e5a7809c93300e1f38",
+   "creationCodeHash": "b7ab7ca07cd8d14fe7440d5086455231d20e628b06616a5a444554428e305561",
+   "txHash": "0xe0ee1d923adc2b80b12c82ef21f0e6144bc691fb9ca1a18ccc76fc27389d9736",
+   "blockNumber": 94701926,
+   "verifiedAt": "2026-10-22T00:33:56.555Z",
+   "verifyFailure": null
+  },
+  {
+   "role": "distributor",
+   "name": "MerkleDistributor",
+   "address": "0x7efd1e5ba536f9b73ca53776ea31e8ba745203af",
+   "creationCodeHash": "f1c21108732a73286b1030e87fbba14c806905275dde6fce012f2c0ca19e30b9",
+   "txHash": "0xe0ee1d923adc2b80b12c82ef21f0e6144bc691fb9ca1a18ccc76fc27389d9736",
+   "blockNumber": 94701926,
+   "verifiedAt": null,
+   "verifyFailure": null
+  },
+  {
+   "role": "hook",
+   "name": "PoolInitializationGuard",
+   "address": "0x19bec7c2e1b2aadaf67b259744751a9960d66000",
+   "creationCodeHash": "0b3f249bc36eb41d4f5f7b8d4c132f9f3e77df94b8536f2e26d0f0e7d159a7ad",
+   "txHash": "0xe0ee1d923adc2b80b12c82ef21f0e6144bc691fb9ca1a18ccc76fc27389d9736",
+   "blockNumber": 94701926,
+   "verifiedAt": null,
+   "verifyFailure": null
+  }
+ ]
+}

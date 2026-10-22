@@ -1,4 +1,4 @@
-import { type Abi, type Address, type Hex, type WalletClient, createPublicClient, http } from "viem";
+import { type Abi, type Address, type Chain, type Hex, type PublicClient, type WalletClient, createPublicClient, http } from "viem";
 import { getCapabilities, sendCalls, waitForCallsStatus, writeContract } from "viem/actions";
 import { mainnet } from "viem/chains";
 
@@ -47,12 +47,12 @@ const unsupported = (e: unknown) => {
 };
 
 /** Whether this wallet sends atomic batches on Ethereum now ("supported") or after a switch it offers itself ("ready"). */
-export async function canBatch(w: WalletClient, account: Address): Promise<boolean> {
+export async function canBatch(w: WalletClient, account: Address, chainId = 1): Promise<boolean> {
   if (noBatch.has(account.toLowerCase())) return false;
   try {
     // a wallet that never answers (some WalletConnect apps) is treated as one without batches
     const caps = await Promise.race([
-      getCapabilities(w, { account, chainId: 1 }),
+      getCapabilities(w, { account, chainId }),
       new Promise<null>((r) => setTimeout(() => r(null), 4_000)),
     ]) as { atomic?: { status?: string }; atomicBatch?: { supported?: boolean } } | null;
     const s = caps?.atomic?.status;
@@ -68,7 +68,8 @@ const resolve = async (s: Step) => (typeof s.call === "function" ? s.call() : s.
  * wallet's hands. Resolves when everything is mined; `ok` is false when the last call (or the
  * batch) reverted. A rejection in the wallet is thrown as it is, never retried the other way.
  */
-export async function sendSteps(w: WalletClient, account: Address, steps: Step[], o: { batched: boolean; once: string; wait?: string; say: (s: string) => void; sent?: () => void }): Promise<Sent> {
+export async function sendSteps(w: WalletClient, account: Address, steps: Step[], o: { batched: boolean; once: string; wait?: string; say: (s: string) => void; sent?: () => void; on?: { chain: Chain; rpc: PublicClient } }): Promise<Sent> {
+  const net = o.on?.chain ?? mainnet, reader = o.on?.rpc ?? rpc;
   let ready: (Call | null)[] | null = null;
   if (o.batched && !noBatch.has(account.toLowerCase())) {
     ready = [];
@@ -79,7 +80,7 @@ export async function sendSteps(w: WalletClient, account: Address, steps: Step[]
       let id: string | null = null;
       try {
         ({ id } = await sendCalls(w, {
-          account, chain: mainnet, forceAtomic: true,
+          account, chain: net, forceAtomic: true,
           calls: calls.map((c) => ({ to: c.address, abi: c.abi as Abi, functionName: c.functionName, args: c.args ?? [], value: c.value })) as never,
         }));
       } catch (e) {
@@ -109,11 +110,11 @@ export async function sendSteps(w: WalletClient, account: Address, steps: Step[]
     const c = typeof s.call === "function" || !ready ? await resolve(s) : ready[i]!;
     if (!c) continue;
     o.say(s.sign);
-    const hash = await writeContract(w, { account, chain: mainnet, address: c.address, abi: c.abi as Abi, functionName: c.functionName, args: c.args ?? [], value: c.value } as never);
+    const hash = await writeContract(w, { account, chain: net, address: c.address, abi: c.abi as Abi, functionName: c.functionName, args: c.args ?? [], value: c.value } as never);
     hashes.push(hash);
     if (last) o.sent?.();
     o.say((last ? o.wait : undefined) ?? s.wait ?? "Waiting for Ethereum…");
-    const r = await rpc.waitForTransactionReceipt({ hash });
+    const r = await reader.waitForTransactionReceipt({ hash });
     if (last) return { ok: r.status === "success", hash, hashes, batched: false };
     if (r.status !== "success") throw new Error(s.fail ?? "A step reverted. Nothing more was sent.");
   }

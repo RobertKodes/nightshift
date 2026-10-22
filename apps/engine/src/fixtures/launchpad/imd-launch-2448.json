@@ -1,0 +1,157 @@
+{
+ "merkleRoot": "0xb3e5d1b6cb2573337676149e6558c223769498666de9715b85fa93b33b407f07",
+ "id": "7b3da6ae-7b9b-4c39-851b-154c41433898",
+ "launchNumber": 2448,
+ "kind": "univ4_hook",
+ "status": "admitted",
+ "chainId": 4663,
+ "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2448-launch-test-test-uniswap",
+ "sourceCommit": "9d10e13fdf142f542fad136a18d0cf3e42b9997b",
+ "parkedReason": null,
+ "artifactCount": 0,
+ "manifestHash": "e0d64702ea3dcf5556b83ab2e744db94455016fc76da67fb7d28c166552192bc",
+ "attestationHash": "2951371c0ad9834adc0a5c41058d35eaf2cd0affc8d5defb6c29d91393541c66",
+ "attestation": {
+  "treeHash": "4c8927c3406cf828d5975ada6ad1b5c6f6a497d6",
+  "verifierVersion": "0.1.0+560ab6a2",
+  "verifierKey": "68249df1f422fa72f61ca7f0ddaf9b62043959c5c134498441d5e552a9921782",
+  "toolchain": {
+   "solc": "0.8.26",
+   "forge": "forge Version: 1.8.3",
+   "viaIR": false,
+   "optimizer": true,
+   "evmVersion": "cancun",
+   "bytecodeHash": "none",
+   "optimizerRuns": 200
+  },
+  "contracts": [
+   {
+    "name": "TestHook",
+    "path": "src/TestHook.sol",
+    "abiHash": "2737ed13de11c079bbceff203cc9d18bf8a7a40de5bdcba7483501eb51419154",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "61196b59cae47f6db29e312c93f3ff06dd834563e9eaa1bd953a31997c0a2b1f",
+    "creationCodeHash": "a68bd2b776cc40fed483be55b3765fa4a01aca3220a15ba4d14be09dda385647",
+    "deployedCodeHash": "77115e1d52f847af4d4eb192c1d62da0eec433e185648a75c4532a7d6daffb2a",
+    "creationCodeBytes": 8802,
+    "deployedCodeBytes": 7918
+   },
+   {
+    "name": "TestToken",
+    "path": "src/TestToken.sol",
+    "abiHash": "38880b8e56d42ce900f744a7908c7139632a49f1c3f33385c64ceaed29d37bee",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "5fa5954810a7b5b9609860bc9b89ef14c09fea1659a849333a34c09efd78f259",
+    "creationCodeHash": "c9eb7fc387bf0c9cc3383fcd88b4162ac2237bddc212338c7f979659e0c128a4",
+    "deployedCodeHash": "01fb92b21a7414fcac4480618142f8968a5d2bae8071370fb5e9369b97fc55bc",
+    "creationCodeBytes": 2603,
+    "deployedCodeBytes": 1722
+   }
+  ],
+  "manifest": {
+   "hook": {
+    "contract": "TestHook",
+    "permissions": [
+     "beforeInitialize",
+     "beforeSwap",
+     "afterSwap",
+     "beforeSwapReturnDelta",
+     "afterSwapReturnDelta"
+    ],
+    "constructorArgs": [
+     "$poolManager",
+     "$owner",
+     "$factory"
+    ]
+   },
+   "kind": "univ4_hook",
+   "pool": {
+    "fee": 12500,
+    "tickSpacing": 60,
+    "initialPrice": "79228162514264337593543950336",
+    "pairedCurrency": "0x5f7bb59365ce557c26dbcaa4ee9d39a4b95b7127"
+   },
+   "notes": "TestHook serves one factory-initialized TEST/IMD pool on Robinhood Chain. Its constructor takes PoolManager, owner and factory in that order; TestToken has no constructor arguments. beforeInitialize accepts calls only from the supplied PoolManager with sender equal to $factory, validates the IMD pair, fee 12500 and tick spacing 60, and permanently binds the first initialized PoolId. TEST is discovered as the other currency, supporting either currency order. token(PoolId) identifies it and totalSupply(PoolId) reads its totalSupply(). The hook charges 1% of the gross IMD leg of buys and sells, separately from the 1.25% LP fee, using FullMath.mulDiv. Specified-IMD partial fills revert; otherwise fees use the actual traded IMD. Fees go directly in IMD to 0x5bff2a2fecd1d6152676813b21346238733beab1 during the swap when payment succeeds; insufficient manager funds or a failed transfer instead mint IMD ERC-6909 claims to the hook, attributed by PoolId. Anyone may call claimFees(PoolId) outside an active manager unlock, including while paused, to redeem available backing to that same recipient; unredeemed claims remain pending. Only $owner may call pause(PoolId), unpause(PoolId) and setAllowed(PoolId,address[],bool). paused(PoolId) and isAllowed(PoolId,address) expose those settings. Buys require an allowlisted tx.origin until 900 seconds after the first successful nonzero swap, which can be a buy or sell. Sells need no allowlisting. Multiple wallets or a shared allowed relayer can defeat wallet-based gating. All pool-dependent state and views use PoolId; unknown pools revert. Liquidity callbacks are disabled, so pause does not block additions, removals or the factory's zero-change fee collection. No ownership transfer, other admin controls, backend signer, upgrade path, ETH conversion, outside pool or price service exists. Permission address mask is 0x20cc. The listed initialPrice is the launch reference value; the deployer derives the opening price from the separate launch policy's opening market cap and deployed token ordering. Supply and allocations are governed by that separate launch policy.",
+   "token": {
+    "name": "test",
+    "symbol": "TEST",
+    "contract": "TestToken",
+    "decimals": 18
+   }
+  },
+  "manifestError": null
+ },
+ "attestationFailure": null,
+ "deployFailure": "broadcast failed: Missing or invalid parameters.\nDouble check you have provided the correct parameters.: Post \"http://robinhood-seq-sequencer-path-r8id-16xlarge-nitro-0.robinhood-seq.svc.cluster.local:8547/\u2026\": dial tcp4 172.24.19.254:8547: connect: cannot assign requested address\n\nURL: https://burned-delicate-snow.robinhood-mainnet.quiknode.pro/\u2026\n\nDetails: Post \"http://robinhood-seq-sequencer-path-r8id-16xlarge-nitro-0.robinhood-seq.svc.cluster.local:8547/\u2026\": dial tcp4 172.24.19.254:8547: connect: cannot assign requested address\nVersion: viem@2.57.7",
+ "policyVersion": 30,
+ "economics": {
+  "poolBps": 1000
+ },
+ "poolFee": null,
+ "requester": "0x5bff2a2fecd1d6152676813b21346238733beab1",
+ "admissionChecks": [
+  {
+   "name": "provenance",
+   "detail": "8 node(s) accepted at 9d10e13f",
+   "status": "passed"
+  },
+  {
+   "name": "findings",
+   "detail": "8 accepted submission(s), no unresolved blocking findings",
+   "status": "passed"
+  },
+  {
+   "name": "independent_review",
+   "detail": "1 independent review(s)",
+   "status": "passed"
+  },
+  {
+   "name": "bytecode",
+   "detail": "2 contract(s) clean and reproducible",
+   "status": "passed"
+  },
+  {
+   "name": "manifest",
+   "detail": "TEST on TestHook, flags 0x20cc",
+   "status": "passed"
+  },
+  {
+   "name": "protected_invariants",
+   "detail": "invariants-73ed8099aa3b: Suite result: ok. 0 passed; 0 failed; 1 skipped; finished in 319.22\u00b5s (0.00ns CPU time)",
+   "status": "passed"
+  },
+  {
+   "name": "economics",
+   "detail": "454 allocation(s), root 0xb3e5d1b6",
+   "status": "passed"
+  }
+ ],
+ "assurances": [],
+ "logo": {
+  "jobId": "79f051ac-d194-45d1-a249-2a4376a5f14c",
+  "state": "completed",
+  "hash": "d4d87d68de8c7932aff3cfa8a6458212d68a017bb24025b36720bc93ea02ecaa",
+  "cleared": null,
+  "link": null
+ },
+ "seeded": null,
+ "createdAt": "2026-10-22T02:35:50.404Z",
+ "updatedAt": "2026-10-22T02:37:18.847Z",
+ "jobs": [
+  {
+   "id": "a01dd7fe-7f49-4efa-a87d-bd32293d0bc2",
+   "objective": "Launch test (TEST) with a Uniswap v4 hook on Robinhood Chain, paired with IMD.\nToken: test (TEST), the standard launch token: 1,000,000,000 supply, 18 decimals, plain transfers, no owner functions.\nbeforeInitialize accepts only the IMD launch factory, passed as the constructor argument $factory; any other initialization reverts; the hook serves only the pool the factory initializes. Constructor arguments: the Robinhood Chain PoolManager 0x8366a39CC670B4001A1121B8F6A443A643e40951, $owner and $factory.\nIn this hook, the token is test (TEST), the launch token; its total supply is that token's totalSupply().\nEvery pool-dependent view, state, window and limit is keyed by PoolId and isolated per pool; pass the pool id to each pool-dependent function.\nThe hook does exactly the following, and nothing else:\n1. Take 1.0% of the IMD side of every buy and sell as a hook fee, settled in IMD inside the swap that paid it (mint a claim when the PoolManager cannot pay it directly), and send it to 0x5Bff2a2FEcD1d6152676813b21346238733bEAB1. Expose claimFees(PoolId poolId) that anyone may call to redeem that pool's claims using the same distribution. Fees are computed on the amount actually traded; when the swap specifies its IMD amount and the pool fills only part of it, the swap reverts rather than overpaying.\n2. The owner may pause and unpause swaps separately by PoolId. Liquidity can always be removed while paused. Expose pause(PoolId poolId) and unpause(PoolId poolId) for the owner and paused(PoolId poolId) as a view.\n3. For the first 15 minutes of block timestamp after the pool's first swap, only wallets on the owner's buyer allowlist may buy; after that, anyone may buy. Track the window and allowlist separately by PoolId. Expose setAllowed(PoolId poolId, address[] accounts, bool allowed) for the owner and isAllowed(PoolId poolId, address wallet) as a view. A wallet means tx.origin; several wallets or a shared relayer can defeat the limit.\nOwner 0x5bff2a2fecd1d6152676813b21346238733beab1 may only: pause and unpause swaps, add and remove buyer allowlist addresses, through the functions named above. No other admin function, no backend signer, no upgrade path.\nFees are always taken from the IMD (pair currency) side, never from TEST; a fee the PoolManager cannot pay directly is minted as a claim the recipient can redeem. Fee recipient: 0x5Bff2a2FEcD1d6152676813b21346238733bEAB1.\nKeep every hook fee in IMD: do not convert the fee to ETH and do not use any other pool.\nThe launch token may be currency0 or currency1; handle both orders.\nThe hook uses no outside pool, token, price feed or service; every price it needs comes from its own pool.\nUse mulDiv for every percentage calculation, including fees, shares, limits and price moves, to avoid intermediate multiplication overflow.\nThe launch factory ($factory) may always add liquidity and collect fees with a zero-change modify. Enable beforeInitialize and only the callbacks the behavior above needs.\nPool: 10% of the total supply seeds the pool; 10% goes to the swarm; the remaining 80% goes to 0x5Bff2a2FEcD1d6152676813b21346238733bEAB1. economics.poolBps=1000, in basis points of the total supply.\nKeep the function names exactly as written so the storefront can show them. Composed with The Hooks Store block builder.",
+   "state": "completed",
+   "attachedAt": "2026-10-22T02:35:50.404Z"
+  }
+ ],
+ "artifacts": []
+}

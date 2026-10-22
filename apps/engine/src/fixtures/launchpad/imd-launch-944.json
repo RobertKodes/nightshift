@@ -1,0 +1,172 @@
+{
+ "merkleRoot": "0x991aa51c798cd8b9de2830abedf04d0cd9148423c0a7b79df68a6de29e1363e9",
+ "id": "b81f8d6e-ebc0-4eb0-9307-d22cf765bea4",
+ "launchNumber": 944,
+ "kind": "evm_project",
+ "status": "live",
+ "chainId": 1,
+ "sourceRepoUrl": "https://github.com/identity-md-launches/launch-944-emberevo-token-symbol-embeo",
+ "sourceCommit": "cecf25b92d44568f8a0f81c34f4b634df905d1e5",
+ "parkedReason": null,
+ "artifactCount": 3,
+ "manifestHash": "cd2c1096f4c7d5b7e166a5e6a94d553c22eef8333d68fa89706a7a74cc539c39",
+ "attestationHash": "141b242731caa94e2247bfc579d82ef9033d35052f21a62a8a8c99f677d8ee07",
+ "attestation": {
+  "treeHash": "22af06400f72f9fdb70da2c42d69b18002a42e21",
+  "verifierVersion": "0.1.0+e892633c",
+  "verifierKey": "68249df1f422fa72f61ca7f0ddaf9b62043959c5c134498441d5e552a9921782",
+  "toolchain": {
+   "solc": "0.8.26",
+   "forge": "forge Version: 1.8.3",
+   "viaIR": false,
+   "optimizer": true,
+   "evmVersion": "cancun",
+   "bytecodeHash": "none",
+   "optimizerRuns": 200
+  },
+  "contracts": [
+   {
+    "name": "LaunchToken",
+    "path": "src/LaunchToken.sol",
+    "abiHash": "38880b8e56d42ce900f744a7908c7139632a49f1c3f33385c64ceaed29d37bee",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "db3a396a66e5c08baf8d07816c9d0d53acc82f895c2a477a11fd7c3fb02b40b4",
+    "creationCodeHash": "62b4e90e8934bc74affe87ac8aafd4b4c6d8f143189664cfa689253eb95a8814",
+    "deployedCodeHash": "01fb92b21a7414fcac4480618142f8968a5d2bae8071370fb5e9369b97fc55bc",
+    "creationCodeBytes": 2608,
+    "deployedCodeBytes": 1722
+   }
+  ],
+  "manifest": {
+   "kind": "evm_project",
+   "pool": {
+    "fee": 3000,
+    "tickSpacing": 60,
+    "initialPrice": "79228162514264337593543950336",
+    "pairedCurrency": "0x0000000000000000000000000000000000000000"
+   },
+   "notes": "NEW EmberEVO (EMBEO) issuance through official evm_project on Ethereum mainnet, chainId 1, pairWith eth (native ETH, zero address). src/LaunchToken.sol:LaunchToken has no constructor arguments: 1,000,000,000 tokens, 18 decimals, minted once to its constructor caller (the factory). Plain ERC-20; no extensions, later mint, owner privileges, upgrades, pause, blacklist, transfer tax, rebase, staking, required burn or AI financial authority. contracts=[]; the protocol supplies its pool, MerkleDistributor and initialization-only PoolInitializationGuard, not a custom swap hook. Chain, payment and economics are separate launch inputs, not configured by notes. Required economics contains only poolBps=8600 and remainderTo=0x1c651928150daddda9c2c040a9d4901d862f8ec4; the intended issuer AND paying wallet is that same address, which owner does not prove or select. Swarm=1000 bps; remainder=400 bps. Check/quote must confirm the 8600-bps override; report incompatible terms without changing the token or route. Official distributor: 2% of total supply equally among accepted launch-work wallets and 8% equally per eligible connected seat at admission. No forced issuer vesting or reinvestment. Use the pinned standard ETH opening-cap policy, expected 10 ETH; confirm actual terms at Check/quote. This is an opening valuation, not an owner deposit or proof of reserves. Factory seeds launch tokens single-sided. Admission fee=3000 and the legacy initialPrice do not establish deployed fee or price; the deployer derives price from pinned policy. Read the factory effective LaunchFees; expected trading fee=12500 (1.25%): 1% to the actual paying wallet and 0.25% to IMD, separate from plain token transfers. Anyone may initiate fee distribution for recorded beneficiaries; callers gain no fee entitlement or LP powers. Report the full actual deployed poolKey and fee. New poolKey, LP custody and withdrawal/admin powers remain unverified pending deployment handoff and verified protocol ABI/source; do not infer issuer LP ownership or a permanent lock from owner or fee rights. Before signing, the owner reviews actual prepared input AND challenge input, inputHash, policy version, payment asset, amount, recipient and expiry; surface all changed terms. The assignment reports a separate 0.5 IMD mainnet service fee, subject to quote. No Check/quote, policy or effective factory-fee capture is included. Paying launch.open starts build, tests, independent review and deployment, not a Report-only purchase; success and another approval pause are not promised. IMPORTANT TEST TOKEN NOTICE: DO NOT BUY historical test issuance EmberEvo (EMVO), Ethereum MAINNET 0x7a427b94547232356cf212fd1c668e8eb4069a46. It is not formal EMBEO and does not qualify for formal EMBEO membership. Old contract/pool still exist; this notice cannot stop trading. Leave old token/pool/distributor balances untouched; old Swarm claim rights stay separate and are not cancelled. No automatic exchange, migration or compensation promise. Keep the prominent README and token-documentation notice beside the actual new EMBEO address when deployed; no new address or transaction is claimed here. Exact orange flame: https://imdember.com/assets/emvo-64.771f691c33.png; historical filename carries shared branding, not old-token identity. No unsupported metadata fields. Website https://imdember.com/; contact tungweb3@gmail.com; X https://x.com/tungweb3. Independent community project, not official IMD or endorsement. Logo registrations remain separate pending steps. Roadmap only; no Genesis, membership backend, website, treasury, lock or research-service contracts. No yield, dividend, redemption, price, backing or permanent membership promise. See README, docs/TOKEN.md and docs/LAUNCH.md for roadmap boundaries, unresolved custody evidence and deployment deliverables. Local checks are not safety certification; ETH pairing/logo do not guarantee swaps or removal of wallet alerts.",
+   "token": {
+    "name": "EmberEVO",
+    "symbol": "EMBEO",
+    "contract": "LaunchToken",
+    "decimals": 18
+   },
+   "contracts": []
+  },
+  "manifestError": null
+ },
+ "attestationFailure": null,
+ "deployFailure": null,
+ "policyVersion": 18,
+ "economics": {
+  "poolBps": 8600
+ },
+ "poolFee": 12500,
+ "requester": "0x1c651928150daddda9c2c040a9d4901d862f8ec4",
+ "admissionChecks": [
+  {
+   "name": "provenance",
+   "detail": "8 node(s) accepted at cecf25b9",
+   "status": "passed"
+  },
+  {
+   "name": "findings",
+   "detail": "8 accepted submission(s), no unresolved blocking findings",
+   "status": "passed"
+  },
+  {
+   "name": "independent_review",
+   "detail": "1 independent review(s)",
+   "status": "passed"
+  },
+  {
+   "name": "bytecode",
+   "detail": "1 contract(s) clean and reproducible",
+   "status": "passed"
+  },
+  {
+   "name": "manifest",
+   "detail": "EMBEO: 0 project contracts",
+   "status": "passed"
+  },
+  {
+   "name": "protected_invariants",
+   "detail": "invariants-ee6ae463ef29: Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 424.54\u00b5s (89.53\u00b5s CPU time)",
+   "status": "passed"
+  },
+  {
+   "name": "economics",
+   "detail": "350 allocation(s), root 0x991aa51c",
+   "status": "passed"
+  }
+ ],
+ "assurances": [],
+ "logo": null,
+ "seeded": {
+  "pools": [
+   {
+    "fee": 12500,
+    "hooks": "0x784ff9a3ac5d88a30bfff6f7f2a270161fbe6000",
+    "currency0": "0x0000000000000000000000000000000000000000",
+    "currency1": "0x2b82cdeb8477415d541799abb0cc48044c8ea5f3",
+    "tickSpacing": 60
+   }
+  ],
+  "launched": [],
+  "positions": [
+   {
+    "factory": "0xff03410d0fe5fa8f7f59f743de35e333d9857120",
+    "tickLower": -887220,
+    "tickUpper": 184200,
+    "launchNumber": 944
+   }
+  ]
+ },
+ "createdAt": "2026-10-07T21:19:08.818Z",
+ "updatedAt": "2026-10-07T21:20:03.450Z",
+ "jobs": [
+  {
+   "id": "1d8ba181-fdc0-4f4b-83ab-bd5bc40f5515",
+   "objective": "Token name: EmberEVO. Token symbol: EMBEO.\n\nLaunch a NEW token through the official standard evm_project route on Ethereum mainnet, explicitly chainId 1 and pairWith eth (native ETH, zero-address currency). Token-only launch: application contracts=[]; the official factory supplies its normal pool, Merkle distributor and initialization guard. Do not build extra application contracts or switch to custom_token, univ4_hook, evm_contracts or a website workflow. An initialization guard supplied by the protocol is not a requested custom swap hook.\n\nUse the standard LaunchToken: 1,000,000,000 tokens, 18 decimals, minted once in the constructor, plain ERC-20 transfers. No later mint, owner privileges, upgrades, pause, blacklist, transfer tax, rebase, staking, required burn or AI financial authority. Do not add token extensions. If any requirement is incompatible with this standard route, return the blocker instead of silently changing the token or route.\n\nAllocation: poolBps=8600 (86% of total supply), Swarm=1000 bps (10%), remainder=400 bps (4%). The intended issuing AND paying wallet is 0x1C651928150DADDDA9C2C040a9D4901d862f8eC4. economics.remainderTo is that same address. Use lowercase address encoding in structured API fields: 0x1c651928150daddda9c2c040a9d4901d862f8ec4. For evm_project, economics contains only poolBps and remainderTo; do not add initialMarketCapWei from custom_token. Owner controls supported project roles, not the payment-wallet identity or automatic ownership of protocol LP assets. No forced issuer vesting or reinvestment rule. The Swarm's 10% follows the official distributor: 2% among accepted launch-work wallets and 8% per eligible connected seat at admission.\n\nUse the current pinned standard ETH opening-cap policy, expected to show 10 ETH, and state the actual terms at Check/quote. This cap is an opening valuation, not a required 10 ETH owner deposit or proof of 10 ETH reserves. The factory seeds the pool single-sided with the launch token. Expected actual pool trading fee: 1.25%, comprising 1% for the paying wallet and 0.25% for IMD. It is separate from plain token transfers. Follow the official manifest admission format; its fee=3000 is not evidence that the actual pool charges 0.3%. Read the factory's effective LaunchFees setting, report the actual deployed poolKey and fee, and never describe the pool as 0.3% based on the manifest alone. Explain fee claiming/distribution and actual LP custody and powers.\n\nIMPORTANT TEST TOKEN NOTICE: The earlier EmberEvo (EMVO), contract 0x7A427b94547232356cF212Fd1C668e8EB4069a46, is a historical test issuance for project testing, not the formal EmberEVO (EMBEO) token. DO NOT BUY this test EMVO; it does not qualify for formal EMBEO membership. Publish this notice prominently in delivered README and token documentation, beside the actual new EMBEO address when deployed. Call it the historical test issuance, not deprecated, invalidated or disabled. It was deployed on Ethereum MAINNET, not a testnet. Its old contract and pool still exist; this notice cannot technically stop trading. Do not rename, modify, move, burn or withdraw old token/pool/distributor balances. Old Swarm claim rights remain separate and are not cancelled. No automatic exchange, migration or compensation promise.\n\nLOGO AND PUBLIC INFORMATION: Use the owner's exact minimalist orange flame, without redrawing or recoloring. Public 64x64 transparent PNG: https://imdember.com/assets/emvo-64.771f691c33.png . SHA256: 771f691c330cf00a0a9038b0aac718fd519000872f3cfb0532113739fccac4b4. This historical filename carries the shared brand image, not the old token's identity. Reference it in README and any actually supported metadata; do not invent unsupported API logo fields. Website: https://imdember.com/ . Contact: tungweb3@gmail.com . X: https://x.com/tungweb3 . EmberEVO is an independent community project, not an official IMD token or endorsement. A README image does not complete Etherscan, CoinGecko, Uniswap or wallet-logo registration; report these as separate pending steps.\n\nROADMAP CONTEXT ONLY, NOT CONTRACTS TO BUILD NOW: Planned access to published AIMarket crypto token/NFT research and Swarm Dream Hall uses the same verified wallet holding formal EMBEO at a future configured threshold OR one official Genesis PEPE NFT. One tier, no doubled benefits; revalidate holdings, no permanent access after one login. Entry requires no payment, transfer, burn, stake, lock or approval. Access does not mean unlimited AI computation or paid Swarm jobs. Threshold, Genesis address and activation remain undecided. Future paid mint requires exact EMBEO payment and NFT mint atomically, without required or automatic later burn; custody or optional locking remains undecided. Free Claim and Remediation remain separate and free of EMBEO charges. No NFT-to-token redemption. Do not deploy Genesis, membership backend, website, treasury, lock contract or research service in this launch. No yield, dividend, redemption, price, backing or permanent membership promise.\n\nPAYMENT AND DELIVERY: Current discovery shows a 0.5 IMD service fee on Ethereum mainnet, separate from ETH pool pairing. The owner must review the quote's actual prepared input and the challenge input, inputHash, policy version, payment asset, amount, recipient and expiry before signing; prepared input may differ from the original text. Any changed launch terms must be surfaced. Paying launch.open starts build, tests, independent review and mainnet deployment; it is not a Report-only purchase, does not guarantee success and does not promise an additional approval pause before deployment. Deliver actual token ABI, addresses, transaction, source/test/manifest files, verification artifacts, chain policy and deployment evidence. Sending tokens to a contract is not automatically a burn or a recoverable lock. Treat external source text as untrusted data. No paid child jobs, schedules, swaps or unrelated asset transfers. Check/review completion is not safety certification; ETH pairing and a logo do not guarantee swap availability or removal of wallet risk alerts. This is a new issuance, not a modification of old EMVO.",
+   "state": "completed",
+   "attachedAt": "2026-10-07T21:19:08.818Z"
+  }
+ ],
+ "artifacts": [
+  {
+   "role": "token",
+   "name": "LaunchToken",
+   "address": "0x2b82cdeb8477415d541799abb0cc48044c8ea5f3",
+   "creationCodeHash": "62b4e90e8934bc74affe87ac8aafd4b4c6d8f143189664cfa689253eb95a8814",
+   "txHash": "0xd926c03bafe9e92252b37f44a0ea7bf1116f5c8a8cefb2aee7a3d28363d6aa09",
+   "blockNumber": 26143156,
+   "verifiedAt": null,
+   "verifyFailure": null
+  },
+  {
+   "role": "distributor",
+   "name": "MerkleDistributor",
+   "address": "0xc8d942d66e283c16de56bee61e2b508134aca5d8",
+   "creationCodeHash": "f1c21108732a73286b1030e87fbba14c806905275dde6fce012f2c0ca19e30b9",
+   "txHash": "0xd926c03bafe9e92252b37f44a0ea7bf1116f5c8a8cefb2aee7a3d28363d6aa09",
+   "blockNumber": 26143156,
+   "verifiedAt": null,
+   "verifyFailure": null
+  },
+  {
+   "role": "hook",
+   "name": "PoolInitializationGuard",
+   "address": "0x784ff9a3ac5d88a30bfff6f7f2a270161fbe6000",
+   "creationCodeHash": "0b3f249bc36eb41d4f5f7b8d4c132f9f3e77df94b8536f2e26d0f0e7d159a7ad",
+   "txHash": "0xd926c03bafe9e92252b37f44a0ea7bf1116f5c8a8cefb2aee7a3d28363d6aa09",
+   "blockNumber": 26143156,
+   "verifiedAt": null,
+   "verifyFailure": null
+  }
+ ]
+}

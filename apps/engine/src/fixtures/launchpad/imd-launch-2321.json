@@ -1,0 +1,309 @@
+{
+ "merkleRoot": "0x3d45771894011843a72619073cfbbabf5f7d84bec69a553aa966e4c557649bbf",
+ "id": "d545b1c4-f052-449e-81b4-06d9ed677af1",
+ "launchNumber": 2321,
+ "kind": "univ4_hook",
+ "status": "live",
+ "chainId": 1,
+ "sourceRepoUrl": "https://github.com/identity-md-launches/launch-2321-src-inkhook-sol",
+ "sourceCommit": "620960b344306b3469330eb0a6f9fb2a48c329a5",
+ "parkedReason": null,
+ "artifactCount": 3,
+ "manifestHash": "1aa850a2c1abae147dca1e53b3b06da02237ee2bda01497a9d854349501afeb6",
+ "attestationHash": "8a0745e57d4f074fe666d4ed4801c2ee1d81c23590e439e414858587c2698bae",
+ "attestation": {
+  "treeHash": "daf6288f6af3227550d5d965ebd84002bb44e5d4",
+  "verifierVersion": "0.1.0+a26ee00d",
+  "verifierKey": "68249df1f422fa72f61ca7f0ddaf9b62043959c5c134498441d5e552a9921782",
+  "toolchain": {
+   "solc": "0.8.26",
+   "forge": "forge Version: 1.8.3",
+   "viaIR": false,
+   "optimizer": true,
+   "evmVersion": "cancun",
+   "bytecodeHash": "none",
+   "optimizerRuns": 200
+  },
+  "contracts": [
+   {
+    "name": "InkFeeRouter",
+    "path": "src/InkFeeRouter.sol",
+    "abiHash": "bceda2f073d99dcc69aceee1e8f258ce4981d073abaa24a7bce41b1252faee87",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "0f3037ab4616672593476917076e7e2bde08acddaf3eba7a13dd0d9a9173b625",
+    "creationCodeHash": "9b4edbf4dbeeef426b314afe256f27c735c3a91fdb6189f8762372d5e978719a",
+    "deployedCodeHash": "a46fb23ce88147646d93dd09d8c7cc0ad091d7ba9fb5b9a59485255bb5d30f11",
+    "creationCodeBytes": 2426,
+    "deployedCodeBytes": 2075
+   },
+   {
+    "name": "InkHook",
+    "path": "src/InkHook.sol",
+    "abiHash": "607cb3c601ef0fd32b3d2a9b387656a046f3cf90b9d3588aa2a1c0097a245215",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "8803a69b0b706a70b01195512dbf667da5c4c6c331ecec175999f71b1a31f789",
+    "creationCodeHash": "f16210e33199ce4c6b254bf52d35becb432252abb07a13ff89f82bd522baa8b5",
+    "deployedCodeHash": "95f13f9466cbd41ef43f1d9d78911338e45368abf0790b188e34ea4526b9bd35",
+    "creationCodeBytes": 7483,
+    "deployedCodeBytes": 6246
+   },
+   {
+    "name": "InkLiquidity",
+    "path": "src/InkLiquidity.sol",
+    "abiHash": "b5b7a2144866960df55bfe6fb068e2f20a675f9568f75e92331a4be92eaf527f",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "83c9558c12027283613fe5139e84a43544672f347ed54151d1a9fc44da83b226",
+    "creationCodeHash": "9bc1c3fb9bfca0a8e918b70a2618bcbd8ef5ee5e9911402822fffa97de1fed48",
+    "deployedCodeHash": "39b8e88ac7324e36f9c586f3841b73d741903ed1bea45a3254b63fa6dce8f1c8",
+    "creationCodeBytes": 12968,
+    "deployedCodeBytes": 12437
+   },
+   {
+    "name": "InkPortraits",
+    "path": "src/InkPortraits.sol",
+    "abiHash": "2d72c247bdb976b2a6105d05688fb5db8dbbcb4cc537db7dbaf3e286228e43e0",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "17239bcb29b82f59a536456fa67e0fd83533b441e4543d77880cddf91f96364c",
+    "creationCodeHash": "19b9d7f776a5b08fb6c156a98667b8669efade0a1c3161aa596734e2104388ee",
+    "deployedCodeHash": "fc3cd811fed6402c8f8dcfaa4d538842dc0f5aa2dd6e7ebdcb7efbaf27e71ac1",
+    "creationCodeBytes": 10194,
+    "deployedCodeBytes": 9307
+   },
+   {
+    "name": "InkRenderer",
+    "path": "src/InkRenderer.sol",
+    "abiHash": "67d9a5f48e3840e7df98bb6d2c32b95834545942f47eb5dfad40a74f183b4d37",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "20b744be2b6ab49f186f4270b3fb61dd469bd56fccc9f5738b6ca101fc1876bf",
+    "creationCodeHash": "ee933acaa06605e32c800c008561de2e202fb43e789940cc5e3bab1c59f95820",
+    "deployedCodeHash": "04b269a07716c6f0f7147a4fec657ff47388704b30aefc099c95dc63532113a1",
+    "creationCodeBytes": 14046,
+    "deployedCodeBytes": 12991
+   },
+   {
+    "name": "InkVault",
+    "path": "src/InkVault.sol",
+    "abiHash": "fe8a33c93bea4343a34d63c906e10d79eca25b4112d1d2620f0acfb5664395ea",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "a8685d1e5f4efeca9c81511626a530767f8d4e87130636dd98eb4160b45bd509",
+    "creationCodeHash": "346ae0b806bd15f79f16f48cf48a06fd15985bca20c4812df7cd3cd068cd5992",
+    "deployedCodeHash": "0c20623b22c2930d4a1e56538b0d526cc4b36b769fe92a34b1d1fc0dc64074e9",
+    "creationCodeBytes": 12914,
+    "deployedCodeBytes": 12400
+   },
+   {
+    "name": "LaunchToken",
+    "path": "src/LaunchToken.sol",
+    "abiHash": "66c0725e9072e2c383f59b9a3baa620d857711ec96837623ad2372c434b83f07",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "f9f6e1b1af75113c20675c853e6940ddbb60d1f29c7cb9c0ce849706d1e1f6d9",
+    "creationCodeHash": "5ac982be67c3f889d9c519c7578f44c77c7b30be72ab479eccc79fde9f8534fd",
+    "deployedCodeHash": "316462b4c1a90ef2cc65036bee1800381f77a90254ddc85d3455a059dfb2a1af",
+    "creationCodeBytes": 2616,
+    "deployedCodeBytes": 1752
+   },
+   {
+    "name": "TestSeats",
+    "path": "src/testnet/TestSeats.sol",
+    "abiHash": "e43b723ee8d27996c84ac66c5081b8dab51ccce60c018ab5ded1f9bae128d090",
+    "opcodes": {
+     "callcode": false,
+     "delegatecall": false,
+     "selfdestruct": false
+    },
+    "metadataHash": "eaf605b55dfdd5b99c51a4d9fba0bd0722d84616f6e52c347ac3f1e9aa41e3e8",
+    "creationCodeHash": "1a8057138c2d8fc28b5dd471d24f19d2e195e6959b458397524fcc41a323a53e",
+    "deployedCodeHash": "869a37d7079d7ced160ddca61849b42bd7e9a57488d48d03d7b13eacddd4fabe",
+    "creationCodeBytes": 4295,
+    "deployedCodeBytes": 3814
+   }
+  ],
+  "manifest": {
+   "hook": {
+    "contract": "InkHook",
+    "permissions": [
+     "beforeInitialize",
+     "beforeSwap",
+     "afterSwap",
+     "afterSwapReturnDelta"
+    ],
+    "constructorArgs": [
+     "$poolManager",
+     "0x54fa3515848440ddde2aefe45a382bd868cacd15",
+     "0x33c85714c7d78fdb253fe1cf761d2d5c3c12d747",
+     "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7",
+     "0xbc10b3662231c830d2ee10bc6359db17bea4b3d4",
+     "25",
+     "$factory"
+    ]
+   },
+   "kind": "univ4_hook",
+   "pool": {
+    "fee": 12500,
+    "tickSpacing": 60,
+    "initialPrice": "79228162514264337593543950336",
+    "pairedCurrency": "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7"
+   },
+   "notes": "Ethereum mainnet INK/IMD launch using the unchanged InkHook and LaunchToken, which takes no constructor arguments. Deploy only these two contracts. Reuse InkPortraits 0x54fa3515848440ddde2aefe45a382bd868cacd15, InkVault 0x33c85714c7d78fdb253fe1cf761d2d5c3c12d747, InkLiquidity 0xa53a3b0521e471f69c0351d9e6620848e749f37d and InkRenderer 0x9853b489003add907ff0849d899f5cb44e8c17d2 from IMD launch 2305; SOURCE_PROVENANCE.json identifies this tree as their source. beforeInitialize is callable only by the PoolManager and accepts only $factory as sender; it binds the hook once to a pool containing IMD and learns INK from the other currency. The hook accepts the listed 12500 LP fee (1.25%). Its additional immutable fee is 25 bps (0.25%) of the unspecified swap currency: output for exact-input swaps, input for exact-output swaps. The hook fee is waived only when portraits.isAgentHolder(tx.origin) is true, requiring agent-portrait ownership since an earlier block; the exemption follows the transaction-origin wallet. Hook fees accrue as PoolManager claims. Anyone may call collectFees(): IMD goes to treasury 0xbc10b3662231c830d2ee10bc6359db17bea4b3d4 and INK goes to vault.liquidity(), the existing InkLiquidity contract, whose permissionless addLiquidity() reinvests eligible balances into the pool. No INK or IMD tokens are burned and hook fees are not sold for ETH. Every swap is rejected until vault.released() is true, with no time-based fallback. After the vault's 24-hour claim window ends, anyone may call release(), which atomically adds any unclaimed INK to the pool before trading can proceed. The hook has no owner, admin, upgrade role or parameter setters. The launch policy directs the launch's pool trading fee share to paying wallet 0x824e12b38cff2d3e7ad9607a0212f7f9eb6a06e3; it is separate from the hook-fee treasury. initialPrice records the required one-to-one sqrtPriceX96 reference; the deployer derives the actual opening price from the separate launch policy and token address.",
+   "token": {
+    "name": "INK",
+    "symbol": "INK",
+    "contract": "LaunchToken",
+    "decimals": 18
+   }
+  },
+  "manifestError": null
+ },
+ "attestationFailure": null,
+ "deployFailure": null,
+ "policyVersion": 34,
+ "economics": {
+  "poolBps": 1000,
+  "remainderTo": "0x33c85714c7d78fdb253fe1cf761d2d5c3c12d747"
+ },
+ "poolFee": 12500,
+ "requester": "0x824e12b38cff2d3e7ad9607a0212f7f9eb6a06e3",
+ "admissionChecks": [
+  {
+   "name": "provenance",
+   "detail": "9 node(s) accepted at 620960b3",
+   "status": "passed"
+  },
+  {
+   "name": "findings",
+   "detail": "9 accepted submission(s), no unresolved blocking findings",
+   "status": "passed"
+  },
+  {
+   "name": "independent_review",
+   "detail": "1 independent review(s)",
+   "status": "passed"
+  },
+  {
+   "name": "bytecode",
+   "detail": "8 contract(s) clean and reproducible",
+   "status": "passed"
+  },
+  {
+   "name": "manifest",
+   "detail": "INK on InkHook, flags 0x20c4",
+   "status": "passed"
+  },
+  {
+   "name": "protected_invariants",
+   "detail": "invariants-73ed8099aa3b: Suite result: ok. 0 passed; 0 failed; 1 skipped; finished in 334.96\u00b5s (0.00ns CPU time)",
+   "status": "passed"
+  },
+  {
+   "name": "economics",
+   "detail": "460 allocation(s), root 0x3d457718",
+   "status": "passed"
+  }
+ ],
+ "assurances": [],
+ "logo": {
+  "jobId": "7141742c-060b-4a1f-a42a-477631e37127",
+  "state": "completed",
+  "hash": "d7fa9e1c5229111aaf6e9c67c66cbe82113380602b357c8ce1c5816f696b4bb6",
+  "cleared": null,
+  "link": null
+ },
+ "seeded": {
+  "pools": [
+   {
+    "fee": 12500,
+    "hooks": "0x8fb4228579feca76d35f8fe361209cffe58c60c4",
+    "currency0": "0x8eeacfe4510dc2b527d2d0fbbea9aeb84139acb2",
+    "currency1": "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7",
+    "tickSpacing": 60
+   }
+  ],
+  "launched": [
+   {
+    "hook": "0x8fb4228579feca76d35f8fe361209cffe58c60c4",
+    "token": "0x8eeacfe4510dc2b527d2d0fbbea9aeb84139acb2",
+    "factory": "0x12c63b581d07093f6126bc02263c58f7eadaa96f",
+    "distributor": "0x654a511b151d6e7b5624d0a0e035bef7c122a3d4",
+    "launchNumber": 2321
+   }
+  ],
+  "positions": [
+   {
+    "factory": "0x12c63b581d07093f6126bc02263c58f7eadaa96f",
+    "tickLower": -128940,
+    "tickUpper": 887220,
+    "launchNumber": 2321
+   }
+  ]
+ },
+ "createdAt": "2026-10-20T17:49:05.453Z",
+ "updatedAt": "2026-10-20T17:50:39.223Z",
+ "jobs": [
+  {
+   "id": "aa9f4f0c-c7aa-49a8-b821-b0c189b1457d",
+   "objective": "Token name: INK. Token symbol: INK. Launch it with the InkHook from this repository on its pool, paired with IMD, on Ethereum mainnet. Keep the hook's logic as written. Constructor values: portraits = 0x54fa3515848440ddde2aefe45a382bd868cacd15, vault = 0x33c85714c7d78fdb253fe1cf761d2d5c3c12d747, imd = the pool's IMD currency, treasury = 0xbc10B3662231c830d2ee10bc6359dB17bEa4b3d4, feeBps = 25 (a 0.25% hook fee on top of the pool's own fee, waived for wallets holding an agent portrait; IMD fees go to the treasury and INK fees are sent to the vault's liquidity contract (vault.liquidity()), which adds them back to the pool; nothing is burned; do not sell hook fees for ETH). Trading lock: the hook rejects every swap until vault.released() is true; there is no time-based fallback (anyone can call release() once the vault's 24-hour claim window ends, and it adds the unclaimed INK to the pool in the same transaction). The agent-holder fee waiver requires portraits.isAgentHolder(tx.origin), which needs the portrait held since an earlier block. Nobody can change any of these after deployment: the hook has no owner, admin or upgrade role, and none may be added. The pool trading fee share goes to the paying wallet, which is 0x824E12b38CfF2D3e7ad9607a0212f7F9Eb6a06E3. The portraits, vault, liquidity and renderer contracts are already live on Ethereum mainnet, deployed by IMD launch 2305 from a tree whose src/, script/, test/ and foundry.toml are byte-identical to this commit (see SOURCE_PROVENANCE.json): InkPortraits 0x54fa3515848440ddde2aefe45a382bd868cacd15, InkVault 0x33c85714c7d78fdb253fe1cf761d2d5c3c12d747, InkLiquidity 0xa53a3b0521e471f69c0351d9e6620848e749f37d, InkRenderer 0x9853b489003add907ff0849d899f5cb44e8c17d2. Each is verified on Sourcify (exact match) and compiles from this tree to the deployed runtime size, so use this tree as their source. Deploy only the hook and the token; do not redeploy or change those contracts.",
+   "state": "completed",
+   "attachedAt": "2026-10-20T17:49:05.453Z"
+  }
+ ],
+ "artifacts": [
+  {
+   "role": "hook",
+   "name": "InkHook",
+   "address": "0x8fb4228579feca76d35f8fe361209cffe58c60c4",
+   "creationCodeHash": "f16210e33199ce4c6b254bf52d35becb432252abb07a13ff89f82bd522baa8b5",
+   "txHash": "0xa4d254ca8affc1da17b3cb012175cf2193f02980bba0d1a1929f67767b58b354",
+   "blockNumber": 26235399,
+   "verifiedAt": "2026-10-20T17:52:54.837Z",
+   "verifyFailure": null
+  },
+  {
+   "role": "token",
+   "name": "LaunchToken",
+   "address": "0x8eeacfe4510dc2b527d2d0fbbea9aeb84139acb2",
+   "creationCodeHash": "5ac982be67c3f889d9c519c7578f44c77c7b30be72ab479eccc79fde9f8534fd",
+   "txHash": "0xa4d254ca8affc1da17b3cb012175cf2193f02980bba0d1a1929f67767b58b354",
+   "blockNumber": 26235399,
+   "verifiedAt": "2026-10-20T17:53:00.186Z",
+   "verifyFailure": null
+  },
+  {
+   "role": "distributor",
+   "name": "MerkleDistributor",
+   "address": "0x654a511b151d6e7b5624d0a0e035bef7c122a3d4",
+   "creationCodeHash": "f1c21108732a73286b1030e87fbba14c806905275dde6fce012f2c0ca19e30b9",
+   "txHash": "0xa4d254ca8affc1da17b3cb012175cf2193f02980bba0d1a1929f67767b58b354",
+   "blockNumber": 26235399,
+   "verifiedAt": null,
+   "verifyFailure": null
+  }
+ ]
+}
