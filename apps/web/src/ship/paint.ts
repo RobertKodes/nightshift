@@ -255,7 +255,10 @@ function fittings(c: Ctx, len: number, h: number, r: Room, y0: number) {
     // pipes along the wall and gauges
     for (const [v, col] of [[1.55, "#3a3254"], [1.85, "#2e2846"], [2.6, "#3a3254"]] as const) { c.fillStyle = col; c.fillRect(0, v, len, 0.16); c.fillStyle = "rgba(255,255,255,.06)"; c.fillRect(0, v, len, 0.04); }
     for (let u = 1; u < len; u += 2.4) { c.fillStyle = "#1e1a30"; c.fillRect(u, 1.5, 0.12, 1.4); }
-    for (let u = 2.6; u < len - 1; u += 4.8) screen(u, 1.05, 1.6, 0.42, "#ffb547", 2);
+    for (const u of [2.6, 7.4, 20.0]) if (u < len - 1) screen(u, 1.05, 1.6, 0.42, "#ffb547", 2);
+    // the frame of the live shift-hours board (its numbers are drawn every frame)
+    c.fillStyle = "#0a0810"; c.fillRect(len - 18.6, 1.2, 6.2, 1.3);
+    c.strokeStyle = "rgba(255,181,71,.8)"; c.lineWidth = 0.05; c.strokeRect(len - 18.6, 1.2, 6.2, 1.3);
   }
   if (r.key === "forge") {
     // the memorial wall's frame (the frogs it burned are drawn live over it)

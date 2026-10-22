@@ -29,8 +29,8 @@ const FX: Record<string, string> = {
 };
 const BLINKS = new Set(["Heavy Lids", "Wired", "Deadpan Wink", "Acid Glow", "Monocle"]);
 
-type Filter = { rarity: string; layer: number; value: number; station: string; special: "" | "watchers" | "missions" | "forged" };
-const NO_FILTER: Filter = { rarity: "", layer: -1, value: -1, station: "", special: "" };
+type Filter = { rarity: string; layer: number; value: number; station: string; special: "" | "watchers" | "missions" | "forged"; tier: number };
+const NO_FILTER: Filter = { rarity: "", layer: -1, value: -1, station: "", special: "", tier: 0 };
 
 export function ShipPage() {
   const { address, signIn, busy } = useSession();
@@ -83,7 +83,7 @@ export function ShipPage() {
     // ?debug: the scene on window, for the frame-rate checks
     if (new URLSearchParams(location.search).has("debug")) (window as unknown as { __shipScene?: ShipScene }).__shipScene = s;
     s.onPick = (p) => { setPick(p && p.kind === "room" && pick?.kind !== "room" ? p : p); if (p && p.kind !== "room") setPanel((x) => (x === "filters" ? "none" : x)); };
-    s.onHover = (p) => setHover((h) => (p ? { p, x: h?.x ?? 0, y: h?.y ?? 0 } : null));
+    s.onHover = (p, x, y) => setHover(p ? { p, x, y } : null);
     const t = setInterval(() => { const x = s.getStats(); setStats({ fps: x.fps, ms: x.frameMs }); }, 1000);
     return () => { clearInterval(t); s.destroy(); scene.current = null; };
   }, [st, view]);
@@ -166,7 +166,7 @@ export function ShipPage() {
       <header className="nx-head"><StationBar room="command" title="The Ship" /></header>
       <main className="sh-main">
         {view === "scene" && canDraw ? (
-          <div className="sh-stage" onPointerMove={(e) => { if (hover) setHover({ ...hover, x: e.clientX, y: e.clientY }); }}>
+          <div className="sh-stage">
             <canvas ref={canvas} className="sh-canvas" tabIndex={0} role="img"
               aria-label={`The NIGHTSHIFT ship: ${totals ? `${totals.held} NIGHT FROGS aboard and ${totals.watchers} Night Watcher${totals.watchers === 1 ? "" : "s"}` : "loading the crew"}. Drag or use the arrow keys to move, scroll or + and - to zoom. The list view shows the same crew as text.`} />
             {!st && !err && <div className="sh-boot"><i /><span>Boarding the ship…</span></div>}
@@ -267,11 +267,12 @@ function roomStats(st: ShipStatic | null, snap: Snapshot | null): Record<RoomKey
 
 // ------------------------------------------------------------------ filters
 function matcher(st: ShipStatic | null, snap: Snapshot | null, f: Filter): ((key: string) => boolean) | null {
-  if (!st || (f.rarity === "" && f.layer < 0 && f.station === "" && f.special === "")) return null;
+  if (!st || (f.rarity === "" && f.layer < 0 && f.station === "" && f.special === "" && !f.tier)) return null;
   return (key: string) => {
     if (key.startsWith("w")) {
       const w = snap?.watchers.find((x) => `w${x.n}` === key);
       if (!w) return false;
+      if (f.tier) return w.tier === f.tier && (f.layer < 0 || f.value < 0 || w.traits[f.layer] === f.value);
       if (f.special === "watchers") return true;
       if (f.special || f.rarity || f.station) return false;
       return f.layer >= 0 && (f.value < 0 || w.traits[f.layer] === f.value);
@@ -279,7 +280,7 @@ function matcher(st: ShipStatic | null, snap: Snapshot | null, f: Filter): ((key
     const id = Number(key), row = st.frogs[id - 1];
     if (!row) return false;
     const sf = snap?.frogs[id - 1];
-    if (f.special === "watchers") return false;
+    if (f.special === "watchers" || f.tier) return false;
     if (f.special === "missions" && !(sf?.mission && !sf.mission.done)) return false;
     if (f.special === "forged" && !sf?.dead) return false;
     if (f.rarity && st.rarities[row[1]!] !== f.rarity) return false;
@@ -298,6 +299,7 @@ function Filters({ st, filter, setFilter, count, onClose }: { st: ShipStatic; fi
       <label>Trait<select value={filter.layer} onChange={(e) => setFilter({ ...filter, layer: Number(e.target.value), value: -1 })}><option value={-1}>Any layer</option>{st.layers.map((l, i) => i > 0 && <option key={l} value={i}>{l}</option>)}</select></label>
       {filter.layer >= 0 && <label>{st.layers[filter.layer]}<select value={filter.value} onChange={(e) => setFilter({ ...filter, value: Number(e.target.value) })}><option value={-1}>Pick one</option>{st.names[filter.layer]!.map((n, i) => <option key={n} value={i}>{n} · {st.counts[filter.layer]![i]} frogs</option>)}</select></label>}
       <label>Show<select value={filter.special} onChange={(e) => setFilter({ ...filter, special: e.target.value as Filter["special"] })}><option value="">Everyone</option><option value="watchers">Night Watchers</option><option value="missions">Out on missions</option><option value="forged">Forged frogs</option></select></label>
+      <label>Night Watcher tier<select value={filter.tier} onChange={(e) => setFilter({ ...filter, tier: Number(e.target.value) })}><option value={0}>Any</option>{st.tiers.map((t) => <option key={t.tier} value={t.tier}>Tier {t.roman} · {t.name}</option>)}<option value={6}>The Captain</option></select></label>
       <div className="sh-panel-foot"><span>{count === null ? "Everyone shown" : `${count} match`}</span><button className="sh-btn" onClick={() => setFilter(NO_FILTER)}>Clear</button></div>
     </aside>
   );

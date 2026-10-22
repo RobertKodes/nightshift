@@ -66,7 +66,7 @@ export class ShipScene {
   get match() { return this.matchFn; }
   set match(f: ((key: string) => boolean) | null) { this.matchFn = f; this.rebake(); }
   onPick?: (p: Pick | null) => void;
-  onHover?: (p: Pick | null) => void;
+  onHover?: (p: Pick | null, x: number, y: number) => void;
 
   constructor(private canvas: HTMLCanvasElement, private st: ShipStatic, private still: boolean) {
     this.c = canvas.getContext("2d", { alpha: false })!;
@@ -76,6 +76,7 @@ export class ShipScene {
     this.assign();
     this.resize();
     this.fit(false);
+    if (this.w < 700) { const [a, b, c2, d] = WORLD_BOX; this.goTo((a + c2) / 2 + 120, (b + d) / 2 - 60, 0.24, false); }
     this.bind();
     this.raf = requestAnimationFrame(this.loop);
   }
@@ -254,7 +255,8 @@ export class ShipScene {
       if (e.pointerType === "mouse" && performance.now() - this.lastPick > 40) {
         this.lastPick = performance.now();
         const p = this.pick(e.offsetX, e.offsetY);
-        if (JSON.stringify(p) !== JSON.stringify(this.hover)) { this.hover = p; this.onHover?.(p); this.canvas.style.cursor = p && p.kind !== "room" ? "pointer" : "grab"; this.dirty = true; }
+        if (JSON.stringify(p) !== JSON.stringify(this.hover)) { this.hover = p; this.canvas.style.cursor = p && p.kind !== "room" ? "pointer" : "grab"; this.dirty = true; }
+        this.onHover?.(p, e.clientX, e.clientY);
       }
     });
     const up = (e: PointerEvent) => {
@@ -265,7 +267,7 @@ export class ShipScene {
       else if (this.pointers.size === 1) { const [p] = [...this.pointers.values()] as [{ x: number; y: number }]; this.drag = { x: p.x, y: p.y, t: performance.now(), moved: 99, cx: this.cam.x, cy: this.cam.y }; }
     };
     on("pointerup", up); on("pointercancel", up);
-    on("pointerleave", () => { if (this.hover) { this.hover = null; this.onHover?.(null); this.dirty = true; } });
+    on("pointerleave", () => { if (this.hover) { this.hover = null; this.onHover?.(null, 0, 0); this.dirty = true; } });
     on("wheel", (e) => { e.preventDefault(); this.zoomBy(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0016)), e.offsetX, e.offsetY); }, { passive: false });
     on("dblclick", (e) => this.zoomBy(1.8, e.offsetX, e.offsetY));
     on("keydown", (e) => {
@@ -474,6 +476,7 @@ export class ShipScene {
     const [x0, y0] = this.toWorld(-40, -60), [x1, y1] = this.toWorld(this.w + 40, this.h + 160);
     this.lightsUnder(c, tt);
     this.drawMemorial(c);
+    this.drawBoard(c);
     const devH = SH * z * d;
     const fxOn = this.quality >= 1 && devH > 22, big = devH > 70;
     let drawn = 0;
@@ -820,6 +823,35 @@ export class ShipScene {
     c.restore();
   }
 
+  /**
+   * The shift floor's board, on the engine room wall: what the whole crew earns an hour, and the hours accruing
+   * since the staking book's last credit (the next hourly credit pays exactly these, if nobody sells meanwhile).
+   */
+  private drawBoard(c: CanvasRenderingContext2D) {
+    const snap = this.snap;
+    if (!snap || this.cam.z < 0.42) return;
+    // the frame is painted on the wall at u = len - 18.6 .. len - 12.4 (u from the room's bow end, y = 54)
+    const y1 = 54 + 22 - 18.6, k = 40, w = 6.2;
+    const [ox, oy] = P(0.02, y1, WALL - 1.2);
+    c.save();
+    c.transform(32 / k, -16 / k, 0, 32 / k, ox, oy);
+    // mirrored wall: draw from the right end (u grows toward the stern, i.e. leftward on screen)
+    c.translate(-w * k, 0);
+    const since = Math.max(0, Date.now() - snap.stakingAt) / 3_600_000, acc = snap.totals.perHour * since;
+    c.textBaseline = "alphabetic"; c.textAlign = "left";
+    c.fillStyle = "rgba(255,181,71,.85)"; c.font = "700 7px 'JetBrains Mono', monospace";
+    c.fillText("THE WHOLE CREW · SHIFT HOURS AN HOUR", 8, 11);
+    c.fillStyle = "#ffe4b0"; c.font = "700 22px 'JetBrains Mono', monospace";
+    c.shadowColor = "#ffb547"; c.shadowBlur = 8;
+    c.fillText(snap.totals.perHour.toLocaleString("en-US", { maximumFractionDigits: 1 }), 8, 34);
+    c.shadowBlur = 0;
+    c.fillStyle = "rgba(184,255,74,.95)"; c.font = "700 9px 'JetBrains Mono', monospace";
+    c.fillText(`+${acc.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} accruing`, 8, 46);
+    c.fillStyle = "rgba(255,181,71,.6)"; c.font = "600 5.5px 'JetBrains Mono', monospace";
+    c.fillText(`since the last credit, ${Math.floor(since * 60)} min ago · paid every hour`, 8, 52);
+    c.restore();
+  }
+
   private overFx(c: CanvasRenderingContext2D, t: number) {
     const prev = c.globalCompositeOperation; c.globalCompositeOperation = "lighter";
     // the engines' exhaust, out of the stern
@@ -900,7 +932,7 @@ export class ShipScene {
   private gradeCv: HTMLCanvasElement | null = null; private gradeKey = "";
   private grade(c: CanvasRenderingContext2D) {
     // the shift's light, by the hour in UTC: night 22-06, day 06-14, swing 14-22
-    const h = new Date().getUTCHours(), shift = h >= 22 || h < 6 ? "night" : h < 14 ? "day" : "swing";
+    const fh = this.F.hour as number | undefined, h = fh ?? new Date().getUTCHours(), shift = h >= 22 || h < 6 ? "night" : h < 14 ? "day" : "swing";
     const key = `${this.w}x${this.h}:${shift}`;
     if (key !== this.gradeKey) {
       this.gradeKey = key;
@@ -915,6 +947,9 @@ export class ShipScene {
       this.gradeCv = cv;
     }
     c.drawImage(this.gradeCv!, 0, 0, this.w, this.h);
+    // day shift: the lights up, softer shadows; swing shift: a warm dusk; night: as it is, neon on indigo
+    if (shift === "day") { c.globalCompositeOperation = "screen"; c.fillStyle = "rgba(110,100,170,.10)"; c.fillRect(0, 0, this.w, this.h); c.globalCompositeOperation = "source-over"; }
+    else if (shift === "swing") { c.globalCompositeOperation = "soft-light"; c.fillStyle = "rgba(255,150,70,.28)"; c.fillRect(0, 0, this.w, this.h); c.globalCompositeOperation = "source-over"; }
   }
   get shift() { const h = new Date().getUTCHours(); return h >= 22 || h < 6 ? "Night shift" : h < 14 ? "Day shift" : "Swing shift"; }
   getStats() { return this.stats; }
