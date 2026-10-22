@@ -1,41 +1,43 @@
 import { Cast, type Drawn, U, type Who } from "./cast";
-import { BACK, FRONT, type Piece as FPiece, SPILL, coffee, driveCoil, furnace, holoPedestal, radarTable, reactor } from "./furniture";
+import { BACK, FRONT, type Piece as FPiece, SPILL, arcadeCabinet, coffee, driveCoil, furnace, holoPedestal, marketKiosk, poolTable, radarTable, reactor } from "./furniture";
 import { type Key, P_IDLE, P_SIT, P_TALK, P_WALK } from "./frogs";
 import { type Rect, fxLight, fxSolid, sparkle, watcherBack, watcherFront } from "./fx";
 import { type Ctx, P, RX, RY, alpha, disc, glow, rad } from "./iso";
-import { Life, type Mover, type Walker } from "./life";
+import { type Agent, Life, type Member, type Outside, type Role, type Status, h2 } from "./life";
 import { Nav } from "./nav";
 import { STATIC, WORLD_BOX } from "./paint";
 import { Space } from "./space";
-import type { Pick, ShipStatic, Snapshot, Station } from "./types";
-import { CHART, COFFEE, CREW_SEATS, DRIVE, FURNACE, L, PEG, PLINTHS, PODS, RADAR, REACTOR, ROOMS, type RoomKey, SEATS, type Seat, THRONE, WALL, WATCH } from "./world";
+import type { Pick, ShipStatic, Snapshot, SnapWatcher, Station } from "./types";
+import { ARCADE, CHART, COFFEE, DRIVE, FURNACE, L, MARKET, PEG, PLINTHS, PODS, POOL, RADAR, REACTOR, ROOMS, type RoomKey, SEATS, type Seat, THRONE, WALL, WATCH } from "./world";
 
 /**
  * THE SHIP, drawn: the whole ship in one isometric Canvas 2D scene with a camera (inertial drag, eased wheel and
  * slider zoom, pinch, held keys, fly-to, follow). The hull, floors and walls are painted once into 256 px tiles
- * per zoom level and reused; the furniture is cached as sprites per level; far out, the seated crew is baked into
- * tiles too and only what moves is drawn live. Every frame draws what is on screen, back to front: space, the
- * tiles, the seats and their characters, the crew walking about, the machines' light, the trait effects, then
- * labels and speech in screen pixels. The quality steps down by itself on a slow device.
+ * per zoom level; far out, the furniture is baked into tiles too and the crew is drawn over it, each one followed
+ * by the desks and machines that stand in front of it. Up close everything is drawn back to front. The crew's
+ * life (life.ts) is driven by the live snapshot: a real forge, a mission starting or ending, the hourly shift-hours
+ * credit and a watch seat going online show on the ship as they happen.
  */
 const LEVELS = [0.125, 0.177, 0.25, 0.354, 0.5, 0.707, 1, 1.414, 2, 2.83, 4];
 const TS = 256;
 export const MAX_ZOOM = 3;
 const ORDER: Station[] = ["bridge", "quarters", "offices", "breakroom", "missions", "engine", "forge"];
 
-type Occ = { key: Key; kind: "frog" | "watcher"; id: number; who: Who; color: string; ph: number; tier: number };
-type Ent = { depth: number; seat?: Seat; prop?: { draw: (c: Ctx) => void; box: [number, number, number, number]; key: string; x: number; y: number; z: number }; box: [number, number, number, number] };
-type Job = { d: Drawn; o: Occ; spill: string | null; body: Rect };
-export type SceneStats = { fps: number; frameMs: number; drawn: number; tiles: number; walkers: number; quality: number; zoom: number; baked?: boolean };
+type Ent = { depth: number; seat?: Seat; front?: Seat; prop?: { draw: (c: Ctx) => void; box: [number, number, number, number]; key: string; x: number; y: number; z: number }; box: [number, number, number, number] };
+type Job = { d: Drawn; a: Agent; spill: string | null; body: Rect };
+export type SceneStats = { fps: number; frameMs: number; drawn: number; tiles: number; walkers: number; moving: number; quality: number; zoom: number; baked?: boolean };
 export type Labels = Partial<Record<RoomKey, { title: string; line: string }>>;
+export type ShipEvent = { at: number; text: string };
 
-/** Seats always drawn live (their glows and rings move): the Night Watch, the Captain's chair, the Night Boss plinths. */
-const LIVE = new Set<Seat["kind"]>(["watch", "throne", "plinth"]);
+/** Seats always drawn live (their glows, rings and flights move): the Night Watch, the Captain's chair, the plinths, the pods. */
+const LIVE = new Set<Seat["kind"]>(["watch", "throne", "plinth", "pod"]);
 const SEAT_LIFT: Partial<Record<Seat["kind"], number>> = { throne: 0.22, plinth: 0.42, pod: 0.2, watch: 0.05, officer: 0.04, console: -0.12, control: -0.12, station: -0.12, desk: -0.12, bar: -0.1, table: -0.1, anvil: -0.12 };
 /** Seats a character stands in rather than sits. */
 const STAND = new Set<Seat["kind"]>(["plinth", "pod"]);
 const ACCENT: Record<number, string> = { 1: "#7C5CFF", 2: "#C4B4FF", 4: "#B8FF4A", 5: "#FFC46B" };
+const ROLE_OF: Record<Station, Role> = { engine: "shift", bridge: "bridge", missions: "control", offices: "office", breakroom: "break", quarters: "officer", forge: "forge" };
 const FONT_UI = "'Space Grotesk', Inter, system-ui, sans-serif", FONT_MONO = "'JetBrains Mono', ui-monospace, monospace";
+const STATUS_COL: Record<Status, string> = { online: "#7ee08a", offline: "#f2b25e", unpaired: "#8a90a6" };
 
 export class ShipScene {
   readonly cast: Cast;
@@ -44,12 +46,11 @@ export class ShipScene {
   private tiles = new Map<string, { c: HTMLCanvasElement | null; used: number }>();
   private ents: Ent[] = [];
   private nav = new Nav(SEATS);
-  private life: Life;
-  private occ = new Map<number, Occ>();
-  private movers = new Map<number, Mover>();
-  private empty = new Map<number, string>();
-  private keyToSeat = new Map<string, number>();
+  readonly life: Life;
   private drawnAt = new Map<string, Drawn>();
+  private homes = new Map<number, string>();
+  private fronts = new Map<number, Seat[]>();
+  private props: { key: string; depth: number; x: number; y: number; z: number; p: { box: [number, number, number, number]; draw: (c: Ctx) => void }; box: [number, number, number, number] }[] = [];
   private memorial: HTMLCanvasElement | null = null;
   private memorialKey = "";
   private raf = 0;
@@ -67,15 +68,16 @@ export class ShipScene {
   private hover: Pick | null = null;
   private lastPick = 0;
   private flare = 0;
+  private creditAt = 0;
+  private roomFloats: { room: RoomKey; text: string; from: number; until: number }[] = [];
   private quality = 2;
   private frames: number[] = [];
   private work: number[] = [];
   private last = 0;
-  private stats: SceneStats = { fps: 0, frameMs: 0, drawn: 0, tiles: 0, walkers: 0, quality: 2, zoom: 0 };
+  private stats: SceneStats = { fps: 0, frameMs: 0, drawn: 0, tiles: 0, walkers: 0, moving: 0, quality: 2, zoom: 0 };
   private dirty = true;
-  private away = new Set<number>();
-  private podOverflow = 0;
   private jobs: Job[] = [];
+  private lights: { a: Agent; d: Drawn }[] = [];
   private F: Record<string, unknown> = {};
   snap: Snapshot | null = null;
   labels: Labels = {};
@@ -84,25 +86,24 @@ export class ShipScene {
   private followKey: string | null = null;
   private matchFn: ((key: string) => boolean) | null = null;
   get match() { return this.matchFn; }
-  set match(f: ((key: string) => boolean) | null) { this.matchFn = f; this.rebake(); }
+  set match(f: ((key: string) => boolean) | null) { this.matchFn = f; this.dirty = true; }
   onPick?: (p: Pick | null) => void;
   onHover?: (p: Pick | null, x: number, y: number) => void;
   onRoom?: (i: { room: Station; shown: number; total: number }) => void;
   onFollow?: (key: string | null) => void;
+  /** Something real happened on the ship (a bot online, a frog back from a mission): a line for the ship's log. */
+  onEvent?: (e: ShipEvent) => void;
   private room: Station | null = null;
+  /** The world outside: live games and companies, set by the page. */
+  set outside(o: Outside) { this.life.outside = o; }
 
   constructor(private canvas: HTMLCanvasElement, private st: ShipStatic, private still: boolean) {
     this.c = canvas.getContext("2d", { alpha: false })!;
     this.cast = new Cast(st);
-    this.life = new Life(this.nav, SEATS, st);
-    let lastRebake = 0;
-    this.cast.faces.onReady = () => {
-      this.dirty = true;
-      const now = performance.now();
-      if (this.cast.faces.pending === 0 || now - lastRebake > 1500) { lastRebake = now; this.staleAll(); }
-    };
+    this.life = new Life(this.nav, st);
+    this.life.onFlare = () => { this.flare = performance.now(); };
+    this.cast.faces.onReady = () => { this.dirty = true; };
     this.build();
-    this.assign();
     this.resize();
     this.fit(false);
     if (this.w < 700) { const [a, b, c2, d] = WORLD_BOX; this.goTo((a + c2) / 2 + 120, (b + d) / 2 - 60, 0.24, false); }
@@ -112,15 +113,21 @@ export class ShipScene {
 
   destroy() { cancelAnimationFrame(this.raf); this.unbind(); }
 
-  // ------------------------------------------------------------------ the cast
+  // ------------------------------------------------------------------ the ship's furniture
   private build() {
     for (const s of SEATS) {
       const [x, y] = P(s.x, s.y, s.z);
       this.ents.push({ depth: s.x + s.y + 0.01, seat: s, box: [x - 70, y - 170, x + 70, y + 40] });
+      if (FRONT[s.kind]) {
+        this.ents.push({ depth: s.x + s.y + 0.42, front: s, box: [x - 44, y - 40, x + 44, y + 40] });
+        const b = Math.floor(s.x / 2) * 100 + Math.floor(s.y / 2);
+        if (!LIVE.has(s.kind)) { if (!this.fronts.has(b)) this.fronts.set(b, []); this.fronts.get(b)!.push(s); }
+      }
     }
     const prop = (key: string, x: number, y: number, z: number, depth: number, box: [number, number, number, number], draw: (c: Ctx) => void) => {
-      const [px, py] = P(x, y, z);
-      this.ents.push({ depth, prop: { key, draw, box, x, y, z }, box: [box[0] + px, box[1] + py, box[2] + px, box[3] + py] });
+      const [px, py] = P(x, y, z), wb: [number, number, number, number] = [box[0] + px, box[1] + py, box[2] + px, box[3] + py];
+      this.ents.push({ depth, prop: { key, draw, box, x, y, z }, box: wb });
+      this.props.push({ key, depth, x, y, z, p: { box, draw }, box: wb });
     };
     prop("radar", RADAR.x, RADAR.y, 0.5, RADAR.x + RADAR.y, [-140, -60, 140, 80], (c) => radarTable(c, 0, 0, 0, RADAR.r));
     prop("reactor", REACTOR.x, REACTOR.y, 0, REACTOR.x + REACTOR.y, [-160, -210, 160, 100], (c) => reactor(c, 0, 0, REACTOR.r));
@@ -129,72 +136,117 @@ export class ShipScene {
     prop("coffee", COFFEE.x, COFFEE.y, 0, COFFEE.x + COFFEE.y + 1, [-50, -70, 50, 30], (c) => coffee(c, 0, 0));
     prop("peg", PEG.x, PEG.y, 0.5, PEG.x + PEG.y, [-40, -30, 40, 24], (c) => holoPedestal(c, "rgba(74,216,255,.9)"));
     prop("chart", CHART.x, CHART.y, 0.5, CHART.x + CHART.y, [-40, -30, 40, 24], (c) => holoPedestal(c, "rgba(164,139,255,.9)"));
+    prop("pool", POOL.x, POOL.y, 0, POOL.x + POOL.y + 0.6, [-70, -40, 70, 52], (c) => poolTable(c, POOL.hx, POOL.hy));
+    for (const [i, [x, y]] of ARCADE.entries()) prop(`arcade${i}`, x, y, 0, x + y + 0.3, [-32, -70, 32, 22], (c) => arcadeCabinet(c, ["#ee7fae", "#6cc8ee", "#b5e37a"][i]!));
+    prop("market", MARKET.x, MARKET.y, 0, MARKET.x + MARKET.y, [-30, -66, 30, 20], (c) => marketKiosk(c));
     this.ents.sort((a, b) => a.depth - b.depth);
+    this.props.sort((a, b) => a.depth - b.depth);
   }
 
-  /** Who sits where: each station's frogs by number in its seats, the Night Watch in its arcs, the Night Bosses on the plinths, the frogs out on missions in the pods. */
-  assign() {
-    this.occ.clear(); this.empty.clear(); this.keyToSeat.clear(); this.movers.clear();
-    const st = this.st, snap = this.snap;
-    const byStation: Record<Station, number[]> = { bridge: [], quarters: [], offices: [], breakroom: [], missions: [], engine: [], forge: [] };
-    st.frogs.forEach((row, i) => { const id = i + 1; if (id !== 1) byStation[st.rules[row[10]!]!.station].push(id); });
-    const frog = (id: number): Occ => {
-      const traits = st.frogs[id - 1]!.slice(3, 10);
-      return { key: id, kind: "frog", id, who: { key: id, k: 1, tier: 0, tc: ACCENT[traits[0]!] ?? "#3FE6FF", traits }, color: "", ph: (id * 0.6180339) % 1, tier: 0 };
-    };
-    const away = new Map<number, string>();
-    const pods: number[] = [];
-    if (snap) for (const f of snap.frogs) {
-      if (f.dead) away.set(f.id, f.into === null ? "forged" : f.into === 0 ? "forged into The Captain" : `forged into Night Watcher #${f.into}`);
-      else if (f.mission && !f.mission.done) { away.set(f.id, `on a mission: ${f.mission.title}`); pods.push(f.id); }
+  // ------------------------------------------------------------------ the crew, from the snapshot
+  /** The crew list: every frog aboard by its station's role (or out on its mission), the Night Watch with its seats and bots. */
+  private members(s: Snapshot): Member[] {
+    const st = this.st, out: Member[] = [];
+    this.homes.clear();
+    const captainForged = s.watchers.some((w) => w.n === 0);
+    const watchSeats = WATCH.filter((w) => this.life.isUsable(w.i)).concat(WATCH.filter((w) => !this.life.isUsable(w.i)));
+    for (const f of s.frogs) {
+      if (f.dead) continue;
+      const row = st.frogs[f.id - 1]!, traits = row.slice(3, 10), station = st.rules[row[10]!]!.station;
+      const who: Who = { key: f.id, k: 1, tier: 0, tc: ACCENT[traits[0]!] ?? "#3FE6FF", traits };
+      const away = f.mission && !f.mission.done;
+      const captain = f.id === 1 && !captainForged;
+      out.push({ key: String(f.id), who, role: away ? "mission" : captain ? "captain" : ROLE_OF[station], room: captain ? "bridge" : station, rate: f.rate, title: away ? f.mission!.title : null, home: captain ? THRONE.i : null, status: null, n: null });
     }
-    const put = (seat: Seat, o: Occ | null, why?: string, walks = false) => {
-      if (o) {
-        this.occ.set(seat.i, o); this.keyToSeat.set(String(o.key), seat.i);
-        this.movers.set(seat.i, { key: String(o.key), k: o.who.k, tier: o.tier, walks });
-      } else if (why) this.empty.set(seat.i, why);
-    };
-    for (const k of Object.keys(byStation) as Station[]) {
-      byStation[k].forEach((id, j) => { const seat = CREW_SEATS[k][j]; if (seat) put(seat, away.has(id) ? null : frog(id), away.get(id), true); });
-    }
-    const watcher = (w: { n: number; traits: number[]; color: string; tier: number }): Occ => {
-      this.cast.faces.setWatcher(w.n, w.traits, w.color);
-      const cap = w.n === 0;
-      return { key: `w${w.n}`, kind: "watcher", id: w.n, who: { key: `w${w.n}`, k: cap ? 1.75 : 1.5, tier: cap ? 6 : w.tier, tc: w.color, traits: w.traits }, color: w.color, ph: cap ? 0.3 : (w.n * 0.37) % 1, tier: cap ? 6 : w.tier };
-    };
-    // the Captain's chair: #1, or The Captain once #1 is forged
-    const captain = snap?.watchers.find((w) => w.n === 0);
-    if (captain) put(THRONE, watcher(captain));
-    else put(THRONE, away.has(1) ? null : frog(1), away.get(1));
     let ring = 0, boss = 0;
-    for (const w of snap?.watchers ?? []) {
-      if (w.n === 0) continue;
-      const seat = w.tier === 5 ? PLINTHS[boss++] : WATCH[ring++];
-      if (seat) put(seat, watcher(w), undefined, true);
+    for (const w of s.watchers) {
+      this.cast.faces.setWatcher(w.n, w.traits, w.color);
+      const cap = w.n === 0, seat = cap ? THRONE : w.tier === 5 ? PLINTHS[boss++] : watchSeats[ring++];
+      const watch = cap ? s.captain.watch : w.watch;
+      out.push(this.watcherMember(w, seat?.i ?? null, watch.paired ? (watch.online ? "online" : "offline") : "unpaired"));
     }
-    pods.sort((a, b) => (snap!.frogs[a - 1]!.mission!.since - snap!.frogs[b - 1]!.mission!.since));
-    pods.forEach((id, k) => { const seat = PODS[k]; if (seat) put(seat, frog(id)); });
-    this.podOverflow = Math.max(0, pods.length - PODS.length);
+    for (const m of out) if (m.home !== null) this.homes.set(m.home, m.key);
+    return out;
+  }
+  private watcherMember(w: SnapWatcher, home: number | null, status: Status): Member {
+    const cap = w.n === 0;
+    return { key: `w${w.n}`, who: { key: `w${w.n}`, k: cap ? 1.75 : 1.5, tier: cap ? 6 : w.tier, tc: w.color, traits: w.traits }, role: cap ? "captain" : "watch", room: w.tier === 5 ? "quarters" : "bridge", rate: w.rate, title: null, home, status, n: w.n };
+  }
+  private frogMember(id: number): Member {
+    const traits = this.st.frogs[id - 1]!.slice(3, 10);
+    return { key: String(id), who: { key: id, k: 1, tier: 0, tc: ACCENT[traits[0]!] ?? "#3FE6FF", traits }, role: "doomed", room: "forge", rate: 0, title: null, home: null, status: null, n: null };
+  }
+
+  /**
+   * A new snapshot: what changed since the last one plays out on the ship (a forge, missions leaving and coming
+   * back, the hourly credit, a bot coming online), then the crew list is brought up to date.
+   */
+  setSnapshot(s: Snapshot) {
+    const prev = this.snap, now = performance.now();
+    this.snap = s;
+    const list = this.members(s);
+    const event = (text: string) => this.onEvent?.({ at: Date.now(), text });
+    if (!this.still) {
+      const ms = (v: number) => (v > 1e12 ? v : v * 1000);
+      const fresh = prev ? s.watchers.filter((w) => !prev.watchers.some((p) => p.n === w.n)) : s.watchers.filter((w) => Date.now() - ms(w.forgedAt) < 30 * 60_000).slice(-1);
+      for (const w of fresh) {
+        const m = list.find((x) => x.key === `w${w.n}`)!;
+        this.life.forge((w.n === 0 ? [1] : w.inputs).map((id) => this.frogMember(id)), m, now);
+      }
+      if (fresh.length) this.flare = now;
+      if (prev) {
+        for (const f of s.frogs) {
+          const p = prev.frogs[f.id - 1], was = Boolean(p?.mission && !p.mission.done), is = Boolean(f.mission && !f.mission.done);
+          if (!was && is && !f.dead) this.life.missionStart(String(f.id), f.mission!.title, now);
+          if (was && !is && !f.dead) {
+            const station = this.st.rules[this.st.frogs[f.id - 1]![10]!]!.station;
+            this.life.missionEnd(String(f.id), ROLE_OF[station], station, now);
+            event(`#${f.id} back from ${p!.mission!.title}`);
+          }
+        }
+        if (s.stakingAt !== prev.stakingAt) this.credit(now);
+        const status = (w: { watch: { paired: boolean; online: boolean } }) => w.watch.online;
+        for (const w of s.watchers) {
+          const p = prev.watchers.find((x) => x.n === w.n);
+          if (p && status(p) !== status(w)) { this.life.watchChange(`w${w.n}`, w.watch.online, now); event(`${w.n === 0 ? "The Captain" : `Night Watcher #${w.n}`}'s bot ${w.watch.online ? "came online" : "went offline"}`); }
+        }
+      }
+    }
+    this.life.setCrew(list, now);
     this.memorialKey = "";
     this.rebake();
     this.dirty = true;
     this.room = null;
   }
-
-  setSnapshot(s: Snapshot) {
-    const before = this.snap?.watchers.length ?? null;
-    this.snap = s;
-    if (before !== null && s.watchers.length > before) this.flare = performance.now();
-    this.assign();
+  /** The hourly credit: what each frog earned floats over it (far out: what each room earned, over its label). */
+  private credit(now: number) {
+    this.creditAt = now;
+    if (this.cam.z >= 0.55) { this.life.credit(now, (a) => this.agentOnScreen(a)); return; }
+    const by = new Map<RoomKey, number>();
+    for (const a of this.life.agents) if (a.mode !== "gone" && a.role !== "doomed") { const r = a.room as RoomKey; by.set(r, (by.get(r) ?? 0) + a.rate); }
+    for (const [room, v] of by) if (v > 0) { const f = now + Math.random() * 900; this.roomFloats.push({ room, text: `+${v.toLocaleString("en-US", { maximumFractionDigits: 1 })} h`, from: f, until: f + 3400 }); }
   }
-  /** Where a character sits. */
-  seatOf(key: string): Seat | null { const i = this.keyToSeat.get(key); return i === undefined ? null : SEATS[i] ?? null; }
-  /** Where a character is now, in world px (feet): walking, or at its seat. */
+  /** For the page's checks (?debug): replays the newest forge on the ship. */
+  replayForge() {
+    const s = this.snap, w = s ? [...s.watchers].sort((a, b) => b.forgedAt - a.forgedAt)[0] : null;
+    if (!s || !w) return false;
+    const m = this.members(s).find((x) => x.key === `w${w.n}`)!;
+    this.life.forge((w.n === 0 ? [1] : w.inputs).map((id) => this.frogMember(id)), m, performance.now());
+    return true;
+  }
+  /** For the page's checks (?debug): the hourly credit's floats, as they show at the real credit. */
+  replayCredit() { this.credit(performance.now()); }
+
+  /** Whether a character is aboard and on the ship now (not out on a mission, not forged). */
+  aboard(key: string) { const a = this.life.get(key); return Boolean(a && a.mode !== "gone" && a.role !== "doomed"); }
+  /** What a character is doing now, in a few words. */
+  activityOf(key: string) { const a = this.life.get(key); return a ? this.life.activity(a, this.snap) : null; }
+  /** Where a character is now, in world px (feet). */
   private where(key: string): [number, number] | null {
-    const w = this.life.byKey(key);
-    if (w) return P(w.x, w.y, w.z);
-    const s = this.seatOf(key);
-    return s ? P(s.x, s.y, s.z + (SEAT_LIFT[s.kind] ?? 0)) : null;
+    const a = this.life.get(key);
+    if (!a || a.mode === "gone") return null;
+    if (a.mode === "sit" && a.seat !== null) { const s = SEATS[a.seat]!; return P(s.x, s.y, s.z + (SEAT_LIFT[s.kind] ?? 0)); }
+    return P(a.x, a.y, a.z);
   }
   get pending() { return this.cast.faces.pending; }
 
@@ -408,34 +460,37 @@ export class ShipScene {
     const r = ROOMS.find((q) => fx >= q.x0 && fx < q.x1 && fy >= q.y0 && fy < q.y1);
     return r && r.key !== "drive" ? r.key : r?.key === "drive" ? "engine" : null;
   }
-  /** What is under a screen point: a character, an empty seat, or a room. */
+  /** What is under a screen point: a character (the front-most), a Night Watch seat or plinth, or a room. */
   pick(sx: number, sy: number): Pick | null {
     const [wx, wy] = this.toWorld(sx, sy);
     const inside = (d: Drawn) => wx >= d.x && wx <= d.x + d.w && wy >= d.y && wy <= d.y + d.h;
-    const toPick = (o: Occ): Pick => (o.kind === "frog" ? { kind: "frog", id: o.id } : { kind: "watcher", n: o.id });
-    // the walkers are in front
-    for (let i = this.life.walkers.length - 1; i >= 0; i--) {
-      const w = this.life.walkers[i]!, d = this.drawnAt.get(w.key), o = this.occ.get(w.seat);
-      if (d && o && inside(d)) return toPick(o);
+    let best: Agent | null = null, bd = -Infinity;
+    for (const a of this.life.agents) {
+      if (a.mode === "gone") continue;
+      const d = this.drawnAt.get(a.key);
+      if (!d || !inside(d)) continue;
+      const depth = this.depthOf(a);
+      if (depth > bd) { bd = depth; best = a; }
     }
+    if (best) return best.key.startsWith("w") ? { kind: "watcher", n: Number(best.key.slice(1)) } : { kind: "frog", id: Number(best.key) };
     for (let i = this.ents.length - 1; i >= 0; i--) {
       const s = this.ents[i]!.seat;
-      if (!s || this.away.has(s.i)) continue;
-      const o = this.occ.get(s.i), d = o ? this.drawnAt.get(String(o.key)) ?? this.estimate(s, o) : this.estimate(s, null);
-      if (!inside(d)) continue;
-      if (o) return toPick(o);
-      if (s.kind === "watch" || s.kind === "plinth" || s.kind === "throne" || this.empty.has(s.i)) return { kind: "seat", seat: s.i };
+      if (!s || (s.kind !== "watch" && s.kind !== "plinth" && s.kind !== "throne") || this.life.seated.has(s.i)) continue;
+      if (!inside(this.estimate(s, 1))) continue;
+      // a seat whose Night Watcher is up and about: that Night Watcher
+      const home = this.homes.get(s.i);
+      if (home) return home.startsWith("w") ? { kind: "watcher", n: Number(home.slice(1)) } : { kind: "frog", id: Number(home) };
+      return { kind: "seat", seat: s.i };
     }
     const r = this.roomAtScreen(sx, sy);
     return r ? { kind: "room", station: r } : null;
   }
-  emptyWhy(seat: number) { return this.empty.get(seat) ?? null; }
-  occupant(seat: number) { return this.occ.get(seat) ?? null; }
-  get overflow() { return this.podOverflow; }
+  emptyWhy(_seat: number): string | null { return null; }
+  private depthOf(a: Agent) { return a.mode === "sit" && a.seat !== null ? SEATS[a.seat]!.x + SEATS[a.seat]!.y + 0.02 : a.x + a.y + 0.05; }
 
   /** Where a seat's character is drawn (before it has been): its feet at the seat, its size by its kind. */
-  private estimate(s: Seat, o: Occ | null): Drawn {
-    const k = o?.who.k ?? 1, [x, y] = P(s.x, s.y, s.z + (SEAT_LIFT[s.kind] ?? 0)), h = (STAND.has(s.kind) ? 36 : 31) * k * U;
+  private estimate(s: Seat, k: number): Drawn {
+    const [x, y] = P(s.x, s.y, s.z + (SEAT_LIFT[s.kind] ?? 0)), h = (STAND.has(s.kind) ? 36 : 31) * k * U;
     return { x: x - 11 * k * U, y: y - h, w: 22 * k * U, h, head: null, hand: null, face: true };
   }
 
@@ -558,7 +613,7 @@ export class ShipScene {
     this.frames.push(now); this.work.push(work);
     while (this.frames.length && now - this.frames[0]! > 1000) { this.frames.shift(); this.work.shift(); }
     this.stats.fps = this.frames.length; this.stats.frameMs = this.work.reduce((a, b) => a + b, 0) / Math.max(1, this.work.length);
-    this.stats.quality = this.quality; this.stats.zoom = this.cam.z; this.stats.walkers = this.life.walkers.length;
+    this.stats.quality = this.quality; this.stats.zoom = this.cam.z; this.stats.walkers = this.life.agents.filter((a) => a.mode !== "sit" && a.mode !== "gone").length;
     this.adapt(now);
     (window as unknown as { __ship?: SceneStats }).__ship = this.stats;
   };
@@ -608,7 +663,7 @@ export class ShipScene {
     }
     // the room in the middle of the free screen, for the page's room bar
     const f = this.free(), r = this.roomAtScreen(f.cx, f.cy) ?? this.room ?? "bridge";
-    if (r !== this.room) { this.room = r; this.onRoom?.({ room: r, shown: 0, total: r === "missions" ? this.podOverflow : 0 }); }
+    if (r !== this.room) { this.room = r; this.onRoom?.({ room: r, shown: 0, total: 0 }); }
   }
 
   private draw(t: number, budgetEnd: number, dt: number) {
@@ -623,39 +678,55 @@ export class ShipScene {
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.imageSmoothingQuality = "low";
     if (!F.noTiles) this.drawTiles(c, budgetEnd);
-    // the crew's life: who is up and walking
+    // the crew's life: everyone up and about
     const ms = performance.now();
-    const onScreen = (i: number) => this.onScreen(SEATS[i]!);
-    if (!this.still) this.life.step(ms, dt, this.snap, this.movers, onScreen, this.quality >= 2 ? 44 : this.quality === 1 ? 24 : 10, this.followKey);
-    const away = new Set(this.life.walkers.map((w) => w.seat));
-    for (const i of away) if (!this.away.has(i)) this.staleSeat(i);
-    for (const i of this.away) if (!away.has(i)) this.staleSeat(i);
-    this.away = away;
-    // far out, the seated crew is painted into tiles too; what moves goes on top
+    if (!this.still) this.life.step(ms, dt, this.snap, (a) => this.agentOnScreen(a), this.quality >= 1 ? 10 : 5, this.followKey);
+    // far out, the furniture is baked into tiles; the crew goes over it, each one under what stands in front of it
     const baked = !F.noBake && z < 0.95 && this.drawCrewTiles(c, budgetEnd);
     this.stats.baked = baked;
     c.setTransform(d * z, 0, 0, d * z, d * (this.w / 2 - this.cam.x * z), d * (this.h / 2 - this.cam.y * z));
     const [x0, y0] = this.toWorld(-60, -80), [x1, y1] = this.toWorld(this.w + 60, this.h + 200);
+    const seen = (b: [number, number, number, number]) => !(b[2] < x0 || b[0] > x1 || b[3] < y0 || b[1] > y1);
     this.lightsUnder(c, tt);
     this.drawMemorial(c);
     this.drawBoard(c);
     this.drawPortrait(c);
     const px = U * z * d;
-    const fxOn = this.quality >= 1 && px > 0.9, big = px > 2.2;
-    let drawn = 0;
-    this.jobs.length = 0;
-    // the walkers, back to front, merged into the seats and props
-    const walkers = this.life.walkers.filter((w) => { const [wx, wy] = P(w.x, w.y, w.z); return wx > x0 && wx < x1 && wy > y0 && wy < y1 + 100; }).sort((a, b) => a.x + a.y - (b.x + b.y));
-    let wi = 0;
-    for (const e of this.ents) {
-      while (wi < walkers.length && walkers[wi]!.x + walkers[wi]!.y < e.depth) this.drawWalker(c, walkers[wi++]!, tt, ms, px, fxOn, big);
-      if (e.box[2] < x0 || e.box[0] > x1 || e.box[3] < y0 || e.box[1] > y1) continue;
-      drawn++;
-      if (e.prop) { if (!baked) { const [ppx, ppy] = P(e.prop.x, e.prop.y, e.prop.z); this.propSprite(e.prop.key, e.prop, ppx, ppy); } if (!F.noFx) this.propFx(c, e.prop.key, tt); continue; }
-      if (!F.noSeats) this.drawSeat(c, e.seat!, tt, px, fxOn && !F.noFx, big, baked && !LIVE.has(e.seat!.kind) ? "overlay" : "live");
+    const fxOn = this.quality >= 1 && px > 0.9 && !F.noFx, big = px > 2.2;
+    let drawn = 0, moving = 0;
+    this.jobs.length = 0; this.lights.length = 0;
+    this.cast.frame();
+    const atSeat = (a: Agent) => (a.mode === "sit" || a.mode === "launch" || a.mode === "land") && a.seat !== null;
+    const loose = this.life.agents.filter((a) => {
+      if (a.mode === "gone" || (atSeat(a) && (!baked || LIVE.has(SEATS[a.seat!]!.kind)))) return false;
+      if (a.mode === "walk") moving++;
+      const [wx, wy] = atSeat(a) ? P(SEATS[a.seat!]!.x, SEATS[a.seat!]!.y, 0) : P(a.x, a.y, a.z);
+      return wx > x0 && wx < x1 && wy > y0 && wy < y1 + 120;
+    });
+    const dep = new Map(loose.map((a) => [a, this.depthOf(a)]));
+    loose.sort((a, b) => dep.get(a)! - dep.get(b)!);
+    if (!baked) {
+      let wi = 0;
+      for (const e of this.ents) {
+        while (wi < loose.length && dep.get(loose[wi]!)! < e.depth) this.drawChar(c, loose[wi++]!, tt, ms, px, fxOn);
+        if (!seen(e.box)) continue;
+        drawn++;
+        if (e.prop) { const [ppx, ppy] = P(e.prop.x, e.prop.y, e.prop.z); this.propSprite(e.prop.key, e.prop, ppx, ppy); if (!F.noFx) this.propFx(c, e.prop.key, tt); continue; }
+        if (e.front) { if (e.front.kind !== "pod") this.drawFront(c, e.front); continue; }
+        if (!F.noSeats) this.drawSeat(c, e.seat!, tt, ms, px, fxOn, "live");
+      }
+      while (wi < loose.length) this.drawChar(c, loose[wi++]!, tt, ms, px, fxOn);
+    } else {
+      for (const e of this.ents) {
+        if (!seen(e.box)) continue;
+        if (e.seat && LIVE.has(e.seat.kind)) { drawn++; this.drawSeat(c, e.seat, tt, ms, px, fxOn, "live"); }
+        else if (e.front && LIVE.has(e.front.kind) && e.front.kind !== "pod") this.drawFront(c, e.front);
+      }
+      if (px < 0.85) { const sh = shadow(); for (const a of loose) if (!atSeat(a)) { const [sx, sy] = P(a.x, a.y, a.z), k = a.who.k; c.drawImage(sh, sx - 8 * k * U, sy + 1 - 3.2 * k * U, 16 * k * U, 6.4 * k * U); } }
+      for (const a of loose) { const dr = this.drawChar(c, a, tt, ms, px, fxOn); drawn++; this.occlude(c, a, dr); }
+      if (!F.noFx) for (const p of this.props) if (seen(p.box)) this.propFx(c, p.key, tt);
     }
-    while (wi < walkers.length) this.drawWalker(c, walkers[wi++]!, tt, ms, px, fxOn, big);
-    this.stats.drawn = drawn;
+    this.stats.drawn = drawn; this.stats.moving = moving;
     // the characters' light and trait effects, over the scene in one pass
     if (!F.noFx) this.drawJobs(c, tt, big);
     this.overFx(c, tt);
@@ -666,122 +737,133 @@ export class ShipScene {
     this.grade(c);
   }
 
+  /** Far out: after a character, the desks and machines in front of it that overlap it are drawn again over it. */
+  private occlude(c: CanvasRenderingContext2D, a: Agent, d: Drawn) {
+    const depth = this.depthOf(a), seat = atSeatOf(a), x = seat ? seat.x : a.x, y = seat ? seat.y : a.y;
+    const bx = Math.floor(x / 2), by = Math.floor(y / 2);
+    const hit = (b: [number, number, number, number]) => b[0] < d.x + d.w && b[2] > d.x && b[1] < d.y + d.h && b[3] > d.y;
+    for (let i = bx - 1; i <= bx + 1; i++) for (let j = by - 1; j <= by + 2; j++) {
+      const list = this.fronts.get(i * 100 + j);
+      if (!list) continue;
+      for (const s of list) {
+        const sd = s.x + s.y + 0.42;
+        if (sd <= depth || sd > depth + 1.9) continue;
+        const [sx, sy] = P(s.x, s.y, s.z), f = FRONT[s.kind]!;
+        if (hit([sx + f.box[0], sy + f.box[1], sx + f.box[2], sy + f.box[3]])) this.piece(`f:${s.kind}`, f, sx, sy, c);
+      }
+    }
+    for (const p of this.props) {
+      if (p.depth <= depth || p.depth > depth + 9 || !hit(p.box)) continue;
+      const [ppx, ppy] = P(p.x, p.y, p.z);
+      this.propSprite(p.key, p.p, ppx, ppy);
+    }
+  }
+
   private drawJobs(c: CanvasRenderingContext2D, t: number, big: boolean) {
     const fine = this.quality >= 2 || big;
-    for (const j of this.jobs) if (fine && j.d.head) fxSolid(c, j.d.head, j.o.who.traits, t, j.o.ph, big, j.d.hand, j.d.face);
+    for (const j of this.jobs) if (fine && j.d.head) fxSolid(c, j.d.head, j.a.who.traits, t, j.a.ph, big, j.d.hand, j.d.face);
     const prev = c.globalCompositeOperation;
     c.globalCompositeOperation = "lighter";
     for (const j of this.jobs) {
       if (j.spill) glow(c, j.body.x + j.body.w / 2, j.d.y + j.d.h * 0.5, j.body.w * 0.9, j.spill, 0.16, 0.6);
-      if (fine && j.d.head) fxLight(c, j.d.head, j.o.who.traits, t, j.o.ph, big, j.d.hand, j.d.face);
+      if (fine && j.d.head) fxLight(c, j.d.head, j.a.who.traits, t, j.a.ph, big, j.d.hand, j.d.face);
     }
     c.globalCompositeOperation = prev;
-    for (const j of this.jobs) if (j.o.kind === "watcher") watcherFront(c, j.body, j.o.tier, j.o.color, t, j.o.ph);
+    for (const j of this.jobs) if (j.a.who.tier > 0) watcherFront(c, j.body, j.a.who.tier, j.a.who.tc, t, j.a.ph);
   }
 
   /** A character's body rect for its aura and orbit rings. */
   private bodyRect(x: number, y: number, k: number): Rect { const w = 30 * k * U, h = 38 * k * U; return { x: x - w / 2, y: y - h, w, h }; }
 
-  /**
-   * One seat: its back piece, its character, its front piece. "live" draws it all now; "bake" draws it still into
-   * a crew tile; "overlay" adds only what moves (markers, effects) over its baked tile.
-   */
-  private drawSeat(c: CanvasRenderingContext2D, s: Seat, t: number, px: number, fxOn: boolean, big: boolean, mode: "live" | "bake" | "overlay" = "live", li?: number) {
+  /** One seat, live or baked: its glow (the Night Watch's), its back piece and its character; a pod in flight moves as one. */
+  private drawSeat(c: CanvasRenderingContext2D, s: Seat, t: number, ms: number, px: number, fxOn: boolean, mode: "live" | "bake", li?: number) {
     const [bx, by] = P(s.x, s.y, s.z);
-    // a frog out walking leaves its seat
-    const o = this.away.has(s.i) ? undefined : this.occ.get(s.i);
-    const key = o ? String(o.key) : "";
-    const dim = o && this.match ? !this.match(key) : this.match !== null && !o;
-    const lift = SEAT_LIFT[s.kind] ?? 0, [cx, cy] = P(s.x, s.y, s.z + lift);
-    if (mode === "overlay") {
-      if (!o) return;
-      const sel = this.selected === key;
-      if (this.crew.has(key) || sel) this.marker(c, s.x, s.y, s.z, sel ? "#ffffff" : "#c6f27a", t);
-      else if (this.match && !dim) this.found(c, s);
-      if (this.isHover(o) && !sel) disc(c, s.x, s.y, s.z, 0.55, null, "rgba(255,255,255,.6)", 1.5 / this.cam.z);
-      const est = this.drawnAt.get(key) ?? this.estimate(s, o);
-      if (fxOn && !dim) this.jobs.push({ d: est, o, spill: SPILL[s.kind] ?? null, body: this.bodyRect(cx, cy, o.who.k) });
-      return;
-    }
-    if (dim) c.globalAlpha = 0.22;
-    // an open Night Watch seat waits, dimmed
-    else if (!o && s.kind === "watch") c.globalAlpha = 0.5;
-    const back = BACK[s.kind];
-    if (s.kind === "watch" || s.kind === "plinth" || s.kind === "throne") this.seatGlow(c, s, o ?? null, t);
-    if (back && !this.F.noPieces) this.piece(`b:${s.kind}`, back, bx, by, c, li);
-    if (o) {
-      const sel = this.selected === key;
-      if (mode === "live" && (this.crew.has(key) || sel)) this.marker(c, s.x, s.y, s.z, sel ? "#ffffff" : "#c6f27a", t);
-      else if (mode === "live" && this.match && !dim) this.found(c, s);
-      const body = this.bodyRect(cx, cy, o.who.k);
-      if (o.kind === "watcher" && fxOn) watcherBack(c, body, o.tier, o.color, t, o.ph);
-      const live = mode === "live" && !this.still;
-      const blink = live && ((t * 1000 + o.ph * 7919) % (3800 + o.ph * 2600)) < 140;
-      const breath = live && Math.floor((t * 1000 + o.ph * 1100) / 1300) % 2 ? 1 : 0;
-      const dr = this.F.noSprites ? this.estimate(s, o) : this.cast.draw(c, o.who, cx, cy, 0, STAND.has(s.kind) ? P_IDLE : P_SIT, px, { blink, breath });
-      if (mode === "live") {
-        this.drawnAt.set(key, dr);
-        if (fxOn && !dim) this.jobs.push({ d: dr, o, spill: SPILL[s.kind] ?? null, body });
-        if (this.isHover(o) && !sel) disc(c, s.x, s.y, s.z, 0.55, null, "rgba(255,255,255,.6)", 1.5 / this.cam.z);
+    const a = mode === "live" ? this.life.seated.get(s.i) : undefined;
+    const taken = a || this.homes.has(s.i);
+    const dimSeat = this.match !== null && !a;
+    // a pod leaving or coming back: the capsule, its rider and a flame, on their way through the hangar door
+    const fl = s.kind === "pod" && mode === "live" ? this.life.pods.get(s.i) : undefined;
+    let moved = false;
+    if (fl) {
+      const p = Math.max(0, Math.min(1, (ms - fl.t0) / 1800)), e = fl.out ? p * p : (1 - p) * (1 - p);
+      if (e > 0) {
+        const [ox, oy] = P(e * 7, 0, e * 1.4), [qx, qy] = P(0, 0, 0);
+        c.save(); c.translate(ox - qx, oy - qy); c.globalAlpha = Math.max(0, 1 - Math.max(0, e - 0.55) / 0.45); moved = true;
+        const prev = c.globalCompositeOperation; c.globalCompositeOperation = "lighter";
+        glow(c, bx - 18, by - 10, 46, "#ffb46a", 0.7 * Math.min(1, e * 4)); glow(c, bx - 10, by - 8, 20, "#fff1d0", 0.8 * Math.min(1, e * 4));
+        c.globalCompositeOperation = prev;
       }
     }
-    const front = FRONT[s.kind];
-    if (front && !this.F.noPieces) this.piece(`f:${s.kind}`, front, bx, by, c, li);
-    if (!o && this.empty.has(s.i) && px > 1.2) {
-      // the seat of a frog that is away: a small tag where it sits
-      const why = this.empty.get(s.i)!;
-      c.fillStyle = why.startsWith("forged") ? "rgba(255,140,90,.7)" : "rgba(198,242,122,.7)";
-      c.beginPath(); c.arc(bx, by - 18, 2.2, 0, Math.PI * 2); c.fill();
-    }
+    if (dimSeat) c.globalAlpha *= 0.3;
+    else if (!taken && s.kind === "watch") c.globalAlpha *= 0.5;
+    const back = BACK[s.kind];
+    if (mode === "live" && (s.kind === "watch" || s.kind === "plinth" || s.kind === "throne")) this.seatGlow(c, s, a ?? null, t);
+    if (back && !this.F.noPieces) this.piece(`b:${s.kind}`, back, bx, by, c, li);
+    if (dimSeat) c.globalAlpha /= 0.3; else if (!taken && s.kind === "watch") c.globalAlpha /= 0.5;
+    if (a && !this.F.noSeats) this.drawChar(c, a, t, ms, px, fxOn);
+    if (s.kind === "pod" || mode === "bake") { const f = FRONT[s.kind]; if (f && !this.F.noPieces) this.piece(`f:${s.kind}`, f, bx, by, c, li); }
+    if (moved) c.restore();
     c.globalAlpha = 1;
   }
+  private drawFront(c: CanvasRenderingContext2D, s: Seat) {
+    const f = FRONT[s.kind];
+    if (!f || this.F.noPieces) return;
+    const [bx, by] = P(s.x, s.y, s.z);
+    this.piece(`f:${s.kind}`, f, bx, by, c);
+  }
 
-  /** A character out of its seat: walking (legs moving), standing at a place, or talking. */
-  private drawWalker(c: CanvasRenderingContext2D, w: Walker, t: number, ms: number, px: number, fxOn: boolean, big: boolean) {
-    const o = this.occ.get(w.seat);
-    if (!o) return;
-    const key = String(o.key), [x, y] = P(w.x, w.y, w.z);
+  /** A crew member: seated at its seat, or walking (legs moving), standing at a place or talking; fading into the forge's fire or out of it. */
+  private drawChar(c: CanvasRenderingContext2D, a: Agent, t: number, ms: number, px: number, fxOn: boolean): Drawn {
+    const seat = atSeatOf(a), key = a.key, k = a.who.k;
     const dim = this.match ? !this.match(key) : false;
-    const moving = (w.mode === "out" || w.mode === "back") && w.v > 0.05;
-    const talking = !moving && w.gesture > ms && w.gesture - ms < 1600;
-    const pose = moving ? P_WALK + (Math.floor(w.dist / (0.3 * w.k)) % 4) : talking ? P_TALK + (Math.floor(ms / 230) % 2) : P_IDLE;
-    if (dim) c.globalAlpha = 0.25;
-    // a soft contact shadow
-    c.fillStyle = "rgba(4,4,12,.38)"; c.beginPath(); c.ellipse(x, y + 1, 9 * w.k * U * 0.9, 3.6 * w.k * U * 0.9, 0, 0, Math.PI * 2); c.fill();
-    const sel = this.selected === key;
-    if (this.crew.has(key) || sel || key === this.followKey) this.marker(c, w.x, w.y, w.z, sel || key === this.followKey ? "#ffffff" : "#c6f27a", t, 0.5);
-    const body = this.bodyRect(x, y, o.who.k);
-    if (o.kind === "watcher" && fxOn && !dim) watcherBack(c, body, o.tier, o.color, t, o.ph);
-    const blink = !this.still && ms > w.blinkAt && ms < w.blinkAt + 140;
-    const breath = !moving && Math.floor((ms + w.ph * 1100) / 1300) % 2 ? 1 : 0;
-    const dr = this.cast.draw(c, o.who, x, y, w.dir, pose, px, { blink, breath });
-    this.drawnAt.set(key, dr);
-    if (fxOn && !dim) this.jobs.push({ d: dr, o, spill: null, body });
-    if (this.isHover(o) && !sel) { c.strokeStyle = "rgba(255,255,255,.6)"; c.lineWidth = 1.5 / this.cam.z; c.beginPath(); c.ellipse(x, y + 1, 11 * w.k * U * 0.8, 4.5 * w.k * U * 0.8, 0, 0, Math.PI * 2); c.stroke(); }
-    c.globalAlpha = 1;
-    void big;
-  }
-
-  private isHover(o: Occ) { const h = this.hover; return Boolean(h && ((h.kind === "frog" && o.kind === "frog" && h.id === o.id) || (h.kind === "watcher" && o.kind === "watcher" && h.n === o.id))); }
-
-  // ------------------------------------------------------------------ the baked crew layer
-  private crewTiles = new Map<string, { c: HTMLCanvasElement; li: number }>();
-  private crewStale = new Set<string>();
-  private crewLevel = -1;
-  /** Throws away the baked crew (the seats changed, a filter). */
-  rebake() { this.crewTiles.clear(); this.crewStale.clear(); this.dirty = true; }
-  /** Marks every baked tile for a redraw, kept on screen until it is (the art came in). */
-  private staleAll() { for (const k of this.crewTiles.keys()) this.crewStale.add(k); this.dirty = true; }
-  /** A seat's frog got up or sat down: the baked tiles it is on are drawn again. */
-  private staleSeat(i: number) {
-    const s = SEATS[i]!, [x, y] = P(s.x, s.y, s.z), box = [x - 70, y - 170, x + 70, y + 40];
-    for (const [k, v] of this.crewTiles) {
-      const span = TS / LEVELS[v.li]!, [, tx, ty] = k.split(":").map(Number) as [number, number, number];
-      if (box[2]! >= tx * span && box[0]! <= (tx + 1) * span && box[3]! >= ty * span && box[1]! <= (ty + 1) * span) this.crewStale.add(k);
+    let x: number, y: number, dir: number, pose: number;
+    const moving = a.mode === "walk" && a.v > 0.05;
+    if (seat) { [x, y] = P(seat.x, seat.y, seat.z + (SEAT_LIFT[seat.kind] ?? 0)); dir = 0; pose = STAND.has(seat.kind) ? P_IDLE : P_SIT; }
+    else {
+      [x, y] = P(a.x, a.y, a.z); dir = a.dir;
+      const talking = !moving && a.gesture > ms && a.gesture - ms < 1600;
+      pose = moving ? P_WALK + (Math.floor(a.dist / (0.3 * k)) % 4) : talking ? P_TALK + (Math.floor(ms / 230) % 2) : P_IDLE;
     }
+    const ga = c.globalAlpha;
+    let fade = 1;
+    if (a.mode === "appear") fade = Math.max(0, Math.min(1, 1 - (a.until - ms) / 1400));
+    if (a.mode === "vanish") fade = Math.max(0, Math.min(1, (a.until - ms) / 900));
+    const al = ga * fade * (dim ? 0.25 : 1);
+    if (al !== ga) c.globalAlpha = al;
+    // far out the shadows were all laid down first, in one pass
+    if (!seat && px >= 0.85) c.drawImage(shadow(), x - 8 * k * U, y + 1 - 3.2 * k * U, 16 * k * U, 6.4 * k * U);
+    const sel = this.selected === key, fol = key === this.followKey;
+    if (this.crew.has(key) || sel || fol) this.marker(c, seat ? seat.x : a.x, seat ? seat.y : a.y, seat ? seat.z : a.z, sel || fol ? "#ffffff" : "#c6f27a", t, seat ? 0.72 : 0.5);
+    const body = this.bodyRect(x, y, k);
+    if (a.who.tier > 0 && fxOn && !dim) watcherBack(c, body, a.who.tier, a.who.tc, t, a.ph);
+    // the forge's ten, lit by the fire they walk to
+    if (a.role === "doomed") { const prev = c.globalCompositeOperation; c.globalCompositeOperation = "lighter"; glow(c, x, y - 16 * U, 26 * U, "#ff8a3a", 0.5); c.globalCompositeOperation = prev; }
+    const blink = !this.still && ms > a.blinkAt && ms < a.blinkAt + 140;
+    const breath = !moving && Math.floor((ms + a.ph * 1100) / 1300) % 2 ? 1 : 0;
+    // far out: one call from the atlas of far-away poses
+    const far = px < 0.85 && !this.F.noMini && fade === 1 && this.cast.drawMini(c, a.who, x, y, dir, pose);
+    const top = (seat && !STAND.has(seat.kind) ? 31 : 35) * k * U;
+    const dr: Drawn = far || this.F.noSprites ? { x: x - 11 * k * U, y: y - top, w: 22 * k * U, h: top, head: null, hand: null, face: true } : this.cast.draw(c, a.who, x, y, dir, pose, px, { blink, breath });
+    // the forge's frogs shrink into the fire
+    this.drawnAt.set(key, dr);
+    if (a.carry && !seat) { const hx = x + (dir === 1 ? -7 : 7) * U, hy = y - 13 * U; c.fillStyle = "#c9a56a"; c.fillRect(hx - 4.5 * U, hy - 4 * U, 9 * U, 6.5 * U); c.fillStyle = "#8a6a3a"; c.fillRect(hx - 4.5 * U, hy - 1.5 * U, 9 * U, 1 * U); }
+    if (fxOn && !dim) this.jobs.push({ d: dr, a, spill: seat ? SPILL[seat.kind] ?? null : null, body });
+    if (a.status && !dim) this.lights.push({ a, d: dr });
+    if (this.isHover(a) && !sel) { c.strokeStyle = "rgba(255,255,255,.6)"; c.lineWidth = 1.5 / this.cam.z; c.beginPath(); c.ellipse(x, y + 1, 10 * k * U * 0.8, 4.2 * k * U * 0.8, 0, 0, Math.PI * 2); c.stroke(); }
+    if (c.globalAlpha !== ga) c.globalAlpha = ga;
+    return dr;
   }
-  private renderCrewTile(li: number, tx: number, ty: number, into?: HTMLCanvasElement): HTMLCanvasElement {
-    const s = LEVELS[li]!, cv = into ?? document.createElement("canvas");
+
+  private isHover(a: Agent) { const h = this.hover; return Boolean(h && ((h.kind === "frog" && a.key === String(h.id)) || (h.kind === "watcher" && a.key === `w${h.n}`))); }
+  private agentOnScreen(a: Agent) { const s = atSeatOf(a), [x, y] = this.toScreen(...(s ? P(s.x, s.y, s.z) : P(a.x, a.y, a.z))); return x > -30 && x < this.w + 30 && y > -30 && y < this.h + 60; }
+
+  // ------------------------------------------------------------------ the baked furniture
+  private crewTiles = new Map<string, { c: HTMLCanvasElement; li: number }>();
+  private crewLevel = -1;
+  /** Throws the baked furniture away (drawn again as it comes into view). */
+  rebake() { this.crewTiles.clear(); this.dirty = true; }
+  private renderCrewTile(li: number, tx: number, ty: number): HTMLCanvasElement {
+    const s = LEVELS[li]!, cv = document.createElement("canvas");
     cv.width = cv.height = TS;
     const g = cv.getContext("2d")!;
     const wx = (tx * TS) / s, wy = (ty * TS) / s, ww = TS / s;
@@ -790,17 +872,17 @@ export class ShipScene {
     for (const e of this.ents) {
       if (e.box[2] < wx || e.box[0] > wx + ww || e.box[3] < wy || e.box[1] > wy + ww) continue;
       if (e.prop) { const [px, py] = P(e.prop.x, e.prop.y, e.prop.z); g.save(); g.translate(px, py); e.prop.draw(g); g.restore(); continue; }
-      if (!LIVE.has(e.seat!.kind)) this.drawSeat(g, e.seat!, 0, U * s, false, false, "bake", li);
+      if (e.seat && !LIVE.has(e.seat.kind)) { const b = BACK[e.seat.kind]; if (b) { const [bx, by] = P(e.seat.x, e.seat.y, e.seat.z); this.piece(`b:${e.seat.kind}`, b, bx, by, g, li); } }
+      if (e.front && !LIVE.has(e.front.kind)) { const [bx, by] = P(e.front.x, e.front.y, e.front.z); this.piece(`f:${e.front.kind}`, FRONT[e.front.kind]!, bx, by, g, li); }
     }
     return cv;
   }
-  /** Draws the baked crew for the view; false when some of it is not baked yet (then the frame draws it live). */
+  /** Draws the baked furniture for the view; false when some of it is not baked yet (then the frame draws it live). */
   private drawCrewTiles(c: CanvasRenderingContext2D, budgetEnd: number): boolean {
     const li = this.levelIndex();
     if (li !== this.crewLevel) {
       this.crewLevel = li;
-      // keep the last level's tiles only while this one bakes
-      for (const [k, v] of this.crewTiles) if (v.li !== li && Math.abs(v.li - li) > 1) { this.crewTiles.delete(k); this.crewStale.delete(k); }
+      for (const [k, v] of this.crewTiles) if (Math.abs(v.li - li) > 1) this.crewTiles.delete(k);
     }
     const s = LEVELS[li]!, span = TS / s;
     const [x0, y0] = this.toWorld(-60, -80), [x1, y1] = this.toWorld(this.w + 60, this.h + 200);
@@ -808,12 +890,7 @@ export class ShipScene {
     const want: [number, number, string][] = [];
     for (let ty = Math.floor(Math.max(y0, B) / span); ty <= Math.floor(Math.min(y1, D) / span); ty++) for (let tx = Math.floor(Math.max(x0, A) / span); tx <= Math.floor(Math.min(x1, C) / span); tx++) want.push([tx, ty, `${li}:${tx}:${ty}`]);
     let ready = true;
-    for (const [tx, ty, k] of want) {
-      const have = this.crewTiles.get(k);
-      if (!have) { if (performance.now() < budgetEnd) this.crewTiles.set(k, { c: this.renderCrewTile(li, tx, ty), li }); else ready = false; }
-      else if (this.crewStale.has(k) && performance.now() < budgetEnd) { this.renderCrewTile(li, tx, ty, have.c); this.crewStale.delete(k); }
-    }
-    if (this.crewStale.size) this.dirty = true;
+    for (const [tx, ty, k] of want) if (!this.crewTiles.has(k)) { if (performance.now() < budgetEnd) this.crewTiles.set(k, { c: this.renderCrewTile(li, tx, ty), li }); else ready = false; }
     if (!ready) { this.dirty = true; return false; }
     const d = this.dpr;
     for (const [tx, ty, k] of want) {
@@ -821,28 +898,27 @@ export class ShipScene {
       const rx = Math.round(px * d), ry = Math.round(py * d);
       c.drawImage(this.crewTiles.get(k)!.c, rx, ry, Math.round(qx * d) - rx, Math.round(qy * d) - ry);
     }
-    if (this.crewTiles.size > 120) for (const [k, v] of this.crewTiles) if (v.li !== li) { this.crewTiles.delete(k); this.crewStale.delete(k); }
+    if (this.crewTiles.size > 120) for (const [k, v] of this.crewTiles) if (v.li !== li) this.crewTiles.delete(k);
     return true;
   }
 
-  private seatGlow(c: CanvasRenderingContext2D, s: Seat, o: Occ | null, t: number) {
-    const col = s.kind === "plinth" ? "#ffcf86" : s.kind === "throne" ? "#e9e4ff" : o ? o.color : "#7fd6ff";
-    const on = o?.kind === "watcher" ? this.onWatch(o.id) : s.kind === "throne" && this.snap?.captain.watch.online;
-    const k = o ? (on ? 0.85 + 0.15 * Math.sin(t * 3) : 0.5) : 0.22;
+  private seatGlow(c: CanvasRenderingContext2D, s: Seat, a: Agent | null, t: number) {
+    const homeKey = this.homes.get(s.i), owner = a ?? (homeKey ? this.life.get(homeKey) ?? null : null);
+    const col = s.kind === "plinth" ? "#ffcf86" : s.kind === "throne" ? "#e9e4ff" : owner ? owner.who.tc : "#7fd6ff";
+    const on = owner?.status === "online";
+    const k = owner ? (on ? 0.85 + 0.15 * Math.sin(t * 3) : 0.45) : 0.22;
     disc(c, s.x, s.y, s.z, s.kind === "throne" ? 1.1 : 0.62, alpha(col, 0.08 * k), alpha(col, 0.55 * k), 1.2);
-    if (!o && s.kind === "watch") {
-      // an open seat: its number on the floor
+    if (!owner && s.kind === "watch") {
       const [x, y] = P(s.x, s.y, s.z);
       c.fillStyle = "rgba(127,214,255,.4)"; c.font = `600 7px ${FONT_MONO}`; c.textAlign = "center";
       c.fillText(String(WATCH.indexOf(s) + 1), x, y + 3);
     }
-    if (!o && s.kind === "plinth" && this.cam.z > 0.9) {
+    if (!owner && s.kind === "plinth" && this.cam.z > 0.9) {
       const [x, y] = P(s.x, s.y, s.z);
       c.fillStyle = "rgba(255,207,134,.85)"; c.font = `700 6px ${FONT_MONO}`; c.textAlign = "center";
       c.fillText("NIGHT BOSS", x, y - 18); c.fillStyle = "rgba(255,207,134,.5)"; c.fillText("NOT FORGED YET", x, y - 11);
     }
   }
-  private onWatch(n: number) { return Boolean(this.snap?.watchers.find((w) => w.n === n)?.watch.online); }
 
   /** A filter's match: a ring of light under it. */
   private found(c: CanvasRenderingContext2D, s: Seat) {
@@ -862,16 +938,24 @@ export class ShipScene {
   }
 
   // ------------------------------------------------------------------ live light and machines
+  /** The reactor's beat: faster the more the whole crew earns an hour, a surge at the hourly credit. */
+  private beat(t: number) {
+    const perHour = this.snap?.totals.perHour ?? 0, w = 1.4 + Math.min(3.2, perHour / 280);
+    const surge = this.creditAt ? Math.max(0, 1 - (performance.now() - this.creditAt) / 4500) : 0;
+    return { k: 0.72 + 0.28 * Math.sin(t * w), surge };
+  }
   private lightsUnder(c: CanvasRenderingContext2D, t: number) {
     const prev = c.globalCompositeOperation; c.globalCompositeOperation = "lighter";
     const fglow = (x: number, y: number, z: number, r: number, col: string, a: number) => { const [px, py] = P(x, y, z); glow(c, px, py, r * RX, col, a * 1.6, 0.5); };
+    const b = this.beat(t);
     fglow(RADAR.x, RADAR.y, 0.5, 7.5, "#4ab8e8", 0.09 + 0.02 * Math.sin(t * 1.3));
-    fglow(REACTOR.x, REACTOR.y, 0, 10, "#ffb05a", 0.08 + 0.03 * Math.sin(t * 2.1));
-    fglow(REACTOR.x, REACTOR.y, 0, 6, "#5ad6f0", 0.08 + 0.04 * Math.sin(t * 3.3 + 1));
+    fglow(REACTOR.x, REACTOR.y, 0, 10, "#ffb05a", 0.07 + 0.04 * b.k + 0.12 * b.surge);
+    fglow(REACTOR.x, REACTOR.y, 0, 6, "#5ad6f0", 0.07 + 0.05 * b.k + 0.15 * b.surge);
     for (const [x, y] of DRIVE) fglow(x, y, 0, 3.2, "#8b74ff", 0.08 + 0.03 * Math.sin(t * 2.6 + x));
-    const fl = 0.12 + 0.04 * Math.sin(t * 7.3) * Math.sin(t * 3.1) + (this.flare ? Math.max(0, 1 - (performance.now() - this.flare) / 4000) * 0.4 : 0);
+    const fl = 0.12 + 0.04 * Math.sin(t * 7.3) * Math.sin(t * 3.1) + (this.flare ? Math.max(0, 1 - (performance.now() - this.flare) / 4000) * 0.45 : 0);
     fglow(FURNACE.x + 1.4, FURNACE.y + 1.4, 0, 8, "#ff7a3a", fl);
     fglow(THRONE.x, THRONE.y, 0.5, 2.4, "#e9e4ff", 0.07);
+    fglow(POOL.x, POOL.y, 0, 2.6, "#9fe8c8", 0.05);
     c.globalCompositeOperation = prev;
   }
 
@@ -882,22 +966,30 @@ export class ShipScene {
     else if (key === "chart") this.starChart(c, t);
     else if (key === "furnace") this.furnaceFx(c, t);
     else if (key === "reactor") {
-      // the plasma column in the glass, bands of light climbing it, the glow round the chamber
+      // the plasma column in the glass, bands of light climbing it (as fast as the crew earns), the glow round the chamber
       c.globalCompositeOperation = "lighter";
-      const R = REACTOR.r * 0.6, k = 0.75 + 0.25 * Math.sin(t * 2.4);
+      const R = REACTOR.r * 0.6, b = this.beat(t), k = Math.min(1.4, b.k + b.surge * 0.6);
       const [x0, top] = P(REACTOR.x, REACTOR.y, 4.35), [, bot] = P(REACTOR.x, REACTOR.y, 1.45);
       const w = R * RX * 0.42;
       const g = c.createLinearGradient(x0 - w, 0, x0 + w, 0);
-      g.addColorStop(0, "rgba(90,214,240,0)"); g.addColorStop(0.3, `rgba(90,214,240,${0.28 * k})`); g.addColorStop(0.5, `rgba(220,250,255,${0.7 * k})`); g.addColorStop(0.7, `rgba(90,214,240,${0.28 * k})`); g.addColorStop(1, "rgba(90,214,240,0)");
+      g.addColorStop(0, "rgba(90,214,240,0)"); g.addColorStop(0.3, `rgba(90,214,240,${0.28 * k})`); g.addColorStop(0.5, `rgba(220,250,255,${Math.min(1, 0.7 * k)})`); g.addColorStop(0.7, `rgba(90,214,240,${0.28 * k})`); g.addColorStop(1, "rgba(90,214,240,0)");
       c.fillStyle = g; c.fillRect(x0 - w, top, w * 2, bot - top);
       glow(c, x0, (top + bot) / 2, R * RX * 1.1, "#5ad6f0", 0.22 * k, 1.25);
+      const speed = 0.25 + Math.min(0.6, (this.snap?.totals.perHour ?? 0) / 1500);
       for (let i = 0; i < 4; i++) {
-        const p = (t * 0.32 + i / 4) % 1, z = 1.5 + p * 2.8, [, py] = P(REACTOR.x, REACTOR.y, z);
+        const p = (t * speed + i / 4) % 1, z = 1.5 + p * 2.8, [, py] = P(REACTOR.x, REACTOR.y, z);
         c.strokeStyle = `rgba(170,240,255,${0.55 * Math.sin(p * Math.PI)})`; c.lineWidth = 1.4;
         c.beginPath(); c.ellipse(x0, py, R * RX * 0.92, R * RY * 0.92, 0, 0, Math.PI * 2); c.stroke();
       }
       const [, ry] = P(REACTOR.x, REACTOR.y, 5.45);
       glow(c, x0, ry, 60, "#ffcf86", 0.24 * k, 0.6);
+      c.globalCompositeOperation = prev;
+      // its readout: what the whole crew earns an hour
+      if (this.snap && this.cam.z > 0.75) {
+        const [rx, ry2] = P(REACTOR.x, REACTOR.y, 0);
+        c.font = `700 8px ${FONT_MONO}`; c.textAlign = "center"; c.fillStyle = "rgba(255,214,160,.9)";
+        c.fillText(`REACTOR · ${this.snap.totals.perHour.toLocaleString("en-US", { maximumFractionDigits: 1 })} H/H`, rx, ry2 + REACTOR.r * RY + 34);
+      }
     } else if (key.startsWith("drive")) {
       c.globalCompositeOperation = "lighter";
       const [x, y] = DRIVE[Number(key.slice(5))]!;
@@ -911,6 +1003,26 @@ export class ShipScene {
       glow(c, tx, ty, 30, "#a996ff", 0.35 + 0.15 * Math.sin(t * 5 + x));
     } else if (key === "coffee" && !this.still) {
       for (let k = 0; k < 3; k++) { const p = (t / 2.6 + k / 3) % 1; const [x, y] = P(COFFEE.x + 0.25, COFFEE.y + 0.25, 1.75); c.fillStyle = `rgba(240,236,250,${0.22 * Math.sin(p * Math.PI)})`; c.beginPath(); c.ellipse(x + Math.sin(p * 5 + k) * 4, y - p * 40, 5 + p * 7, 6 + p * 8, 0, 0, Math.PI * 2); c.fill(); }
+    } else if (key.startsWith("arcade")) {
+      // the screen plays: a scrolling field of light in the cabinet's colour
+      const i = Number(key.slice(6)), [x, y] = ARCADE[i]!, col = ["#ee7fae", "#6cc8ee", "#b5e37a"][i]!;
+      const [sx, sy] = P(x, y + 0.282, 1.11);
+      c.globalCompositeOperation = "lighter";
+      glow(c, sx, sy, 22, col, 0.4 + 0.2 * Math.sin(t * 6 + i));
+      for (let k = 0; k < 3; k++) { const p = (t * 0.8 + k / 3 + i * 0.3) % 1; c.fillStyle = alpha(col, 0.7); c.fillRect(sx - 8 + ((k * 7 + i * 3) % 14), sy - 7 + p * 14, 2, 2); }
+      c.globalCompositeOperation = prev;
+    } else if (key === "market") {
+      const co = this.life.outside.companies;
+      const [mx, my] = P(MARKET.x + 0.11, MARKET.y, 1.35);
+      c.globalCompositeOperation = "lighter"; glow(c, mx, my, 26, "#a493f0", 0.3); c.globalCompositeOperation = prev;
+      if (this.cam.z > 0.8) {
+        c.font = `700 6px ${FONT_MONO}`; c.textAlign = "center"; c.fillStyle = "rgba(214,206,255,.95)";
+        c.fillText("MARKET", mx, my - 6);
+        c.font = `600 5px ${FONT_MONO}`; c.fillText(co ? `${co.count} COMPANIES · ${co.working.length} WORKING` : "COMPANIES", mx, my + 3);
+      }
+    } else if (key === "pool" && this.cam.z > 0.8) {
+      const g = this.life.outside.games, [x, y] = P(POOL.x, POOL.y + POOL.hy, 0);
+      if (g) { c.font = `600 7px ${FONT_MONO}`; c.textAlign = "center"; c.fillStyle = "rgba(170,236,210,.85)"; c.fillText(`${g.total} GAME${g.total === 1 ? "" : "S"} LIVE ON NIGHTSHIFT`, x, y + 22); }
     }
     c.globalCompositeOperation = prev;
   }
@@ -1026,7 +1138,7 @@ export class ShipScene {
     // the newest Night Watcher, as a hologram above the furnace
     const latest = [...(this.snap?.watchers ?? [])].sort((a, b) => b.forgedAt - a.forgedAt)[0];
     if (latest) {
-      const key = `w${latest.n}`, o = [...this.occ.values()].find((q) => String(q.key) === key);
+      const o = this.life.get(`w${latest.n}`);
       const [hx, hy] = P(FURNACE.x + 1.9, FURNACE.y + 1.9, 2.4), k = this.still ? 1 : 0.8 + 0.2 * Math.sin(t * 1.6);
       if (o) {
         c.globalAlpha = 0.6 * k;
@@ -1152,19 +1264,42 @@ export class ShipScene {
       }
     }
     c.globalCompositeOperation = prev;
-    if (this.podOverflow > 0 && this.cam.z > 0.5) {
-      const p = PODS[PODS.length - 1]!; const [x, y] = P(p.x, p.y + 1.2, 0);
-      c.font = `700 9px ${FONT_MONO}`; c.textAlign = "center"; c.fillStyle = "#c6f27a"; c.fillText(`+${this.podOverflow} MORE OUT`, x, y);
+    // the crew out on missions, at the hangar door
+    const out = this.snap?.totals.onMissions ?? 0;
+    if (out > 0 && this.cam.z > 0.45) {
+      const p = PODS[PODS.length - 1]!; const [x, y] = P(p.x, p.y + 1.3, 0);
+      c.font = `700 9px ${FONT_MONO}`; c.textAlign = "center"; c.fillStyle = "#c6f27a"; c.fillText(`${out} OUT ON MISSIONS`, x, y);
     }
     void sparkle;
   }
 
   // ------------------------------------------------------------------ labels, speech and grading, in CSS px
-  private onScreen(s: Seat) { const [x, y] = this.toScreen(...P(s.x, s.y, s.z)); return x > -30 && x < this.w + 30 && y > -30 && y < this.h + 30; }
-
-  /** Speech bubbles over the crew: short lines with the ship's live numbers, fading in and out, never on top of each other. */
+  /** Speech over the crew (short lines with the ship's live numbers, never on top of each other) and the hourly credit's floats. */
   private drawBubbles(c: CanvasRenderingContext2D, ms: number) {
     const z = this.cam.z;
+    // what each frog just earned, floating up
+    if (this.life.floats.length) {
+      c.font = `700 ${z > 1.2 ? 12 : 10.5}px ${FONT_MONO}`; c.textAlign = "center"; c.textBaseline = "middle";
+      for (const f of this.life.floats) {
+        if (ms < f.from) continue;
+        const d = this.drawnAt.get(f.a.key);
+        if (!d) continue;
+        const p = (ms - f.from) / (f.until - f.from), [sx, sy] = this.toScreen(d.x + d.w / 2, d.y);
+        c.globalAlpha = Math.min(1, p * 6, (1 - p) * 3);
+        c.fillStyle = "rgba(9,10,18,.7)"; c.fillText(f.text, sx + 1, sy - 8 - p * 28 + 1);
+        c.fillStyle = "#c6f27a"; c.fillText(f.text, sx, sy - 8 - p * 28);
+      }
+      c.globalAlpha = 1;
+    }
+    this.roomFloats = this.roomFloats.filter((f) => ms < f.until);
+    for (const f of this.roomFloats) {
+      if (ms < f.from) continue;
+      const r = ROOMS.find((q) => q.key === f.room)!, [wx, wy] = P(r.label[0], r.label[1], 3.2), [sx, sy] = this.toScreen(wx, wy), p = (ms - f.from) / (f.until - f.from);
+      c.globalAlpha = Math.min(1, p * 5, (1 - p) * 3);
+      c.font = `700 14px ${FONT_MONO}`; c.textAlign = "center"; c.fillStyle = "#c6f27a";
+      c.fillText(f.text, sx, sy - 30 - p * 30);
+      c.globalAlpha = 1;
+    }
     if (z < 0.45) return;
     const fs = Math.round(Math.max(11, Math.min(13.5, 9.5 + z * 2)));
     c.font = `600 ${fs}px ${FONT_UI}`;
@@ -1172,14 +1307,14 @@ export class ShipScene {
     const placed: [number, number, number, number][] = [];
     const list = this.life.bubbles.filter((b) => ms >= b.from).sort((a, b) => a.from - b.from);
     for (const b of list) {
-      let wx: number, wy: number;
-      if (b.w) { const d = this.drawnAt.get(b.w.key); const [px, py] = P(b.w.x, b.w.y, b.w.z); wx = px; wy = d ? d.y : py - 40 * b.w.k; }
-      else { const s = SEATS[b.seat!]!, o = this.occ.get(s.i); if (!o || this.away.has(s.i)) continue; const d = this.drawnAt.get(String(o.key)) ?? this.estimate(s, o); wx = d.x + d.w / 2; wy = d.y; }
-      const [sx, sy0] = this.toScreen(wx, wy);
+      const d = this.drawnAt.get(b.a.key);
+      if (!d) continue;
+      const [sx, sy0] = this.toScreen(d.x + d.w / 2, d.y);
       const a = Math.min(1, (ms - b.from) / 200, (b.until - ms) / 300);
       if (a <= 0) continue;
       const tw = c.measureText(b.text).width, pw = tw + 18, ph = fs + 12;
-      let x = sx - pw / 2, y = sy0 - 10 - ph;
+      const x = sx - pw / 2;
+      let y = sy0 - 10 - ph;
       if (x < -pw || x > this.w || y < -ph || y > this.h) continue;
       const hit = () => placed.find(([px, py, qw, qh]) => x < px + qw + 2 && x + pw + 2 > px && y < py + qh + 3 && y + ph + 3 > py);
       let k = 0;
@@ -1187,7 +1322,6 @@ export class ShipScene {
       if (k > 3) continue;
       placed.push([x, y, pw, ph]);
       c.globalAlpha = a;
-      // a light card with a small tail toward the speaker, its edge in the room's colour
       c.fillStyle = "rgba(10,10,20,.35)"; c.beginPath(); c.roundRect(x + 1, y + 2, pw, ph, 8); c.fill();
       c.fillStyle = "#f6f4fb"; c.beginPath(); c.roundRect(x, y, pw, ph, 8); c.fill();
       const tx = Math.max(x + 10, Math.min(x + pw - 10, sx));
@@ -1203,6 +1337,7 @@ export class ShipScene {
     c.textBaseline = "middle";
     // up close the room speaks for itself (and the room bar names it): the labels fade out
     const la = Math.min(0.96, 1.5 - z * 1.05);
+    const ls = (v: string) => { if ("letterSpacing" in c) (c as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = v; };
     for (const r of ROOMS) {
       const lab = this.labels[r.key];
       if (!lab || la <= 0.02) continue;
@@ -1212,7 +1347,6 @@ export class ShipScene {
       c.globalAlpha = la;
       // a phone gets smaller labels
       const k = this.w < 600 ? 0.84 : 1, f1 = `700 ${(11.5 * k).toFixed(1)}px ${FONT_UI}`, f2 = `500 ${(10.5 * k).toFixed(1)}px ${FONT_MONO}`;
-      const ls = (v: string) => { if ("letterSpacing" in c) (c as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = v; };
       c.font = f1; ls(`${1.6 * k}px`);
       const t1 = c.measureText(lab.title).width;
       ls("0px"); c.font = f2;
@@ -1227,32 +1361,45 @@ export class ShipScene {
       c.font = f2; c.fillStyle = alpha(r.accent, 0.92); c.fillText(lab.line, x - pw / 2 + 11 * k, y + 8.5 * k);
       c.globalAlpha = 1;
     }
+    // the Night Watch's bots: a light over each Night Watcher (green on watch, amber offline, grey not paired)
+    if (z > 0.34) for (const { a, d } of this.lights) {
+      const [x, y] = this.toScreen(d.x + d.w / 2, d.y), col = STATUS_COL[a.status!];
+      if (x < -60 || x > this.w + 60 || y < -30 || y > this.h + 30) continue;
+      if (z > 0.75) {
+        const text = a.status === "online" ? "ON WATCH" : a.status === "offline" ? "BOT OFFLINE" : "NOT PAIRED";
+        c.font = `700 9px ${FONT_MONO}`; c.textAlign = "left";
+        const w = c.measureText(text).width + 20;
+        c.fillStyle = "rgba(9,10,18,.85)"; c.beginPath(); c.roundRect(x - w / 2, y - 40, w, 15, 7.5); c.fill();
+        c.fillStyle = col; c.beginPath(); c.arc(x - w / 2 + 8, y - 32.5, 3, 0, Math.PI * 2); c.fill();
+        c.fillStyle = alpha(col, 0.95); c.fillText(text, x - w / 2 + 14, y - 32);
+      } else { c.fillStyle = "rgba(9,10,18,.8)"; c.beginPath(); c.arc(x, y - 8, 4.5, 0, Math.PI * 2); c.fill(); c.fillStyle = col; c.beginPath(); c.arc(x, y - 8, 3, 0, Math.PI * 2); c.fill(); }
+    }
     // tags over the wallet's crew, the selected, the followed and the hovered character
     const tags = new Set<string>([...this.crew]);
     if (this.selected) tags.add(this.selected);
     if (this.followKey) tags.add(this.followKey);
     const hk = this.hover?.kind === "frog" ? String(this.hover.id) : this.hover?.kind === "watcher" ? `w${this.hover.n}` : null;
     if (hk) tags.add(hk);
+    if (z > 0.7) for (const a of this.life.agents) if (a.role === "doomed" && a.mode !== "gone") tags.add(a.key);
     if (tags.size > 60 && z < 0.9) return;
     c.font = `700 10.5px ${FONT_UI}`; c.textAlign = "center";
     for (const k of tags) {
-      const s = this.seatOf(k);
-      if (!s) continue;
-      const d = this.drawnAt.get(k) ?? this.estimate(s, this.occ.get(s.i) ?? null);
+      const d = this.drawnAt.get(k), a = this.life.get(k);
+      if (!d || !a || a.mode === "gone") continue;
       const [x, y] = this.toScreen(d.x + d.w / 2, d.y);
       if (x < -40 || x > this.w + 40 || y < -20 || y > this.h + 20) continue;
       const label = k.startsWith("w") ? (k === "w0" ? "THE CAPTAIN" : `NW ${k.slice(1)}`) : `#${k}`;
-      const w = c.measureText(label).width + 12, bob = this.still ? 0 : Math.sin(t * 3) * 1.2;
-      const col = k === this.selected || k === this.followKey ? "#ffffff" : this.crew.has(k) ? "#c6f27a" : "#e9e4ff";
-      c.fillStyle = "rgba(9,10,18,.86)"; c.beginPath(); c.roundRect(x - w / 2, y - 24 + bob, w, 16, 8); c.fill();
+      const w = c.measureText(label).width + 12, bob = this.still ? 0 : Math.sin(t * 3) * 1.2, up = a.status && z > 0.75 ? 18 : 0;
+      const col = k === this.selected || k === this.followKey ? "#ffffff" : a.role === "doomed" ? "#ffb27a" : this.crew.has(k) ? "#c6f27a" : "#e9e4ff";
+      c.fillStyle = "rgba(9,10,18,.86)"; c.beginPath(); c.roundRect(x - w / 2, y - 24 + bob - up, w, 16, 8); c.fill();
       c.strokeStyle = alpha(col, 0.7); c.lineWidth = 1; c.stroke();
-      c.fillStyle = col; c.fillText(label, x, y - 15.5 + bob);
+      c.fillStyle = col; c.fillText(label, x, y - 15.5 + bob - up);
     }
   }
 
   private gradeCv: HTMLCanvasElement | null = null; private gradeKey = "";
+  /** The shift's light, by the hour in UTC: night 22-06 (dim and blue), day 06-14 (lights up), swing 14-22 (a warm dusk). */
   private grade(c: CanvasRenderingContext2D) {
-    // the shift's light, by the hour in UTC: night 22-06, day 06-14, swing 14-22
     const fh = this.F.hour as number | undefined, h = fh ?? new Date().getUTCHours(), shift = h >= 22 || h < 6 ? "night" : h < 14 ? "day" : "swing";
     const key = `${this.w}x${this.h}:${shift}`;
     if (key !== this.gradeKey) {
@@ -1260,13 +1407,29 @@ export class ShipScene {
       const cv = document.createElement("canvas"); cv.width = Math.max(1, Math.round(this.w / 3)); cv.height = Math.max(1, Math.round(this.h / 3));
       const g = cv.getContext("2d")!;
       const v = g.createRadialGradient(cv.width / 2, cv.height / 2, Math.min(cv.width, cv.height) * 0.4, cv.width / 2, cv.height / 2, Math.max(cv.width, cv.height) * 0.8);
-      v.addColorStop(0, "rgba(4,4,10,0)"); v.addColorStop(1, shift === "night" ? "rgba(4,4,14,.5)" : shift === "day" ? "rgba(4,4,10,.32)" : "rgba(12,6,8,.4)");
+      v.addColorStop(0, "rgba(4,4,10,0)"); v.addColorStop(1, shift === "night" ? "rgba(3,5,18,.58)" : shift === "day" ? "rgba(4,4,10,.26)" : "rgba(14,7,6,.42)");
       g.fillStyle = v; g.fillRect(0, 0, cv.width, cv.height);
       this.gradeCv = cv;
     }
     c.drawImage(this.gradeCv!, 0, 0, this.w, this.h);
-    if (shift === "swing") { c.globalCompositeOperation = "soft-light"; c.fillStyle = "rgba(255,160,90,.16)"; c.fillRect(0, 0, this.w, this.h); c.globalCompositeOperation = "source-over"; }
+    c.globalCompositeOperation = "soft-light";
+    c.fillStyle = shift === "night" ? "rgba(50,80,170,.2)" : shift === "day" ? "rgba(255,250,235,.14)" : "rgba(255,150,80,.18)";
+    c.fillRect(0, 0, this.w, this.h);
+    c.globalCompositeOperation = "source-over";
   }
   get shift() { const h = new Date().getUTCHours(); return h >= 22 || h < 6 ? "Night shift" : h < 14 ? "Day shift" : "Swing shift"; }
   getStats() { return this.stats; }
 }
+
+let shadowCv: HTMLCanvasElement | null = null;
+/** A soft contact shadow, drawn once. */
+function shadow() {
+  if (shadowCv) return shadowCv;
+  shadowCv = document.createElement("canvas"); shadowCv.width = 32; shadowCv.height = 14;
+  const g = shadowCv.getContext("2d")!, r = g.createRadialGradient(16, 7, 0, 16, 7, 16);
+  r.addColorStop(0, "rgba(4,4,12,.46)"); r.addColorStop(0.7, "rgba(4,4,12,.3)"); r.addColorStop(1, "rgba(4,4,12,0)");
+  g.setTransform(1, 0, 0, 7 / 16, 0, 0); g.fillStyle = r; g.fillRect(0, 0, 32, 32);
+  return shadowCv;
+}
+/** The seat a crew member is in (seated, or riding a pod), or null. */
+function atSeatOf(a: Agent): Seat | null { return (a.mode === "sit" || a.mode === "launch" || a.mode === "land") && a.seat !== null ? SEATS[a.seat]! : null; }

@@ -31,6 +31,11 @@ export const FURNACE = { x: 8.5, y: 81.5 } as const;
 export const PEG = { x: 6.3, y: 12.8 } as const, CHART = { x: 25.7, y: 12.2 } as const;
 /** The drive room's three coils, one per engine. */
 export const DRIVE: [number, number][] = [[20.2, 80.0], [24.4, 82.4], [28.4, 84.6]];
+/** The breakroom's games corner: the pool table (long side along y) and three arcade cabinets at the wall. */
+export const POOL = { x: 13.3, y: 46.2, hx: 0.62, hy: 1.15 } as const;
+export const ARCADE: [number, number][] = [[12.2, 36.55], [13.45, 36.55], [14.7, 36.55]];
+/** The company offices' market kiosk, where finished work goes. */
+export const MARKET = { x: 30.85, y: 27.6 } as const;
 /** The coffee machine at the breakroom wall. */
 export const COFFEE = { x: 1.0, y: 36.9 } as const;
 /** The low partitions between the rooms and their doorways (from, to along the partition). */
@@ -90,7 +95,8 @@ for (let c = 0; c < 5; c++) row("offices", "desk", 17.2 + c * 2.95, 21.4, 0, 1.3
 
 // ---- breakroom: the coffee bar at the wall, three long tables with crew on both sides
 row("breakroom", "bar", 1.7, 37.6, 0, 1.36, 12);
-for (let t = 0; t < 3; t++) { row("breakroom", "table", 5.6 + t * 3.6, 37.5, 0, 1.3, 12); row("breakroom", "bench", 7.3 + t * 3.6, 37.5, 0, 1.3, 12); }
+// two long tables (the games corner takes the third: the pool table and the arcade)
+for (let t = 0; t < 2; t++) { row("breakroom", "table", 5.6 + t * 3.6, 37.5, 0, 1.3, 12); row("breakroom", "bench", 7.3 + t * 3.6, 37.5, 0, 1.3, 12); }
 
 // ---- mission bay: seven rows of mission control, the launch pods at the hangar door
 for (let c = 0; c < 7; c++) row("missions", "control", 17.6 + c * 1.72, 37.6, 0, 1.36, 12);

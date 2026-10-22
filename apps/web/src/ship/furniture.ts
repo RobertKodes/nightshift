@@ -1,4 +1,4 @@
-import { type Ctx, HZ, P, type V3, alpha, cylinder, disc, lin, line, poly, rad } from "./iso";
+import { type Ctx, HZ, P, type V3, alpha, cylinder, disc, lin, line, poly, rad, box } from "./iso";
 import { tube } from "./paint";
 import type { SeatKind } from "./world";
 
@@ -279,3 +279,33 @@ export function padRing(c: Ctx, x: number, y: number, z: number, r: number, col:
   disc(c, x, y, z, r, alpha(col, 0.08), alpha(col, 0.6), 1.2);
 }
 void rad;
+
+// ------------------------------------------------------------------ the breakroom's games corner and the market kiosk
+/** The pool table, drawn round its centre: walnut rails on four legs, green baize, a few balls and a cue. */
+export function poolTable(c: Ctx, hx: number, hy: number) {
+  disc(c, 0, 0, 0, Math.max(hx, hy) + 0.2, "rgba(0,0,0,.32)");
+  for (const [x, y] of [[-hx + 0.12, -hy + 0.12], [hx - 0.22, -hy + 0.12], [-hx + 0.12, hy - 0.22], [hx - 0.22, hy - 0.22]]) box(c, x!, y!, 0, 0.1, 0.1, 0.5, { top: "#3a281e", left: "#24170f", right: "#2e1e14" });
+  box(c, -hx, -hy, 0.5, hx * 2, hy * 2, 0.14, { top: "#5e4030", left: "#3a271c", right: "#4a3224", edge: "rgba(255,230,200,.18)" });
+  poly(c, [[-hx + 0.12, -hy + 0.12, 0.645], [hx - 0.12, -hy + 0.12, 0.645], [hx - 0.12, hy - 0.12, 0.645], [-hx + 0.12, hy - 0.12, 0.645]], "#1d5a48");
+  poly(c, [[-hx + 0.16, -hy + 0.16, 0.646], [hx - 0.16, -hy + 0.16, 0.646], [hx - 0.16, -hy + 0.5, 0.646], [-hx + 0.16, -hy + 0.5, 0.646]], "rgba(255,255,255,.04)");
+  for (const [x, y] of [[-hx + 0.14, -hy + 0.14], [hx - 0.14, -hy + 0.14], [-hx + 0.14, 0], [hx - 0.14, 0], [-hx + 0.14, hy - 0.14], [hx - 0.14, hy - 0.14]]) disc(c, x!, y!, 0.647, 0.07, "#0a0d0c");
+  const balls: [number, number, string][] = [[0.1, -0.45, "#f2c47e"], [-0.12, -0.3, "#c9473f"], [0.16, -0.25, "#3f6fc9"], [-0.05, -0.12, "#1a1a1a"], [0.05, 0.55, "#f4f2ea"]];
+  for (const [x, y, col] of balls) { const [a, b] = P(x, y, 0.69); c.fillStyle = col; c.beginPath(); c.arc(a, b, 2.4, 0, Math.PI * 2); c.fill(); c.fillStyle = "rgba(255,255,255,.5)"; c.fillRect(a - 1, b - 1.4, 1, 1); }
+  line(c, [0.22, 0.75, 0.7], [-0.3, 1.5, 0.82], "#d9c49a", 1.4);
+}
+/** An arcade cabinet against the wall, its screen toward the room (the screen's glow is drawn live). */
+export function arcadeCabinet(c: Ctx, col: string) {
+  disc(c, 0, 0.1, 0, 0.5, "rgba(0,0,0,.3)");
+  box(c, -0.36, -0.28, 0, 0.72, 0.56, 1.6, { top: "#1e2230", left: "#151823", right: "#1b1f2c", edge: alpha(col, 0.45) });
+  poly(c, [[-0.3, 0.281, 0.86], [0.3, 0.281, 0.86], [0.3, 0.281, 1.36], [-0.3, 0.281, 1.36]], "#06070c");
+  poly(c, [[-0.36, 0.282, 1.42], [0.36, 0.282, 1.42], [0.36, 0.282, 1.58], [-0.36, 0.282, 1.58]], alpha(col, 0.55));
+  box(c, -0.36, 0.28, 0.66, 0.72, 0.16, 0.08, { top: "#2a2f40", left: "#191c27", right: "#20242f" });
+  for (const x of [-0.16, 0.12]) disc(c, x, 0.36, 0.745, 0.045, col);
+}
+/** The market kiosk: where the companies' finished work goes (its count is drawn live). */
+export function marketKiosk(c: Ctx) {
+  disc(c, 0, 0, 0, 0.5, "rgba(0,0,0,.35)");
+  cylinder(c, 0, 0, 0, 0.32, 0.95, lin(c, P(-0.3, 0.3, 0), P(0.3, -0.3, 0), [[0, "#1a1d28"], [0.5, "#3a4054"], [1, "#1a1d28"]]), "#262a38", "rgba(164,147,240,.4)");
+  poly(c, [[0.1, -0.42, 0.95], [0.1, 0.42, 0.95], [0.1, 0.42, 1.75], [0.1, -0.42, 1.75]], "#11131c");
+  poly(c, [[0.11, -0.36, 1.02], [0.11, 0.36, 1.02], [0.11, 0.36, 1.68], [0.11, -0.36, 1.68]], "rgba(164,147,240,.16)");
+}

@@ -135,14 +135,20 @@ async function raster(svg: string, W: number, H: number, SS: number): Promise<HT
 
 function flatBack(skin: HTMLCanvasElement, sk: { s: Col; d: Col; l: Col }) {
   const W = skin.width, H = skin.height, g = skin.getContext("2d")!, d = g.getImageData(0, 0, W, H).data;
-  const out = sheet(W, H), [top, bot] = opaqueRows(skin);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const q = (y * W + x) * 4;
-    if (d[q + 3]! < 128) continue;
-    const ink = d[q]! + d[q + 1]! + d[q + 2]! < 60;
-    const edge = ink && (x === 0 || x === W - 1 || d[q - 4 + 3]! < 128 || d[q + 4 + 3]! < 128 || y === 0 || d[q - W * 4 + 3]! < 128 || y === H - 1 || d[q + W * 4 + 3]! < 128);
-    const f = (y - top) / Math.max(1, bot - top);
-    out.p.p(x, y, edge ? "#08070D" : f < 0.22 ? sk.l : f > 0.78 ? sk.d : sk.s);
+  // the back of the head, rounded: lit on the crown, shaded down the sides and at the nape, a crease above the neck
+  const out = sheet(W, H), [top, bot] = opaqueRows(skin), deep = tone(sk.d, -0.28);
+  for (let y = 0; y < H; y++) {
+    let x0 = -1, x1 = -1;
+    for (let x = 0; x < W; x++) if (d[(y * W + x) * 4 + 3]! >= 128) { if (x0 < 0) x0 = x; x1 = x; }
+    for (let x = 0; x < W; x++) {
+      const q = (y * W + x) * 4;
+      if (d[q + 3]! < 128) continue;
+      const ink = d[q]! + d[q + 1]! + d[q + 2]! < 60;
+      const edge = ink && (x === 0 || x === W - 1 || d[q - 4 + 3]! < 128 || d[q + 4 + 3]! < 128 || y === 0 || d[q - W * 4 + 3]! < 128 || y === H - 1 || d[q + W * 4 + 3]! < 128);
+      const f = (y - top) / Math.max(1, bot - top), side = Math.min(x - x0, x1 - x), mid = Math.abs(x - (x0 + x1) / 2) / Math.max(1, (x1 - x0) / 2);
+      const col = edge ? "#08070D" : f > 0.8 ? deep : f > 0.62 && f < 0.68 ? sk.d : side <= 1 && f > 0.12 ? sk.d : f < 0.2 && mid < 0.6 ? sk.l : f > 0.68 ? sk.d : sk.s;
+      out.p.p(x, y, col);
+    }
   }
   return out;
 }

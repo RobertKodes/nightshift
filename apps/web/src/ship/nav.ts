@@ -1,4 +1,4 @@
-import { CHAMFER, COFFEE, CHART, DRIVE, FURNACE, L, PARTS, PEG, RADAR, REACTOR, STEPS, type Seat, type SeatKind, W } from "./world";
+import { ARCADE, CHAMFER, COFFEE, CHART, DRIVE, FURNACE, L, MARKET, PARTS, PEG, POOL, RADAR, REACTOR, STEPS, type Seat, type SeatKind, W } from "./world";
 
 /**
  * Where the crew can walk: the deck as a grid of quarter tiles. Walls, partitions (but their doorways), desks,
@@ -63,6 +63,10 @@ export class Nav {
     obox(FURNACE.x, FURNACE.y, 1.9, 1.3);
     obox(FURNACE.x + 2.0, FURNACE.y + 2.0, 0.16, 1.0);
     obox(FURNACE.x + 2.3, FURNACE.y + 2.3, 0.75, 0.32);
+    // the games corner and the market kiosk
+    mark(POOL.x - POOL.hx - BODY, POOL.y - POOL.hy - BODY, POOL.x + POOL.hx + BODY, POOL.y + POOL.hy + BODY, () => true, HARD);
+    for (const [x, y] of ARCADE) mark(x - 0.4 - BODY, y - 0.35, x + 0.4 + BODY, y + 0.3 + BODY, () => true, HARD);
+    disc(MARKET.x, MARKET.y, 0.42);
     // the seats: chairs are soft (their own frog gets up out of them), what stands in front is solid
     for (const s of seats) {
       const k = s.kind, d = DESK[k];
@@ -74,6 +78,32 @@ export class Nav {
     }
   }
 
+  private comp: Uint8Array | null = null;
+  /** The deck everyone can reach: the free cells joined to the engine room's floor. */
+  private reachMap() {
+    if (this.comp) return this.comp;
+    const c = new Uint8Array(GW * GH), q: number[] = [];
+    const s = this.nearest(16, 71, HARD, 20);
+    if (s) { const o = this.cellOf(s[0], s[1]); c[o] = 1; q.push(o); }
+    for (let h = 0; h < q.length; h++) {
+      const o = q[h]!, i = o % GW, j = Math.floor(o / GW);
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const ni = i + di, nj = j + dj;
+        if (ni < 0 || nj < 0 || ni >= GW || nj >= GH) continue;
+        const n = nj * GW + ni;
+        if (!c[n] && this.g[n] === FREE) { c[n] = 1; q.push(n); }
+      }
+    }
+    return (this.comp = c);
+  }
+  /** Whether a point is on the deck everyone can reach. */
+  reach(x: number, y: number) { const o = this.cellOf(x, y); return o >= 0 && this.reachMap()[o] === 1; }
+  /** Every reachable free point (cell centres) in a box, for spawning and wandering. */
+  cellsIn(x0: number, y0: number, x1: number, y1: number): Pt[] {
+    const out: Pt[] = [], m = this.reachMap();
+    for (let j = Math.max(0, Math.ceil(y0 * R)); j < Math.min(GH, Math.floor(y1 * R)); j++) for (let i = Math.max(0, Math.ceil(x0 * R)); i < Math.min(GW, Math.floor(x1 * R)); i++) if (m[j * GW + i]) out.push([(i + 0.5) / R, (j + 0.5) / R]);
+    return out;
+  }
   private cellOf(x: number, y: number) { const i = Math.floor(x * R), j = Math.floor(y * R); return i < 0 || j < 0 || i >= GW || j >= GH ? -1 : j * GW + i; }
   free(x: number, y: number) { const o = this.cellOf(x, y); return o >= 0 && this.g[o] === FREE; }
   private centre(o: number): Pt { return [((o % GW) + 0.5) / R, (Math.floor(o / GW) + 0.5) / R]; }

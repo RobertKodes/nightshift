@@ -4,7 +4,7 @@ import { NxTabs, StationBar, rememberRoom } from "../nx/Shell";
 import { Link } from "../router";
 import { useSession } from "../session";
 import { CELLS, MAP_H, MAP_W, Minimap as MapArt, fromMap } from "./minimap";
-import { type Labels, ShipScene } from "./scene";
+import { type Labels, ShipScene, type ShipEvent } from "./scene";
 import { type Crew, FORGE, FORGED_ID, NIGHT_FROGS, type Pick, RARITY_TONE, type ShipStatic, type Snapshot, type SnapFrog, type SnapWatcher, type Station } from "./types";
 import "../nx/nx.css";
 import "./ship.css";
@@ -70,6 +70,8 @@ export function ShipPage() {
   const [now, setNow] = useState(Date.now());
   const [stats, setStats] = useState<{ fps: number; ms: number } | null>(null);
   const [following, setFollowing] = useState<string | null>(null);
+  const [events, setEvents] = useState<ShipEvent[]>([]);
+  const [legend, setLegend] = useState(false);
   const still = useMemo(() => matchMedia("(prefers-reduced-motion: reduce)").matches, []);
   const canDraw = useMemo(() => { try { return Boolean(document.createElement("canvas").getContext("2d")); } catch { return false; } }, []);
   const wallet = viewing ?? address?.toLowerCase() ?? null;
@@ -87,10 +89,28 @@ export function ShipPage() {
       setSnap(s);
     }).catch(() => setErr("The ship's live data did not load; retrying."));
     void load();
-    const t = setInterval(load, 30_000);
+    // every 15 seconds, so a forge, a mission, the hourly credit or a bot coming online shows within seconds
+    const t = setInterval(load, 15_000);
     return () => clearInterval(t);
   }, []);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  // the world the crew talks about: the games being played now and the AI companies at work
+  const outside = useRef<{ games: { total: number; pool: number; pinball: number } | null; companies: { count: number; working: { name: string; title: string }[] } | null }>({ games: null, companies: null });
+  useEffect(() => {
+    const games = () => fetch("/api/games/live").then((r) => r.json()).then((g: { games?: { game: string }[] }) => {
+      if (!Array.isArray(g.games)) return;
+      outside.current = { ...outside.current, games: { total: g.games.length, pool: g.games.filter((x) => x.game === "pool").length, pinball: g.games.filter((x) => x.game === "pinball").length } };
+      if (scene.current) scene.current.outside = outside.current;
+    }).catch(() => {});
+    const companies = () => fetch("/api/companies").then((r) => r.json()).then((list: { name?: string; working?: { title?: string } | null }[]) => {
+      if (!Array.isArray(list)) return;
+      outside.current = { ...outside.current, companies: { count: list.length, working: list.filter((c) => c.working?.title).map((c) => ({ name: String(c.name ?? "A company"), title: String(c.working!.title) })) } };
+      if (scene.current) scene.current.outside = outside.current;
+    }).catch(() => {});
+    void games(); void companies();
+    const a = setInterval(games, 30_000), b = setInterval(companies, 60_000);
+    return () => { clearInterval(a); clearInterval(b); };
+  }, []);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 7000); return () => clearTimeout(t); }, [toast]);
 
   // the scene
@@ -102,6 +122,9 @@ export function ShipPage() {
     if (new URLSearchParams(location.search).has("debug")) (window as unknown as { __shipScene?: ShipScene }).__shipScene = s;
     s.onRoom = (i) => setRoomInfo(i);
     s.onFollow = (k) => setFollowing(k);
+    s.onEvent = (e) => setEvents((x) => [e, ...x].slice(0, 12));
+    s.outside = outside.current;
+    if (new URLSearchParams(location.search).has("debug")) (window as unknown as { __shipEvent?: (t: string) => void }).__shipEvent = (text) => setEvents((x) => [{ at: Date.now(), text }, ...x]);
     if (snap) s.setSnapshot(snap);
     s.onPick = (p) => { setPick(p && p.kind === "room" && pick?.kind !== "room" ? p : p); if (p && p.kind !== "room") setPanel((x) => (x === "filters" ? "none" : x)); };
     s.onHover = (p, x, y) => setHover(p ? { p, x, y } : null);
@@ -215,7 +238,7 @@ export function ShipPage() {
               <b>{totals.held}</b> NIGHT FROGS aboard · <b>{totals.burned}</b> forged · <b>{totals.watchers}</b> Night Watcher{totals.watchers === 1 ? "" : "s"} · <b>{totals.holders}</b> holders · <b className="sh-acc">{fmt(totals.perHour, 1)}</b> shift hours an hour{totals.onMissions ? <> · <b>{totals.onMissions}</b> out on missions</> : null}
             </p>
           ) : <p className="sh-line">{err ?? "Reading the crew from Ethereum…"}</p>}
-          {snap && <div className="sh-log-top"><ShipLog snap={snap} now={now} /></div>}
+          {snap && <div className="sh-log-top"><ShipLog snap={snap} now={now} events={events} /></div>}
         </section>
 
         <section className="sh-hud sh-tools" aria-label="Find on the ship">
@@ -225,13 +248,14 @@ export function ShipPage() {
           </form>
           <button className={`sh-btn${panel === "filters" || matches ? " on" : ""}`} onClick={() => setPanel(panel === "filters" ? "none" : "filters")} aria-expanded={panel === "filters"}><NxIcon name="setup" size={16} /><span>Filter{matchCount !== null ? ` · ${matchCount}` : ""}</span></button>
           <button className={`sh-btn sh-btn-crew${panel === "crew" ? " on" : ""}`} onClick={() => { setPanel(panel === "crew" ? "none" : "crew"); if (crewKeys.length) scene.current?.focusKeys(crewKeys); }} aria-expanded={panel === "crew"}><NxIcon name="crew" size={16} /><span>My crew{crew ? ` · ${crew.frogs.length + crew.watchers.length}` : ""}</span></button>
+          {view === "scene" && <button className={`sh-btn sh-btn-legend${legend ? " on" : ""}`} onClick={() => setLegend(!legend)} aria-expanded={legend} title="What the crew is doing, and what it means"><NxIcon name="info" size={16} /><span>What's happening</span></button>}
           <button className="sh-btn" onClick={() => setView(view === "scene" ? "list" : "scene")} aria-pressed={view === "list"}><NxIcon name={view === "scene" ? "menu" : "command"} size={16} /><span>{view === "scene" ? "List" : "Scene"}</span></button>
         </section>
         </div>
 
         {view === "scene" && canDraw && (
           <div className="sh-bottom" ref={botRef}>
-            {snap && <div className="sh-hud sh-log-bot"><ShipLog snap={snap} now={now} /></div>}
+            {snap && <div className="sh-hud sh-log-bot"><ShipLog snap={snap} now={now} events={events} /></div>}
             <div className="sh-hud sh-roombar" style={{ "--rc": accent(room) } as React.CSSProperties}>
               <div className="sh-roominfo">
                 <b>{ROOM_NAME[room]}</b>
@@ -254,6 +278,7 @@ export function ShipPage() {
           </div>
         )}
 
+        {legend && view === "scene" && <Legend snap={snap} onClose={() => setLegend(false)} />}
         {panel === "filters" && st && <Filters st={st} filter={filter} setFilter={setFilter} count={matchCount} onClose={() => setPanel("none")} />}
         {panel === "crew" && (
           <CrewPanel crew={crew} st={st} snap={snap} wallet={wallet} session={address} now={now} signIn={signIn} busy={busy} paste={paste} setPaste={setPaste}
@@ -438,8 +463,9 @@ function Card({ pick, st, snap, rooms, scene, following, onFollow, onOpen, onClo
   useEffect(() => { ref.current?.focus(); }, [pick]);
   let body: React.ReactNode = null;
   const key = pick.kind === "frog" ? String(pick.id) : pick.kind === "watcher" ? `w${pick.n}` : null;
-  const aboard = key !== null && Boolean(scene?.seatOf(key));
-  const fol = key && aboard ? <FollowButton on={following === key} onClick={() => onFollow(following === key ? null : key)} /> : null;
+  const aboard = key !== null && Boolean(scene?.aboard(key));
+  const doing = key ? scene?.activityOf(key) ?? null : null;
+  const fol = key && (aboard || doing) ? <>{doing && <p className="sh-now"><b>Now</b> {doing}</p>}{aboard && <FollowButton on={following === key} onClick={() => onFollow(following === key ? null : key)} />}</> : null;
   if (pick.kind === "frog") body = <FrogCard id={pick.id} st={st} snap={snap} onOpen={onOpen} onWallet={onWallet} follow={fol} />;
   else if (pick.kind === "watcher") body = <WatcherCard n={pick.n} st={st} snap={snap} onOpen={onOpen} onWallet={onWallet} follow={fol} />;
   else if (pick.kind === "seat") body = <SeatCard seat={pick.seat} st={st} snap={snap} scene={scene} onOpen={onOpen} />;
@@ -617,9 +643,10 @@ function Hover({ h, st, snap, scene }: { h: { p: Pick; x: number; y: number }; s
   let t = "";
   if (h.p.kind === "frog") { const row = st.frogs[h.p.id - 1]!, f = snap?.frogs[h.p.id - 1]; t = `#${h.p.id} · ${st.rarities[row[1]!]} · ${f ? `${fmt(f.rate, 2)} h/h` : ""}`; }
   else if (h.p.kind === "watcher") { const n = h.p.n, w = snap?.watchers.find((x) => x.n === n); t = w ? `${n === 0 ? "The Captain" : `Night Watcher #${n}`} · ${w.tierName} · ${fmt(w.rate, 2)} h/h` : ""; }
-  else if (h.p.kind === "seat") t = scene?.emptyWhy(h.p.seat) ? "An empty seat" : "An open Night Watch seat";
+  else if (h.p.kind === "seat") t = "An open Night Watch seat";
   if (!t || !h.x) return null;
-  return <div className="sh-hover" style={{ left: h.x + 14, top: h.y + 12 }}>{t}</div>;
+  const key = h.p.kind === "frog" ? String(h.p.id) : h.p.kind === "watcher" ? `w${h.p.n}` : null, doing = key ? scene?.activityOf(key) : null;
+  return <div className="sh-hover" style={{ left: h.x + 14, top: h.y + 12 }}>{t}{doing && <em>{doing}</em>}</div>;
 }
 
 // ------------------------------------------------------------------ my crew
@@ -709,13 +736,34 @@ function ListView({ st, snap, matches, q, onOpen }: { st: ShipStatic | null; sna
   );
 }
 
+/** What's happening on the ship: each activity, and the NIGHTSHIFT mechanic it shows, in a line. */
+function Legend({ snap, onClose }: { snap: Snapshot | null; onClose: () => void }) {
+  const r = snap?.radar, act = r ? r.loans.filter((l) => l.state !== "safe").length : 0;
+  const rows: [string, string, string][] = [
+    ["#f2b25e", "Shift hours", `Every frog held earns shift hours each hour (its h/h; the whole crew ${snap ? fmt(snap.totals.perHour, 1) : "…"} h/h, the reactor beats with it). On the hourly credit each frog floats what it earned.`],
+    ["#6cc8ee", "Night Watch", `Night Watchers patrol the bridge; their bots watch imdUSD loans on the radar (${r ? `${r.loans.length} now, ${act} needing a mark or a liquidation` : "no read yet"}) and gather there to mark or liquidate. Green light: its bot is online.`],
+    ["#b5e37a", "Missions", `A frog sent on a mission walks to the pods and launches; it comes back when the mission is done (${snap?.totals.onMissions ?? 0} out now).`],
+    ["#f08a5a", "The Forge", "On a forge, its 10 frogs walk into the furnace and a Night Watcher walks out to the bridge. Between forges the forge crew tends the fire."],
+    ["#ee7fae", "Games", "The breakroom plays pool and the arcade; the number on the table is the games being played on NIGHTSHIFT now."],
+    ["#a493f0", "Companies", "Office frogs carry work between their desks and the market, for the AI companies running on NIGHTSHIFT."],
+  ];
+  return (
+    <aside className="sh-panel sh-legend" aria-label="What's happening on the ship">
+      <div className="sh-panel-head"><b>What's happening</b><button className="sh-x" onClick={onClose} aria-label="Close"><NxIcon name="close" size={14} /></button></div>
+      <ul>{rows.map(([c, t, d]) => <li key={t} style={{ "--rc": c } as React.CSSProperties}><b>{t}</b><span>{d}</span></li>)}</ul>
+      <p className="sh-fine">Hover or tap a frog to see what it is doing now.</p>
+    </aside>
+  );
+}
+
 /** The ship's log: its latest real events (forges, missions leaving, the hourly shift-hours credit), newest first. */
-function ShipLog({ snap, now }: { snap: Snapshot; now: number }) {
+function ShipLog({ snap, now, events }: { snap: Snapshot; now: number; events: ShipEvent[] }) {
   const ms = (v: number) => (v > 1e12 ? v : v * 1000);
   const rows: { at: number; text: string }[] = [
     ...snap.watchers.map((w) => ({ at: ms(w.forgedAt), text: `Night Watcher #${w.n} forged · ${w.tierName}` })),
     ...snap.frogs.filter((f) => f.mission && !f.mission.done).map((f) => ({ at: ms(f.mission!.since), text: `#${f.id} left on ${f.mission!.title}` })),
     ...(snap.stakingAt ? [{ at: ms(snap.stakingAt), text: "Shift hours credited to the crew" }] : []),
+    ...events,
   ].filter((r) => r.at > 0 && r.at <= now + 60_000).sort((a, b) => b.at - a.at).slice(0, 4);
   if (!rows.length) return null;
   const ago = (t: number) => { const m = Math.max(0, Math.round((now - t) / 60_000)); return m < 1 ? "now" : m < 60 ? `${m}m` : m < 2880 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
