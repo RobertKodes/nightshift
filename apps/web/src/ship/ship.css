@@ -158,3 +158,4 @@
   .sh-loading { bottom: 120px; }
 }
 @media (prefers-reduced-motion: reduce) { .sh-live, .sh-boot i { animation: none; } }
+.sh-card-top .sh-kicker { letter-spacing: .12em; font-size: 9.5px; white-space: nowrap; }

@@ -214,7 +214,8 @@ export class ShipScene {
     this.fly = null; this.clamp(); this.dirty = true;
   }
   private clamp() {
-    const [a, b, c, d] = WORLD_BOX, m = 120;
+    // room to frame the ends of the ship beside a panel or above a sheet
+    const i = this.inset, [a, b, c, d] = WORLD_BOX, m = 120 + Math.max(i.l, i.r, i.t, i.b) / Math.max(0.05, this.cam.z);
     this.cam.x = Math.max(a - m, Math.min(c + m, this.cam.x));
     this.cam.y = Math.max(b - m, Math.min(d + m, this.cam.y));
   }

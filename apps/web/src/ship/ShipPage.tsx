@@ -151,7 +151,7 @@ export function ShipPage() {
     if (f) { const id = Number(f[1]); if (id >= 1 && id <= 500) { open({ kind: "frog", id }); if (view === "list") setView("list"); } else setToast("NIGHT FROGS are #1 to #500."); return; }
     setToast("Type a frog number (1-500) or NW and a Night Watcher's number.");
   };
-  const flyRoom = (k: RoomKey) => { setPick({ kind: "room", station: k }); scene.current?.focusRoom(k); };
+  const flyRoom = (k: RoomKey) => { setPick({ kind: "room", station: k }); setTimeout(() => scene.current?.focusRoom(k), 30); };
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") { setPick(null); setPanel("none"); } };
     addEventListener("keydown", k); return () => removeEventListener("keydown", k);
