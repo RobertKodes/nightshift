@@ -68,6 +68,7 @@ import { accrueStaking, frogCached, frogCount, frogSlots, frogStats, frogsOn, ma
 import { roomLink, sweepRoom } from "./watch-room.js";
 import { forgeOn, forgedAll } from "./forge.js";
 import { followForges } from "./forge-news.js";
+import { startGuard } from "./guard.js";
 import { startNightWatch } from "./nightwatch.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
@@ -355,6 +356,7 @@ Night Watcher #${seat.watcher} repaid ${debt.toLocaleString("en-US", { maximumFr
     })().catch((e) => console.error("stakes announce", e)), 120_000);
     // Swarm orders from /setup: announced to the community when the swarm finishes them.
     followForges();
+    startGuard((text, topic) => this.alert(text, topic));
     followSwarm((text, buttons) => toCommunity(text, buttons, "milestone"), (text) => Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => sendCard(id, "alert", text))));
     // Space Pinball in the community chat: records and crushing wins at once, the rest in a half-hourly report.
     const play = `${config.publicUrl}/games/pinball`;
