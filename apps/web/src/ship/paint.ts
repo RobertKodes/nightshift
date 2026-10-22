@@ -249,8 +249,9 @@ function fittings(c: Ctx, len: number, h: number, r: Room, y0: number) {
   };
   if (r.key === "quarters") {
     // a portrait frame for #1 between the windows, gold trim
-    c.fillStyle = "#1b1020"; c.fillRect(len * 0.5 - 0.9, 2.05, 1.8, 0.9);
-    c.strokeStyle = "#ffc46b"; c.lineWidth = 0.06; c.strokeRect(len * 0.5 - 0.9, 2.05, 1.8, 0.9);
+    c.fillStyle = "#1b1020"; c.fillRect(3.9, 1.98, 1.3, 1.06);
+    c.strokeStyle = "#ffc46b"; c.lineWidth = 0.07; c.strokeRect(3.9, 1.98, 1.3, 1.06);
+    c.strokeStyle = "rgba(255,196,107,.45)"; c.lineWidth = 0.03; c.strokeRect(3.82, 1.9, 1.46, 1.22);
   }
   if (r.key === "breakroom") {
     // the menu board above the coffee bar
@@ -276,7 +277,7 @@ function fittings(c: Ctx, len: number, h: number, r: Room, y0: number) {
   const SIGN: Partial<Record<string, [string, number]>> = { bridge: ["NIGHT WATCH", 0.5], quarters: ["WARDROOM", 0.5], breakroom: ["BREAK ROOM", 0.5], engine: ["SHIFT FLOOR · REACTOR ONE", 0.42], forge: ["THE FORGE", 0.5] };
   const sign = SIGN[r.key];
   // the wall runs toward the stern, right to left on screen: the lettering is mirrored back to read
-  if (sign) { c.save(); c.translate(r.key === "breakroom" ? len * 0.34 : len * 0.5, r.key === "forge" ? 0.75 : r.key === "engine" ? 0.95 : 2.35); c.scale(-1, 1); neon(c, sign[0], 0, 0, sign[1], acc); c.restore(); }
+  if (sign) { c.save(); c.translate(r.key === "breakroom" ? len * 0.34 : r.key === "quarters" ? len * 0.68 : len * 0.5, r.key === "forge" ? 0.75 : r.key === "engine" ? 0.95 : 2.35); c.scale(-1, 1); neon(c, sign[0], 0, 0, sign[1], acc); c.restore(); }
   void y0; void h;
 }
 

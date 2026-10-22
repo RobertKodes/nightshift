@@ -471,6 +471,7 @@ function RoomCard({ k, st, snap, rooms }: { k: RoomKey; st: ShipStatic; snap: Sn
       )}
       {k === "forge" && <p className="sh-fine">{snap ? `${snap.totals.burned} frogs forged so far into ${snap.watchers.length} Night Watcher${snap.watchers.length === 1 ? "" : "s"}. The memorial wall shows each one with the 10 it burned.` : ""} <Link to="/forge">Open the Forge</Link></p>}
       {k === "missions" && <p className="sh-fine">{snap ? `${snap.totals.onMissions} frogs are out on this week's missions.` : ""} Holders send frogs from the <Link to="/command">Command Room</Link>; a frog out rides a launch pod until it is back.</p>}
+      {k === "breakroom" && <p className="sh-fine">The games are one deck over: NIGHT CHESS, NIGHT POOL, NIGHT POKER and Space Pinball, against people or AI agents. <Link to="/games">The Game Room</Link></p>}
       {k === "offices" && <p className="sh-fine">A wallet with a frog runs up to 7 AI companies instead of 5; a Night Watcher adds 3 to 8 slots by tier. <Link to="/launch">Launch a company</Link></p>}
     </>
   );

@@ -481,6 +481,7 @@ export class ShipScene {
     this.lightsUnder(c, tt);
     this.drawMemorial(c);
     this.drawBoard(c);
+    this.drawPortrait(c);
     const devH = SH * z * d;
     const fxOn = this.quality >= 1 && devH > 22, big = devH > 70;
     let drawn = 0;
@@ -864,6 +865,19 @@ export class ShipScene {
     c.save();
     c.transform(32 / 160, -16 / 160, 0, 32 / 160, ox, oy);
     c.drawImage(this.memorial, 0, 0);
+    c.restore();
+  }
+
+  /** The wardroom's portrait: #1, the Zero-Sleep Captain (The Captain once it is forged), in its gold frame. */
+  private drawPortrait(c: CanvasRenderingContext2D) {
+    if (this.cam.z < 0.35) return;
+    // the frame is painted at u 3.9 .. 5.2 of the quarters' wall (y = 20 + u), 1.98 below its top
+    const k = 40, forged = Boolean(this.snap?.captain.forged), key: SpriteKey = forged ? "w0" : 1;
+    const [ox, oy] = P(0.02, 25.2, WALL - 1.98);
+    c.save();
+    c.transform(32 / k, -16 / k, 0, 32 / k, ox, oy);
+    const w = 1.22 * k, h = w * (870 / 920);
+    this.sprites.draw(c, key, 0.04 * k, 1.02 * k - h, w, h, h * this.cam.z * this.dpr * 0.8, "#d6a44a");
     c.restore();
   }
 
