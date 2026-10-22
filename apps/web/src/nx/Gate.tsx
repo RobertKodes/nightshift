@@ -67,7 +67,13 @@ function Decode({ text }: { text: string }) {
 }
 
 const get = <T,>(u: string) => fetch(u).then((r) => (r.ok ? (r.json() as Promise<T>) : null)).catch(() => null);
-const money = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toPrecision(3)}`);
+/** A price below $0.001 with its zeros counted, the way DexScreener writes it: 0.0000644 is $0.0₄644. */
+export const tiny = (n: number) => {
+  const zeros = -Math.floor(Math.log10(n)) - 1;
+  const digits = Math.min(999, Math.round(n * 10 ** (zeros + 3)));
+  return `$0.0${[...String(zeros)].map((d) => "₀₁₂₃₄₅₆₇₈₉"[Number(d)]).join("")}${digits}`;
+};
+const money = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : n > 0 && n < 1e-3 ? tiny(n) : `$${n.toPrecision(3)}`);
 const amount = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : n >= 100 ? n.toFixed(0) : n.toFixed(2));
 
 /** The keeper runs at every odd UTC hour (its burn lands within about an hour of it). */

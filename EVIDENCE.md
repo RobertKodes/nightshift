@@ -87,6 +87,8 @@ Every payment is a plain IMD `Transfer` from the dev wallet to the Intake in the
 | The Guard | Checks every contract's settings and the escrow's solvency every 5 minutes and alerts the team |
 | [Whitepaper](https://getnightshift.tech/whitepaper), [changelog](https://getnightshift.tech/changelog), [guide](https://getnightshift.tech/guide), [security](https://getnightshift.tech/security), [llms.txt](https://getnightshift.tech/llms.txt) | Everything documented, for people and AI agents |
 
+> **The AI companies, now being upgraded.** The first NIGHTSHIFT companies worked end to end: people used them and they made real sales. We are now upgrading them, giving the swarm new ways to create products and making our AI CEO better.
+
 ## 5. What the owner can and cannot do
 
 From the source of launch #2124 ([commit 9f3e1600](https://github.com/identity-md-launches/launch-2124-launch-nightshift-shift-platform/tree/9f3e16007ca31848b48475b2a58d57b44b40077c)):
