@@ -30,7 +30,7 @@ vi.mock("./chain.js", () => ({
   ethWallet: () => ({ writeContract: async ({ nonce }: { nonce: number }) => { await new Promise((r) => setTimeout(r, 5)); calls.nonces.push(nonce); return "0xhash"; } }),
 }));
 
-const { BURN_MAX_DRIFT_PCT, KEEPER_LOW, ONCE_A_DAY_MS, burnAt, keeperAccount, keeperBurnRate, keeperGasAlert, keeperSend, lastBurnPrice, runKeeper } = await import("./keeper.js");
+const { BURN_MAX_DRIFT_PCT, KEEPER_LOW, ONCE_A_DAY_MS, SPLIT_EVERY_MS, burnAt, keeperAccount, keeperBurnRate, keeperGasAlert, keeperSend, lastBurnPrice, runKeeper } = await import("./keeper.js");
 const C = { splitter: "0x00000000000000000000000000000000000000cc", token: "0x00000000000000000000000000000000000000dd" };
 const vault = () => new Vault(mkdtempSync(join(tmpdir(), "ns-keeper-")), "s");
 const now = { burnDelayMs: 0 };
@@ -120,7 +120,7 @@ describe("the keeper's gas sense", () => {
     expect(burnAt(gwei(1))).toBe(30n * 320_000n * gwei(1));
   });
 
-  it("splits a token at most once a day, and only when it is worth 50x the gas", async () => {
+  it("splits a token at most every 6 hours, and only when it is worth 50x the gas", async () => {
     const t0 = Date.now() + 10 * ONCE_A_DAY_MS;
     calls.reserve = milli(2); calls.splitterEth = milli(10); calls.gasPrice = gwei(1); calls.units = { distribute: 150_000n }; calls.quote = quoteFor(milli(2));
     calls.simulated = [];
@@ -131,11 +131,11 @@ describe("the keeper's gas sense", () => {
     expect(calls.simulated).not.toContain("distribute");
     expect(again.skipped.join("\n")).toMatch(/distribute ETH: split 2 h ago/);
     calls.simulated = []; calls.gasPrice = gwei(2); // gas 0.0003 x50 = 0.015 > 0.008
-    const dear = await runKeeper(vault(), C, undefined, { ...now, now: t0 + ONCE_A_DAY_MS + 60_000 });
+    const dear = await runKeeper(vault(), C, undefined, { ...now, now: t0 + SPLIT_EVERY_MS + 60_000 });
     expect(calls.simulated).not.toContain("distribute");
     expect(dear.skipped.join("\n")).toMatch(/under 50x its gas/);
     calls.simulated = []; calls.gasPrice = gwei(0.065);
-    await runKeeper(vault(), C, undefined, { ...now, now: t0 + ONCE_A_DAY_MS + 120_000 });
+    await runKeeper(vault(), C, undefined, { ...now, now: t0 + SPLIT_EVERY_MS + 120_000 });
     expect(calls.simulated.filter((f) => f === "distribute")).toHaveLength(1);
   });
 

@@ -11,7 +11,7 @@ import { IMD_TOKEN } from "./token.js";
 import type { Vault } from "./vault.js";
 
 /**
- * The keeper: a server wallet that runs the fee splitter once a day. `distribute(token)` is open to
+ * The keeper: a server wallet that runs the fee splitter every 2 hours. `distribute(token)` is open to
  * anyone; `burnReserve` is keeper-only and swaps the splitter's ETH burn reserve for IMD, which the
  * splitter sends straight to IMD's BurnExecutor. The dev wallet names this address as keeper once.
  * It only ever pays gas: the funds move inside the splitter, to the addresses fixed in its code.
@@ -42,7 +42,7 @@ const erc20 = parseAbi(["function balanceOf(address) view returns (uint256)"]);
  * The keeper pays its own gas and nothing refills it (the splitter's split is fixed forever), so each
  * write must be worth it: what it moves is worth at least WORTH times its gas at today's gas price.
  * distribute(token) is open to anyone and the IMD launch fee waits at the factory, so a skipped run
- * loses nothing: those go at most once a day each. Below KEEPER_RESERVE the keeper sends none of its
+ * loses nothing: the fee goes at most once a day, each token's split at most every 6 hours. Below KEEPER_RESERVE the keeper sends none of its
  * own writes: what is left pays the staked-game payouts it relays.
  */
 export const WORTH = { distribute: 50n, burn: 30n, fees: 50n } as const;
@@ -52,6 +52,8 @@ export const KEEPER_RESERVE = 3n * 10n ** 15n;
 /** Under this the admins are told, at most once a day. */
 export const KEEPER_LOW = 4n * 10n ** 15n;
 export const ONCE_A_DAY_MS = 86_400_000;
+/** Each token is split at most this often: a little under 6 hours, so the run six hours later (runs start on odd UTC hours, a minute or so late) still splits. */
+export const SPLIT_EVERY_MS = 5.5 * 3_600_000;
 /** Gas units when the node gives no estimate (a v4 swap for the burn; four transfers for a split). */
 export const GAS_UNITS = { distribute: 150_000n, burn: 320_000n, claimFees: 160_000n, withdraw: 80_000n, redeem: 120_000n, setPool: 90_000n } as const;
 /** Enough of a value, at this gas price, for a write that costs `units` of gas (a null price falls back to `dust`). */
@@ -293,10 +295,10 @@ export async function runKeeper(vault: Vault, c: { splitter?: string; token?: st
   // The spec's reserve(token) view: the splitter's ETH balance also holds the burn reserve, which is not split again.
   const readReserve = () => eth.readContract({ address: splitter, abi: SPLITTER, functionName: "reserve", args: [ETH] }).catch(() => null);
 
-  // 3. Split what came in, by the rule: rewards, dev, treasury, burn. Once a day per token at most, when worth 50x its gas.
+  // 3. Split what came in, by the rule: rewards, dev, treasury, burn. Every 6 hours per token at most, when worth 50x its gas.
   for (const [t, label, dust, price] of [[ETH, "ETH", DUST.eth, 1], [c.token as Address, "SHIFT", DUST.token, o.prices?.shift], [IMD_TOKEN as Address, "IMD", DUST.imd, o.prices?.imd]] as const) {
     const last = st.distributed?.[label];
-    if (last && now() - last < ONCE_A_DAY_MS) { run.skipped.push(`distribute ${label}: split ${ago(last)}`); continue; }
+    if (last && now() - last < SPLIT_EVERY_MS) { run.skipped.push(`distribute ${label}: split ${ago(last)}`); continue; }
     let b = await bal(t).catch(() => 0n);
     if (t === ETH) { const r = await readReserve(); if (r !== null) b = b > r ? b - r : 0n; }
     if (b <= 0n) { run.skipped.push(`distribute ${label}: nothing new in the splitter`); continue; }

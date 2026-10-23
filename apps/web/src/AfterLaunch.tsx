@@ -53,7 +53,7 @@ export function AfterLaunch({ call, token }: { call: Call; token: string }) {
     <div className="card-b" style={{ display: "grid", gap: 14 }}>
       <div>
         <b>Keeper</b> <span className="mono faint" style={{ fontSize: 12 }}>{k?.address}</span>
-        <p className="dim" style={{ fontSize: 13, margin: "4px 0" }}>Every two hours (odd UTC hours) it looks; it only sends what is worth its gas. Each token is split at most once a day, when it is worth 50x the gas; the ETH burn reserve is burned as IMD from 0.002 ETH and 30x the gas; the launch fee is collected once a day, when worth 50x the gas. Nothing refills it: the splitter's split is fixed.</p>
+        <p className="dim" style={{ fontSize: 13, margin: "4px 0" }}>Every two hours (odd UTC hours) it looks; it only sends what is worth its gas. Each token is split at most every 6 hours, when it is worth 50x the gas; the ETH burn reserve is burned as IMD from 0.002 ETH and 30x the gas; the launch fee is collected once a day, when worth 50x the gas. Nothing refills it: the splitter's split is fixed.</p>
         {fuel}
         <div className="setup-tools">
           <button className="btn" disabled={busy || !k} onClick={() => void act(async () => {
