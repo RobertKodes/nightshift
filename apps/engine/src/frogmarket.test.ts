@@ -69,4 +69,18 @@ describe("frog sales from Seaport", () => {
     vi.unstubAllGlobals();
     config.openseaKey = "";
   });
+
+  it("announces a frog its seller re-lists every few minutes once a day, and again when it gets cheaper", async () => {
+    config.openseaKey = "test";
+    const listing = (hash: string, at: number, id: string, eth: number) => ({ event_timestamp: at, order_hash: hash, maker: SELLER, asset: { identifier: id }, payment: { quantity: String(BigInt(Math.round(eth * 1e6)) * 10n ** 12n), decimals: 18 } });
+    let events = [listing("0xa1", 1000, "234", 0.0125), listing("0xa2", 1300, "234", 0.0125), listing("0xb1", 1400, "381", 0.019)];
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ asset_events: [...events].reverse() })));
+    expect((await newFrogListings()).map((x) => [x.id, x.eth])).toEqual([[234, 0.0125], [381, 0.019]]);
+    events = [listing("0xa3", 1900, "234", 0.0125), listing("0xb2", 2000, "381", 0.0185), listing("0xa4", 2100, "234", 0.0124)];
+    expect(await newFrogListings()).toEqual([]);
+    events = [listing("0xb3", 2500, "381", 0.0138)];
+    expect((await newFrogListings()).map((x) => [x.id, x.eth])).toEqual([[381, 0.0138]]);
+    vi.unstubAllGlobals();
+    config.openseaKey = "";
+  });
 });

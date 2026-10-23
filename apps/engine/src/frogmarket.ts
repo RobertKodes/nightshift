@@ -17,7 +17,13 @@ export const OPENSEA_SLUG = "night-frogs-825445489";
 export type FrogSale = { id: number; eth: number; buyer: string; seller: string; tx: string };
 export type FrogListing = { id: number; eth: number; seller: string; url: string };
 
-type State = { block?: number; listedAt?: number; seen?: string[] };
+/** Frogs whose listing was announced, with its price and when: re-listings inside a day are not announced again. */
+type Posted = Record<string, { eth: number; at: number }>;
+type State = { block?: number; listedAt?: number; seen?: string[]; posted?: Posted };
+/** Sellers' tools re-list a frog every few minutes, each time as a new order: one alert per frog a day... */
+export const RELIST_QUIET_MS = 24 * 3_600_000;
+/** ...unless the new price is at least 5% lower. */
+const PRICE_CUT = 0.95;
 const file = () => join(config.dataDir, "frogmarket.json");
 const load = (): State => { try { return existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : {}; } catch { return {}; } };
 /** Writes only these fields: the sales and listings reads share the file and run at the same moment. */
@@ -75,15 +81,23 @@ export async function newFrogListings(): Promise<FrogListing[]> {
   if (!r.ok) throw new Error(`opensea ${r.status}`);
   const d = (await r.json()) as { asset_events?: { event_timestamp: number; maker?: string; order_hash?: string; asset?: { identifier?: string; opensea_url?: string }; payment?: { quantity?: string; decimals?: number; symbol?: string } }[] };
   const seen = new Set(st.seen ?? []);
+  const posted: Posted = { ...(st.posted ?? {}) };
+  const now = Date.now();
   const out: FrogListing[] = [];
   let latest = after;
-  for (const e of d.asset_events ?? []) {
+  // oldest first: a frog listed several times in one read is judged in the order it happened
+  for (const e of [...(d.asset_events ?? [])].sort((a, b) => a.event_timestamp - b.event_timestamp)) {
     latest = Math.max(latest, e.event_timestamp);
     const key = e.order_hash ?? `${e.asset?.identifier}-${e.event_timestamp}`;
     if (seen.has(key) || !e.asset?.identifier || !e.payment?.quantity) continue;
     seen.add(key);
-    out.push({ id: Number(e.asset.identifier), eth: Number(e.payment.quantity) / 10 ** (e.payment.decimals ?? 18), seller: e.maker ?? "", url: e.asset.opensea_url ?? `https://opensea.io/collection/${OPENSEA_SLUG}` });
+    const id = e.asset.identifier, eth = Number(e.payment.quantity) / 10 ** (e.payment.decimals ?? 18);
+    const prev = posted[id];
+    if (prev && now - prev.at < RELIST_QUIET_MS && eth > prev.eth * PRICE_CUT) continue;
+    posted[id] = { eth, at: now };
+    out.push({ id: Number(id), eth, seller: e.maker ?? "", url: e.asset.opensea_url ?? `https://opensea.io/collection/${OPENSEA_SLUG}` });
   }
-  patch({ listedAt: latest, seen: [...seen].slice(-200) });
+  for (const [id, p] of Object.entries(posted)) if (now - p.at >= RELIST_QUIET_MS) delete posted[id];
+  patch({ listedAt: latest, seen: [...seen].slice(-500), posted });
   return out;
 }
