@@ -13,6 +13,22 @@ export interface Policy {
   dailyBudgetUsd: number; approvalOverUsd: number; autopilot: boolean; shiftMinutes: number;
   /** Buy research from another company on the market first, within these USDC limits. */
   marketBuy?: boolean; marketDailyUsd?: number; marketMaxUsd?: number;
+  /** USDC the CEO may spend on the strong model in 24 hours, from the company's own wallet. 0 = the free model only. */
+  aiDailyUsd?: number;
+}
+
+/** A button under a CEO chat answer: pressed by the owner, done by the engine with exactly these fields. */
+export type ChatAction = { id: string; state?: "done" | "failed"; note?: string } & (
+  | { type: "order"; kind: "research" | "build_product" | "build_site" | "improve_site"; title: string; brief: string; name?: string; pitch?: string; priceUsd?: number; productKind?: string }
+  | { type: "todo"; text: string }
+  | { type: "post"; where: string; text: string }
+  | { type: "connect"; to: string; why: string }
+  | { type: "buy"; sellerId: string; seller: string; productId: string; name: string; priceUsd: number; why: string }
+);
+export interface ChatLine { id: string; at: number; from: "owner" | "ceo"; text: string; actions?: ChatAction[]; model?: string }
+export interface ChatView {
+  lines: ChatLine[];
+  brain: { strong: boolean; model: string | null; leftUsd: number | null; dailyUsd: number; spentTodayUsd: number; spentTotalUsd: number; usdcUsd: number };
 }
 
 export interface CompanyFull {
@@ -176,6 +192,9 @@ export const api = {
   pause: (id: string) => req("POST", `/api/companies/${id}/pause`),
   resume: (id: string) => req("POST", `/api/companies/${id}/resume`),
   price: (id: string, product: string, priceUsd: number) => req("POST", `/api/companies/${id}/products/${product}/price`, { priceUsd }),
+  chat: (id: string) => req<ChatView>("GET", `/api/companies/${id}/chat`),
+  say: (id: string, text: string) => req<{ lines: ChatLine[] }>("POST", `/api/companies/${id}/chat`, { text }),
+  chatAct: (id: string, line: string, action: string) => req<{ ok: boolean; note: string; taskId?: string; state?: string }>("POST", `/api/companies/${id}/chat/act`, { line, action }),
   policy: (id: string, p: Partial<Policy>) => req<Policy>("POST", `/api/companies/${id}/policy`, p),
   approve: (id: string, task: string) => req("POST", `/api/companies/${id}/tasks/${task}/approve`),
   reject: (id: string, task: string) => req("POST", `/api/companies/${id}/tasks/${task}/reject`),

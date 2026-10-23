@@ -1,0 +1,51 @@
+/* The owner's chat with the CEO, inside the company drawer: the nx tokens, the drawer's accent. */
+.cc { display: grid; gap: 12px; min-width: 0; }
+.cc-head { display: grid; gap: 8px; }
+.cc-brain { justify-self: start; display: inline-flex; align-items: center; gap: 7px; min-height: 30px; padding: 4px 11px; border: 0; border-radius: 999px; background: var(--nx-panel2); box-shadow: inset 0 0 0 1px var(--nx-line); color: var(--nx-dim); font: 600 12px var(--nx-ui); text-align: left; cursor: pointer; }
+.cc-brain.on { color: var(--nx-ink); box-shadow: inset 0 0 0 1px var(--acc); background: var(--acc-soft); }
+.cc-brain .nx-ic { color: var(--acc); flex: none; }
+
+.cc-todo { display: grid; gap: 6px; padding: 10px 12px; background: var(--nx-panel); box-shadow: inset 0 0 0 1px var(--nx-line); border-left: 3px solid var(--acc); }
+.cc-todo > b { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--acc); }
+.cc-check { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; line-height: 1.45; color: var(--nx-ink); cursor: pointer; }
+.cc-check input { margin-top: 3px; accent-color: var(--acc); flex: none; }
+.cc-you.is-done .cc-check { color: var(--nx-faint); text-decoration: line-through; }
+
+.cc-log { display: grid; gap: 10px; align-content: start; height: min(52vh, 560px); min-height: 260px; overflow-y: auto; padding: 10px; overscroll-behavior: contain; background: rgba(0, 0, 0, .22); box-shadow: inset 0 0 0 1px var(--nx-line); border-radius: 10px; }
+.cc-line { display: flex; min-width: 0; }
+.cc-line.owner { justify-content: flex-end; }
+.cc-bubble { display: grid; gap: 8px; max-width: min(88%, 620px); min-width: 0; padding: 10px 13px; font-size: 14.5px; line-height: 1.55; color: var(--nx-ink); background: var(--nx-panel); box-shadow: inset 0 0 0 1px var(--nx-line); border-radius: 4px 14px 14px 14px; overflow-wrap: anywhere; }
+.cc-line.owner .cc-bubble { background: var(--acc-soft); box-shadow: inset 0 0 0 1px var(--acc); border-radius: 14px 4px 14px 14px; }
+.cc-bubble p { margin: 0; }
+.cc-bubble ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.cc-at { font-size: 11px; justify-self: end; }
+
+.cc-card { display: grid; gap: 6px; padding: 10px 11px; background: var(--nx-bg2, var(--nx-panel2)); box-shadow: inset 0 0 0 1px var(--nx-line2, var(--nx-line)); border-radius: 8px; }
+.cc-card > b { font-size: 14px; }
+.cc-card p { font-size: 13px; line-height: 1.5; }
+.cc-card .nx-btn { justify-self: start; }
+.cc-tag { font: 600 11px var(--nx-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--acc); }
+.cc-brief { color: var(--nx-dim); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.cc-post { white-space: pre-wrap; padding: 8px 10px; background: var(--nx-panel); box-shadow: inset 0 0 0 1px var(--nx-line); border-radius: 6px; font-size: 13.5px !important; }
+.cc-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cc-done { margin: 0; font-size: 13px; color: #7ee2a8; }
+
+.cc-typing { display: flex; gap: 5px; padding: 14px 16px; }
+.cc-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--nx-dim); animation: cc-dot 1.2s infinite ease-in-out; }
+.cc-typing span:nth-child(2) { animation-delay: .15s; }
+.cc-typing span:nth-child(3) { animation-delay: .3s; }
+@keyframes cc-dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .cc-typing span { animation: none; opacity: .6; } }
+
+.cc-asks { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; min-height: 34px; }
+.cc-asks::-webkit-scrollbar { display: none; }
+.cc-ask { flex: none; min-height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--nx-panel2); box-shadow: inset 0 0 0 1px var(--nx-line); color: var(--nx-ink); font: 500 12.5px var(--nx-ui); cursor: pointer; }
+.cc-ask:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--acc); }
+.cc-ask:disabled { opacity: .5; cursor: default; }
+.cc-input { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.cc-input .field { width: 100%; box-sizing: border-box; resize: none; font: 15px/1.45 var(--nx-ui); }
+.cc-input .nx-btn { min-height: 44px; }
+@media (max-width: 560px) {
+  .cc-bubble { max-width: 94%; }
+  .cc-log { height: 56vh; padding: 8px; }
+}

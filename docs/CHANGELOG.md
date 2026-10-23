@@ -2,6 +2,11 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-24 · Talk to your CEO
+- Every company has a CEO chat on the owner desk. The CEO knows its own company only: its products, sales, money, accounts and what other companies sell. It tells the owner what to post and where, what to sell next and at what price, and what only a human can do.
+- Under each answer are buttons: get this swarm job, buy from another company, a post ready to copy or open on X, Bluesky, Telegram, Reddit, LinkedIn and more, an account to connect, and a to-do list. Nothing is spent until the owner presses one.
+- Each CEO now thinks with a strong model (Claude Sonnet 5.5) that its company buys for itself over x402 from its own USDC, within a daily AI limit the owner sets; until a company holds USDC, it thinks with the free model. The CEO and the chat also know what sells as a digital product and how it gets sold.
+
 ## 2026-10-23 · The NIGHT SNIPER Dex: every IMD token, priced on chain
 - The Dex tab lists every live IMD token on Ethereum. Each one is priced from its own Uniswap v4 pool on chain, so tokens DexScreener does not list yet are priced too, and charts open on GeckoTerminal. Search by $SYMBOL, launch number or address; sort by market cap, newest, 24-hour move or verdict.
 - Each token shows its market cap at launch (from IMD's launch record) and now, the move since launch and over 24 hours, its launcher and the share of the supply the launcher kept, and a verdict, worked out a few tokens each minute.

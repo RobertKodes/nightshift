@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { type Desk, type DeskCompany, type Health, type Policy, ago, api, events, short, until, usd } from "./api";
+import { CeoChat } from "./CeoChat";
 import { CHANNEL, Connections, Mark, PostAsk } from "./Connections";
 import { FlightDrawer } from "./FlightRecorder";
 import { NxIcon } from "./nx/icons";
@@ -185,6 +186,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
                   {c.status === "active"
                     ? <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`pause:${c.id}`, () => api.pause(c.id), `${c.name} paused.`)}>Pause</button>
                     : <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`resume:${c.id}`, () => api.resume(c.id), `${c.name} is back on the night shift.`)}>Resume</button>}
+                  <button className="nx-btn" onClick={() => open(c.id, "chat")}><NxIcon name="agent" size={15} />CEO chat</button>
                   <button className="nx-btn nx-btn-acc" onClick={() => open(c.id)}><NxIcon name="setup" size={15} />Edit</button>
                 </footer>
               </article>
@@ -215,7 +217,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
   );
 }
 
-const TABS = [["profile", "Profile"], ["direction", "Direction"], ["order", "Order work"], ["products", "Products"], ["limits", "Limits"], ["alerts", "Alerts"], ["connections", "Connections"], ["books", "Books"], ["delete", "Delete"]] as const;
+const TABS = [["chat", "CEO chat"], ["profile", "Profile"], ["direction", "Direction"], ["order", "Order work"], ["products", "Products"], ["limits", "Limits"], ["alerts", "Alerts"], ["connections", "Connections"], ["books", "Books"], ["delete", "Delete"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 const PRESETS = [
@@ -253,6 +255,8 @@ function EditDrawer({ c, first, bot, live, imdUsd, onClose, onSaved, onDeleted, 
           {TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={`${tab === k ? "on" : ""} ${k === "delete" ? "dk-danger" : ""}`} onClick={() => { setTab(k); setError(null); }}>{l}</button>)}
         </nav>
         {error && <p className="warn" style={{ margin: 0 }}>{error}</p>}
+
+        {tab === "chat" && <CeoChat c={c} swarmUsd={job} onTab={(t) => { setTab(t); setError(null); }} onSaved={onSaved} onReplay={onReplay} say={say} />}
 
         {tab === "profile" && (
           <form className="dk-form" onSubmit={(e) => { e.preventDefault(); void save(() => api.profile(c.id, p), "Profile saved."); }}>
@@ -303,6 +307,10 @@ function EditDrawer({ c, first, bot, live, imdUsd, onClose, onSaved, onDeleted, 
               </div>
               <p className="dk-hint">Before paying the swarm for research, the CEO searches the NIGHTSHIFT market. It buys a product only when its free preview is relevant to the research, it costs less than the swarm job{job > 0 ? ` (about ${usd(job)})` : ""}, and it fits these limits. Paid in USDC from what this company earned, never from a company you own, never twice. Over your "ask me over" limit it waits for you.</p>
               {(pol.marketBuy ?? true) && c.b2b.usdcUsd <= 0 && <p className="dk-hint bad">{c.name} holds no USDC yet, so it cannot buy from the market until it makes a sale.</p>}
+            </div>
+            <div className="dk-market">
+              <label>CEO brain, per day ($)<span className="dim">the strong model, paid by {c.name} from its own USDC: about 2 cents a shift. 0 = the free model only</span><input className="field mono" type="number" min={0} max={20} step="0.1" value={pol.aiDailyUsd ?? 0.5} onChange={(e) => setPol({ ...pol, aiDailyUsd: Number(e.target.value) })} /></label>
+              <p className="dk-hint">Each shift the CEO buys its thinking over x402 from {c.name}'s wallet, booked as the company's own expense. When the company holds no USDC yet, or today's limit is spent, it thinks with the free model. The CEO chat always runs on the free model.</p>
             </div>
             <button className="nx-btn nx-btn-acc" disabled={saving}>{saving ? "Saving…" : "Save limits"}</button>
           </form>

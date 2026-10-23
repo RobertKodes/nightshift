@@ -3,6 +3,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 import {
+  type Brain,
+  type ChatLine,
   type Company,
   type CompanyStats,
   type Decision,
@@ -11,17 +13,23 @@ import {
   type Policy,
   type ShiftDeps,
   type Task,
+  CHANNELS,
   advance,
+  aiSpentToday,
   approve,
   budgetPrice,
   commission,
   dropMarketBuy,
   finishMarketBuy,
   found,
+  fromImd,
   fromUsdc,
+  keywordScore,
   mark,
+  marketReserved,
   missingAddress,
   note,
+  ownerBuy,
   recoverAddresses,
   reject,
   runShift,
@@ -39,6 +47,8 @@ import { FEE_PARTS, Payouts } from "./payout.js";
 import { Checkout, NoGasError, PendingError, type SettledBy, type Settlement, saleKey } from "./checkout.js";
 import { offerFor } from "./agentmarket.js";
 import { MarketDesk } from "./b2b.js";
+import { companyBrain } from "./ceo-brain.js";
+import { type ChatFacts, answerOwner, asksToday, remember } from "./ceo-chat.js";
 import { V4, findPool } from "./v4.js";
 import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
 import { forgive, judge, muteMinutes, strike, track } from "./moderation.js";
@@ -115,6 +125,8 @@ export class Engine {
   readonly #inputOwner = new WeakMap<object, string>();
   readonly #listeners = new Set<(e: EngineEvent) => void>();
   readonly #busy = new Set<string>();
+  /** The strong model each company pays for itself, over x402 from its own USDC (live on Base, with a CEO model set). */
+  #brain: ((c: Company) => Promise<Brain | null>) | null = null;
   readonly auth: Auth;
   readonly reads = new ImdReads("https://api.imd.fun");
   /** Withdrawals, leg by leg, and x402 settlements: both saved before broadcast and booked once they land. */
@@ -165,6 +177,13 @@ export class Engine {
       return id ? this.store.companies.get(id) : undefined;
     }, `${config.dataDir}/sim-files`);
     this.files = new ProductFiles(config.dataDir, this.vault.material, this.llm, config.model, config.publicUrl);
+    if (config.mode === "live" && config.ceoModel && config.salesChainId === 8453) {
+      this.#brain = companyBrain({
+        url: config.aiGateway, model: config.ceoModel, chainId: config.salesChainId, usdc: usdcAddr(), ledger: this.ledger, live: true,
+        account: (x) => this.vault.account(x.id),
+        spendable: async (x) => (await this.b2b.usdc(x)) - marketReserved(x),
+      });
+    }
     this.b2b = new MarketDesk({
       mode: config.mode,
       chainId: config.salesChainId,
@@ -980,6 +999,7 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
       emit: (x, type, payload) => this.#emit(x.id, type, payload),
       persist: () => this.store.save(),
       market: this.b2b,
+      ...(this.#brain ? { brain: this.#brain } : {}),
       // each shift: what sells, the owner's channels and the real events to post about; a post move hands its event to them
       context: (x) => this.connect.context(x),
       posts: { queue: (x, t, fact, angle) => this.connect.queue(x, t, fact, angle) },
@@ -1178,6 +1198,89 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     this.#busy.add(c.id);
     try {
       return await commission(c, this.#deps(c), decision);
+    } finally {
+      this.#busy.delete(c.id);
+      this.store.markDirty();
+      this.#emit(c.id, "company", null);
+    }
+  }
+
+  /** What the CEO answers the owner from: its company only, its money and accounts, and what other companies sell. */
+  async #chatFacts(c: Company): Promise<ChatFacts> {
+    const context = await this.connect.context(c).catch(() => ({}));
+    const like = `${c.idea} ${c.audience} ${c.direction ?? ""} ${c.products.map((p) => p.name).join(" ")}`;
+    const offers = (await this.b2b.offers(c).catch(() => []))
+      .filter((o) => o.seller.id !== c.id && Boolean(c.owner) && Boolean(o.seller.owner) && o.seller.owner!.toLowerCase() !== c.owner!.toLowerCase() && Boolean(o.seller.sim) === Boolean(c.sim))
+      .map((o) => ({ o, score: keywordScore(like, o).score })).sort((a, b) => b.score - a.score).slice(0, 8).map((x) => x.o);
+    const usdcHeld = await this.b2b.usdc(c).catch(() => 0n);
+    let swarmUsd = 0.5 * config.imdUsd;
+    try { swarmUsd = fromImd((await this.plane(c).capabilities()).price) * config.imdUsd; } catch { /* the usual price */ }
+    const daily = c.policy.aiDailyUsd ?? DEFAULT_POLICY.aiDailyUsd ?? 0;
+    const left = daily - fromUsdc(aiSpentToday(c));
+    const connected = [...CHANNELS.filter((k) => c.connections?.channels[k] && !c.connections.channels[k]!.paused), ...(c.connections?.gumroad ? ["gumroad"] : [])];
+    return {
+      stats: { ...this.stats(c), ...context }, offers, usdcUsd: fromUsdc(usdcHeld), swarmUsd, pageUrl: `${config.publicUrl}/c/${c.slug}`, connected,
+      brainLeftUsd: this.#brain && daily > 0 && left >= 0.01 && fromUsdc(usdcHeld) >= 0.01 ? left : null,
+    };
+  }
+
+  /** The owner's chat: the lines, and which brain the CEO thinks with. */
+  async chatView(c: Company) {
+    const f = await this.#chatFacts(c);
+    return {
+      lines: (c.chat ?? []).slice(-60),
+      brain: { strong: f.brainLeftUsd !== null, model: this.#brain ? config.ceoModel : null, leftUsd: f.brainLeftUsd, dailyUsd: c.policy.aiDailyUsd ?? DEFAULT_POLICY.aiDailyUsd ?? 0, spentTodayUsd: fromUsdc(aiSpentToday(c)), spentTotalUsd: fromUsdc(c.aiSpentUsdc ?? 0n), usdcUsd: f.usdcUsd },
+    };
+  }
+
+  /** The owner writes to the CEO; the CEO answers on the free model, with buttons. Nothing is spent or done until a button is pressed. */
+  async chat(c: Company, text: unknown): Promise<ChatLine[]> {
+    if (!this.llm) throw new Error("The CEO chat needs the AI key on this engine.");
+    const msg = String(text ?? "").replace(/[<>]/g, "").replace(/[ \t]+/g, " ").trim();
+    if (msg.length < 2 || msg.length > 1500) throw new Error("Write between 2 and 1500 characters.");
+    if (asksToday(c) >= 80) throw new Error("That is 80 messages today. The CEO answers again tomorrow.");
+    const facts = await this.#chatFacts(c);
+    const asked: ChatLine = { id: randomUUID(), at: Date.now(), from: "owner", text: msg };
+    let reply: ChatLine;
+    try {
+      reply = await answerOwner(this.llm, config.chatModel, c, msg, facts);
+    } catch (e) {
+      throw new Error(/nothing useful/.test((e as Error).message) ? (e as Error).message : "The CEO could not answer right now: the free models are busy. Try again in a minute.");
+    }
+    remember(c, asked, reply);
+    this.store.markDirty();
+    return [asked, reply];
+  }
+
+  /** The owner pressed a button under a CEO answer: it is done with the fields stored with it, by the same rules as work ordered by hand. */
+  async chatAct(c: Company, lineId: string, actionId: string): Promise<{ ok: true; note: string; taskId?: string; state?: string }> {
+    const a = c.chat?.find((l) => l.id === lineId && l.from === "ceo")?.actions?.find((x) => x.id === actionId);
+    if (!a) throw new Error("That button is gone.");
+    const done = (note: string, taskId?: string) => {
+      a.state = "done";
+      a.note = note;
+      this.store.markDirty();
+      this.#emit(c.id, "company", null);
+      return { ok: true as const, note, state: "done", ...(taskId ? { taskId } : {}) };
+    };
+    if (a.type === "todo") {
+      if (a.state === "done") { delete a.state; delete a.note; this.store.markDirty(); return { ok: true, note: "Back on the list." }; }
+      return done("Done.");
+    }
+    if (a.state === "done") throw new Error(a.note ?? "Already done.");
+    if (a.type === "post") return done("Marked as posted.");
+    if (a.type === "connect") return { ok: true, note: "Open Connections to link the account." };
+    if (a.type === "order") {
+      const t = await this.commission(c, { kind: a.kind, brief: a.brief, name: a.name, pitch: a.pitch, priceUsd: a.priceUsd, productKind: a.productKind });
+      if (t.status === "failed") throw new Error(t.error ?? "The order did not go through.");
+      return done(t.status === "awaiting_approval" ? `Waiting for your approval: ${t.title}.` : `Ordered: ${t.title}.`, t.id);
+    }
+    if (this.#busy.has(c.id)) throw new Error("A shift is running. Try again in a minute.");
+    this.#busy.add(c.id);
+    try {
+      const t = await ownerBuy(c, this.#deps(c), a.sellerId, a.productId);
+      if (t.status === "failed") throw new Error(t.error ?? "The purchase did not go through.");
+      return done(t.status === "done" ? `Bought "${a.name}" from ${a.seller}. It is in this company's research now.` : `Paying ${a.seller} for "${a.name}": waiting for Base to confirm.`, t.id);
     } finally {
       this.#busy.delete(c.id);
       this.store.markDirty();

@@ -26,6 +26,12 @@ export const config = {
   model: env.NIGHTSHIFT_MODEL || "nvidia/nemotron-3-super-120b-a12b:free",
   fallbackModels: (env.NIGHTSHIFT_FALLBACK_MODELS || "nvidia/nemotron-3-ultra-550b-a55b:free,google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,openrouter/free").split(",").map((m) => m.trim()).filter(Boolean),
   llmAllowPaid: env.LLM_ALLOW_PAID === "1",
+  /** The owner chat with the CEO: a free model, so it costs nothing to run. */
+  chatModel: env.NIGHTSHIFT_CHAT_MODEL || env.NIGHTSHIFT_MODEL || "nvidia/nemotron-3-super-120b-a12b:free",
+  /** The CEO's strong model, paid by each company from its own USDC over x402 ("" turns it off). */
+  ceoModel: env.NIGHTSHIFT_CEO_MODEL ?? "anthropic/claude-sonnet-5.5",
+  /** The OpenAI-compatible gateway that sells that model over x402 on Base. */
+  aiGateway: env.AI_GATEWAY_URL || "https://blockrun.ai/api/v1/chat/completions",
   /** USD per IMD, for budgets. Follows the market every 10 minutes unless IMD_USD pins it. */
   imdUsd: num(env.IMD_USD, 6.87),
   imdUsdPinned: Boolean(env.IMD_USD),

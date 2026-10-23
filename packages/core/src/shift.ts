@@ -32,6 +32,18 @@ export interface ShiftDeps {
   context?: (c: Company) => Promise<Partial<CompanyStats>>;
   /** The owner's connected channels: a post move hands its event here, to be posted by the rules. */
   posts?: PostDeps;
+  /**
+   * The strong model, paid by the company itself from its own USDC (over x402), or null when it cannot
+   * pay today (no USDC, or its AI limit for the day is spent): the CEO then thinks with the free model.
+   */
+  brain?: (c: Company) => Promise<Brain | null>;
+}
+
+export interface Brain {
+  llm: Pick<LlmClient, "chat">;
+  model: string;
+  /** What the last answer cost the company, once it is paid. */
+  paid: () => NonNullable<Task["mind"]>["paid"] | null;
 }
 
 export interface PostDeps {
@@ -100,12 +112,18 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
     if (why) avoided.push(`${x.title}: ${why}`);
     return !why;
   };
-  if (d.llm) {
+  // the strong model when the company pays for it, else the free one; the playbook when neither answers
+  const brain = d.brain ? await d.brain(c).catch(() => null) : null;
+  const minds: Brain[] = [...(brain ? [brain] : []), ...(d.llm ? [{ llm: d.llm, model: d.model, paid: () => null }] : [])];
+  for (const [i, m] of minds.entries()) {
     try {
-      const r = await llmDecision(d.llm, d.model, c, stats);
-      if (r && isNew(r.decision)) { decision = r.decision; mind = { by: "model", model: r.servedModel, costUsd: r.costUsd, saw }; }
+      const r = await llmDecision(m.llm, m.model, c, stats);
+      const paid = m.paid();
+      if (r && isNew(r.decision)) { decision = r.decision; mind = { by: "model", model: r.servedModel, costUsd: r.costUsd, saw, ...(paid ? { paid } : {}) }; }
       else mind.fallback = r ? `the model's move repeats earlier work (${avoided[0]!.slice(r.decision.title.length + 2)})` : "the model's answer was not a usable move";
+      break;
     } catch (err) {
+      if (i < minds.length - 1) { note(c, d, "note", `The strong model could not answer (${(err as Error).message.slice(0, 120)}); thinking with the free model this shift.`); continue; }
       mind.fallback = "the model could not be reached";
       note(c, d, "warning", "The CEO could not think this shift; using the playbook.");
     }
@@ -396,8 +414,8 @@ async function shopFirst(c: Company, t: Task, brief: string, d: ShiftDeps, appro
   return payMarket(c, t, d);
 }
 
-/** Pays for the market pick: limits checked again (an approval may come hours later), then bought once. */
-async function payMarket(c: Company, t: Task, d: ShiftDeps): Promise<"bought" | "pending" | "none"> {
+/** Pays for the market pick: limits checked again (an approval may come hours later), then bought once. `alone`: the owner's own buy, with no swarm order after it. */
+async function payMarket(c: Company, t: Task, d: ShiftDeps, alone = false): Promise<"bought" | "pending" | "none"> {
   const s = t.market!, pick = s.pick!;
   // reserved before anything is awaited: a second approval or shift cannot spend the same limit or buy it twice
   touch(c, t, d, { status: "ordering", costUsdc: pick.priceUsdc, activity: `paying ${pick.company} ${usd(pick.priceUsdc)} over x402` });
@@ -405,7 +423,7 @@ async function payMarket(c: Company, t: Task, d: ShiftDeps): Promise<"bought" | 
   const spent = marketSpentToday(c, now(d), t);
   const held = await d.market!.usdc(c).catch(() => 0n);
   const stop = !lim.on ? "buying from the market was turned off"
-    : fromUsdc(pick.priceUsdc) > lim.maxUsd + 1e-9 ? `over the $${lim.maxUsd.toFixed(2)} limit per market buy`
+    : !alone && fromUsdc(pick.priceUsdc) > lim.maxUsd + 1e-9 ? `over the $${lim.maxUsd.toFixed(2)} limit per market buy`
     : fromUsdc(spent + pick.priceUsdc) > lim.dailyUsd + 1e-9 ? `over the $${lim.dailyUsd.toFixed(2)} a day for the market`
     : held - marketReserved(c, t) < pick.priceUsdc ? "not enough USDC"
     : null;
@@ -423,6 +441,13 @@ async function payMarket(c: Company, t: Task, d: ShiftDeps): Promise<"bought" | 
       return "pending";
     }
     const msg = (err as Error).message.slice(0, 200);
+    if (alone) {
+      s.decision = `${s.decision} The purchase did not go through (${msg}), so nothing was paid.`;
+      s.doneAt = now(d);
+      touch(c, t, d, { status: "failed", costUsdc: 0n, error: msg, activity: null });
+      note(c, d, "warning", `Could not buy "${pick.name}" from ${pick.company} (${msg}). Nothing was paid.`);
+      return "none";
+    }
     s.decision = `${s.decision} The purchase did not go through (${msg}), so nothing was paid: ordering from the swarm.`;
     delete s.pick;
     s.doneAt = now(d);
@@ -448,6 +473,38 @@ export function finishMarketBuy(c: Company, t: Task, r: MarketReceipt, d: ShiftD
   touch(c, t, d, { status: "done", costUsdc: pick.priceUsdc, activity: null, error: null, result: { files: { research: r.url }, note: `Bought from ${pick.company} on the NIGHTSHIFT market: ${pick.name}` } });
   note(c, d, "result", `${r.sim ? "[sim] " : ""}Market first: bought "${pick.name}" from ${pick.company} for ${usd(pick.priceUsdc)} instead of paying the swarm ~$${s.swarmUsd.toFixed(2)}. It is this shift's research and feeds the next product.`);
   d.emit(c, "company", null);
+}
+
+/**
+ * The owner presses Buy under a CEO chat answer: one product from another company. The press is the
+ * approval, so the per-buy limit gives way; the day's market limit, the money held and the market's
+ * other rules (never the owner's own companies, never twice) all still apply. Booked like the CEO's own buys.
+ */
+export async function ownerBuy(c: Company, d: ShiftDeps, sellerId: string, productId: string): Promise<Task> {
+  if (!d.market) throw new Error("The market is not open on this engine.");
+  if (c.status !== "active") throw new Error("The company is paused. Resume it to buy.");
+  if (c.tasks.some((t) => ACTIVE.has(t.status))) throw new Error("Work is still in progress. Buy once it is delivered.");
+  const o = (await d.market.offers(c)).find((x) => x.seller.id === sellerId && x.product.id === productId);
+  if (!o) throw new Error("That product is no longer on sale.");
+  const lim = marketLimits(c);
+  if (!lim.on) throw new Error("Buying from the market is off for this company (see Limits).");
+  const held = await d.market.usdc(c).catch(() => 0n);
+  const rule = marketRule(c, o, { swarmUsd: Infinity, maxUsd: Math.max(lim.maxUsd, fromUsdc(o.product.priceUsdc)), dailyUsd: lim.dailyUsd, spentUsdc: marketSpentToday(c, now(d)), availableUsdc: held - marketReserved(c) });
+  if (rule) throw new Error(`Not bought: ${rule.why}.`);
+  c.cycle += 1;
+  const t: Task = {
+    id: randomUUID(), cycle: c.cycle, kind: "research", title: `Buy "${o.product.name}" from ${o.seller.name}`, why: "Ordered by the owner from the CEO chat.",
+    status: "planned", stepsDone: 0, stepsTotal: 0, activity: null, costImd: 0n, result: null, error: null, createdAt: now(d), updatedAt: now(d),
+    mind: { by: "owner", saw: seen(c, d.stats(c)) }, about: `${o.product.name}: ${o.product.pitch}`,
+  };
+  mark(t, now(d));
+  c.tasks.push(t);
+  trimTasks(c, d);
+  const pick = { sellerId: o.seller.id, company: o.seller.name, slug: o.seller.slug, productId: o.product.id, name: o.product.name, kind: o.product.kind, priceUsdc: o.product.priceUsdc, score: 1 };
+  t.market = { at: now(d), doneAt: now(d), query: o.product.name, swarmUsd: 0, by: "keywords", threshold: 0, candidates: [], decision: `The owner bought "${o.product.name}" from ${o.seller.name} for ${usd(o.product.priceUsdc)}.`, pick };
+  note(c, d, "decision", `Shift ${c.cycle}, ordered by the owner: buy "${o.product.name}" from ${o.seller.name} for ${usd(o.product.priceUsdc)}.`);
+  await payMarket(c, t, d, true);
+  return t;
 }
 
 /** A payment that was sent never landed: nothing was charged, the limit is back, and the next shift starts fresh. */

@@ -10,6 +10,8 @@ export const DEFAULT_POLICY: Policy = {
   marketBuy: true,
   marketDailyUsd: 5,
   marketMaxUsd: 3,
+  // the strong model, paid by the company from its own USDC: a shift's thought costs about two cents
+  aiDailyUsd: 0.5,
 };
 
 export type SpendDecision =
@@ -18,6 +20,13 @@ export type SpendDecision =
   | { allow: false; wait: "budget"; reason: string };
 
 const DAY = 24 * 60 * 60 * 1000;
+
+/** USDC the company paid for the strong model in the last 24 hours. */
+export function aiSpentToday(c: Company, now = Date.now()): bigint {
+  let s = 0n;
+  for (const x of c.aiSpend ?? []) if (now - x.at < DAY) s += x.usdc;
+  return s;
+}
 
 /** IMD spent in the last 24 hours, valued at today's price. */
 export function spentTodayUsd(c: Company, imdUsd: number, now = Date.now()): number {
@@ -49,12 +58,14 @@ export function validatePolicy(p: Partial<Policy>): Policy {
   const out: Policy = {
     dailyBudgetUsd: Number(m.dailyBudgetUsd), approvalOverUsd: Number(m.approvalOverUsd), autopilot: yes(m.autopilot), shiftMinutes: Number(m.shiftMinutes),
     marketBuy: yes(m.marketBuy), marketDailyUsd: Number(m.marketDailyUsd), marketMaxUsd: Number(m.marketMaxUsd),
+    aiDailyUsd: Number(m.aiDailyUsd ?? DEFAULT_POLICY.aiDailyUsd),
   };
   if (!(out.dailyBudgetUsd >= 0 && out.dailyBudgetUsd <= 10_000)) throw new Error("dailyBudgetUsd must be between 0 and 10000");
   if (!(out.approvalOverUsd >= 0)) throw new Error("approvalOverUsd must be 0 or more");
   if (!(out.shiftMinutes >= 1 && out.shiftMinutes <= 7 * 24 * 60)) throw new Error("shiftMinutes must be between 1 and 10080");
   if (!(out.marketDailyUsd >= 0 && out.marketDailyUsd <= 1_000)) throw new Error("marketDailyUsd must be between 0 and 1000");
   if (!(out.marketMaxUsd >= 0 && out.marketMaxUsd <= 500)) throw new Error("marketMaxUsd must be between 0 and 500");
+  if (!(out.aiDailyUsd! >= 0 && out.aiDailyUsd! <= 20)) throw new Error("aiDailyUsd must be between 0 and 20");
   return out;
 }
 

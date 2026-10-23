@@ -103,13 +103,14 @@ async function full(engine: Engine, c: Company) {
   const held = await engine.ledger.balance(`co:${c.id}:usdc`, "USDC");
   const b = await b2bBooks(engine.ledger, c.id);
   // revenue from people and outside agents; B2B shown apart
-  const rev = held - b.soldUsdc + b.boughtUsdc;
+  const rev = held - b.soldUsdc + b.boughtUsdc + (c.aiSpentUsdc ?? 0n);
   let spent = 0n;
   for (const t of c.tasks) spent += t.costImd;
   const stats = engine.stats(c);
   const m = engine.store.metricsOf(c.id);
   return {
     ...c,
+    chat: undefined,
     tasks: c.tasks.slice(-60),
     journal: c.journal.slice(-150),
     stats,
@@ -121,6 +122,8 @@ async function full(engine: Engine, c: Company) {
       imdBalance: fromImd(imd),
       b2bSoldUsd: fromUsdc(b.soldUsdc),
       b2bBoughtUsd: fromUsdc(b.boughtUsdc),
+      // what the company paid for its CEO's strong model, from its own USDC
+      aiUsd: fromUsdc(c.aiSpentUsdc ?? 0n),
     },
     recentSales: m.sales.slice(-20).reverse(),
     holder: tokenOn() ? { symbol: config.token.symbol, ...(await holderStatus(c.owner)), min: config.token.holderMin } : null,
@@ -140,7 +143,7 @@ async function desk(engine: Engine, owner: string | null) {
     const held = await engine.ledger.balance(`co:${c.id}:usdc`, "USDC");
     const b = await b2bBooks(engine.ledger, c.id);
     // sales to people and outside agents; what it sold to and bought from other companies is shown apart
-    const revenueUsd = fromUsdc(held - b.soldUsdc + b.boughtUsdc);
+    const revenueUsd = fromUsdc(held - b.soldUsdc + b.boughtUsdc + (c.aiSpentUsdc ?? 0n));
     const spentUsd = fromImd(spent) * config.imdUsd;
     const soldUsd = fromUsdc(b.soldUsdc), boughtUsd = fromUsdc(b.boughtUsdc);
     const working = c.tasks.find((t) => ["checking", "ordering", "building"].includes(t.status));
@@ -849,6 +852,7 @@ export function serve(engine: Engine) {
           res.writeHead(302, { Location: engine.files.link(c, product, `owner-${Date.now()}`, 1) });
           return res.end();
         }
+        if (action === "chat" && req.method === "GET") return json(res, 200, await engine.chatView(c));
         if (action === "connect") {
           if (await ownerConnectRoutes(req, res, c, seg.slice(4), { json, body, limited, url, connect: engine.connect, owner, find: (x) => engine.get(x) })) return;
           return json(res, 404, { error: "unknown action" });
@@ -871,6 +875,15 @@ export function serve(engine: Engine) {
         if (action === "commission") {
           if (limited(req, `commission:${c.id}`, 3, 60_000)) return json(res, 429, { error: "slow down" });
           try { const t = await engine.commission(c, await body(req)); return json(res, 200, { ok: true, taskId: t.id, status: t.status, error: t.error }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
+        if (action === "chat" && !seg[4]) {
+          if (limited(req, `chat:${c.id}`, 6, 60_000)) return json(res, 429, { error: "Give the CEO a moment: six messages a minute." });
+          try { return json(res, 200, { lines: await engine.chat(c, (await body(req)).text) }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
+        if (action === "chat" && seg[4] === "act") {
+          if (limited(req, `chat-act:${c.id}`, 6, 60_000)) return json(res, 429, { error: "slow down" });
+          const b = await body(req);
+          try { return json(res, 200, await engine.chatAct(c, String(b.line ?? ""), String(b.action ?? ""))); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
         }
         if (action === "profile") {
           try { engine.updateProfile(c, await body(req)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }

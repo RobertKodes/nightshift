@@ -154,6 +154,8 @@ export interface Mind {
   saw: { visits7d: number; sales7d: number; revenue7dUsd: number; imdUsd: number; liveProducts: number; direction: boolean };
   /** Moves the CEO passed over because they repeat earlier work, each with the reason. */
   avoided?: string[];
+  /** The company paid for this thought itself, from its own USDC over x402 (the strong model). */
+  paid?: { usdc: bigint; tx: string | null; via: string };
 }
 
 export interface Policy {
@@ -171,6 +173,28 @@ export interface Policy {
   marketDailyUsd: number;
   /** USDC at most for one product bought on the market. */
   marketMaxUsd: number;
+  /** USDC the CEO may spend on the strong model in 24 hours, paid from the company's own wallet. 0 = the free model only. */
+  aiDailyUsd?: number;
+}
+
+/** One action the CEO offers under a chat answer: the owner presses it, the engine does it with these exact fields. */
+export type ChatAction = { id: string; state?: "done" | "failed"; note?: string } & (
+  | { type: "order"; kind: "research" | "build_product" | "build_site" | "improve_site"; title: string; brief: string; name?: string; pitch?: string; priceUsd?: number; productKind?: ProductKind }
+  | { type: "todo"; text: string }
+  | { type: "post"; where: string; text: string }
+  | { type: "connect"; to: string; why: string }
+  | { type: "buy"; sellerId: string; seller: string; productId: string; name: string; priceUsd: number; why: string }
+);
+
+/** The owner's chat with the CEO, newest last. */
+export interface ChatLine {
+  id: string;
+  at: number;
+  from: "owner" | "ceo";
+  text: string;
+  actions?: ChatAction[];
+  /** The model that answered (owner view only). */
+  model?: string;
 }
 
 export interface JournalEntry {
@@ -218,6 +242,12 @@ export interface Company {
   b2b?: { bought: B2bLine[]; sold: B2bLine[] };
   /** Accounts the owner created and connected, the posts written for them and what was done through them. */
   connections?: Connections;
+  /** The owner's chat with the CEO (the owner's alone). */
+  chat?: ChatLine[];
+  /** What the company paid for the strong model, from its own USDC, over the last two days. */
+  aiSpend?: { at: number; usdc: bigint; tx: string | null }[];
+  /** Everything the company ever paid for the strong model (USDC base units). */
+  aiSpentUsdc?: bigint;
 }
 
 /** Where the company may post, on accounts its owner made and connected. */

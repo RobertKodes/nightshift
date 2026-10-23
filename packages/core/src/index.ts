@@ -7,3 +7,4 @@ export * from "./market.js";
 export * from "./posts.js";
 export * from "./sells.js";
 export * from "./memory.js";
+export * from "./knowhow.js";

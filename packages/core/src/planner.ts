@@ -1,5 +1,6 @@
 import type { ChatMessage, LlmClient } from "@nightshift/llm";
 import { type Sells, sellsLines } from "./sells.js";
+import { KNOW_HOW } from "./knowhow.js";
 import { memoryLines, repeatOf } from "./memory.js";
 import type { Company, PostFact, Product, ProductKind, TaskKind } from "./types.js";
 import { fromUsdc } from "./types.js";
@@ -40,7 +41,8 @@ export interface CompanyStats {
 
 const KINDS: TaskKind[] = ["research", "build_product", "build_site", "improve_site", "marketing", "reprice", "retire_product", "post"];
 
-function summary(c: Company, s: CompanyStats): string {
+/** Everything the CEO knows about its company: the shift reads it, and so does the owner chat. */
+export function companyBrief(c: Company, s: CompanyStats): string {
   const products = c.products.map((p) => `- [${p.id}] ${p.name} (${p.kind}, $${fromUsdc(p.priceUsdc).toFixed(2)}${p.priceByOwner ? " set by the owner, never reprice it" : ""}, ${p.status}, ${p.sales} sales, $${fromUsdc(p.revenueUsdc).toFixed(2)})`).join("\n") || "- none yet";
   const recent = c.tasks.slice(-8).map((t) => `- shift ${t.cycle}: ${t.kind} "${t.title}" → ${t.status}${t.error ? ` (${t.error})` : ""}`).join("\n") || "- nothing yet";
   return `Company: ${c.name}
@@ -243,13 +245,16 @@ Moves:
 - reprice: change a product's price (free; needs productId and priceUsd)
 - retire_product: stop selling a product (free; needs productId)
 - post: tell people about one real event on the owner's connected channels (free; only when channels are listed; needs fact, one key from the list; post is an optional short line of your own with no number, link, @mention or hashtag that the event does not carry)
+Use the know-how on what sells and how it gets sold: pick a sharp niche, make what buyers use every week, price an entry item and a bundle.
 Rules: never order a product, research, site or site change the company already has or already ordered (see its memory), and never work that failed twice: choose a different move instead; with no sales, put the products in front of buyers and try a different kind of product; with sales, improve what sells and make products related to it; never build a site before there is a product; never start paid work while paid work is still building unless it clearly pays back; be specific about who buys and why; when the owner gives a direction, follow it unless it breaks these rules.
 Answer with JSON only: {"kind": ..., "title": ..., "why": ..., "brief": ..., "product"?: {"name","kind","pitch","priceUsd"}, "productId"?, "priceUsd"?, "post"?, "fact"?}`;
 
-export async function llmDecision(llm: LlmClient, model: string, c: Company, s: CompanyStats): Promise<{ decision: Decision; costUsd: number; servedModel: string } | null> {
+export async function llmDecision(llm: Pick<LlmClient, "chat">, model: string, c: Company, s: CompanyStats): Promise<{ decision: Decision; costUsd: number; servedModel: string } | null> {
   const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM },
-    { role: "user", content: summary(c, s) },
+    { role: "user", content: `${companyBrief(c, s)}
+
+${KNOW_HOW}` },
   ];
   const res = await llm.chat({ model, messages, temperature: 0.4, maxTokens: 1200 });
   const text = res.message.content ?? "";
