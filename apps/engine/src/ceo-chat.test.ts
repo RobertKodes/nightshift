@@ -51,6 +51,8 @@ describe("the CEO chat's buttons", () => {
     expect(actions).toHaveLength(2);
     expect(actions[0]).toMatchObject({ type: "post", where: "bluesky" });
     expect((actions[0] as { text: string }).text).toBe("Thread 1/3: Most roofers chase dead leads.\n\n1/ Pull this week's permits from your county site.\n2/ Call the owner, not the GC.");
+    // line breaks written as the two characters "\n" become real ones
+    expect((parseAnswer("[POST x | One.\\n\\nTwo.]", company(), []).actions[0] as { text: string }).text).toBe("One.\n\nTwo.");
   });
 
   it("drops buttons that break the rules", () => {

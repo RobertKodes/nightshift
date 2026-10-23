@@ -33,6 +33,7 @@ Your job here is to get the company its sales. Tell the owner exactly what to do
 How you answer:
 - Short and concrete: under 120 words, plain words, steps the owner can do today. Answer in the owner's language.
 - Use only the facts you are given. Never invent results, client stories, testimonials, reviews, page counts, discounts, giveaways, sales or numbers: a post that claims something untrue hurts the company. When you do not know, say so.
+- A post speaks as the company, never as a person who used the product: no "it used to take me an hour", no "I tried", no before-and-after stories.
 - Never ask for a password, private key or seed phrase. No investment or financial advice, no promises of income.
 - Every post you suggest goes in its own POST button (at most 2 per answer), ready to paste: no placeholders, only links from the facts. The words above the buttons say why, where and when, not the post again.
 - Only these accounts can be connected here: ${CONNECTABLE.join(", ")}. For any other place (Pinterest, TikTok, a forum), give a TODO.
@@ -88,7 +89,8 @@ export function parseAnswer(raw: string, c: Company, offers: MarketOffer[]): { t
 function action(kind: string, rest: string, c: Company, offers: MarketOffer[]): ChatAction | null {
   const [head = "", ...parts] = rest.split("|").map((x) => x.trim());
   const id = randomUUID().slice(0, 8);
-  const tail = parts.join(" | ").trim();
+  // models sometimes write line breaks as the two characters "\n"
+  const tail = parts.join(" | ").replace(/\\n/g, "\n").trim();
   const ok = (s: string, lo: number, hi: number) => s.length >= lo && s.length <= hi;
   if (kind === "TODO") return ok(tail, 4, 300) ? { id, type: "todo", text: tail } : null;
   if (kind === "POST") {

@@ -17,13 +17,13 @@ const accept = (o: Record<string, unknown> = {}) => ({ scheme: "exact", network:
 /** A gateway that asks for `amount` and answers once paid. */
 function gateway(amount = "20000") {
   const calls: { headers: Record<string, string> }[] = [];
-  const fetch = (async (_url: string, init: { headers: Record<string, string> }) => {
+  const fake = (async (_url: string, init: { headers: Record<string, string> }) => {
     calls.push({ headers: init.headers });
     if (!init.headers["PAYMENT-SIGNATURE"]) return new Response(JSON.stringify({ x402Version: 2, accepts: [accept({ amount })], resource: { url: "https://blockrun.ai/api/v1/chat/completions" } }), { status: 402 });
     const settled = Buffer.from(JSON.stringify({ success: true, transaction: "0xfeed", network: "eip155:8453" })).toString("base64");
     return new Response(JSON.stringify({ model: "anthropic/claude-sonnet-5.5", choices: [{ message: { role: "assistant", content: "{}" }, finish_reason: "stop" }], usage: { prompt_tokens: 900, completion_tokens: 200 } }), { status: 200, headers: { "payment-response": settled } });
-  }) as unknown as typeof fetch;
-  return { fetch, calls };
+  }) as unknown as typeof globalThis.fetch;
+  return { fetch: fake, calls };
 }
 
 const deps = (fetch: typeof globalThis.fetch, held = 5_000_000n, ledger = new Ledger()) => ({
