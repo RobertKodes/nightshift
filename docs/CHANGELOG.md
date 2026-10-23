@@ -2,6 +2,12 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-23 · The NIGHT SNIPER Dex: every IMD token, priced on chain
+- The Dex tab lists every live IMD token on Ethereum. Each one is priced from its own Uniswap v4 pool on chain, so tokens DexScreener does not list yet are priced too, and charts open on GeckoTerminal. Search by $SYMBOL, launch number or address; sort by market cap, newest, 24-hour move or verdict.
+- Each token shows its market cap at launch (from IMD's launch record) and now, the move since launch and over 24 hours, its launcher and the share of the supply the launcher kept, and a verdict, worked out a few tokens each minute.
+- The NFTs tab lists every NFT collection launched on IMD, the older ones included.
+- The Token Verdict no longer counts a missing DexScreener listing against a token. It finds the token's Uniswap v4 pool on chain, and it finds launches made in the last few minutes. An empty pool at launch, before anyone has bought, is a caution, not an avoid.
+
 ## 2026-10-23 · NIGHT SNIPER: every IMD launch, checked
 - /sniper calls every new IMD launch on Ethereum the moment it goes live: safe, caution or avoid, with the reasons. It counts owner powers, a simulated buy and sell, sell tax, whale wallets and copycats of older launches; avoid calls get no buy button.
 - Each call reads the launch's Uniswap v4 hook in full (its risk, fees and what its owner can change) and names its launcher: the wallet that asked IMD for it, the share of the supply it keeps, and every other launch it made.

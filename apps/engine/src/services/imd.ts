@@ -42,6 +42,7 @@ export const launchUrl = (l: { id: string }) => `${IMD_API}/launches/${l.id}`;
 export function imdReader(d: Deps) {
   const lists = new TtlCache<LaunchRow[]>(10 * 60_000, 4, d.now);
   const details = new TtlCache<LaunchDetail>(10 * 60_000, 300, d.now);
+  const newest = new TtlCache<LaunchRow[]>(60_000, 1, d.now);
   const symbols = new Map<string, string | null>();
   let symbolsAt = 0;
 
@@ -66,12 +67,20 @@ export function imdReader(d: Deps) {
   /** The launch whose artifacts include this address, on this chain. */
   async function launchOf(chainId: number, address: string): Promise<{ launch: LaunchRow; artifact: Artifact } | null> {
     const a = address.toLowerCase();
-    for (const l of (await launches()).list) {
-      if (l.chainId !== chainId) continue;
-      const art = l.artifacts?.find((x) => x.address?.toLowerCase() === a);
-      if (art) return { launch: l, artifact: art };
-    }
-    return null;
+    const find = (list: LaunchRow[]) => {
+      for (const l of list) {
+        if (l.chainId !== chainId) continue;
+        const art = l.artifacts?.find((x) => x.address?.toLowerCase() === a);
+        if (art) return { launch: l, artifact: art };
+      }
+      return null;
+    };
+    const hit = find((await launches()).list);
+    if (hit) return hit;
+    // a launch from the last few minutes is not in the cached list yet: IMD's newest page, read fresh
+    const fresh = await newest.get("new", async () => (await d.net.json<{ launches?: LaunchRow[] }>(`${IMD_API}/launches?limit=50`, 15_000)).launches ?? [])
+      .then((r) => r.v).catch(() => [] as LaunchRow[]);
+    return find(fresh);
   }
 
   /** One launch in full (admission checks, jobs, economics…), by launch number or id. */

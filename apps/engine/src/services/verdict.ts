@@ -7,7 +7,8 @@ import { type HookReport, KNOWN_HOOKS, decodeFlags, inspectHook, ownerKind } fro
 import { IMD_FACTORIES, IMD_TOKEN, type LaunchDetail, type LaunchRow, chainIdOf, hookOf, launchUrl, tokenOf } from "./imd.js";
 import type { Pair } from "./market.js";
 import { type Fn, factsOf, functionsOf, scopeTo } from "./source.js";
-import { NATIVE, type Slot0, keyFromInitialize, poolIdOf, positionAmounts, quote, quoteRoundTrip, routerRoundTrip, slot0 } from "./v4pool.js";
+import { MAX_LOG_RANGE } from "./net.js";
+import { NATIVE, type Slot0, keyFromInitialize, poolIdOf, poolsOfToken, positionAmounts, quote, quoteRoundTrip, routerRoundTrip, slot0 } from "./v4pool.js";
 
 /**
  * TOKEN VERDICT, run by NIGHTSHIFT: before you buy a token on Ethereum, is it safe, worth caution,
@@ -147,6 +148,19 @@ export async function tokenVerdict(ctx: Ctx, chain: string, tokenIn: string, dep
     const k = await keyFromInitialize(ctx.d.rpc, v4pair.pairAddress as Hex, near, head).catch(() => null);
     if (k) { key = k.key; keyFrom = `PoolManager Initialize event, block ${k.block}`; }
   }
+  let onChainOnly = false;
+  if (!key) {
+    // DexScreener indexes only some Uniswap v4 pools: look for the token's pool on chain, from the block it was made
+    const born = hit?.artifact.blockNumber ? BigInt(hit.artifact.blockNumber) : head > MAX_LOG_RANGE * 6n ? head - MAX_LOG_RANGE * 6n : 0n;
+    const found = (await poolsOfToken(ctx.d.rpc, token, born, head).catch(() => [])).slice(0, 4);
+    let best: { key: PoolKey; block: number; liq: bigint } | null = null;
+    for (const p of found) {
+      const s = await slot0(ctx.d.rpc, p.id).catch(() => null);
+      const liq = s?.liquidity ?? 0n;
+      if (!best || liq > best.liq) best = { key: p.key, block: p.block, liq };
+    }
+    if (best) { key = best.key; keyFrom = `PoolManager Initialize event, block ${best.block}, found on chain`; onChainOnly = !pairs.length; }
+  }
   const poolId = key ? poolIdOf(key) : null;
   const s0: Slot0 | null = poolId ? await slot0(ctx.d.rpc, poolId).catch(() => null) : null;
   const ePool = key ? ev.add(`Uniswap v4 pool ${poolId}: key from ${keyFrom}; ${s0 ? `tick ${s0.tick}, LP fee ${s0.lpFee / 100} bps` : "state not readable"}`, "eth_getStorageAt") : null;
@@ -175,12 +189,17 @@ export async function tokenVerdict(ctx: Ctx, chain: string, tokenIn: string, dep
   }
   const eLiq = liquiditySource === "onchain" ? ev.add(`On-chain liquidity: the IMD-seeded position's amounts at the current price, valued at ${qCur === NATIVE ? "ETH" : "IMD"} $${qUsd}`, "eth_getStorageAt") : ePair;
   const exitText = (x: number) => `${usd(x)} can be taken out by sellers (the pool's ${qCur === NATIVE || pair?.quoteToken.symbol === "ETH" || pair?.quoteToken.symbol === "WETH" ? "ETH" : pair?.quoteToken.symbol ?? "quote"} side${liquidityUsd !== null ? `; ${usd(liquidityUsd)} in all` : ""})`;
-  if (exitUsd === 0 && liquiditySource === "onchain") say("liquidity", "caution", `The pool holds no ${qCur === NATIVE ? "ETH" : "IMD"} right now: nobody has bought yet, or every buyer has sold. Only what buyers put in can come out.`, [eLiq]);
-  else if (exitUsd === null) say("no-liquidity", key ? "caution" : "avoid", key ? "No liquidity figure: DexScreener does not index this pool and it could not be valued on chain." : "No pool found: DexScreener lists no pair and no IMD launch pool is known. You may not be able to sell.", [ePair]);
+  // an empty quote side is where every new launch starts, whichever source reads it: nobody has bought yet
+  const qName = qCur === NATIVE ? "ETH" : qCur === IMD_TOKEN ? "IMD" : pair?.quoteToken.symbol ?? "quote token";
+  if (exitUsd === 0) say("liquidity", "caution", `The pool holds no ${qName} right now: nobody has bought yet, or every buyer has sold. Only what buyers put in can come out.`, [eLiq]);
+  else if (exitUsd === null) say("no-liquidity", "caution", key
+    ? "Liquidity not valued yet: DexScreener does not list this Uniswap v4 pool and its depth could not be read on chain. The sell test below shows whether a small sell goes through."
+    : "No Uniswap pool found yet, on DexScreener or on chain (DexScreener lists only some v4 pools, so the chain was searched too). Until a pool exists the token cannot be bought or sold.", [ePair]);
   else if (exitUsd < 500) say("liquidity", "avoid", `Only ${exitText(exitUsd)}: even a small sell moves the price a lot.`, [eLiq]);
   else if (exitUsd < 5_000) say("liquidity", "caution", `Thin: ${exitText(exitUsd)}.`, [eLiq]);
   else if (exitUsd < 25_000) say("liquidity", "note", `${exitText(exitUsd)[0]!.toUpperCase()}${exitText(exitUsd).slice(1)}: thin, so large sells move the price.`, [eLiq]);
   else say("liquidity", "good", `${exitText(exitUsd)[0]!.toUpperCase()}${exitText(exitUsd).slice(1)}.`, [eLiq]);
+  if (onChainOnly) say("v4-unlisted", "note", "DexScreener does not list this Uniswap v4 pool (it indexes only some v4 pools); the pool was read on chain instead.", [ePool ?? ePair]);
   if (key && launch && isToken && position && IMD_FACTORIES[position.factory.toLowerCase()]) say("lp-held", "good", `The pool's liquidity is a position held by ${IMD_FACTORIES[position.factory.toLowerCase()]} (${short(position.factory)}), which has no function to remove it.`, [ev.add(FACTORY_ABI_NOTE, "sourcify", { url: `https://sourcify.dev/server/v2/contract/1/${position.factory}?fields=abi` }), ePool]);
 
   let hook: VerdictReport["hook"] = null;

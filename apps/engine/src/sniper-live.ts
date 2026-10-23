@@ -6,7 +6,9 @@ import { frogCount } from "./frogs.js";
 import { dexQuotes } from "./imdmarket.js";
 import { send as pushSend } from "./push.js";
 import { context } from "./services/context.js";
+import { tokenBasics } from "./services/evm.js";
 import { inspectHook } from "./services/hook.js";
+import { createDex, dexFile } from "./sniper-dex.js";
 import type { LaunchDetail, LaunchRow } from "./services/imd.js";
 import { liveNet, liveRpc } from "./services/net.js";
 import { NATIVE, slot0 } from "./services/v4pool.js";
@@ -36,9 +38,23 @@ async function ethUsd(): Promise<number> {
   return eth$?.usd ?? 0;
 }
 
+const quotes$ = new Map<string, { at: number; usd: number }>();
+/** A pool's quote currency in dollars: ETH, IMD, or any other token at its DexScreener price (kept 10 minutes). */
 export async function quoteUsd(quote: Address): Promise<number> {
   if (quote === NATIVE) return ethUsd();
-  return quote.toLowerCase() === IMD ? config.imdUsd : 0;
+  const q = quote.toLowerCase();
+  if (q === IMD) return config.imdUsd;
+  const hit = quotes$.get(q);
+  if (hit && Date.now() - hit.at < 600_000) return hit.usd;
+  const p = (await dexQuotes([q]).catch(() => new Map())).get(q);
+  const usd = Number(p?.priceUsd ?? 0) || 0;
+  quotes$.set(q, { at: Date.now(), usd });
+  return usd;
+}
+/** Dollar prices for a set of quote currencies, for the views that price synchronously. */
+export async function quotePrices(list: string[]): Promise<(quote: string) => number> {
+  const m = new Map(await Promise.all([...new Set(list)].map(async (q) => [q, await quoteUsd(q as Address).catch(() => 0)] as const)));
+  return (q) => m.get(q) ?? 0;
 }
 
 const IMD_API = "https://api.imd.fun";
@@ -90,6 +106,8 @@ export async function readNft(address: Address): Promise<NftRead | null> {
     const token = payToken && !/^0x0{40}$/i.test(payToken) ? payToken : null;
     const [dec, sym] = token ? await Promise.all([call<number>(token, "decimals", "uint8"), call<string>(token, "symbol", "string")]) : [18, "ETH"];
     price = { amount: Number(formatUnits(wei, Number(dec ?? 18))), unit: sym ?? "tokens" };
+    // a "price" no mint asks for in ETH is some other number the contract keeps under that name
+    if (price.unit === "ETH" && price.amount > 5) price = null;
   }
   return {
     standard, name, symbol, owner: owner?.toLowerCase() ?? null, price,
@@ -147,3 +165,12 @@ export function liveDeps(): SniperDeps {
 }
 
 export const liveSniper = () => createSniper(liveDeps());
+
+/** The dex of every IMD token and NFT collection, on the same live network. */
+export function liveDex() {
+  const s = liveDeps(), rpc = liveRpc(eth as never);
+  return createDex({
+    now: Date.now, allLaunches: s.allLaunches!, detail: s.detail, basics: (token) => tokenBasics(rpc, token), slot0: s.slot0, decimals: s.decimals,
+    verdict: s.verdict, dexQuotes: (tokens) => dexQuotes(tokens), nft: readNft, file: dexFile(),
+  });
+}

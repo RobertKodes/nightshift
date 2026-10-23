@@ -74,7 +74,7 @@ import { startNightWatch } from "./nightwatch.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { type Anim, burnTotals, buyCard, chats, marketSnapshot, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
-import { liveSniper } from "./sniper-live.js";
+import { liveDex, liveSniper } from "./sniper-live.js";
 import { type Button, type CommandContext, type GroupMessage, type Reply, esc, telegram, telegramCommands, tgCall } from "./social.js";
 import { Connect } from "./connect.js";
 import type { Http } from "./channels.js";
@@ -126,6 +126,8 @@ export class Engine {
   readonly gameBot = new GameBot({ profiles: new Profiles() });
   /** NIGHT SNIPER: every new IMD launch checked and called (off in sim unless SNIPER=1). */
   readonly sniper = config.sniper ? liveSniper() : null;
+  /** The NIGHT SNIPER dex: every IMD token and NFT collection, filled in a few at a time. */
+  readonly dex = config.sniper ? liveDex() : null;
 
   constructor() {
     this.auth = new Auth(this.vault.material, this.store.apiKeys, () => this.store.markDirty());
@@ -262,6 +264,11 @@ export class Engine {
       const sniper = this.sniper;
       setTimeout(() => void sniper.tick().catch((e) => console.error("sniper", e)), 20_000);
       setInterval(() => void sniper.tick().catch((e) => console.error("sniper", e)), 60_000);
+    }
+    if (this.dex) {
+      const dex = this.dex;
+      setTimeout(() => void dex.tick().catch((e) => console.error("dex", e)), 50_000);
+      setInterval(() => void dex.tick().catch((e) => console.error("dex", e)), 60_000);
     }
     // The daily digest of what the live companies did, from their records and the ledger (sim mode: a dry-run log only).
     startDigest(() => this.store.companies.values(), () => this.ledger.store.list(""));

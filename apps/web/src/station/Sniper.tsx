@@ -30,7 +30,16 @@ type Feed = {
   live: boolean; holder: boolean; delayMinutes: number; hidden: number; calls: Call[]; launchers: LauncherRow[]; indexed: number;
   stats: { calls: number; nfts: number; safe: number; caution: number; avoid: number; best: { symbol: string | null; launch: number; peak: number; verdict: Verdict } | null; avoidDumped: number };
 };
-type Tab = "calls" | "nfts" | "launchers" | "alerts";
+type DexRow = {
+  launch: number; token: string; symbol: string | null; name: string | null; kind: string; at: string; quote: string | null;
+  mcapNow: number | null; mcap0: number | null; sinceLaunch: number | null; change24: number | null; liquidityUsd: number | null; onDexScreener: boolean;
+  verdict: { verdict: Verdict; summary: string; reasons: { impact: Impact; text: string }[]; at: number } | null; launcher: string | null; keepsPct: number | null;
+  links: { uniswap: string | null; chart: string; dexscreener: string | null; repo: string | null };
+};
+type DexNft = { launch: number; contract: string; name: string | null; symbol: string | null; standard: string; minted: number | null; maxSupply: number | null; price: { amount: number; unit: string } | null; owner: string | null; launcher: string | null; at: string; repo: string | null };
+type DexFeed = { live: boolean; count: number; tokens: DexRow[]; nfts: DexNft[]; verdicts: number };
+type DexSort = "mcap" | "new" | "move" | "safe";
+type Tab = "calls" | "dex" | "nfts" | "launchers" | "alerts";
 
 /** Problems first, then what passed, then plain notes. */
 const ORDER: Impact[] = ["avoid", "caution", "good", "note"];
@@ -56,6 +65,34 @@ function useFeed(): [Feed | null, () => void] {
   }, [load]);
   return [d, load];
 }
+
+function useDex(sort: DexSort, q: string): DexFeed | null {
+  const [d, setD] = useState<DexFeed | null>(null);
+  useEffect(() => {
+    let off = false;
+    const load = () => fetch(`/api/sniper/dex?sort=${sort}&q=${encodeURIComponent(q)}`, { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)).then((x) => { if (x && !off) setD(x); }).catch(() => {});
+    const t = setTimeout(load, q ? 250 : 0), i = setInterval(load, 60_000);
+    return () => { off = true; clearTimeout(t); clearInterval(i); };
+  }, [sort, q]);
+  return d;
+}
+
+/** A dex row or a collection, in the shape the sheet shows a call in. */
+const dexCall = (r: DexRow): Call => ({
+  type: "token", launch: r.launch, token: r.token, symbol: r.symbol, name: r.name, kind: r.kind, at: Date.parse(r.at),
+  verdict: r.verdict?.verdict ?? "unchecked", summary: r.verdict?.summary ?? "Not checked yet: the checks run on every IMD token, a few each minute.", reasons: r.verdict?.reasons ?? [],
+  quote: r.quote, multiple: r.sinceLaunch, peak: r.change24, mcapAtCall: r.mcap0, mcapNow: r.mcapNow, dumped: false, hook: null, nft: null,
+  launcher: r.launcher ? { address: r.launcher, keepsPct: r.keepsPct, history: [] } : null,
+  links: { uniswap: r.links.uniswap, chart: r.links.chart, opensea: null, etherscan: `https://etherscan.io/token/${r.token}`, repo: r.links.repo },
+});
+const nftCall = (n: DexNft): Call => ({
+  type: "nft", launch: n.launch, token: n.contract, symbol: n.symbol, name: n.name, kind: "evm_contracts", at: Date.parse(n.at), verdict: "unchecked", summary: "", reasons: [],
+  quote: null, multiple: null, peak: null, mcapAtCall: null, mcapNow: null, dumped: false, hook: null,
+  nft: { standard: n.standard, maxSupply: n.maxSupply, minted: n.minted, price: n.price, owner: n.owner },
+  launcher: n.launcher ? { address: n.launcher, keepsPct: null, history: [] } : null,
+  links: { uniswap: null, chart: null, opensea: `https://opensea.io/assets/ethereum/${n.contract}`, etherscan: `https://etherscan.io/address/${n.contract}`, repo: n.repo },
+});
+const pct = (x: number | null) => (x == null ? "" : `${x >= 0 ? "+" : ""}${(x * 100).toFixed(x > -0.1 && x < 0.1 ? 1 : 0)}%`);
 
 // ---- notifications (web push from the installed site)
 type PushState = "unsupported" | "ios-install" | "off" | "on" | "denied" | "busy";
@@ -100,13 +137,15 @@ function usePush(): [PushState, (on: boolean) => Promise<void>] {
 }
 
 // ---- iOS parts
-function Glyph({ name }: { name: "scope" | "photo" | "people" | "bell" | "chevron" | "back" | "copy" | "ext" }) {
+function Glyph({ name }: { name: "scope" | "photo" | "people" | "bell" | "chevron" | "back" | "copy" | "ext" | "search" | "dex" }) {
   const p: Record<string, React.ReactNode> = {
     scope: <><circle cx="12" cy="12" r="7.5" /><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4" /><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" /></>,
     photo: <><rect x="3.5" y="5" width="17" height="14" rx="3" /><circle cx="9" cy="10" r="1.8" /><path d="m4.5 17 4.8-4.6 3.4 3.2 2.6-2.4 4.2 3.8" /></>,
     people: <><circle cx="9" cy="8.5" r="3.2" /><path d="M3.5 19c.6-3.3 2.7-5 5.5-5s4.9 1.7 5.5 5" /><circle cx="16.8" cy="9.5" r="2.5" /><path d="M16 14.2c2.4.1 4 1.6 4.5 4.3" /></>,
     bell: <><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.8H5z" /><path d="M10 20.5a2.2 2.2 0 0 0 4 0" /></>,
     chevron: <path d="m9.5 6 6 6-6 6" />,
+    search: <><circle cx="10.5" cy="10.5" r="6" /><path d="m15 15 5 5" /></>,
+    dex: <><rect x="4" y="4" width="7" height="7" rx="1.8" /><rect x="13" y="4" width="7" height="7" rx="1.8" /><rect x="4" y="13" width="7" height="7" rx="1.8" /><rect x="13" y="13" width="7" height="7" rx="1.8" /></>,
     back: <path d="m14.5 5.5-6.5 6.5 6.5 6.5" />,
     copy: <><rect x="8.5" y="8.5" width="11" height="11" rx="2.5" /><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" /></>,
     ext: <><path d="M14 4.5h5.5V10M19.5 4.5 11 13" /><path d="M17.5 14v3.5a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2H10" /></>,
@@ -149,7 +188,7 @@ function Group({ head, foot, children }: { head?: string; foot?: React.ReactNode
 }
 
 // ---- the sheet: one call in full
-function Sheet({ c, onClose }: { c: Call; onClose: () => void }) {
+function Sheet({ c, onClose, dex }: { c: Call; onClose: () => void; dex?: { onDexScreener: boolean; dexscreener: string | null } }) {
   const [copied, setCopied] = useState(false);
   const [drag, setDrag] = useState(0);
   const start = useRef<number | null>(null);
@@ -176,13 +215,21 @@ function Sheet({ c, onClose }: { c: Call; onClose: () => void }) {
         </header>
         <div className="ios-sheet-body">
           {c.type === "token" && <div className="ios-verdict"><Pill v={c.verdict} /><p>{c.summary}</p></div>}
-          {c.type === "token" && (
+          {c.type === "token" && !dex && (
             <div className="ios-tiles">
               <div><span>At the call</span><b>{money(c.mcapAtCall)}</b></div>
               <div><span>Now</span><b>{c.dumped ? "Dumped" : money(c.mcapNow)}</b><small>{c.multiple ? times(c.multiple) : "not traded"}</small></div>
               <div><span>High since</span><b>{times(c.peak)}</b></div>
             </div>
           )}
+          {c.type === "token" && dex && (
+            <div className="ios-tiles">
+              <div><span>At launch</span><b>{money(c.mcapAtCall)}</b></div>
+              <div><span>Now</span><b>{money(c.mcapNow)}</b><small>{c.multiple ? `${times(c.multiple)} since launch` : "market cap"}</small></div>
+              <div><span>24 hours</span><b className={c.peak == null ? "" : c.peak >= 0 ? "t-safe" : "t-avoid"}>{c.peak == null ? "—" : pct(c.peak)}</b></div>
+            </div>
+          )}
+          {dex && !dex.onDexScreener && <p className="ios-foot ios-note">Not on DexScreener yet: it lists only some Uniswap v4 pools. The price here is read on chain, from the token's own pool, and the chart is on GeckoTerminal.</p>}
           {n && (
             <Group head="Collection">
               <Cell title="Standard" trail={n.standard} />
@@ -206,7 +253,7 @@ function Sheet({ c, onClose }: { c: Call; onClose: () => void }) {
             </Group>
           )}
           {c.launcher && (
-            <Group head="Launcher" foot={hist.length ? "Every other IMD launch this wallet asked for, newest first. A result shows where NIGHT SNIPER called it." : "This wallet's first IMD launch."}>
+            <Group head="Launcher" foot={dex ? "The wallet that asked IMD for this launch, and the share of the supply it kept." : hist.length ? "Every other IMD launch this wallet asked for, newest first. A result shows where NIGHT SNIPER called it." : "This wallet's first IMD launch."}>
               <Cell lead={<WalletAvatar a={c.launcher.address} />} title={short(c.launcher.address)} sub={c.launcher.keepsPct !== null ? `Keeps ${c.launcher.keepsPct}% of the supply` : `${hist.length + 1} launch${hist.length ? "es" : ""}`} href={`https://etherscan.io/address/${c.launcher.address}`} />
               {hist.slice(0, 8).map((h) => <Cell key={h.launch} title={`#${h.launch}`} sub={`${h.kind.replace(/_/g, " ")} · ${ago(Date.parse(h.at))} ago`} trail={h.called ? (h.called.dumped ? <span className="ios-risk r-high">dumped</span> : h.called.peak ? times(h.called.peak) : <Pill v={h.called.verdict} />) : undefined} />)}
             </Group>
@@ -218,6 +265,7 @@ function Sheet({ c, onClose }: { c: Call; onClose: () => void }) {
             {c.links.uniswap && !inStoreApp && <a className="ios-btn fill" href={c.links.uniswap} target="_blank" rel="noreferrer">Buy on Uniswap</a>}
             {c.links.opensea && !inStoreApp && <a className="ios-btn fill" href={c.links.opensea} target="_blank" rel="noreferrer">View on OpenSea</a>}
             {c.links.chart && <a className="ios-btn" href={c.links.chart} target="_blank" rel="noreferrer">Chart</a>}
+            {dex?.dexscreener && <a className="ios-btn" href={dex.dexscreener} target="_blank" rel="noreferrer">DexScreener</a>}
             {c.type === "token" && <button type="button" className="ios-btn" onClick={() => go(`/services/verdict?token=${c.token}`)}>Full verdict</button>}
             {c.links.repo && <a className="ios-btn" href={c.links.repo} target="_blank" rel="noreferrer">Source</a>}
             <a className="ios-btn" href={c.links.etherscan} target="_blank" rel="noreferrer">Etherscan</a>
@@ -262,6 +310,47 @@ function CallsTab({ feed, open, nfts }: { feed: Feed | null; open: (c: Call) => 
   );
 }
 
+function DexTab({ open }: { open: (r: DexRow) => void }) {
+  const [sort, setSort] = useState<DexSort>("mcap");
+  const [q, setQ] = useState("");
+  const dex = useDex(sort, q);
+  return (
+    <>
+      <label className="ios-search"><Glyph name="search" /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="$SYMBOL, #launch or 0x…" aria-label="Search IMD tokens" autoCapitalize="none" autoCorrect="off" spellCheck={false} /></label>
+      <Segmented label="Sort the dex" value={sort} onChange={setSort} options={[{ id: "mcap", label: "Top" }, { id: "new", label: "New" }, { id: "move", label: "Movers" }, { id: "safe", label: "Safe" }]} />
+      <Group foot={dex ? `${dex.count} IMD token${dex.count === 1 ? "" : "s"} on Ethereum, priced from each one's own Uniswap v4 pool on chain${dex.verdicts < dex.count ? `; ${dex.verdicts} checked so far, the rest a few each minute` : ""}.` : undefined}>
+        {!dex && <div className="ios-cell"><span className="ios-cell-mid"><span className="ios-cell-s">Loading…</span></span></div>}
+        {dex && !dex.tokens.length && <div className="ios-cell"><span className="ios-cell-mid"><span className="ios-cell-s">{q ? "No IMD token matches." : "The dex is filling: every IMD token is added a few at a time."}</span></span></div>}
+        {dex?.tokens.map((r) => (
+          <Cell key={r.token} onClick={() => open(r)} lead={<span className={`ios-av v-${r.verdict?.verdict ?? "unchecked"}`} aria-hidden="true">{(r.symbol ?? r.name ?? "?").replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "?"}</span>}
+            title={r.symbol ? `$${r.symbol}` : r.name ?? "Token"}
+            sub={`#${r.launch} · ${r.quote ?? "?"} · ${ago(Date.parse(r.at))}`}
+            trail={<span className="ios-trail dex"><span>{money(r.mcapNow)}</span><small className={r.change24 == null ? "" : r.change24 >= 0 ? "t-safe" : "t-avoid"}>{r.change24 == null ? (r.sinceLaunch ? `${times(r.sinceLaunch)} launch` : "") : pct(r.change24)}</small></span>} />
+        ))}
+      </Group>
+    </>
+  );
+}
+
+/** NFT launches: the ones NIGHT SNIPER called (with mint-out replies) and every IMD collection before them. */
+function NftsTab({ feed, open }: { feed: Feed | null; open: (c: Call) => void }) {
+  const dex = useDex("new", "");
+  const called = (feed?.calls ?? []).filter((c) => c.type === "nft");
+  const seen = new Set(called.map((c) => c.token));
+  const all = [...called, ...(dex?.nfts ?? []).filter((n) => !seen.has(n.contract)).map(nftCall)].sort((a, b) => b.launch - a.launch);
+  return (
+    <Group foot="Every IMD launch whose contract is an ERC-721 or ERC-1155 collection. New ones are called as they go live, with replies as they mint out.">
+      {!feed && !dex && <div className="ios-cell"><span className="ios-cell-mid"><span className="ios-cell-s">Loading…</span></span></div>}
+      {(feed || dex) && !all.length && <div className="ios-cell"><span className="ios-cell-mid"><span className="ios-cell-s">The collections are being read: every IMD launch is checked a few at a time.</span></span></div>}
+      {all.map((c) => (
+        <Cell key={c.token} onClick={() => open(c)} lead={<Avatar c={c} />} title={c.name ?? c.symbol ?? "NFT collection"}
+          sub={`#${c.launch} · ${c.nft?.maxSupply ? `${c.nft.minted ?? 0}/${c.nft.maxSupply}` : c.nft?.minted ?? "?"} minted · ${ago(c.at)}`}
+          trail={c.nft?.price ? `${c.nft.price.amount} ${c.nft.price.unit}` : undefined} />
+      ))}
+    </Group>
+  );
+}
+
 function LaunchersTab({ feed }: { feed: Feed | null }) {
   const rows = feed?.launchers ?? [];
   return (
@@ -300,9 +389,10 @@ function AlertsTab({ feed }: { feed: Feed | null }) {
   );
 }
 
-const TABS: { id: Tab; label: string; glyph: "scope" | "photo" | "people" | "bell"; title: string; line: string }[] = [
+const TABS: { id: Tab; label: string; glyph: "scope" | "photo" | "people" | "bell" | "dex"; title: string; line: string }[] = [
   { id: "calls", label: "Calls", glyph: "scope", title: "Sniper", line: "Every IMD launch, checked" },
-  { id: "nfts", label: "NFTs", glyph: "photo", title: "NFT Launches", line: "Collections built on IMD" },
+  { id: "dex", label: "Dex", glyph: "dex", title: "Dex", line: "Every IMD token, priced on chain" },
+  { id: "nfts", label: "NFTs", glyph: "photo", title: "NFT Launches", line: "Every collection built on IMD" },
   { id: "launchers", label: "Launchers", glyph: "people", title: "Launchers", line: "Who launches, and how it went" },
   { id: "alerts", label: "Alerts", glyph: "bell", title: "Alerts", line: "Get the calls first" },
 ];
@@ -312,6 +402,7 @@ export function SniperPage() {
   const q = useMemo(() => new URLSearchParams(location.search), []);
   const [tab, setTab] = useState<Tab>(() => (TABS.some((t) => t.id === q.get("tab")) ? (q.get("tab") as Tab) : "calls"));
   const [sheet, setSheet] = useState<Call | null>(null);
+  const [row, setRow] = useState<DexRow | null>(null);
   const [folded, setFolded] = useState(false);
   const title = useRef<HTMLHeadingElement>(null);
   const t = TABS.find((x) => x.id === tab)!;
@@ -340,7 +431,8 @@ export function SniperPage() {
           <p className="ios-sub">{t.line}{feed?.holder ? " · Holder" : ""}</p>
         </div>
         {tab === "calls" && <CallsTab feed={feed} open={setSheet} />}
-        {tab === "nfts" && <CallsTab feed={feed} open={setSheet} nfts />}
+        {tab === "nfts" && <NftsTab feed={feed} open={setSheet} />}
+        {tab === "dex" && <DexTab open={setRow} />}
         {tab === "launchers" && <LaunchersTab feed={feed} />}
         {tab === "alerts" && <AlertsTab feed={feed} />}
       </main>
@@ -353,6 +445,7 @@ export function SniperPage() {
         ))}
       </nav>
       {sheet && <Sheet c={sheet} onClose={() => setSheet(null)} />}
+      {row && <Sheet c={dexCall(row)} dex={{ onDexScreener: row.onDexScreener, dexscreener: row.links.dexscreener }} onClose={() => setRow(null)} />}
     </div>
   );
 }

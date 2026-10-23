@@ -47,6 +47,30 @@ export async function keyFromInitialize(rpc: Rpc, poolId: Hex, nearBlock: bigint
   return null;
 }
 
+/**
+ * The pools a token is in, on either side, from the PoolManager's Initialize events from `fromBlock` on (a
+ * token's pools are usually made right after it). DexScreener indexes only some Uniswap v4 pools: this
+ * finds the rest on chain.
+ */
+export async function poolsOfToken(rpc: Rpc, token: Address, fromBlock: bigint, head: bigint, chunks = 6): Promise<{ key: PoolKey; id: Hex; block: number }[]> {
+  const t = pad(lc(token), { size: 32 });
+  const out: { key: PoolKey; id: Hex; block: number }[] = [];
+  for (let i = 0n; i < BigInt(chunks); i++) {
+    const from = fromBlock + i * MAX_LOG_RANGE;
+    if (from > head) break;
+    const to = from + MAX_LOG_RANGE - 1n > head ? head : from + MAX_LOG_RANGE - 1n;
+    for (const topics of [[INITIALIZE_TOPIC, null, t], [INITIALIZE_TOPIC, null, null, t]] as (Hex | null)[][]) {
+      const logs = await rpc.logs({ address: V4.poolManager, topics, fromBlock: from, toBlock: to }).catch(() => []);
+      for (const l of logs) {
+        const [fee, tickSpacing, hooks] = decodeAbiParameters([{ type: "uint24" }, { type: "int24" }, { type: "address" }, { type: "uint160" }, { type: "int24" }], l.data) as unknown as [number, number, Address];
+        out.push({ key: { currency0: lc(`0x${l.topics[2]!.slice(26)}`), currency1: lc(`0x${l.topics[3]!.slice(26)}`), fee: Number(fee), tickSpacing: Number(tickSpacing), hooks: lc(hooks) }, id: l.topics[1]! as Hex, block: l.blockNumber });
+      }
+    }
+    if (out.length) break;
+  }
+  return out;
+}
+
 /** Pools initialised with this hook, from its deploy block onwards (a hook's pools are usually created right after it). */
 export async function poolsOfHook(rpc: Rpc, hook: Address, fromBlock: bigint, head: bigint, chunks = 4): Promise<{ key: PoolKey; id: Hex; block: number }[]> {
   const out: { key: PoolKey; id: Hex; block: number }[] = [];

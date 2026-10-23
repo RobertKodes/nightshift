@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { TOPICS, type Topic, parseSub, publicKey, subscribe, subscribed, unsubscribe } from "./push.js";
 import { type Sniper, publicCall, sniperStats } from "./sniper.js";
-import { holds, quoteUsd } from "./sniper-live.js";
+import type { Dex } from "./sniper-dex.js";
+import { holds, quotePrices } from "./sniper-live.js";
 import { IMD_TOKEN } from "./services/imd.js";
 import { NATIVE } from "./services/v4pool.js";
 import { config } from "./config.js";
@@ -13,6 +14,7 @@ type Helpers = {
   /** The signed-in wallet (session cookie), if any. */
   owner: string | null;
   sniper: Sniper | null;
+  dex: Dex | null;
 };
 
 /**
@@ -25,8 +27,7 @@ export async function sniperRoutes(req: IncomingMessage, res: ServerResponse, p:
     if (h.limited(req, "sniper", 120, 60_000)) { h.json(res, 429, { error: "slow down" }); return true; }
     const holder = h.owner ? await holds(h.owner).catch(() => false) : false;
     const calls = h.sniper?.calls(holder) ?? [];
-    const ethUsd = await quoteUsd(NATIVE);
-    const usdOf = (q: string) => (q === NATIVE ? ethUsd : q === IMD_TOKEN ? config.imdUsd : 0);
+    const usdOf = await quotePrices([NATIVE, IMD_TOKEN, ...calls.map((c) => c.pool?.quote).filter((q): q is `0x${string}` => Boolean(q))]);
     h.json(res, 200, {
       live: Boolean(h.sniper), holder, delayMinutes: Math.round(config.sniperDelayMs / 60_000),
       /** Calls holders can already see and this visitor cannot yet. */
@@ -36,6 +37,17 @@ export async function sniperRoutes(req: IncomingMessage, res: ServerResponse, p:
       launchers: (h.sniper?.launchers(holder) ?? []).slice(0, 50),
       indexed: h.sniper?.indexed() ?? 0,
     });
+    return true;
+  }
+  if (p === "/api/sniper/dex" && req.method === "GET") {
+    if (h.limited(req, "sniper", 120, 60_000)) { h.json(res, 429, { error: "slow down" }); return true; }
+    const url = new URL(req.url ?? "/", "http://x");
+    const holder = h.owner ? await holds(h.owner).catch(() => false) : false;
+    const usdOf = await quotePrices([NATIVE, IMD_TOKEN, ...(h.dex?.quotes() ?? [])]);
+    const sort = (["mcap", "new", "move", "safe"] as const).find((s) => s === url.searchParams.get("sort")) ?? "mcap";
+    const view = h.dex?.view({ sort, q: url.searchParams.get("q")?.slice(0, 64) ?? "", limit: 150, hideNewerThan: holder ? undefined : Date.now() - config.sniperDelayMs },
+      usdOf);
+    h.json(res, 200, { live: Boolean(h.dex), holder, ...(view ?? { count: 0, tokens: [], nfts: [], verdicts: 0 }) });
     return true;
   }
   if (p === "/api/push/key" && req.method === "GET") { h.json(res, 200, { key: publicKey() }); return true; }

@@ -535,7 +535,7 @@ export function serve(engine: Engine) {
       // Reads that reach the chain or IMD when their cache is cold: plenty for pages, not for a loop.
       if (["/api/staked", "/api/token/overview", "/api/token", "/api/frogs", "/api/frogs/claims", "/api/frogs/staking", "/api/impact", "/api/landing"].includes(p) && limited(req, "reads", 240, 60_000)) return json(res, 429, { error: "slow down" });
 
-      if ((p === "/api/sniper" || p.startsWith("/api/push/")) && await sniperRoutes(req, res, p, { json, body, limited, owner: caller?.via === "session" ? caller.addr : null, sniper: engine.sniper })) return;
+      if ((p === "/api/sniper" || p.startsWith("/api/sniper/") || p.startsWith("/api/push/")) && await sniperRoutes(req, res, p, { json, body, limited, owner: caller?.via === "session" ? caller.addr : null, sniper: engine.sniper, dex: engine.dex })) return;
       // ---- the landing page's live numbers: real where they can be, labelled where simulated
       if (await serviceRoutes(req, res, p, { url, base: config.publicUrl, ip: clientIp(req), limited })) return;
       if (p === "/api/landing") return json(res, 200, await landing(engine));
