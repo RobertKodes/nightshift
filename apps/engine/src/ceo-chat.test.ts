@@ -51,6 +51,8 @@ describe("the CEO chat's buttons", () => {
     expect(actions).toHaveLength(2);
     expect(actions[0]).toMatchObject({ type: "post", where: "bluesky" });
     expect((actions[0] as { text: string }).text).toBe("Thread 1/3: Most roofers chase dead leads.\n\n1/ Pull this week's permits from your county site.\n2/ Call the owner, not the GC.");
+    // a button cut off at the end of the answer is dropped, not shown half-written
+    expect(parseAnswer("Do this.\n[TODO | Record a flip-through]\n[TODO | Create 3 pins: (1) a tablet", company(), [])).toMatchObject({ text: "Do this.", actions: [{ type: "todo", text: "Record a flip-through" }] });
     // line breaks written as the two characters "\n" become real ones
     expect((parseAnswer("[POST x | One.\\n\\nTwo.]", company(), []).actions[0] as { text: string }).text).toBe("One.\n\nTwo.");
   });

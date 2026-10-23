@@ -77,6 +77,8 @@ export function parseAnswer(raw: string, c: Company, offers: MarketOffer[]): { t
     // a button runs to the first line that ends with "]" (a post may take several lines)
     let body = m[2]!, j = i;
     while (!closed.test(body) && j + 1 < lines.length && j < i + 25) body += `\n${lines[++j]}`;
+    // cut off at the end of the answer (the model ran out of room): dropped, not shown half-written
+    if (!closed.test(body) && j + 1 >= lines.length) break;
     if (!closed.test(body)) { keep.push(lines[i]!); continue; }
     i = j;
     const a = action(m[1]!.toUpperCase(), body.replace(closed, ""), c, offers);
@@ -134,7 +136,7 @@ export async function answerOwner(llm: Pick<LlmClient, "chat">, model: string, c
     ...history,
     { role: "user", content: text },
   ];
-  const r = await llm.chat({ model, messages, temperature: 0.5, maxTokens: 900 });
+  const r = await llm.chat({ model, messages, temperature: 0.5, maxTokens: 1600 });
   const { text: answer, actions } = parseAnswer(r.message.content ?? "", c, facts.offers);
   if (!answer && !actions.length) throw new Error("The CEO had nothing useful to say. Ask again in other words.");
   return { id: randomUUID(), at: now, from: "ceo", text: answer || "Here is what I would do:", ...(actions.length ? { actions } : {}), model: r.servedModel };
