@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { inStoreApp } from "../store";
 import { Icon } from "../Icon";
 import { authHeaders } from "../api";
 import { go, useRoute } from "../router";
@@ -133,6 +134,10 @@ const clock = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)); re
 
 /** On every page: your staked game is ready (take your seat), being dealt, or your stake is on its way. */
 export function StakedBanner() {
+  return inStoreApp ? null : <StakedBannerIn />;
+}
+
+function StakedBannerIn() {
   const path = useRoute(), mine = useMyStakes();
   useSeatedVersion();
   const [now, setNow] = useState(Date.now());

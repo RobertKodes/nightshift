@@ -171,7 +171,9 @@ function VerdictCard({ v }: { v: Verdict }) {
 
 export function VerdictPage() {
   const index = useIndex();
-  const [token, setToken] = useState(SHIFT);
+  // /services/verdict?token=0x… (from a NIGHT SNIPER call) opens on that token's free preview
+  const asked = new URLSearchParams(location.search).get("token")?.trim() ?? "";
+  const [token, setToken] = useState(isAddr(asked) ? asked : SHIFT);
   const [busy, setBusy] = useState<"" | "demo" | "preview">("");
   const [v, setV] = useState<Verdict | null>(null);
   const [pv, setPv] = useState<Preview | null>(null);
@@ -187,6 +189,7 @@ export function VerdictPage() {
       if (kind === "demo") { setV(d); setPv(null); } else { setPv(d); setV(null); }
     } catch { setErr("The service did not answer. Try again in a minute."); } finally { setBusy(""); }
   };
+  useEffect(() => { if (isAddr(asked)) void run("preview", asked); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="st-room">
       <Hero title="Token Verdict" deck="BEFORE YOU BUY" line="Safe, caution or avoid for an Ethereum token, with every reason tied to its evidence. Made for IMD launches and Uniswap v4 hook tokens, where nobody else looks.">

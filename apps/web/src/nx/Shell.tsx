@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { webOnly } from "../store";
 import { short } from "../api";
 import { InstallButton } from "../landing/app";
 import { BLUESKY_URL, Crescent, DEV_X_URL, NightFrog, OPENSEA_URL, TELEGRAM_URL, X_URL, useSwarm } from "../landing/chrome";
@@ -57,13 +58,13 @@ function RoomBar({ room, path }: { room: RoomId; path: string }) {
         <span><small>{r.deck}</small><b>{r.name}</b></span>
       </Link>
       <nav className={`nx-roomnav${open ? " open" : ""}`} aria-label={`${r.name} pages`}>
-        {r.nav.map((n) => (
+        {r.nav.filter((n) => !webOnly(n.to)).map((n) => (
           <Link key={n.to} to={n.to} className={isOn(path, n.to) ? "on" : ""} style={n.room ? ({ "--acc": ROOMS[n.room].accent } as React.CSSProperties) : undefined}>
             <NxIcon name={n.icon} size={16} /><span>{n.label}</span>
           </Link>
         ))}
       </nav>
-      {r.cta && <Link to={r.cta.to} className="nx-btn nx-btn-acc nx-roomcta"><NxIcon name={r.cta.icon} size={16} />{r.cta.label}</Link>}
+      {r.cta && !webOnly(r.cta.to) && <Link to={r.cta.to} className="nx-btn nx-btn-acc nx-roomcta"><NxIcon name={r.cta.icon} size={16} />{r.cta.label}</Link>}
     </div>
   );
 }
@@ -75,7 +76,7 @@ export function Footer({ room }: { room: RoomId | null }) {
         {ROOM_ORDER.map((id) => (
           <div key={id} className={room === id ? "here" : ""} style={{ "--acc": ROOMS[id].accent } as React.CSSProperties}>
             <b><i className="nx-dot" />{ROOMS[id].name}</b>
-            {ROOMS[id].nav.filter((n) => !n.room).map((n) => <Link key={n.to} to={n.to}>{n.label}</Link>)}
+            {ROOMS[id].nav.filter((n) => !n.room && !webOnly(n.to)).map((n) => <Link key={n.to} to={n.to}>{n.label}</Link>)}
           </div>
         ))}
         <div style={{ "--acc": "#a48bff" } as React.CSSProperties}>

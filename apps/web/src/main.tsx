@@ -12,6 +12,8 @@ import { Landing } from "./landing/Landing";
 import { McpPage } from "./McpPage";
 import { PublicPage } from "./PublicPage";
 import { useRoute } from "./router";
+import { webOnly } from "./store";
+import { WebOnlyPage } from "./StoreNote";
 import { SessionProvider } from "./session";
 import { SetupPage } from "./SetupPage";
 import { MarketPage } from "./MarketPage";
@@ -25,6 +27,7 @@ import { StakePage } from "./StakePage";
 import { ImpactPage } from "./ImpactPage";
 import { GuidePage } from "./GuidePage";
 import { TermsPage } from "./TermsPage";
+import { PrivacyPage } from "./PrivacyPage";
 import { SecurityPage } from "./SecurityPage";
 import { TokenomicsPage } from "./TokenomicsPage";
 import { GameRoomPage } from "./GameRoomPage";
@@ -55,6 +58,7 @@ const VerdictPage = lazy(() => import("./station/Services").then((x) => ({ defau
 const HookPage = lazy(() => import("./station/Services").then((x) => ({ default: x.HookPage })));
 const ShipPage = lazy(() => import("./ship/ShipPage").then((x) => ({ default: x.ShipPage })));
 const FeedPage = lazy(() => import("./station/Services").then((x) => ({ default: x.FeedPage })));
+const SniperPage = lazy(() => import("./station/Sniper").then((x) => ({ default: x.SniperPage })));
 
 function App() {
   const path = useRoute();
@@ -76,12 +80,15 @@ function App() {
   // NIGHT POKER: its own page and bar, the cards drawn in code (no three.js)
   // THE SHIP: the whole crew live in one isometric scene, full screen under the station bar (its own chunk)
   if (seg[0] === "ship") return <Suspense fallback={<div className="arc-boot" />}><ShipPage /></Suspense>;
+  // NIGHT SNIPER: an app screen of its own (iOS layout: its own bars, its own tabs)
+  if (seg[0] === "sniper") return <Suspense fallback={<div className="arc-boot" />}><SniperPage /></Suspense>;
   if (seg[0] === "games" && seg[1] === "poker") return <Suspense fallback={<div className="arc-boot" />}><PokerPage /></Suspense>;
   let page: React.ReactNode = <Home health={health} />;
   if (seg[0] === "co" && seg[1]) page = <CompanyPage id={seg[1]} health={health} />;
   if (seg[0] === "c" && seg[1]) page = <PublicPage slug={seg[1]} health={health} />;
   if (seg[0] === "mcp") page = <McpPage health={health} />;
   if (seg[0] === "terms") page = <TermsPage health={health} />;
+  if (seg[0] === "privacy") page = <PrivacyPage />;
   if (seg[0] === "security") page = <SecurityPage />;
   if (seg[0] === "setup") page = <SetupPage />;
   if (seg[0] === "market") page = <MarketPage />;
@@ -107,6 +114,8 @@ function App() {
   if (seg[0] === "league") page = <Suspense fallback={<div className="st-room" />}><LeaguePage id={seg[1]} /></Suspense>;
   if (seg[0] === "services") page = <Suspense fallback={<div className="st-room" />}>{seg[1] === "verdict" ? <VerdictPage /> : seg[1] === "hook" ? <HookPage /> : seg[1] === "imd-feed" ? <FeedPage /> : <ServicesPage />}</Suspense>;
   if (seg[0] === "arena") page = <Suspense fallback={<div className="docs"><p className="dim">Loading the arena…</p></div>}><ArenaPage /></Suspense>;
+  // the Play Store app leaves what moves money to the website
+  if (webOnly(path)) page = <WebOnlyPage path={path} />;
   const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "stake", "guide", "tokenomics", "games", "impact", "launchpad", "arena", "breakroom", "geek", "info", "economy", "command", "league", "forge", "watch"];
   const key = seg[0] === "staking" ? "stake" : seg[0] === "hr" ? "economy" : seg[0];
   const active: Active = seg[0] === "co" ? "company" : named.includes(key as Active) ? (key as Active) : "companies";

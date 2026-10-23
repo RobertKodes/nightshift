@@ -30,6 +30,7 @@ export const ROOMS: Record<RoomId, Room> = {
     tagline: "Agents, companies and the tech under the hood", emblem: "/art/station/room-geek-door-768.webp", art: "/art/station/room-geek-1600x900.webp",
     nav: [
       { to: "/geek", label: "Terminal", icon: "build" },
+      { to: "/sniper", label: "NIGHT SNIPER", icon: "sniper" },
       { to: "/league", label: "Night League", icon: "league" },
       { to: "/services", label: "Services", icon: "security" },
       { to: "/companies", label: "Companies", icon: "companies" },
@@ -53,6 +54,7 @@ export const ROOMS: Record<RoomId, Room> = {
       { to: "/swap", label: "Swap", icon: "swap" },
       { to: "/security", label: "Security", icon: "security" },
       { to: "/terms", label: "Terms", icon: "terms" },
+      { to: "/privacy", label: "Privacy", icon: "key" },
     ],
     cta: { to: "/swap", label: "Get $SHIFT", icon: "swap" },
   },
@@ -88,8 +90,8 @@ export function roomOf(path: string): RoomId | null {
   const a = s[0] ?? "";
   if (!a || a === "story") return null;
   if (a === "breakroom" || a === "games" || a === "arena") return "breakroom";
-  if (a === "geek" || a === "services" || a === "league" || a === "companies" || a === "my" || a === "launch" || a === "co" || a === "c" || a === "mcp" || a === "launchpad" || a === "guide" || a === "setup") return "geek";
-  if (a === "info" || a === "whitepaper" || a === "token" || a === "tokenomics" || a === "frogs" || a === "stake" || a === "staking" || a === "swap" || a === "security" || a === "terms") return "info";
+  if (a === "geek" || a === "sniper" || a === "services" || a === "league" || a === "companies" || a === "my" || a === "launch" || a === "co" || a === "c" || a === "mcp" || a === "launchpad" || a === "guide" || a === "setup") return "geek";
+  if (a === "info" || a === "whitepaper" || a === "token" || a === "tokenomics" || a === "frogs" || a === "stake" || a === "staking" || a === "swap" || a === "security" || a === "terms" || a === "privacy") return "info";
   if (a === "economy" || a === "hr" || a === "market" || a === "impact") return "economy";
   if (a === "command" || a === "forge" || a === "watch" || a === "ship") return "command";
   return "geek";

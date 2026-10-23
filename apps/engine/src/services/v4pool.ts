@@ -64,7 +64,7 @@ export async function poolsOfHook(rpc: Rpc, hook: Address, fromBlock: bigint, he
   return out;
 }
 
-/** Price of currency1 in currency0 units, decimals applied. */
+/** How much currency1 one currency0 is worth (the pool's own price), decimals applied. */
 export function price1in0(s: Slot0, dec0: number, dec1: number): number {
   const p = Number(s.sqrtPriceX96) / 2 ** 96;
   return (p * p) * 10 ** (dec0 - dec1);

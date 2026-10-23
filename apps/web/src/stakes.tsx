@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { inStoreApp } from "./store";
+import { StoreNote } from "./StoreNote";
 import { type Address, type Hex, createPublicClient, createWalletClient, custom, erc20Abi, formatUnits, getAddress, http, parseAbi, parseUnits, stringToHex } from "viem";
 import { mainnet } from "viem/chains";
 import { Icon } from "./Icon";
@@ -88,7 +90,12 @@ const keep = (game: StakeGame, matchId: Hex | null) => { try { if (matchId) loca
  * open it), wait for a rival (cancel before a join, refund after the hour), or accept an open one
  * (approve exactly, join). Once both stakes are in, the game hands over the seat.
  */
-export function StakeLobby({ game, token, name, tc, address, signIn, onSeat, theme, guide = game !== "pool" }: {
+/** In the Play Store app, staked matches are on the website. */
+export function StakeLobby(p: Parameters<typeof StakeLobbyIn>[0]) {
+  return inStoreApp ? <StoreNote what="Staked matches" path={`/games/${p.game}`} /> : <StakeLobbyIn {...p} />;
+}
+
+function StakeLobbyIn({ game, token, name, tc, address, signIn, onSeat, theme, guide = game !== "pool" }: {
   game: StakeGame; token: StakeToken; name: string; tc?: string; address: string | null; signIn: () => Promise<void>; onSeat: (s: Seat) => void; theme: "arc" | "nc";
   /** The three steps and the wallet line on top (NIGHT POOL's page draws its own steps around the lobby). */
   guide?: boolean;

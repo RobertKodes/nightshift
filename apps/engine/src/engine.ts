@@ -74,6 +74,7 @@ import { startNightWatch } from "./nightwatch.js";
 import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { type Anim, burnTotals, buyCard, chats, marketSnapshot, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
+import { liveSniper } from "./sniper-live.js";
 import { type Button, type CommandContext, type GroupMessage, type Reply, esc, telegram, telegramCommands, tgCall } from "./social.js";
 import { Connect } from "./connect.js";
 import type { Http } from "./channels.js";
@@ -123,6 +124,8 @@ export class Engine {
   readonly facilitator: CdpFacilitator | null = config.x402Facilitator === "cdp" ? new CdpFacilitator({ id: config.cdpApiKeyId, secret: config.cdpApiKeySecret }) : null;
   /** The bot's game commands: links to the games on the website, and the records Telegram players kept from the old Mini App (read only). */
   readonly gameBot = new GameBot({ profiles: new Profiles() });
+  /** NIGHT SNIPER: every new IMD launch checked and called (off in sim unless SNIPER=1). */
+  readonly sniper = config.sniper ? liveSniper() : null;
 
   constructor() {
     this.auth = new Auth(this.vault.material, this.store.apiKeys, () => this.store.markDirty());
@@ -254,6 +257,11 @@ export class Engine {
       });
       startCommunity();
       setInterval(() => void sweepRoom().catch((e) => console.error("watch room", e)), 3_600_000);
+    }
+    if (this.sniper) {
+      const sniper = this.sniper;
+      setTimeout(() => void sniper.tick().catch((e) => console.error("sniper", e)), 20_000);
+      setInterval(() => void sniper.tick().catch((e) => console.error("sniper", e)), 60_000);
     }
     // The daily digest of what the live companies did, from their records and the ledger (sim mode: a dry-run log only).
     startDigest(() => this.store.companies.values(), () => this.ledger.store.list(""));

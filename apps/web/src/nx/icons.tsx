@@ -45,6 +45,7 @@ const ICONS: Record<string, React.ReactNode> = {
   menu: <path d="M4 7h16M4 12h16M4 17h10" />,
   close: <path d="M5.5 5.5l13 13M18.5 5.5l-13 13" />,
   chevron: <path d="m6.5 9.5 5.5 5.5 5.5-5.5" />,
+  sniper: <><circle cx="12" cy="12" r="7.5" /><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4" /><circle cx="12" cy="12" r="1.6" {...A} /></>,
   setup: <><circle cx="12" cy="12" r="3.2" /><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M5.5 18.5l1.8-1.8M16.7 7.3l1.8-1.8" /><circle cx="12" cy="12" r="1.2" {...A} /></>,
 };
 

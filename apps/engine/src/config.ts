@@ -87,6 +87,12 @@ export const config = {
   digestHour: Math.min(23, Math.max(0, Math.floor(num(env.DIGEST_HOUR, 18)))),
   /** Mondays 09:00 UTC: the past week's changelog entries, posted and pinned in the community chat (changelog.ts); CHANGELOG_POST=0 turns it off. */
   changelogPost: (env.CHANGELOG_POST ?? "1") !== "0",
+  /** NIGHT SNIPER (sniper.ts): every new IMD launch checked and called. On in live mode unless SNIPER=0; SNIPER=1 runs it in sim too. */
+  sniper: (env.SNIPER ?? (env.NIGHTSHIFT_MODE === "live" ? "1" : "0")) !== "0",
+  /** How long holders' app has a call before the community chat and everyone else get it. */
+  sniperDelayMs: num(env.SNIPER_DELAY_MS, 180_000),
+  /** The Android app's signing certificates (SHA-256, AA:BB:… form, comma separated): the upload key and Play's app signing key. */
+  androidCertSha256: (env.ANDROID_CERT_SHA256 ?? "").split(",").map((x) => x.trim().toUpperCase()).filter((x) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(x)),
   /** Buys below this many dollars are not posted; one 🌙 per BUYBOT_EMOJI_USD dollars. */
   buyMinUsd: num(env.BUYBOT_MIN_USD, 0),
   /** The community guard: removes scams, spam and FUD in the public group and mutes repeat offenders. */

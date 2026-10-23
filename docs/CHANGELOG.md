@@ -2,6 +2,18 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-23 · NIGHT SNIPER: every IMD launch, checked
+- /sniper calls every new IMD launch on Ethereum the moment it goes live: safe, caution or avoid, with the reasons. It counts owner powers, a simulated buy and sell, sell tax, whale wallets and copycats of older launches; avoid calls get no buy button.
+- Each call reads the launch's Uniswap v4 hook in full (its risk, fees and what its owner can change) and names its launcher: the wallet that asked IMD for it, the share of the supply it keeps, and every other launch it made.
+- NFT launches are called too, with their supply, mint price and owner, and replies at 25%, 50% and 75% minted and when they sell out.
+- After the call, NIGHT SNIPER follows the pool on chain for a week and replies under the call at 2x, 3x, 5x, 10x and up, or when it falls 80%. A recap goes out every evening at 20:00 UTC.
+- Holders (a NIGHT FROG, a Night Watcher or $SHIFT above the holder line) get each call the moment it is made as a notification from the installed app; the community chat and everyone else get it 3 minutes later.
+- The page is laid out as an app: Calls, NFTs, Launchers and Alerts, in light or dark to match the phone.
+
+## 2026-10-23 · Rewards every 6 hours, frog alerts once a day
+- The keeper now splits NIGHTSHIFT fees every 6 hours instead of once a day, by the same fixed rule: 40% rewards, 20% dev, 20% treasury, 20% burn.
+- A frog its seller re-lists every few minutes gets one listing alert a day, and a new one only when its price drops. Sales are announced every time.
+
 ## 2026-10-22 · The site text matches what is live
 - The whitepaper, tokenomics, front page and menus now say what is live: the Forge and the Watch Room, the multichain swap with its 0.25% fee (none for NIGHT FROG or Night Watcher holders, or 5M+ $SHIFT), the Game Room's four games with 95% to the winner, and staking locks from 0 to 730 days.
 - Swap and staking got their own entries in the page index that AI agents read at /llms.txt.

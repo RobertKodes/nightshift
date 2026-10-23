@@ -20,6 +20,7 @@ export const EDITABLE = [
   "GUMROAD_CLIENT_ID", "GUMROAD_CLIENT_SECRET", "ETHERSCAN_API_KEY", "WATCHTOWER_URL",
   "HOUSE_GAMES", "HOUSE_GAMES_MAX_REAL", "WEEKLY_PRIZES", "PRIZE_HOURS", "DIGEST", "DIGEST_HOUR", "CHANGELOG_POST",
   "SWAP_FEE_BPS", "SWAP_FEE_WALLET", "LIFI_INTEGRATOR", "LIFI_API_KEY", "RELAY_API_KEY",
+  "SNIPER", "SNIPER_DELAY_MS", "ANDROID_CERT_SHA256",
 ] as const;
 export type SettingKey = (typeof EDITABLE)[number];
 /** Shown as set / not set, never sent back to the browser. */

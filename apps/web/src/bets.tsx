@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { inStoreApp } from "./store";
 import { type Address, type Hex, erc20Abi, formatUnits, parseAbi, parseUnits, stringToHex } from "viem";
 import { mainnet } from "viem/chains";
 import { Icon } from "./Icon";
@@ -81,7 +82,12 @@ function Soon({ names, theme }: { names?: [string, string]; theme: string }) {
  * The betting panel for one match. `game` is where the page watches it; the server answers with
  * the board it is really played on (an arena table on the site's chess board is "chess").
  */
-export function BetPanel({ game, id, theme }: { game: BetGame; id: string; theme: "nc" | "arc" | "ar" }) {
+/** No bets inside the Play Store app. */
+export function BetPanel(p: { game: BetGame; id: string; theme: "nc" | "arc" | "ar" }) {
+  return inStoreApp ? null : <BetPanelIn {...p} />;
+}
+
+function BetPanelIn({ game, id, theme }: { game: BetGame; id: string; theme: "nc" | "arc" | "ar" }) {
   const { address, signIn } = useSession();
   const [v, setV] = useState<View | null>(null);
   const [gone, setGone] = useState(false);

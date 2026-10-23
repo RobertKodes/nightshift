@@ -25,9 +25,11 @@
     "chess.js": "1.0.0-beta.8",
     "imd-mcp": "github:RobertKodes/imd-mcp#15fcbf9ba01f7a7e6089cc2afeef9acfc50d757f",
     "viem": "^2.21.54",
+    "web-push": "3.6.7",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/web-push": "^3.6.4",
     "pokersolver": "2.1.4"
   }
 }

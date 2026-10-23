@@ -19,3 +19,19 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request).then((r) => { if (r.ok) { const c = r.clone(); void caches.open(CACHE).then((x) => x.put(e.request, c)); } return r; })));
   }
 });
+
+// Notifications (NIGHT SNIPER calls): the server's note, and a tap opens its page on this site only.
+self.addEventListener("push", (e) => {
+  let n = {};
+  try { n = e.data ? e.data.json() : {}; } catch { n = { body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(n.title || "NIGHTSHIFT", { body: n.body || "", icon: "/app/icon-192.png", badge: "/app/icon-192.png", tag: n.tag, renotify: Boolean(n.tag), data: { url: n.url || "/sniper" } }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  let url = new URL("/sniper", location.origin);
+  try { const u = new URL(e.notification.data && e.notification.data.url, location.origin); if (u.origin === location.origin) url = u; } catch {}
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((ws) => {
+    const w = ws.find((x) => x.url.startsWith(location.origin) && "focus" in x);
+    return w ? w.navigate(url.href).then((x) => (x || w).focus()) : self.clients.openWindow(url.href);
+  }));
+});

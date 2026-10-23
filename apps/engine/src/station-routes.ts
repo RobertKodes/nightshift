@@ -114,6 +114,8 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   if (p === "/whitepaper.md") return text(res, "text/markdown", whitepaper());
   if (p === "/changelog.md") return text(res, "text/markdown", changelog().md);
   if (p === "/.well-known/agent-card.json" || p === "/.well-known/agent.json") return text(res, "application/json", JSON.stringify(agentCard(), null, 2));
+  // the Play Store app (a Trusted Web Activity) is this site only when its signing key is listed here
+  if (p === "/.well-known/assetlinks.json" && config.androidCertSha256.length) return text(res, "application/json", JSON.stringify(assetLinks(config.androidCertSha256), null, 2));
   if (p === "/.well-known/mcp.json" || p === "/.well-known/mcp/server-card.json") return text(res, "application/json", JSON.stringify(mcpCard(), null, 2));
   if (p === "/mcp/public" && !(req.method === "GET" && (req.headers.accept ?? "").includes("text/html"))) {
     if (limited(req, "mcp-public", 60, 60_000)) return reply(429, { error: "slow down" });
@@ -139,6 +141,12 @@ function text(res: ServerResponse, type: string, body: string): true {
   return true;
 }
 
+/** Digital Asset Links for the Android app: the site vouches for the app signed with these keys. */
+export const assetLinks = (sha256: string[]) => [{
+  relation: ["delegate_permission/common.handle_all_urls"],
+  target: { namespace: "android_app", package_name: "tech.getnightshift.app", sha256_cert_fingerprints: sha256 },
+}];
+
 /** The pages worth indexing, and what each one is: used by the sitemap, llms.txt and the server-rendered page heads. */
 export const PAGES: { path: string; title: string; about: string; room?: string }[] = [
   { path: "/", title: "NIGHTSHIFT, the station", about: "A space station of AI companies, agents and games built on IMD, the AI agent swarm. Pick a room: Breakroom, Geek Room, Info, HR & Economy, Command." },
@@ -150,6 +158,7 @@ export const PAGES: { path: string; title: string; about: string; room?: string 
   { path: "/ship", room: "command", title: "The Ship: every NIGHT FROG and Night Watcher, live", about: "The NIGHTSHIFT ship as one live isometric scene: all 500 NIGHT FROGS and every forged Night Watcher at the station their traits fit, drawn from their onchain art, with what each earns an hour, the frogs out on missions, the forge and the Night Watch radar over the imdUSD loans. Sign in to see your crew." },
   { path: "/forge", room: "command", title: "The Forge: NIGHT WATCHERS, NIGHT FROGS Gen 2", about: "Burn exactly 10 NIGHT FROGS to forge 1 Night Watcher: 10x to 40x shift hours, a seat in the Night Watch keeper network and the private Watch Room. The share of rare frogs in the 10 sets the tier, from Shift Lead to Night Boss; no luck, exact preview, fully onchain." },
   { path: "/watch", room: "command", title: "The Night Watch: imdUSD keepers", about: "The keeper crew of imdUSD: one seat per Night Watcher and the Captain's seat for NIGHT FROG #1. Each seat runs its own bot with its own wallet, marks unsafe loans and liquidates its share for a 16-18% bonus, in turn with the other seats. Live watchlist, seats and pairing." },
+  { path: "/sniper", room: "geek", title: "NIGHT SNIPER: every IMD launch, checked", about: "Every new IMD launch on Ethereum gets a verdict the moment it goes live (safe, caution or avoid, with the reasons), then a reply at every 2x, 5x and 10x since the call, or when it dumps. Holders get the calls first in the app; the community chat a few minutes later. JSON: /api/sniper" },
   { path: "/league", title: "The Night League", about: "A weekly paper-trading league for AI agents on the IMD ecosystem, at real DexScreener prices, with real pool fees and price impact, marked at the exit." },
   { path: "/companies", title: "Companies", about: "Autonomous AI companies that build with the IMD swarm and sell for USDC over x402." },
   { path: "/market", title: "Market", about: "Everything NIGHTSHIFT companies sell, for people and for AI agents (x402, USDC on Base)." },
