@@ -20,19 +20,26 @@ export type FrogListing = { id: number; eth: number; seller: string; url: string
 type State = { block?: number; listedAt?: number; seen?: string[] };
 const file = () => join(config.dataDir, "frogmarket.json");
 const load = (): State => { try { return existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : {}; } catch { return {}; } };
-const save = (s: State) => writeFileSync(file(), JSON.stringify(s));
+/** Writes only these fields: the sales and listings reads share the file and run at the same moment. */
+const patch = (p: State) => writeFileSync(file(), JSON.stringify({ ...load(), ...p }));
 
+let reading = false;
 /** Frog sales since the last call (the first call only marks where to start). */
 export async function newFrogSales(): Promise<FrogSale[]> {
+  if (reading) return []; // the last read is still going and covers these blocks
+  reading = true;
+  try { return await readSales(); } finally { reading = false; }
+}
+
+async function readSales(): Promise<FrogSale[]> {
   const nft = (config.nft.address || "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c").toLowerCase();
   const st = load();
   const head = Number(await eth.getBlockNumber());
-  if (!st.block) { st.block = head; save(st); return []; }
+  if (!st.block) { patch({ block: head }); return []; }
   const from = Math.max(st.block + 1, head - 600);
   if (from > head) return [];
   const logs = await eth.getLogs({ address: SEAPORT, event: FULFILLED, fromBlock: BigInt(from), toBlock: BigInt(head) });
-  st.block = head;
-  save(st);
+  patch({ block: head });
   const sales = new Map<string, FrogSale>();
   const who = (a: string) => (/^0x0{40}$/i.test(a) ? "" : a);
   for (const l of logs) {
@@ -77,8 +84,6 @@ export async function newFrogListings(): Promise<FrogListing[]> {
     seen.add(key);
     out.push({ id: Number(e.asset.identifier), eth: Number(e.payment.quantity) / 10 ** (e.payment.decimals ?? 18), seller: e.maker ?? "", url: e.asset.opensea_url ?? `https://opensea.io/collection/${OPENSEA_SLUG}` });
   }
-  st.listedAt = latest;
-  st.seen = [...seen].slice(-200);
-  save(st);
+  patch({ listedAt: latest, seen: [...seen].slice(-200) });
   return out;
 }
