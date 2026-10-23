@@ -157,6 +157,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "price", description: "Price, market cap, liquidity" },
     { command: "ca", description: "The official contract address" },
     { command: "links", description: "Website, X, Telegram, Bluesky" },
+    { command: "community", description: "Join the NIGHTSHIFT community on X" },
     { command: "games", description: "The Game Room: chess, pinball and pool" },
     { command: "pinball", description: "Space Pinball and its best players" },
     { command: "chess", description: "NIGHT CHESS" },

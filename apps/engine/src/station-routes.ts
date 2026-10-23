@@ -254,7 +254,7 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     "- IMD: https://imd.fun (docs: https://imd.fun/docs/llms.txt)",
     "- Source: https://github.com/RobertKodes/nightshift",
     `- IMD Watchtower (independent IMD status by NIGHTSHIFT): ${base}/imd-status/ · source: https://github.com/RobertKodes/imd-watchtower`,
-    "- X: https://x.com/nightshiftimd · Telegram: https://t.me/getnightshift",
+    "- X: https://x.com/nightshiftimd · X community: https://x.com/i/communities/1946355874932334723 · Telegram: https://t.me/getnightshift",
     "- Telegram bot @nightshiftimdbot: buy alerts, announcements and links to the games. The games are played on the website and its installable app (open the site and tap Install), not inside Telegram.",
     "- IMD ecosystem tokens, safety checks and launches for people: IMD Radar, https://www.imdradar.site (independent community tool)",
   ];

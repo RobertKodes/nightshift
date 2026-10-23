@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { webOnly } from "../store";
 import { short } from "../api";
 import { InstallButton } from "../landing/app";
-import { BLUESKY_URL, Crescent, DEV_X_URL, NightFrog, OPENSEA_URL, TELEGRAM_URL, X_URL, useSwarm } from "../landing/chrome";
+import { BLUESKY_URL, Crescent, DEV_X_URL, NightFrog, OPENSEA_URL, TELEGRAM_URL, X_COMMUNITY_URL, X_URL, useSwarm } from "../landing/chrome";
 import { Link, go } from "../router";
 import { useSession } from "../session";
 import { NxIcon } from "./icons";
@@ -92,6 +92,7 @@ export function Footer({ room }: { room: RoomId | null }) {
         <span className="nx-mark"><Crescent size={18} /><span>NIGHTSHIFT</span></span>
         <nav>
           <a href={X_URL} target="_blank" rel="noreferrer">X</a>
+          <a href={X_COMMUNITY_URL} target="_blank" rel="noreferrer">X Community</a>
           <a href={TELEGRAM_URL} target="_blank" rel="noreferrer">Telegram</a>
           <a href={BLUESKY_URL} target="_blank" rel="noreferrer">Bluesky</a>
           <a href={OPENSEA_URL} target="_blank" rel="noreferrer">OpenSea</a>

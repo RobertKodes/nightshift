@@ -799,7 +799,7 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
       nightFrogs: { about: "500 fully onchain NIGHT FROGS on Ethereum, minted only in IMD (2 IMD each, half burned). Holders get the frog half of rewards weekly by shift hours: #1 50x, Night Watchers (Gen 2, forged from 10 at /forge, never #1) 10x-40x by rarity and never less than their 10 frogs, #2-25 3x, #26-77 2x, the rest 1x; holding an IMD seat doubles it. Claim at /frogs.", minted: frogs?.minted ?? null, contract: config.nft.address || null },
       companies: { live: companies.length, costPerSwarmJob: "0.5 IMD", platformFee: `${config.platformFeeBps / 100}% of withdrawals; 0% for SHIFT and NIGHT FROGS holders`, start: `${u} (sign in with a wallet, press Launch a company)` },
       imdPriceUsd: config.imdUsd,
-      links: { website: u, tokenomics: `${u}/tokenomics`, stake: `${u}/stake`, swap: `${u}/swap`, frogs: `${u}/frogs`, guide: `${u}/guide`, telegram: config.telegramUrl || "t.me/getnightshift", x: config.xUrl || null },
+      links: { website: u, tokenomics: `${u}/tokenomics`, stake: `${u}/stake`, swap: `${u}/swap`, frogs: `${u}/frogs`, guide: `${u}/guide`, telegram: config.telegramUrl || "t.me/getnightshift", x: config.xUrl || null, xCommunity: config.xCommunityUrl },
       forge: {
         status: forgeOn() ? "OPEN" : "not open yet",
         what: "Burn 10 NIGHT FROGS + 2 IMD (1 IMD burned, 1 to the treasury) to forge 1 Night Watcher (NIGHT FROGS Gen 2). You see the exact Night Watcher before you sign. The planner on the page picks your best 10.",

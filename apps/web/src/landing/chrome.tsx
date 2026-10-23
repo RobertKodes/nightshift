@@ -52,6 +52,8 @@ export function useSwarm() {
 
 const DOCS = "/guide";
 export const X_URL = "https://x.com/nightshiftimd";
+/** The NIGHTSHIFT community on X. */
+export const X_COMMUNITY_URL = "https://x.com/i/communities/1946355874932334723";
 export const TELEGRAM_URL = "https://t.me/getnightshift";
 export const TIKTOK_URL = "https://www.tiktok.com/@getnightshift.tech";
 export const OPENSEA_URL = "https://opensea.io/collection/night-frogs-825445489";
@@ -64,6 +66,9 @@ function Socials() {
     <div className="ns-social">
       <a href={X_URL} target="_blank" rel="noreferrer" aria-label="NIGHTSHIFT on X" title="Follow on X">
         <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-6.4L6.3 22H3.2l7.3-8.3L2.8 2h6.4l4.4 5.9L18.9 2Zm-1.1 18.1h1.7L7.3 3.8H5.5l12.3 16.3Z"/></svg>
+      </a>
+      <a href={X_COMMUNITY_URL} target="_blank" rel="noreferrer" aria-label="The NIGHTSHIFT community on X" title="Join the X community" className="ns-social-x">
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8 13c-2.7 0-6 1.3-6 3.5V19h12v-2.5C14 14.3 10.7 13 8 13Zm8 0c-.4 0-.8 0-1.3.1 1.4.8 2.3 2 2.3 3.4V19h5v-2.5c0-2.2-3.3-3.5-6-3.5Z"/></svg>
       </a>
       <a href={TELEGRAM_URL} target="_blank" rel="noreferrer" aria-label="NIGHTSHIFT on Telegram" title="Join the Telegram">
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.7.8l-4.8-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9 8.9-8c.4-.3-.1-.5-.6-.2L6.5 13.2 1.8 11.7c-1-.3-1-1 .2-1.5L20.6 3c.9-.3 1.6.2 1.3 1.3Z"/></svg>
@@ -233,6 +238,7 @@ export function SiteFooter() {
       <Link to="/" className="ns-logo"><Crescent size={26} /><span>NIGHTSHIFT</span><small>AUTONOMOUS COMPANIES<br />FOR A BRIGHTER TOMORROW</small></Link>
       <nav>
         <a href={X_URL} target="_blank" rel="noreferrer">X</a>
+        <a href={X_COMMUNITY_URL} target="_blank" rel="noreferrer">X COMMUNITY</a>
         <a href={TELEGRAM_URL} target="_blank" rel="noreferrer">TELEGRAM</a>
         <a href={TIKTOK_URL} target="_blank" rel="noreferrer">TIKTOK</a>
         <a href={BLUESKY_URL} target="_blank" rel="noreferrer">BLUESKY</a>

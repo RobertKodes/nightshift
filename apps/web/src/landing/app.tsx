@@ -6,6 +6,7 @@ import { useSession } from "../session";
 import type { Active } from "./chrome";
 
 const X_URL = "https://x.com/nightshiftimd";
+const X_COMMUNITY_URL = "https://x.com/i/communities/1946355874932334723";
 const TELEGRAM_URL = "https://t.me/getnightshift";
 
 /** The four tabs people use most; everything else lives under More. */
@@ -87,6 +88,7 @@ export function AppTabs({ active }: { active: Active }) {
             </div>
             <div className="app-social">
               <a href={X_URL} target="_blank" rel="noreferrer">X</a>
+              <a href={X_COMMUNITY_URL} target="_blank" rel="noreferrer">X Community</a>
               <a href={TELEGRAM_URL} target="_blank" rel="noreferrer">Telegram</a>
               <a href="https://opensea.io/collection/night-frogs-825445489" target="_blank" rel="noreferrer">OpenSea</a>
               <InstallSite />

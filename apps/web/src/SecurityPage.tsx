@@ -36,7 +36,7 @@ export function SecurityPage() {
           <li>Approvals are for the <b>exact amount</b> of what you are doing, never unlimited. The one exception is Uniswap's own Permit2 contract when you sell, the same as on any Uniswap swap.</li>
           <li>Sign-in is a plain text message. It never moves funds.</li>
           <li>We never ask for your seed phrase or private key, in the site, in Telegram or anywhere else.</li>
-          <li>The only site is <b>getnightshift.tech</b>. Official links: <a href="https://x.com/nightshiftimd" target="_blank" rel="noreferrer">X</a> · <a href="https://t.me/getnightshift" target="_blank" rel="noreferrer">Telegram</a> · <a href="https://www.tiktok.com/@getnightshift.tech" target="_blank" rel="noreferrer">TikTok</a> · <a href="https://github.com/RobertKodes/nightshift" target="_blank" rel="noreferrer">open source code</a>.</li>
+          <li>The only site is <b>getnightshift.tech</b>. Official links: <a href="https://x.com/nightshiftimd" target="_blank" rel="noreferrer">X</a> · <a href="https://x.com/i/communities/1946355874932334723" target="_blank" rel="noreferrer">X Community</a> · <a href="https://t.me/getnightshift" target="_blank" rel="noreferrer">Telegram</a> · <a href="https://www.tiktok.com/@getnightshift.tech" target="_blank" rel="noreferrer">TikTok</a> · <a href="https://github.com/RobertKodes/nightshift" target="_blank" rel="noreferrer">open source code</a>.</li>
         </ul>
         <h4>Report a problem</h4>
         <p>Found a bug or a fake site? Tell us in the <a href="https://t.me/getnightshift" target="_blank" rel="noreferrer">Telegram group</a> or open an issue on <a href="https://github.com/RobertKodes/nightshift/issues" target="_blank" rel="noreferrer">GitHub</a>.</p>

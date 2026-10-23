@@ -93,7 +93,7 @@ export async function answer(llm: LlmClient, model: string, question: string, fa
  * allows the host and its subdomains.
  */
 export const ALLOWED_HOSTS = [
-  "getnightshift.tech", "x.com/nightshiftidm", "twitter.com/nightshiftidm", "t.me/getnightshift", "bsky.app", "imd.fun", "dexscreener.com",
+  "getnightshift.tech", "x.com/nightshiftimd", "twitter.com/nightshiftimd", "x.com/i/communities/1946355874932334723", "t.me/getnightshift", "bsky.app", "imd.fun", "dexscreener.com",
   "opensea.io", "uniswap.org", "etherscan.io", "basescan.org", "github.com/robertkodes",
 ];
 /** What a reply may not claim, unless the sentence denies it ("there is no airdrop", "never share your seed phrase"). */

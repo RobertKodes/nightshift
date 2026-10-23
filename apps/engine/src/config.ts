@@ -113,6 +113,8 @@ export const config = {
   /** Pin each X raid in the community chat (the bot needs the pin right). */
   raidPin: (env.RAID_PIN ?? "1") === "1",
   xUrl: env.X_URL || "https://x.com/nightshiftimd",
+  /** The NIGHTSHIFT community on X. */
+  xCommunityUrl: env.X_COMMUNITY_URL || "https://x.com/i/communities/1946355874932334723",
   telegramUrl: env.TELEGRAM_URL || "https://t.me/getnightshift",
   /** WalletConnect (Reown) project id: phones and the installed game connect a wallet app with it. */
   // the Reown (WalletConnect) project of getnightshift.tech: a public id, a setting overrides it
