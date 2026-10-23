@@ -39,7 +39,7 @@ How you answer:
 - Only these accounts can be connected here: ${CONNECTABLE.join(", ")}. For any other place (Pinterest, TikTok, a forum), give a TODO.
 After the answer, add up to 4 buttons, each starting on its own line, exactly in these forms, and only ones that fit what you said (a POST may run over several lines and ends with "]"):
 [ORDER research | what the swarm should research, 20-300 characters]
-[ORDER product | name | price in USD | tool, template or dataset | one-line pitch | what goes inside, 20-600 characters]
+[ORDER product | name | price in USD | planner, tool, template or dataset | one-line pitch | what goes inside, 20-600 characters]   (a planner is a hyperlinked digital planner PDF the NIGHTSHIFT studio makes in-house, no swarm cost)
 [ORDER site]
 [ORDER site change | what to change, 20-300 characters]
 [TODO | one thing only the owner can do]
@@ -120,7 +120,7 @@ function action(kind: string, rest: string, c: Company, offers: MarketOffer[]): 
     const priceUsd = Number(price.replace(/[$\s]/g, ""));
     const brief = inside.join(" | ").trim();
     // "Notion template", "a dataset (CSV)": the kind named anywhere in it
-    const productKind = (["template", "dataset", "tool"] as const).find((k) => pk.toLowerCase().includes(k)) ?? (/\bdata\b|csv|sheet/i.test(pk) ? "dataset" : "tool");
+    const productKind = (["planner", "template", "dataset", "tool"] as const).find((k) => pk.toLowerCase().includes(k)) ?? (/\bdata\b|csv|sheet/i.test(pk) ? "dataset" : "tool");
     if (!ok(name, 3, 80) || !(priceUsd >= 1 && priceUsd <= 499) || !ok(pitch, 8, 240) || !ok(brief, 20, 1500)) return null;
     return { id, type: "order", kind: "build_product", title: `Build "${name}"`, brief, name, pitch, priceUsd: Math.round(priceUsd * 100) / 100, productKind };
   }

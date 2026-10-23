@@ -12,7 +12,7 @@ export interface Decision {
   why: string;
   /** What the swarm should build or change, in plain words. */
   brief: string;
-  product?: { name: string; kind: ProductKind; pitch: string; priceUsd: number };
+  product?: { name: string; kind: ProductKind; pitch: string; priceUsd: number; format?: "planner" };
   productId?: string;
   priceUsd?: number;
   post?: string;
@@ -238,7 +238,7 @@ export function heuristicDecision(c: Company, s: CompanyStats, now = Date.now())
 const SYSTEM = `You are the CEO of a one-person online company that runs itself. Each shift you choose exactly ONE next move that most increases revenue within budget.
 Moves:
 - research: commission market research from the IMD swarm (costs one IMD order)
-- build_product: commission a product buyers use from the IMD swarm, then sell it (costs one IMD order). product.kind is "tool" (a small hosted web tool: a checker, calculator, generator, planner, finder), "template" or "dataset"; never a report: research is an input, not a product
+- build_product: commission a product buyers use from the IMD swarm, then sell it (costs one IMD order). product.kind is "tool" (a small hosted web tool: a checker, calculator, generator, planner, finder), "template" or "dataset"; never a report: research is an input, not a product. Or set product.format to "planner" (with kind "template"): the NIGHTSHIFT studio designs and renders a hyperlinked digital planner PDF for the niche in-house, no swarm order (year, months, weeks, days, the niche's own trackers and pages, listing images included); the brief says who it is for and what the niche needs on its pages
 - build_site: commission the landing page (costs one IMD order; only if there is none)
 - improve_site: commission a change to the existing page (costs one IMD order)
 - marketing: write one post for the audience (free)
@@ -277,6 +277,8 @@ ${KNOW_HOW}` },
       d.product.priceUsd = Math.min(499, Math.max(1, Number(d.product.priceUsd) || 9));
       // the owner's rule: products are things buyers use, so a report the model asks for is built as a tool
       if (!["tool", "template", "dataset"].includes(d.product.kind)) d.product.kind = "tool";
+      if (d.product.format === "planner") d.product.kind = "template";
+      else delete d.product.format;
     }
     return { decision: { ...d, brief: d.brief ?? "" }, costUsd: res.costUsd, servedModel: res.servedModel };
   } catch {

@@ -118,9 +118,15 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
       <div className="grid products">
         {c.products.length === 0 ? <div className="card empty">The first product ships tonight.</div> : c.products.map((p) => (
           <div key={p.id} id={p.id} className="card product">
-            <span className="pill">{p.kind}</span>
+            <span className="pill">{p.format ?? p.kind}</span>
             <h4>{p.name}</h4>
             <p>{p.pitch}</p>
+            {p.studio && (
+              <>
+                <div className="studio-shots">{p.studio.images.map((src, i) => <a key={src} href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt={`${p.name}: ${["the planner", "what's inside", "what's included"][i] ?? "preview"}`} loading="lazy" width={640} height={640} /></a>)}</div>
+                <span className="faint studio-facts">{p.studio.pages} pages · {p.studio.links.toLocaleString("en-US")} links · {p.studio.files.length} PDFs (Monday and Sunday start) · GoodNotes, Notability, print</span>
+              </>
+            )}
             <div className="buy-row">
               <span className="price">{usd(p.priceUsd)}</span>
               <button className="btn primary" onClick={() => buy(p)}>{health?.mode === "sim" ? "Buy (demo)" : "Buy with USDC"}</button>

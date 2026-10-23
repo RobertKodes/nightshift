@@ -37,6 +37,8 @@ export interface ShiftDeps {
    * pay today (no USDC, or its AI limit for the day is spent): the CEO then thinks with the free model.
    */
   brain?: (c: Company) => Promise<Brain | null>;
+  /** The NIGHTSHIFT studio: makes a planner in-house and calls finishStudio when it is done. */
+  studio?: { build: (c: Company, t: Task, p: Product, decision: Decision) => void };
 }
 
 export interface Brain {
@@ -220,6 +222,20 @@ async function start(c: Company, d: ShiftDeps, decision: Decision, mind: Task["m
   if (decision.kind === "research" && d.market) {
     t.imd = { action: order.action, input: order.input };
     if ((await shopFirst(c, t, decision.brief || decision.title, d, approved)) !== "none") return t;
+  }
+
+  if (decision.kind === "build_product" && decision.product?.format === "planner" && d.studio) {
+    const p: Product = {
+      id: randomUUID(), name: decision.product.name, kind: "template", format: "planner", pitch: decision.product.pitch, priceUsdc: usdc(decision.product.priceUsd),
+      status: "building", deliverableUrl: null, taskId: t.id, sales: 0, revenueUsdc: 0n, createdAt: now(d),
+    };
+    c.products.push(p);
+    t.productId = p.id;
+    t.studio = { format: "planner", at: now(d), brief: decision.brief };
+    touch(c, t, d, { status: "building", activity: "the studio is designing the planner" });
+    note(c, d, "decision", `Making "${p.name}" in the NIGHTSHIFT studio: a hyperlinked planner, designed for ${c.audience}. No swarm order, so no IMD is spent.`);
+    d.studio.build(c, t, p, decision);
+    return t;
   }
 
   if (decision.kind === "build_product" && decision.product) {
@@ -505,6 +521,22 @@ export async function ownerBuy(c: Company, d: ShiftDeps, sellerId: string, produ
   note(c, d, "decision", `Shift ${c.cycle}, ordered by the owner: buy "${o.product.name}" from ${o.seller.name} for ${usd(o.product.priceUsdc)}.`);
   await payMarket(c, t, d, true);
   return t;
+}
+
+/** The studio finished (or could not finish) a planner: the product goes live with its files, or is dropped. Once only. */
+export function finishStudio(c: Company, t: Task, d: ShiftDeps, r: { ok: true; summary: string } | { ok: false; error: string }): void {
+  if (t.status !== "building" || !t.studio) return;
+  const p = c.products.find((x) => x.id === t.productId);
+  if (r.ok && p) {
+    p.status = "live";
+    touch(c, t, d, { status: "done", activity: null, error: null, result: { files: {}, note: r.summary } });
+    note(c, d, "result", `Studio: "${p.name}" is on sale. ${r.summary}`);
+  } else {
+    touch(c, t, d, { status: "failed", activity: null, error: r.ok ? "the product is gone" : r.error.slice(0, 300) });
+    dropProduct(c, t);
+    note(c, d, "warning", `The studio could not make "${t.title}": ${r.ok ? "the product is gone" : r.error.slice(0, 200)}. Nothing was spent.`);
+  }
+  d.emit(c, "company", null);
 }
 
 /** A payment that was sent never landed: nothing was charged, the limit is back, and the next shift starts fresh. */

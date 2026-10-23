@@ -9,6 +9,9 @@ export interface TaskView {
 }
 export interface ProductView { id: string; name: string; kind: string; pitch: string; priceUsdc: string; priceByOwner?: boolean; status: string; deliverableUrl: string | null; sales: number; revenueUsdc: string; createdAt: number }
 export interface JournalView { at: number; cycle: number; kind: string; text: string }
+/** A product the NIGHTSHIFT studio made: its PDFs' facts and its listing images. */
+export interface StudioView { pages: number; links: number; files: string[]; mb: number; year: number; images: string[] }
+
 export interface Policy {
   dailyBudgetUsd: number; approvalOverUsd: number; autopilot: boolean; shiftMinutes: number;
   /** Buy research from another company on the market first, within these USDC limits. */
@@ -52,7 +55,7 @@ export interface CompanyFull {
 
 export interface CompanyCard {
   id: string; slug: string; name: string; mission: string; status: string; cycle: number; site: string | null;
-  products: { id: string; name: string; priceUsd: number; sales: number; b2bSales?: number; buyUrl: string; pitch: string; kind: string }[];
+  products: { id: string; name: string; priceUsd: number; sales: number; b2bSales?: number; buyUrl: string; pitch: string; kind: string; format?: string; studio?: StudioView }[];
   pnl: { revenueUsd: number; spentUsd: number; sales: number }; nextShiftAt: number | null;
   working: { title: string; status: string; activity: string | null } | null; createdAt: number; wallet: string;
   /** The signed-in viewer owns it: the card opens the owner's view instead of the public page. */
@@ -137,7 +140,7 @@ export interface DeskCompany {
   /** Resting: the saver found nothing new worth paying for, or the day's budget is spent. A shift the owner runs ends it. */
   rest: { until: number; why: "saver" | "budget"; reason?: string | null } | null;
   policy: Policy; site: string | null; alerts: boolean;
-  products: { id: string; name: string; pitch: string; kind: string; status: string; priceUsd: number; priceByOwner: boolean; sales: number; revenueUsd: number; b2bSales: number; packaged: boolean }[];
+  products: { id: string; name: string; pitch: string; kind: string; status: string; priceUsd: number; priceByOwner: boolean; sales: number; revenueUsd: number; b2bSales: number; packaged: boolean; format?: string; studio?: StudioView }[];
   pnl: { revenueUsd: number; spentUsd: number; profitUsd: number };
   /** Bought from and sold to other NIGHTSHIFT companies, apart from revenue from people and agents. */
   b2b: { bought: { count: number; usd: number; items: B2bItem[] }; sold: { count: number; usd: number; items: B2bItem[] }; usdcUsd: number };

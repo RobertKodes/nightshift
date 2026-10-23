@@ -9,7 +9,7 @@ import {
   APP_PASSWORD, ApiError, BSKY, type BskySession, DISCORD_HOOK, type Http, bskyBotLabel, bskyLogin, bskyPost, bskyRecord, bskyRefresh, clean, discordBody, discordHook, discordPost,
   mastoApp, mastoAuthorizeUrl, mastoBody, mastoBot, mastoInstance, mastoMe, mastoPost, mastoRevoke, mastoToken, pushedBack, tgBody, tgChannel, tgChatId, tgPost,
 } from "./channels.js";
-import { GUMROAD_SCOPES, GumroadApi, type GumroadSale, type GumroadToken, bookGumroadSale, draftFields, gumroadAuthorizeUrl, gumroadCents, gumroadDescription, gumroadExchange, pingOk, pingSig, prohibited, syncKey, uploadFile } from "./gumroad.js";
+import { GUMROAD_SCOPES, GumroadApi, type GumroadSale, type GumroadToken, bookGumroadSale, coverPng, draftFields, gumroadAuthorizeUrl, gumroadCents, gumroadDescription, gumroadExchange, pingOk, pingSig, prohibited, syncKey, uploadFile } from "./gumroad.js";
 
 /**
  * Connections: accounts a company's owner made and connected (Gumroad to sell, Bluesky, a Telegram
@@ -57,7 +57,7 @@ export interface ConnectDeps {
   telegram: () => { token: string; bot: string } | null;
   /** The platform's own Telegram chats: never a company's channel. */
   platformChats: () => string[];
-  files: { has(c: Company, p: Product): boolean; read(c: Company, p: Product): string | null };
+  files: { has(c: Company, p: Product): boolean; read(c: Company, p: Product): string | null; bytes?(c: Company, p: Product): { data: Buffer; name: string; type: string } | null; image?(c: Company, p: Product, name: string): Buffer | null };
   metrics: (c: Company) => { sales: { at: number; productId: string; usdc: string }[]; visits: number[]; via?: { at: number; ch: string }[] };
   /** Every product on sale on the NIGHTSHIFT market. */
   market: () => { company: string; slug: string; name: string; kind: string; priceUsd: number; sales: number }[];
@@ -298,18 +298,23 @@ export class Connect {
   /** The delivered file, uploaded the way Gumroad takes files (presign, PUT the parts, complete) and attached to the product. */
   async #file(c: Company, p: Product, api: GumroadApi | null): Promise<void> {
     const l = p.gumroad!;
-    const text = this.d.files.read(c, p);
-    if (!text) return;
-    const bytes = Buffer.from(text, "utf8");
+    // a studio product is its ZIP of PDFs; everything else is its Markdown file
+    const bin = this.d.files.bytes?.(c, p) ?? null;
+    const text = bin ? null : this.d.files.read(c, p);
+    if (!bin && !text) return;
+    const bytes = bin ? bin.data : Buffer.from(text!, "utf8");
     if (api) {
-      const name = `${c.slug}-${p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "product"}.md`;
-      const url = await uploadFile(api, this.d.open, name, bytes, "text/markdown");
+      const name = bin ? bin.name : `${c.slug}-${p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "product"}.md`;
+      const url = await uploadFile(api, this.d.open, name, bytes, bin ? bin.type : "text/markdown");
       await api.update(l.id, { files: [{ url }] });
     }
     l.file = true;
-    this.#log(c, { channel: "gumroad", what: `Uploaded the file of "${p.name}" to Gumroad`, result: api ? "ok" : "sim", detail: `${Math.max(1, Math.ceil(bytes.length / 1024))} KB of Markdown.`, taskId: p.taskId });
+    this.#log(c, { channel: "gumroad", what: `Uploaded the file of "${p.name}" to Gumroad`, result: api ? "ok" : "sim", detail: bin ? `${(bytes.length / 1e6).toFixed(1)} MB ZIP of PDFs.` : `${Math.max(1, Math.ceil(bytes.length / 1024))} KB of Markdown.`, taskId: p.taskId });
     this.d.changed(c);
   }
+
+  /** A product's cover: the studio's hero image when it made one, else the product's own card. */
+  cover(c: Company, p: Product): Buffer { return this.d.files.image?.(c, p, "hero") ?? coverPng(c, p); }
 
   /** The cover is the product's own card, which Gumroad reads from the engine's public address. */
   async #cover(c: Company, p: Product, api: GumroadApi | null): Promise<void> {

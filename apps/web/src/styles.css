@@ -506,3 +506,9 @@ html[data-lite] .arc .arc-stage::before { filter: none; opacity: .6; }
 .frogs-ship i { font-style: normal; font-weight: 700; color: #b8ff4a; white-space: nowrap; }
 .frogs-ship:hover { border-color: #b8ff4a; }
 @media (max-width: 640px) { .frogs-ship { grid-template-columns: 1fr; } }
+
+/* A studio product's listing images on its company page */
+.studio-shots { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; scrollbar-width: thin; }
+.studio-shots a { flex: 0 0 min(78%, 300px); scroll-snap-align: start; }
+.studio-shots img { display: block; width: 100%; height: auto; aspect-ratio: 1; border-radius: 12px; object-fit: cover; }
+.studio-facts { font-size: 12.5px; line-height: 1.5; }

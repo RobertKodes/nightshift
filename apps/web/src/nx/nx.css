@@ -815,3 +815,9 @@ a.nx-btn-acc, a.nx-btn-acc:visited, a.nx-btn-acc:hover, .nx-btn-acc .nx-ic { col
 .nx-new-go { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--acc); }
 @media (max-width: 980px) { .nx-new { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .nx-new-card { transition: none; } }
+
+/* a studio product in the owner desk: its listing images and its files */
+.dk-studio { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dk-studio img { display: block; width: 72px; height: 72px; border-radius: 8px; object-fit: cover; box-shadow: inset 0 0 0 1px var(--nx-line); }
+.dk-studio span { font-size: 12.5px; line-height: 1.55; flex: 1 1 200px; }
+.dk-studio a { color: var(--acc); }

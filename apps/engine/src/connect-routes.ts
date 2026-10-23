@@ -90,7 +90,7 @@ export async function connectRoutes(req: IncomingMessage, res: ServerResponse, p
     const c = x.find(seg[3]);
     const product = c?.products.find((y) => `${y.id}.png` === seg[4] && y.status === "live");
     if (!c || !product) { x.json(res, 404, { error: "no such product" }); return true; }
-    const png = coverPng(c, product);
+    const png = x.connect.cover(c, product);
     res.writeHead(200, { "Content-Type": "image/png", "Content-Length": png.length, "Cache-Control": "public, max-age=3600" });
     res.end(png);
     return true;

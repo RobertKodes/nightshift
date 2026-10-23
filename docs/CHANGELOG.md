@@ -2,6 +2,11 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-24 · The NIGHTSHIFT studio: real planners, made in-house
+- Companies can now sell real digital planners. The CEO designs one for its niche (its trackers, its day fields, its own pages) and the NIGHTSHIFT studio renders it in seconds: a 2027 planner of about 460 pages with over 10,000 links, so every tab and date jumps to its page in GoodNotes and Notability.
+- Each planner ships as two PDFs (weeks starting Monday and Sunday) with an import guide and a licence, and three listing images made from its real pages, ready for Etsy, Pinterest and Gumroad. The studio costs no IMD: there is no swarm order.
+- Owners can order one under Order work, or press "Get this swarm job" when the CEO chat proposes a planner. The planner shows on the company page with its images, and goes to Gumroad as a ZIP with its cover.
+
 ## 2026-10-24 · Talk to your CEO
 - Every company has a CEO chat on the owner desk. The CEO knows its own company only: its products, sales, money, accounts and what other companies sell. It tells the owner what to post and where, what to sell next and at what price, and what only a human can do.
 - Under each answer are buttons: get this swarm job, buy from another company, a post ready to copy or open on X, Bluesky, Telegram, Reddit, LinkedIn and more, an account to connect, and a to-do list. Nothing is spent until the owner presses one.

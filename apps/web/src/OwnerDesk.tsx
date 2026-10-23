@@ -391,7 +391,7 @@ function OrderWork({ c, imdUsd, saving, setSaving, setError, onOrdered }: { c: D
           <label>Name<input className="field" value={w.name} maxLength={80} placeholder="e.g. The Etsy Holiday Playbook" onChange={(e) => setW({ ...w, name: e.target.value })} /></label>
           <label>Pitch<span className="dim">one line for the shop</span><input className="field" value={w.pitch} maxLength={240} placeholder="Sell more this December, with 30 listings that work" onChange={(e) => setW({ ...w, pitch: e.target.value })} /></label>
           <div className="dk-two">
-            <label>Kind<select className="field" value={w.productKind} onChange={(e) => setW({ ...w, productKind: e.target.value })}><option value="tool">Web tool</option><option value="template">Templates</option><option value="dataset">Dataset</option><option value="report">Report</option></select></label>
+            <label>Kind<select className="field" value={w.productKind} onChange={(e) => setW({ ...w, productKind: e.target.value })}><option value="tool">Web tool</option><option value="planner">Planner (made by the studio, no swarm cost)</option><option value="template">Templates</option><option value="dataset">Dataset</option><option value="report">Report</option></select></label>
             <label>Price (USDC)<input className="field mono" type="number" min={1} max={499} step="0.5" value={w.priceUsd} onChange={(e) => setW({ ...w, priceUsd: e.target.value })} /></label>
           </div>
         </>
@@ -487,7 +487,7 @@ function ProductEdit({ co, x, saving, save }: { co: string; x: DeskCompany["prod
   const changed = name !== x.name || pitch !== x.pitch;
   return (
     <div className={`dk-prod ${x.status}`}>
-      <div className="dk-prod-h"><span className="mk-kind">{x.kind}</span><span className={`dk-st ${x.status}`}>{x.status === "live" ? "on sale" : x.status}</span><span className="faint">{x.sales} sold · {usd(x.revenueUsd)}{x.b2bSales ? ` · ${x.b2bSales} to other companies` : ""}</span></div>
+      <div className="dk-prod-h"><span className="mk-kind">{x.format ?? x.kind}</span><span className={`dk-st ${x.status}`}>{x.status === "live" ? "on sale" : x.status}</span><span className="faint">{x.sales} sold · {usd(x.revenueUsd)}{x.b2bSales ? ` · ${x.b2bSales} to other companies` : ""}</span></div>
       <input className="field" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} aria-label="Product name" />
       <textarea className="field" rows={2} value={pitch} maxLength={240} onChange={(e) => setPitch(e.target.value)} aria-label="Pitch" />
       <div className="dk-row">
@@ -497,6 +497,12 @@ function ProductEdit({ co, x, saving, save }: { co: string; x: DeskCompany["prod
         {x.status === "live" && <button className="nx-btn" disabled={saving} onClick={() => void save(() => api.product(co, x.id, { status: "retired" }), "Taken off sale.")}>Take off sale</button>}
         {x.status === "retired" && <button className="nx-btn" disabled={saving || !x.packaged} title={x.packaged ? undefined : "No packaged file to sell"} onClick={() => void save(() => api.product(co, x.id, { status: "live" }), "Back on sale.")}>Put back on sale</button>}
       </div>
+      {x.studio && (
+        <div className="dk-studio">
+          {x.studio.images.slice(0, 3).map((src) => <a key={src} href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt="" loading="lazy" width={120} height={120} /></a>)}
+          <span className="faint">{x.studio.pages} pages · {x.studio.links.toLocaleString("en-US")} links · {x.studio.mb} MB · {x.studio.year}<br /><a href={`/api/companies/${co}/products/${x.id}/download`}>Download the files</a> · use the images on Etsy, Pinterest and Gumroad</span>
+        </div>
+      )}
       {x.priceByOwner && <span className="faint dk-hint">Price set by you: the CEO will not change it.</span>}
     </div>
   );

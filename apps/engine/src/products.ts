@@ -31,8 +31,22 @@ export class ProductFiles {
     const clean = (x: string) => x.replace(/[^a-zA-Z0-9-]/g, "");
     return join(this.#dir, legacy(p.id) ? `${clean(p.id)}.md` : `${clean(c.id)}-${clean(p.id)}.md`);
   }
-  has(c: Company, p: Product): boolean { return existsSync(this.#file(c, p)); }
-  read(c: Company, p: Product): string | null { return this.has(c, p) ? readFileSync(this.#file(c, p), "utf8") : null; }
+  /** A studio product's download (a ZIP of its PDFs) and its listing images sit next to the text files. */
+  #bin(c: Company, p: Product) { return join(this.#dir, `${c.id.replace(/[^a-zA-Z0-9-]/g, "")}-${p.id.replace(/[^a-zA-Z0-9-]/g, "")}.zip`); }
+  #img(c: Company, p: Product, name: string) { return join(this.#dir, `${c.id.replace(/[^a-zA-Z0-9-]/g, "")}-${p.id.replace(/[^a-zA-Z0-9-]/g, "")}-${name.replace(/[^a-z0-9-]/g, "")}.png`); }
+  has(c: Company, p: Product): boolean { return existsSync(this.#file(c, p)) || existsSync(this.#bin(c, p)); }
+  /** The text of a Markdown product (research, guides, tool links); null for a studio download. */
+  read(c: Company, p: Product): string | null { return existsSync(this.#file(c, p)) ? readFileSync(this.#file(c, p), "utf8") : null; }
+  /** A studio product's download, as the buyer gets it. */
+  bytes(c: Company, p: Product): { data: Buffer; name: string; type: string } | null {
+    const f = this.#bin(c, p);
+    if (!existsSync(f)) return null;
+    const base = p.name.replace(/[^\w .()-]+/g, "").replace(/\s+/g, " ").trim().slice(0, 70) || "product";
+    return { data: readFileSync(f), name: `${base}.zip`, type: "application/zip" };
+  }
+  putBundle(c: Company, p: Product, zip: Uint8Array): void { writeAtomic(this.#bin(c, p), Buffer.from(zip), { mode: 0o600 }); }
+  putImage(c: Company, p: Product, name: string, png: Buffer): void { writeAtomic(this.#img(c, p, name), png, { mode: 0o644 }); }
+  image(c: Company, p: Product, name: string): Buffer | null { const f = this.#img(c, p, name); return existsSync(f) ? readFileSync(f) : null; }
 
   /** A link that opens this product for 7 days. `ref` ties it to one sale (a tx hash or a buyer). */
   link(c: Company, p: Product, ref: string, days = 7): string {

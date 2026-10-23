@@ -21,6 +21,7 @@ import {
   commission,
   dropMarketBuy,
   finishMarketBuy,
+  finishStudio,
   found,
   fromImd,
   fromUsdc,
@@ -48,6 +49,7 @@ import { Checkout, NoGasError, PendingError, type SettledBy, type Settlement, sa
 import { offerFor } from "./agentmarket.js";
 import { MarketDesk } from "./b2b.js";
 import { companyBrain } from "./ceo-brain.js";
+import { Studio } from "./studio/index.js";
 import { type ChatFacts, answerOwner, asksToday, remember } from "./ceo-chat.js";
 import { V4, findPool } from "./v4.js";
 import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
@@ -118,6 +120,8 @@ export class Engine {
   readonly files: ProductFiles;
   /** Companies buying from each other on the NIGHTSHIFT market (B2B), booked on both sides. */
   readonly b2b: MarketDesk;
+  /** Real digital products made in-house: hyperlinked planners, with their listing images. */
+  readonly studio: Studio;
   /** The accounts owners connected (Gumroad to sell; Bluesky, Telegram, Mastodon, Discord to post) and what the CEOs do with them. */
   readonly connect: Connect;
   readonly #simPlane: SimImdPlane;
@@ -177,6 +181,12 @@ export class Engine {
       return id ? this.store.companies.get(id) : undefined;
     }, `${config.dataDir}/sim-files`);
     this.files = new ProductFiles(config.dataDir, this.vault.material, this.llm, config.model, config.publicUrl);
+    this.studio = new Studio({
+      files: this.files,
+      // the company's own paid brain designs it when it has one; the free model otherwise
+      mind: async (c) => (this.#brain ? await this.#brain(c).catch(() => null) : null) ?? (this.llm ? { llm: this.llm, model: config.model } : null),
+      finish: (c, t, r) => { finishStudio(c, t, this.#deps(c), r); this.store.markDirty(); },
+    });
     if (config.mode === "live" && config.ceoModel && config.salesChainId === 8453) {
       this.#brain = companyBrain({
         url: config.aiGateway, model: config.ceoModel, chainId: config.salesChainId, usdc: usdcAddr(), ledger: this.ledger, live: true,
@@ -1000,6 +1010,7 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
       persist: () => this.store.save(),
       market: this.b2b,
       ...(this.#brain ? { brain: this.#brain } : {}),
+      studio: { build: (x, t, p, decision) => this.studio.build(x, t, p, decision) },
       // each shift: what sells, the owner's channels and the real events to post about; a post move hands its event to them
       context: (x) => this.connect.context(x),
       posts: { queue: (x, t, fact, angle) => this.connect.queue(x, t, fact, angle) },
@@ -1180,12 +1191,13 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
       decision = { kind: "research", title: `Research: ${brief.slice(0, 70)}${brief.length > 70 ? "…" : ""}`, why: "Ordered by the owner.", brief };
     } else if (w.kind === "build_product") {
       const name = plain(w.name ?? ""), pitch = plain(w.pitch ?? ""), price = Number(w.priceUsd);
-      const kind = (["tool", "template", "dataset", "report"] as const).find((k) => k === w.productKind) ?? "tool";
+      const planner = w.productKind === "planner";
+      const kind = planner ? "template" : (["tool", "template", "dataset", "report"] as const).find((k) => k === w.productKind) ?? "tool";
       if (name.length < 3 || name.length > 80) throw new Error("Product name: between 3 and 80 characters.");
       if (pitch.length < 8 || pitch.length > 240) throw new Error("Pitch: between 8 and 240 characters.");
       if (!(price >= 1 && price <= 499)) throw new Error("Price: between $1 and $499.");
       if (brief.length < 20 || brief.length > 1500) throw new Error("Say what goes inside in 20 to 1500 characters.");
-      decision = { kind: "build_product", title: `Build "${name}"`, why: "Ordered by the owner.", brief, product: { name, kind, pitch, priceUsd: Math.round(price * 100) / 100 } };
+      decision = { kind: "build_product", title: `${planner ? "Make" : "Build"} "${name}"`, why: "Ordered by the owner.", brief, product: { name, kind, pitch, priceUsd: Math.round(price * 100) / 100, ...(planner ? { format: "planner" as const } : {}) } };
     } else if (w.kind === "build_site") {
       if (c.site) throw new Error("The company already has a site: order a change to it instead.");
       if (!c.products.some((p) => p.status === "live")) throw new Error("A site needs something to sell first.");
@@ -1729,6 +1741,12 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
     const now = Date.now();
     for (const c of this.store.companies.values()) {
       if (c.tasks.some((t) => t.status === "building")) await advance(c, this.#deps(c)).catch((e) => console.error("advance", c.slug, e));
+      // a studio build cut off by a restart is started again
+      for (const t of c.tasks) {
+        const p = t.studio && t.status === "building" ? c.products.find((x) => x.id === t.productId) : undefined;
+        if (!p || this.studio.building(t.id) || now - t.updatedAt < 120_000) continue;
+        this.studio.build(c, t, p, { kind: "build_product", title: t.title, why: t.why, brief: t.studio!.brief ?? "", product: { name: p.name, kind: "template", pitch: p.pitch, priceUsd: fromUsdc(p.priceUsdc), format: "planner" } });
+      }
       // a site or web tool delivered before IMD published its address: collected, never bought again
       if (missingAddress(c).length) await recoverAddresses(c, this.#deps(c)).catch((e) => console.error("address", c.slug, e));
       // a market payment sent on chain is followed until it lands (booked by the checkout) or is dropped

@@ -26,6 +26,10 @@ export interface Product {
   gumroad?: GumroadListing;
   /** Why it is never listed on Gumroad: one of Gumroad's prohibited categories. */
   gumroadBlocked?: string;
+  /** Made in-house by the NIGHTSHIFT studio, not ordered from the swarm: a hyperlinked planner. */
+  format?: "planner";
+  /** What the studio made: the pages and links in each PDF, the files in the download, and its listing images. */
+  studio?: { pages: number; links: number; files: string[]; bytes: number; images: string[]; year: number; theme: string };
 }
 
 export type TaskKind = "research" | "build_product" | "build_site" | "improve_site" | "marketing" | "reprice" | "retire_product" | "post";
@@ -70,6 +74,8 @@ export interface Task {
   market?: MarketSearch;
   /** What the work was about, in plain words (its brief, the product, the owner's direction then): the hard rules compare it with new moves. */
   about?: string;
+  /** Built in-house by the studio (no swarm order): what it is making and since when. */
+  studio?: { format: "planner"; at: number; brief: string };
 }
 
 /** Why a product on the market was or was not bought. */
@@ -179,7 +185,7 @@ export interface Policy {
 
 /** One action the CEO offers under a chat answer: the owner presses it, the engine does it with these exact fields. */
 export type ChatAction = { id: string; state?: "done" | "failed"; note?: string } & (
-  | { type: "order"; kind: "research" | "build_product" | "build_site" | "improve_site"; title: string; brief: string; name?: string; pitch?: string; priceUsd?: number; productKind?: ProductKind }
+  | { type: "order"; kind: "research" | "build_product" | "build_site" | "improve_site"; title: string; brief: string; name?: string; pitch?: string; priceUsd?: number; productKind?: ProductKind | "planner" }
   | { type: "todo"; text: string }
   | { type: "post"; where: string; text: string }
   | { type: "connect"; to: string; why: string }

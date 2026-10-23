@@ -6,11 +6,12 @@ import { dirname } from "node:path";
  * the data goes to `<file>.tmp`, is flushed to disk, and only then renamed over the old file.
  * With `backup`, the previous version is kept as `<file>.bak` first.
  */
-export function writeAtomic(file: string, data: string, opts: { mode?: number; backup?: boolean } = {}): void {
+export function writeAtomic(file: string, data: string | Uint8Array, opts: { mode?: number; backup?: boolean } = {}): void {
   const tmp = `${file}.tmp`;
   const fd = openSync(tmp, "w", opts.mode ?? 0o644);
   try {
-    writeSync(fd, data);
+    if (typeof data === "string") writeSync(fd, data);
+    else for (let off = 0; off < data.length;) off += writeSync(fd, data, off, data.length - off);
     fsyncSync(fd);
   } finally {
     closeSync(fd);
