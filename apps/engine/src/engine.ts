@@ -274,7 +274,7 @@ export class Engine {
     if (config.telegramToken) {
       telegramCommands(config.telegramToken, config.telegramAdmins, {
         admin: (cmd, args, ctx) => this.#command(cmd, args, ctx),
-        open: (cmd) => publicCommand(cmd),
+        open: (cmd, args) => publicCommand(cmd, args),
         guard: async (m) => { const removed = await this.#guard(m); if (!removed) void this.#ask(m).catch(() => {}); return removed; },
         ask: (m) => this.#ask(m),
         // Raids are off: a shared X post is not reposted to the community.

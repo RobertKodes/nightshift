@@ -4,6 +4,7 @@ import { writeAtomic } from "./atomic.js";
 import { chats } from "./community.js";
 import { config } from "./config.js";
 import { type Forged, forgeOn, forgedAll, tierInfo } from "./forge.js";
+import { makeGifs } from "./forge-gif.js";
 import { type Button, telegramMedia } from "./social.js";
 
 /** The three NIGHT WATCHERS contracts IMD deployed (launches #2437, #2445, #2436): the only ones the Forge is switched on with. */
@@ -41,6 +42,8 @@ export function followForges(): void {
   const tick = async () => {
     if (!forgeOn() || !config.telegramToken) return;
     const all = await forgedAll(true);
+    // each Night Watcher's moving GIF, made in the background for /forge
+    makeGifs(all);
     let seen: Set<number>;
     if (existsSync(file())) seen = new Set(JSON.parse(readFileSync(file(), "utf8")) as number[]);
     else { seen = new Set(all.length > 3 ? all.map((f) => f.n) : []); writeAtomic(file(), JSON.stringify([...seen])); }

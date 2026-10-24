@@ -1,3 +1,4 @@
+import { forgeReply } from "./forge-bot.js";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { board as pinballBoard } from "./pinball.js";
 import { join } from "node:path";
@@ -280,9 +281,10 @@ export const MEMES_URL = "https://t.me/+GGNTd12GmRIyMDVh";
 export const OPENSEA_URL = "https://opensea.io/collection/night-frogs-825445489";
 
 /** Commands anyone in the community may use. Null when the command is not a public one. */
-export async function publicCommand(cmd: string): Promise<{ text: string; buttons?: Button[][] } | null> {
+export async function publicCommand(cmd: string, args: string[] = []): Promise<{ text: string; buttons?: Button[][]; animation?: string; photo?: string } | null> {
   const sym = esc(config.token.symbol);
   const links: Button[][] = [[{ text: "🌐 Website", url: config.publicUrl }, { text: "𝕏 X", url: config.xUrl }], [{ text: "👥 X community", url: config.xCommunityUrl }], [{ text: "💬 Telegram", url: config.telegramUrl }, { text: "🦋 Bluesky", url: `https://bsky.app/profile/${config.blueskyHandle}` }], [{ text: "🌊 NIGHT FROGS on OpenSea", url: OPENSEA_URL }], [{ text: "👨‍💻 Developer · @probert_mihai", url: "https://x.com/probert_mihai" }]];
+  if (cmd === "forge" || cmd === "forges" || cmd === "watchers") return forgeReply(args);
   if (cmd === "memes" || cmd === "meme" || cmd === "art") return { text: "🎨 <b>NIGHTSHIFT memes &amp; art</b>\nAll the memes and art from the night crew are posted here. Join and share yours 🐸", buttons: [[{ text: "🎨 Open memes & art", url: MEMES_URL }]] };
   if (cmd === "pinball") {
     const b = (() => { try { return pinballBoard() as { board?: { name: string; score: number }[]; best?: { name: string; score: number }[] }; } catch { return {}; } })();

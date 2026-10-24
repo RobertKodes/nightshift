@@ -4,6 +4,7 @@ import { eth } from "./chain.js";
 import { config } from "./config.js";
 import { CAPTAIN_TIER, DEAD, FORGE_ABI, FORGE_SIZE, FORGE_TIERS, ForgeError, RARITIES, SHOWCASE, TABLE, captainSvg, forgeOn, forgedAll, forgedSvg, frogOf, nightFrogSvg, plan, preview, tierInfo } from "./forge.js";
 import { svgPng } from "./frogpng.js";
+import { gifIfReady, makeGifs } from "./forge-gif.js";
 import { multiplier } from "./frogs.js";
 import { forgeBuild } from "./swarm.js";
 import { roomCode, roomMembers, roomOn } from "./watch-room.js";
@@ -114,6 +115,16 @@ export async function forgeRoutes(req: IncomingMessage, res: ServerResponse, p: 
       if (!f) { json(res, 404, { error: "No Night Watcher with that number yet." }); return true; }
       res.writeHead(200, { "content-type": "image/png", "cache-control": f.tier < 5 || f.name ? "public, max-age=31536000, immutable" : "public, max-age=300" });
       res.end(svgPng(forgedSvg(f.n, f.tier, f.traits, f.name, f.inputs, f.points)));
+      return true;
+    }
+    // a Night Watcher moving, once its GIF is made (in the background); its picture until then
+    const mg = /^\/api\/forge\/frog\/(\d{1,3})\.gif$/.exec(p);
+    if (mg) {
+      const all = await forgedAll(), f = all.find((x) => x.n === Number(mg[1]));
+      const gif = f ? gifIfReady(f) : null;
+      if (!gif) { makeGifs(all); json(res, 404, { error: f ? "Its animation is still being made. Try again in a minute." : "No Night Watcher with that number yet." }); return true; }
+      res.writeHead(200, { "content-type": "image/gif", "content-length": gif.length, "cache-control": f!.tier < 5 || f!.name ? "public, max-age=31536000, immutable" : "public, max-age=300" });
+      res.end(gif);
       return true;
     }
     const m = /^\/api\/forge\/frog\/(\d{1,3})\.svg$/.exec(p);

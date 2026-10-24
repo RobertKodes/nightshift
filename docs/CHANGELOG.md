@@ -2,6 +2,10 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-24 · /forge in Telegram, and a poker table you can read
+- /forge in the bot: the Forge's numbers (Night Watchers forged and left, NIGHT FROGS burned, every tier, their shift hours) with the newest Night Watcher moving, made from its own animated art. /forge 4 shows one Night Watcher, /forge tier 3 (or /forge boss) every Night Watcher of a tier.
+- Night Poker: bigger names, stacks, pot and bets, and on phones the side players' cards sit above their names, so everyone at the table is easy to tell apart.
+
 ## 2026-10-24 · One name in every game
 - Pick your player name once and every game seats you under it: poker, chess, pool and pinball, whatever link you came in by. Signed in, it is saved on your wallet, and no other player can take it.
 - The lounge shows who you are playing as at the top, the poker buy-in asks for your name at the table, and you can change it while you are seated.

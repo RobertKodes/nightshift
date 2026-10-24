@@ -366,3 +366,24 @@ li.open .pk-h-row .icon { transform:rotate(90deg); }
 .pk-name-field input, .pk-rename input { width:100%; min-height:42px; padding:0 12px; border:1px solid var(--edge); background:rgba(124,92,255,.07); color:var(--moon); font:600 15px Inter, system-ui, sans-serif; letter-spacing:0; text-transform:none; }
 .pk-name-field input:focus, .pk-rename input:focus { outline:2px solid var(--uv-hi); outline-offset:1px; }
 .pk-rename { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:6px; align-items:center; }
+
+/* readable at a glance: bigger names, stacks, pot and bets (the layout and every position stay as they are) */
+.pk-id>b { font-size:15px; max-width:150px; }
+.pk-stack { font-size:15px; font-weight:700; color:#fff; }
+.pk-stack small { font-size:10px; }
+.pk-pot>b { font-size:16px; padding:4px 12px; background:rgba(0,0,0,.6); }
+.pk-pot>small { font-size:12px; }
+.pk-bet>b { font-size:14px; padding:2px 9px; background:rgba(0,0,0,.62); }
+.pk-flag { font-size:12px; }
+.pk-flag.win { font-size:14px; }
+.pk-timer { font-size:11px; }
+.pk-amount { font-size:16px; }
+@media (max-width:560px) {
+  .pk-id>b { font-size:13px; max-width:108px; } .pk-stack { font-size:13px; }
+  .pk-pot>b { font-size:15px; } .pk-bet>b { font-size:13px; }
+  .seats-6 .pk-id>b { font-size:12px; max-width:76px; } .seats-6 .pk-stack { font-size:12px; }
+  .seats-6 .pk-bet>b { font-size:12px; padding:1px 7px; }
+  /* the side seats' cards sit just above their plates, so every name stays in sight */
+  .seats-6 .pk-slot-1 .pk-hole, .seats-6 .pk-slot-2 .pk-hole, .seats-6 .pk-slot-4 .pk-hole, .seats-6 .pk-slot-5 .pk-hole { top:-46px; }
+}
+@media (max-height:500px) and (orientation:landscape) { .pk-id>b { font-size:13px; max-width:110px; } .pk-stack { font-size:13px; } }

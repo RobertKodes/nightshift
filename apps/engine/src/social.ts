@@ -58,7 +58,8 @@ export async function blueskyPost(handle: string, appPassword: string, text: str
  * the games are on the website and its installable app, and a link opens them in Telegram's browser.
  */
 export type Button = { text: string; data?: string; url?: string; switch_inline?: string };
-export type Reply = { text: string; buttons?: Button[][] };
+/** A command's answer: text and buttons, and optionally an animation or a picture (by URL) that carries the text as its caption. */
+export type Reply = { text: string; buttons?: Button[][]; animation?: string; photo?: string };
 export const kb = (b?: Button[][]) => (b?.length ? { inline_keyboard: b.map((row) => row.map((x) => (x.url ? { text: x.text, url: x.url } : x.switch_inline !== undefined ? { text: x.text, switch_inline_query: x.switch_inline } : { text: x.text, callback_data: x.data ?? x.text }))) } : undefined);
 
 /**
@@ -163,6 +164,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "chess", description: "NIGHT CHESS" },
     { command: "pool", description: "NIGHT POOL: 3D 8-ball on the website" },
     { command: "frogs", description: "NIGHT FROGS on OpenSea" },
+    { command: "forge", description: "Night Watchers: every forge, moving, with stats" },
     { command: "memes", description: "Memes and art from the night crew" },
     ...(h.games ? games : []),
   ];
@@ -250,5 +252,7 @@ export async function handleUpdate(token: string, admins: string[], h: BotHandle
   const reply: Reply | null = pub ?? (adminHere ? await h.admin(cmd, args, ctx).catch((e) => ({ text: `⚠️ ${esc((e as Error).message)}` })) : m?.chat.type === "private" ? { text: "🌙 Public commands: /price · /ca · /links" } : null);
   if (!reply) return;
   if (q?.message && cmd !== "stop") await tg(token, "editMessageText", { chat_id: chat, message_id: q.message.message_id, text: reply.text, parse_mode: "HTML", disable_web_page_preview: true, reply_markup: kb(reply.buttons) });
+  // an animation or a picture carries the text as its caption; the plain text when Telegram refuses it
+  else if ((reply.animation || reply.photo) && reply.text.length <= 1024 && await tg(token, reply.animation ? "sendAnimation" : "sendPhoto", { chat_id: chat, ...(reply.animation ? { animation: reply.animation } : { photo: reply.photo }), caption: reply.text, parse_mode: "HTML", reply_markup: kb(reply.buttons) })) return;
   else await telegram(token, chat, reply.text, reply.buttons);
 }
