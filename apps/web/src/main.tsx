@@ -57,6 +57,7 @@ const CommandPage = lazy(() => import("./station/EconomyCommand").then((x) => ({
 const LivePage = lazy(() => import("./LivePage").then((x) => ({ default: x.LivePage })));
 const TgMoved = lazy(() => import("./TgMoved").then((x) => ({ default: x.TgMoved })));
 const ServicesPage = lazy(() => import("./station/Services").then((x) => ({ default: x.ServicesPage })));
+const MindPage = lazy(() => import("./station/Mind").then((x) => ({ default: x.MindPage })));
 const VerdictPage = lazy(() => import("./station/Services").then((x) => ({ default: x.VerdictPage })));
 const HookPage = lazy(() => import("./station/Services").then((x) => ({ default: x.HookPage })));
 const ShipPage = lazy(() => import("./ship/ShipPage").then((x) => ({ default: x.ShipPage })));
@@ -115,6 +116,7 @@ function App() {
   if (seg[0] === "economy" || seg[0] === "hr") page = <Suspense fallback={<div className="st-room" />}><EconomyPage /></Suspense>;
   if (seg[0] === "command") page = <Suspense fallback={<div className="st-room" />}><CommandPage /></Suspense>;
   if (seg[0] === "league") page = <Suspense fallback={<div className="st-room" />}><LeaguePage id={seg[1]} /></Suspense>;
+  if (seg[0] === "mind") page = <Suspense fallback={<div className="st-room" />}><MindPage /></Suspense>;
   if (seg[0] === "services") page = <Suspense fallback={<div className="st-room" />}>{seg[1] === "verdict" ? <VerdictPage /> : seg[1] === "hook" ? <HookPage /> : seg[1] === "imd-feed" ? <FeedPage /> : <ServicesPage />}</Suspense>;
   if (seg[0] === "arena") page = <Suspense fallback={<div className="docs"><p className="dim">Loading the arena…</p></div>}><ArenaPage /></Suspense>;
   // the Play Store app leaves what moves money to the website

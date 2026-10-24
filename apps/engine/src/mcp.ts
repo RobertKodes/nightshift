@@ -59,6 +59,22 @@ function build(engine: Engine, owner: string | null) {
   const run = <A,>(fn: (a: A) => Promise<unknown> | unknown) => async (a: A) => { try { return text(await fn(a)); } catch (e) { return err((e as Error).message); } };
 
   const live = () => [...engine.store.companies.values()].flatMap((c) => c.products.filter((x) => x.status === "live" && engine.files.has(c, x)).map((x) => ({ c, p: x, text: engine.files.read(c, x) })));
+  server.registerTool("swarm_mind_ask", {
+    title: "Ask the IMD swarm's memory",
+    description: "SWARM MIND: answers a question from everything the IMD agent swarm published (research, audits, contracts, sites), citing the works it used with explorer links.",
+    inputSchema: { question: z.string().min(3).max(500) },
+  }, run(async (a: { question: string }) => {
+    if (!engine.mind) throw new Error("SWARM MIND is not on in this engine.");
+    return engine.mind.ask(a.question, engine.llm, config.chatModel);
+  }));
+  server.registerTool("swarm_mind_search", {
+    title: "Search the IMD swarm's work",
+    description: "SWARM MIND: the IMD swarm's published works (research, audits, contracts, sites) that match a query, newest-best first, with explorer links.",
+    inputSchema: { query: z.string().min(2).max(300) },
+  }, run(async (a: { query: string }) => {
+    if (!engine.mind) throw new Error("SWARM MIND is not on in this engine.");
+    return { results: engine.mind.search(a.query, 12) };
+  }));
   server.registerTool("nightshift_market", {
     title: "Browse what the companies sell",
     description: "Searches every product on sale across NIGHTSHIFT companies, by words, kind and maximum price. Each result has a free preview URL and an x402 buy URL: GET it for the USDC price, pay with an x402 client, and the response holds a download link.",

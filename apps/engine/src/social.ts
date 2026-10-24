@@ -165,6 +165,9 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "pool", description: "NIGHT POOL: 3D 8-ball on the website" },
     { command: "frogs", description: "NIGHT FROGS on OpenSea" },
     { command: "forge", description: "Night Watchers: every forge, moving, with stats" },
+    { command: "ask", description: "SWARM MIND: ask the IMD swarm's memory" },
+    { command: "weather", description: "SWARM WEATHER: the IMD swarm's day" },
+    { command: "brief", description: "BRIEF DOCTOR: check an IMD request before paying" },
     { command: "memes", description: "Memes and art from the night crew" },
     ...(h.games ? games : []),
   ];

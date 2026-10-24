@@ -49,6 +49,8 @@ import { Checkout, NoGasError, PendingError, type SettledBy, type Settlement, sa
 import { offerFor } from "./agentmarket.js";
 import { MarketDesk } from "./b2b.js";
 import { companyBrain } from "./ceo-brain.js";
+import { liveMind, liveWeather } from "./mind-live.js";
+import { weatherText } from "./swarm-weather.js";
 import { Studio } from "./studio/index.js";
 import { type ChatFacts, answerOwner, asksToday, remember } from "./ceo-chat.js";
 import { V4, findPool } from "./v4.js";
@@ -144,6 +146,10 @@ export class Engine {
   readonly sniper = config.sniper ? liveSniper() : null;
   /** The NIGHT SNIPER dex: every IMD token and NFT collection, filled in a few at a time. */
   readonly dex = config.sniper ? liveDex() : null;
+  /** SWARM MIND: everything the IMD swarm published, searchable and askable (live only: it reads IMD's public API). */
+  readonly mind = config.mode === "live" || process.env.SWARM_MIND === "1" ? liveMind() : null;
+  /** SWARM WEATHER: the swarm's day as a forecast, with its card; posted once a day at 18:00 UTC unless SWARM_WEATHER=0. */
+  readonly weather = this.mind ? liveWeather(this.mind) : null;
 
   constructor() {
     this.auth = new Auth(this.vault.material, this.store.apiKeys, () => this.store.markDirty());
@@ -274,7 +280,7 @@ export class Engine {
     if (config.telegramToken) {
       telegramCommands(config.telegramToken, config.telegramAdmins, {
         admin: (cmd, args, ctx) => this.#command(cmd, args, ctx),
-        open: (cmd, args) => publicCommand(cmd, args),
+        open: (cmd, args) => (cmd === "ask" || cmd === "mind" ? this.#askSwarm(args) : cmd === "weather" ? this.#weatherReply() : cmd === "brief" ? this.#briefReply(args) : publicCommand(cmd, args)),
         guard: async (m) => { const removed = await this.#guard(m); if (!removed) void this.#ask(m).catch(() => {}); return removed; },
         ask: (m) => this.#ask(m),
         // Raids are off: a shared X post is not reposted to the community.
@@ -293,6 +299,14 @@ export class Engine {
       const sniper = this.sniper;
       setTimeout(() => void sniper.tick().catch((e) => console.error("sniper", e)), 20_000);
       setInterval(() => void sniper.tick().catch((e) => console.error("sniper", e)), 60_000);
+    }
+    if (this.mind) {
+      const mind = this.mind;
+      setTimeout(() => void mind.tick().catch((e) => console.error("swarm mind", e)), 35_000);
+      setInterval(() => void mind.tick().catch((e) => console.error("swarm mind", e)), 60_000);
+    }
+    if (this.weather && config.telegramToken && config.mode === "live" && process.env.SWARM_WEATHER !== "0") {
+      setInterval(() => void this.#postWeather().catch((e) => console.error("swarm weather", e)), 10 * 60_000);
     }
     if (this.dex) {
       const dex = this.dex;
@@ -1234,6 +1248,48 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     return {
       stats: { ...this.stats(c), ...context }, offers, usdcUsd: fromUsdc(usdcHeld), swarmUsd, pageUrl: `${config.publicUrl}/c/${c.slug}`, connected,
       brainLeftUsd: this.#brain && daily > 0 && left >= 0.01 && fromUsdc(usdcHeld) >= 0.01 ? left : null,
+    };
+  }
+
+  /** /weather in Telegram: the swarm's day as a forecast, with its moving card. */
+  async #weatherReply(): Promise<{ text: string; buttons?: { text: string; url: string }[][]; animation?: string }> {
+    const page = `${config.publicUrl}/mind`;
+    if (!this.weather) return { text: "🌦 SWARM WEATHER is not on in this engine." };
+    const w = await this.weather.today().catch(() => null);
+    if (!w) return { text: "🌦 The swarm's numbers did not come in. Try again in a minute.", buttons: [[{ text: "🧠 SWARM MIND", url: page }]] };
+    return { text: weatherText(w, page), animation: `${config.publicUrl}/api/mind/weather.gif?d=${w.day}`, buttons: [[{ text: "🧠 Ask the swarm", url: page }]] };
+  }
+
+  /** /brief in Telegram: where BRIEF DOCTOR lives (the request is checked on the page, where it fits). */
+  async #briefReply(args: string[]): Promise<{ text: string; buttons?: { text: string; url: string }[][] }> {
+    const q = args.join(" ").trim();
+    const url = `${config.publicUrl}/mind?brief=${encodeURIComponent(q.slice(0, 600))}#brief`;
+    return { text: "🩺 <b>BRIEF DOCTOR</b>\nCheck a request before you pay 0.5 IMD for it: IMD's own free check, the work the swarm already did on it, and a better request that says what the swarm would have to guess.", buttons: [[{ text: "🩺 Check my request", url }]] };
+  }
+
+  /** Once a day, after 18:00 UTC: the forecast and its card in the community chats. */
+  async #postWeather(): Promise<void> {
+    const day = new Date().toISOString().slice(0, 10), mark = join(config.dataDir, "swarm-weather-posted.txt");
+    if (new Date().getUTCHours() < 18 || (existsSync(mark) && readFileSync(mark, "utf8").trim() === day) || !this.weather || !this.mind || this.mind.size() < 500) return;
+    const w = await this.weather.today();
+    writeFileSync(mark, day);
+    const r = await this.#weatherReply();
+    const markup = { inline_keyboard: (r.buttons ?? []).map((row) => row.map((b) => ({ text: b.text, url: b.url }))) };
+    for (const chat of chats()) await tgCall(config.telegramToken, "sendAnimation", { chat_id: chat, animation: `${config.publicUrl}/api/mind/weather.gif?d=${w.day}`, caption: weatherText(w, `${config.publicUrl}/mind`).slice(0, 1024), parse_mode: "HTML", reply_markup: markup });
+  }
+
+  /** /ask in Telegram: a question to SWARM MIND, answered from the swarm's own work, its sources as buttons. */
+  async #askSwarm(args: string[]): Promise<{ text: string; buttons?: { text: string; url: string }[][] }> {
+    const q = args.join(" ").trim();
+    const page = `${config.publicUrl}/mind`;
+    if (!this.mind) return { text: "🧠 SWARM MIND is not on in this engine.", buttons: [[{ text: "🧠 SWARM MIND", url: page }]] };
+    if (q.length < 3) return { text: `🧠 <b>SWARM MIND</b>\nAsk the IMD swarm's memory: ${this.mind.stats().works.toLocaleString("en-US")} works it published (research, audits, contracts, sites).\n\nTry: <code>/ask what audits found reentrancy</code>`, buttons: [[{ text: "🧠 Open SWARM MIND", url: page }]] };
+    const r = await this.mind.ask(q, this.llm, config.chatModel).catch(() => null);
+    if (!r) return { text: "🧠 SWARM MIND could not answer right now. Try again in a minute.", buttons: [[{ text: "🧠 SWARM MIND", url: page }]] };
+    const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]!));
+    return {
+      text: `🧠 <b>SWARM MIND</b> · ${esc(q.slice(0, 120))}\n\n${esc(r.answer).slice(0, 2600)}\n\n<i>From the swarm's own work. Not financial advice.</i>`,
+      buttons: [...r.sources.slice(0, 3).map((s) => [{ text: `[${s.n}] ${s.title.slice(0, 48)}`, url: s.url }]), [{ text: "🧠 Ask more", url: `${page}?q=${encodeURIComponent(q.slice(0, 200))}` }]],
     };
   }
 
