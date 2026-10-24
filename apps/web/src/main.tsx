@@ -58,6 +58,7 @@ const LivePage = lazy(() => import("./LivePage").then((x) => ({ default: x.LiveP
 const TgMoved = lazy(() => import("./TgMoved").then((x) => ({ default: x.TgMoved })));
 const ServicesPage = lazy(() => import("./station/Services").then((x) => ({ default: x.ServicesPage })));
 const MindPage = lazy(() => import("./station/Mind").then((x) => ({ default: x.MindPage })));
+const LastspawnPage = lazy(() => import("./lastspawn/LastspawnPage").then((x) => ({ default: x.LastspawnPage })));
 const VerdictPage = lazy(() => import("./station/Services").then((x) => ({ default: x.VerdictPage })));
 const HookPage = lazy(() => import("./station/Services").then((x) => ({ default: x.HookPage })));
 const ShipPage = lazy(() => import("./ship/ShipPage").then((x) => ({ default: x.ShipPage })));
@@ -87,6 +88,8 @@ function App() {
   // NIGHT SNIPER: an app screen of its own (iOS layout: its own bars, its own tabs)
   if (seg[0] === "sniper") return <Suspense fallback={<div className="arc-boot" />}><SniperPage /></Suspense>;
   if (seg[0] === "games" && seg[1] === "poker") return <Suspense fallback={<div className="arc-boot" />}><PokerPage /></Suspense>;
+  // LASTSPAWN: the MMORPG, full screen with its own three.js world (its own chunk)
+  if (seg[0] === "play") return <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#05070c" }} />}><LastspawnPage /></Suspense>;
   let page: React.ReactNode = <Home health={health} />;
   if (seg[0] === "co" && seg[1]) page = <CompanyPage id={seg[1]} health={health} />;
   if (seg[0] === "c" && seg[1]) page = <PublicPage slug={seg[1]} health={health} />;

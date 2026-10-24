@@ -46,6 +46,9 @@ importers:
       '@nightshift/imd':
         specifier: workspace:*
         version: link:../../packages/imd
+      '@nightshift/lastspawn':
+        specifier: workspace:^
+        version: link:../../packages/lastspawn
       '@nightshift/launch':
         specifier: workspace:*
         version: link:../../packages/launch
@@ -91,6 +94,9 @@ importers:
       web-push:
         specifier: 3.6.7
         version: 3.6.7
+      ws:
+        specifier: 8.22.0
+        version: 8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       zod:
         specifier: ^3.25.76
         version: 3.25.76
@@ -98,12 +104,18 @@ importers:
       '@types/web-push':
         specifier: ^3.6.4
         version: 3.6.4
+      '@types/ws':
+        specifier: 8.18.2
+        version: 8.18.2
       pokersolver:
         specifier: 2.1.4
         version: 2.1.4
 
   apps/web:
     dependencies:
+      '@nightshift/lastspawn':
+        specifier: workspace:^
+        version: link:../../packages/lastspawn
       '@nightshift/launch':
         specifier: workspace:*
         version: link:../../packages/launch
@@ -134,6 +146,9 @@ importers:
       chess.js:
         specifier: 1.0.0-beta.8
         version: 1.0.0-beta.8
+      postprocessing:
+        specifier: 6.39.5
+        version: 6.39.5(three@0.169.0)
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -192,6 +207,8 @@ importers:
       viem:
         specifier: ^2.21.54
         version: 2.57.7(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.7)
+
+  packages/lastspawn: {}
 
   packages/launch: {}
 
@@ -3221,6 +3238,11 @@ packages:
     resolution: {integrity: sha512-zkd+e9S1AQHhmaBKye9zlFHWjOwVgqXl1q3ECYy8561K7qxR2cREf/STLskulBFd78k6AOFeA+ff1TtEzk9bAA==}
     engines: {node: ^10 || ^12 || >=14}
 
+  postprocessing@6.39.5:
+    resolution: {integrity: sha512-YmH+t74J2X1lwYjKzK/tgs9C9kqWWPB9JwZiDF5mEf4BdCEAmEFbO8lXBA7NM0/j4g+x6FgD/Tt5/kT7ogbEDA==}
+    peerDependencies:
+      three: '>= 0.168.0 < 0.187.0'
+
   preact@10.24.2:
     resolution: {integrity: sha512-1cSoF0aCC8uaARATfrlz4VCBqE8LwZwRfLgkxJOQwAlQt6ayTmi0D9OF7nXid1POI5SZidFuG9CnlXbDfLqY/Q==}
 
@@ -3869,6 +3891,18 @@ packages:
 
   ws@8.21.0:
     resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -5579,11 +5613,11 @@ snapshots:
       '@noble/hashes': 1.8.0
       apg-js: 4.4.0
 
-  '@signinwithethereum/siwe@4.2.1(viem@2.57.7(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76))':
+  '@signinwithethereum/siwe@4.2.1(viem@2.57.7(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.7))':
     dependencies:
       '@signinwithethereum/siwe-parser': 4.2.1
     optionalDependencies:
-      viem: 2.57.7(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)
+      viem: 2.57.7(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.7)
 
   '@socket.io/component-emitter@3.1.2': {}
 
@@ -7213,7 +7247,7 @@ snapshots:
     dependencies:
       '@noble/curves': 1.9.7
       '@scure/base': 1.2.6
-      '@signinwithethereum/siwe': 4.2.1(viem@2.57.7(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76))
+      '@signinwithethereum/siwe': 4.2.1(viem@2.57.7(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.7))
       '@x402/core': 2.28.0
       ajv: 8.20.0
       jose: 5.10.0
@@ -8459,6 +8493,10 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.2
 
+  postprocessing@6.39.5(three@0.169.0):
+    dependencies:
+      three: 0.169.0
+
   preact@10.24.2: {}
 
   process-nextick-args@2.0.1: {}
@@ -9168,6 +9206,11 @@ snapshots:
       utf-8-validate: 6.0.6
 
   ws@8.21.0(bufferutil@4.1.0)(utf-8-validate@6.0.6):
+    optionalDependencies:
+      bufferutil: 4.1.0
+      utf-8-validate: 6.0.6
+
+  ws@8.22.0(bufferutil@4.1.0)(utf-8-validate@6.0.6):
     optionalDependencies:
       bufferutil: 4.1.0
       utf-8-validate: 6.0.6

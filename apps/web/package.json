@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@nightshift/lastspawn": "workspace:^",
     "@nightshift/launch": "workspace:*",
     "@nightshift/swap": "workspace:*",
     "@reown/appkit": "1.8.24",
@@ -20,6 +21,7 @@
     "@wagmi/connectors": "6.2.0",
     "@wagmi/core": "2.22.1",
     "chess.js": "1.0.0-beta.8",
+    "postprocessing": "6.39.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "0.169.0",

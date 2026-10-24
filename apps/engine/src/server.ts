@@ -3,6 +3,7 @@ import { type IncomingMessage, type ServerResponse, createServer } from "node:ht
 import { extname, join, normalize, resolve, sep } from "node:path";
 import type { Company, Product } from "@nightshift/core";
 import { NameError, saveName, savedName } from "./players.js";
+import { attachLastspawn } from "./lastspawn/index.js";
 import { fromImd, fromUsdc } from "@nightshift/core";
 import { type PaymentPayload, USDC, challenge as challenge402, decodeHeader, encodeHeader, requirement, verifyPayment } from "@nightshift/x402";
 import { balances, eth, sales } from "./chain.js";
@@ -1073,6 +1074,8 @@ export function serve(engine: Engine) {
       return json(res, 400, { error: raw || !msg ? "Something went wrong. Try again in a moment." : msg });
     }
   });
+  // LASTSPAWN: the MMORPG's world, one WebSocket on this same server (LASTSPAWN=0 turns it off)
+  if (process.env.LASTSPAWN !== "0") attachLastspawn(server, { dataDir: config.dataDir, wallet: (req) => engine.auth.caller(req)?.addr ?? null, savedName, log: (s) => console.error(s) });
   server.listen(config.port, () => console.log(`NIGHTSHIFT engine on ${config.publicUrl} (${config.mode} mode${engine.llm ? `, CEO model ${config.model}` : ", playbook CEO: set OPENROUTER_API_KEY for the model"})`));
   return server;
 }
