@@ -11,7 +11,7 @@ import { type Seat, StakeLobby, StakeResult, useEscrow } from "./stakes";
 import { alertJoined, doneWaiting, keepSeat, keepWaiting, Lounge, primeAlerts, waitText } from "./games/lounge";
 import { useStakedSeat } from "./games/staked";
 import { WeeklyPrizes } from "./games/prizes";
-import { handleFor, nameOr } from "./games/handle";
+import { handleFor, keepName, localName, nameOr } from "./games/handle";
 import "./pinball/arcade.css";
 import { LITE, onHidden } from "./lite";
 
@@ -108,7 +108,7 @@ export function PinballPage() {
   const [play, setPlay] = useState<Play | null>(null);
   const [waiting, setWaiting] = useState<{ match: MatchView; player: string } | null>(null);
   const [over, setOver] = useState<Over | null>(null);
-  const [name, setName] = useState(() => { try { return localStorage.getItem("pb-name") ?? ""; } catch { return ""; } });
+  const [name, setName] = useState(() => localName() ?? "");
   // ?accept=<match>&token=IMD (from the lounge): the stake lobby, where that challenge is accepted
   const [mode, setMode] = useState<Mode>(() => { const t = new URLSearchParams(location.search).get("token"); return t === "IMD" || t === "SHIFT" ? t : "FREE"; });
   const [now, setNow] = useState(Date.now());
@@ -190,7 +190,7 @@ export function PinballPage() {
 
   const start = async (want: Mode = mode) => {
     setErr(null); setOver(null);
-    try { localStorage.setItem("pb-name", name); } catch { /* private window */ }
+    keepName(name, !!address);
     if (want === "PRACTICE") {
       es.current?.close();
       // the server deals the table and runs its clock so the run can go on the solo board; offline, practice still works
@@ -230,7 +230,7 @@ export function PinballPage() {
   const following = waiting?.match.escrow ? waiting.match.id : play?.kind === "duel" && play.match.escrow ? play.match.id : null;
   useStakedSeat("pinball", seat, { busy: (play?.kind === "duel" && !play.match.done && !play.match.escrow) || (play?.kind === "practice" && !over), following, open: (s) => { if (!new URLSearchParams(location.search).get("token")) setMode((m) => (m === "FREE" ? s.token : m)); } });
   /** A seat from the lounge on this page: the same as a seat from the queue. */
-  const loungeSeat = (_game: string, id: string, player: string) => { setErr(null); setOver(null); clock.current = 0; try { localStorage.setItem("pb-name", name); } catch { /* private window */ } follow(id, player); };
+  const loungeSeat = (_game: string, id: string, player: string) => { setErr(null); setOver(null); clock.current = 0; keepName(name, !!address); follow(id, player); };
   const toLobby = () => { es.current?.close(); setPlay(null); setOver(null); setWaiting(null); };
 
   const opp = play?.kind === "duel" ? play.match.players.find((p) => !p.you) : null;

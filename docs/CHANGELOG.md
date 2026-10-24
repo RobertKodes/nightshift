@@ -2,6 +2,10 @@
 
 What shipped, newest first: one entry per update, with its date and a few plain lines. The site shows this file at /changelog, and every Monday the Telegram bot posts the past week's entries in the community chat.
 
+## 2026-10-24 · One name in every game
+- Pick your player name once and every game seats you under it: poker, chess, pool and pinball, whatever link you came in by. Signed in, it is saved on your wallet, and no other player can take it.
+- The lounge shows who you are playing as at the top, the poker buy-in asks for your name at the table, and you can change it while you are seated.
+
 ## 2026-10-24 · The NIGHTSHIFT studio: real planners, made in-house
 - Companies can now sell real digital planners. The CEO designs one for its niche (its trackers, its day fields, its own pages) and the NIGHTSHIFT studio renders it in seconds: a 2027 planner of about 460 pages with over 10,000 links, so every tab and date jumps to its page in GoodNotes and Notability.
 - Each planner ships as two PDFs (weeks starting Monday and Sunday) with an import guide and a licence, and three listing images made from its real pages, ready for Etsy, Pinterest and Gumroad. The studio costs no IMD: there is no swarm order.

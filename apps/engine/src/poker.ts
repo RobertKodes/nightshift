@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { LOUNGE_GRACE_MS, LOUNGE_WAIT_MS, LoungeError, OwnGameError, type Expired } from "./chess.js";
 import { config } from "./config.js";
 import { publicName, walletHandle } from "./names.js";
+import { savedName } from "./players.js";
 import type { Look } from "./pool.js";
 import { botAction, thinkMs } from "./poker/bot.js";
 import type { Card } from "./poker/cards.js";
@@ -103,7 +104,8 @@ export type PokerEvent = {
 };
 const ended: ((e: PokerEvent) => void)[] = [];
 export const onPoker = (f: (e: PokerEvent) => void) => { ended.push(f); };
-export function cleanName(name: string, wallet?: string | null): string { return publicName(name, { max: 18 }) ?? walletHandle(wallet) ?? "Night crew"; }
+/** A signed-in player plays under the name saved on their wallet; else the name typed, else a handle. */
+export function cleanName(name: string, wallet?: string | null): string { return savedName(wallet) ?? publicName(name, { max: 18 }) ?? walletHandle(wallet) ?? "Night crew"; }
 const keyOf = (p: Pick<Player, "name" | "wallet">) => (p.wallet ? `w:${p.wallet.toLowerCase()}` : `n:${p.name.toLowerCase()}`);
 const STREET_CARDS = { preflop: 0, flop: 3, turn: 4, river: 5 } as const;
 /** The pots of a hand being played, when an all-in has made more than one. */

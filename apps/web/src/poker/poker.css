@@ -360,3 +360,9 @@ li.open .pk-h-row .icon { transform:rotate(90deg); }
 }
 [data-lite] .pk-panel, [data-lite] .pk-top, [data-lite] .pk-overlay, [data-lite] .pk-emotes { backdrop-filter:none; }
 @media (prefers-reduced-motion:reduce) { .pk-deal, .pk-result, .pk-hole.shown .pk-card, .pk-bet.collect { animation:none; } .pk-mark-sweep { animation:none; opacity:0; } }
+
+/* your name at the table: on the buy-in, and changed while seated */
+.pk-name-field { display:grid; gap:6px; width:100%; text-align:left; font:600 10px/1 var(--mono); letter-spacing:.14em; color:var(--dim); text-transform:uppercase; }
+.pk-name-field input, .pk-rename input { width:100%; min-height:42px; padding:0 12px; border:1px solid var(--edge); background:rgba(124,92,255,.07); color:var(--moon); font:600 15px Inter, system-ui, sans-serif; letter-spacing:0; text-transform:none; }
+.pk-name-field input:focus, .pk-rename input:focus { outline:2px solid var(--uv-hi); outline-offset:1px; }
+.pk-rename { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:6px; align-items:center; }

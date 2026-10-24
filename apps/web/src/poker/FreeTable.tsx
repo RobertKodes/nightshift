@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { saveName } from "../games/handle";
 import { Icon } from "../Icon";
 import { Emote } from "../pool/cosmetics";
 import { type Action, type TableView, type TablesList, chips, newClientSeed, poker } from "./api";
@@ -13,11 +14,16 @@ export const TABLE_SEAT = "nk-table";
  * One free table, game first: from the rail (no seat) with every empty seat to sit in, or from your
  * seat with the actions, sit out, top up and stand up. Play chips only: never rated, staked or bet on.
  */
-export function FreeTable({ id, name, address, sound, onExit }: { id: string; name: string; address: string | null; sound: PokerSound | null; onExit: () => void }) {
+export function FreeTable({ id, name, address, sound, onName, onExit }: { id: string; name: string; address: string | null; sound: PokerSound | null; onName?: (n: string) => void; onExit: () => void }) {
   const [v, setV] = useState<TableView | null>(null);
   const [token, setToken] = useState<string | null>(() => { try { const s = JSON.parse(sessionStorage.getItem(TABLE_SEAT) ?? "null") as { id: string; player: string } | null; return s?.id === id ? s.player : null; } catch { return null; } });
   const [err, setErr] = useState<string | null>(null), [busy, setBusy] = useState(false), [skew, setSkew] = useState(0);
   const [buy, setBuy] = useState<{ seat: number; amount: number } | null>(null);
+  // the name you sit under (asked on the buy-in) and a new one while seated
+  // an automatic handle ("Frog-7F3A") is not a name: the box starts empty, the handle as its hint
+  const auto = /^Frog-[0-9A-F]{4}$/.test(name);
+  const [seatName, setSeatName] = useState(auto ? "" : name), [renaming, setRenaming] = useState<string | null>(null);
+  useEffect(() => setSeatName(/^Frog-[0-9A-F]{4}$/.test(name) ? "" : name), [name]);
   const [emotes, setEmotes] = useState(false);
   // the signed-in wallet's play chips, for the buy-in (a seat's own view carries them too)
   const [wallet, setWallet] = useState<number | null>(null);
@@ -63,7 +69,10 @@ export function FreeTable({ id, name, address, sound, onExit }: { id: string; na
   const post = async <T,>(path: string, body: Record<string, unknown> = {}) => poker<T>(`table/${id}/${path}`, { player: token, ...body });
   const run = async (f: () => Promise<unknown>) => { if (busy) return; setBusy(true); setErr(null); sound?.unlock(); try { await f(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); } };
   const sit = (seat: number, amount: number) => run(async () => {
-    const r = await poker<{ table: TableView; player: string }>(`table/${id}/sit`, { seat, name, buyIn: amount });
+    // signed in, the name is saved on the wallet first: the table seats you under it
+    const n = seatName.trim() ? (address ? await saveName(seatName, true) : seatName.trim().slice(0, 18)) : name;
+    if (n !== name) onName?.(n);
+    const r = await poker<{ table: TableView; player: string }>(`table/${id}/sit`, { seat, name: n, buyIn: amount });
     try { sessionStorage.setItem(TABLE_SEAT, JSON.stringify({ id, player: r.player })); } catch { /* private window */ }
     setBuy(null); last.current = null; receive(r.table); setToken(r.player);
   });
@@ -99,6 +108,14 @@ export function FreeTable({ id, name, address, sound, onExit }: { id: string; na
     <aside className="pk-side">
       {token && me ? <div className="pk-mine-tools">
         <div className="pk-section"><span>Your seat</span><span>{chips(me.stack)} chips{me.leaving ? " · standing up after this hand" : ""}</span></div>
+        {renaming === null
+          ? <button type="button" className="pk-name-btn" disabled={busy} onClick={() => setRenaming(me.name)} aria-label={`Your name at the table: ${me.name}. Change it`}><b>{me.name}</b><Icon name="edit" size={14} /></button>
+          : <form className="pk-rename" onSubmit={(e) => { e.preventDefault(); void run(async () => {
+              const n = address ? await saveName(renaming, true) : renaming.trim().slice(0, 18);
+              onName?.(n);
+              receive((await post<{ table: TableView }>("rename", { name: n })).table);
+              setRenaming(null);
+            }); }}><input autoFocus value={renaming} maxLength={18} autoComplete="nickname" aria-label="Your name at the table" onChange={(e) => setRenaming(e.target.value)} /><button type="submit" className="pk-btn small" disabled={busy || !renaming.trim()}>SAVE</button><button type="button" className="pk-btn ghost small" onClick={() => setRenaming(null)}>CANCEL</button></form>}
         <div className="pk-tool-row">
           <button type="button" className="pk-btn ghost small" disabled={busy} onClick={() => void run(async () => receive(await post<TableView>("sitout", { on: !me.sittingOut })))}>{me.sittingOut ? "I'M BACK" : "SIT OUT"}</button>
           <button type="button" className="pk-btn ghost small" disabled={busy || me.stack >= v.buyIn.max || (!!v.hand && v.hand.street !== "done" && v.hand.seats.some((s) => s.seat === v.you))} onClick={() => void run(async () => receive(await post<TableView>("topup")))}>TOP UP</button>
@@ -114,6 +131,7 @@ export function FreeTable({ id, name, address, sound, onExit }: { id: string; na
     {buy && <div className="pk-overlay" role="dialog" aria-modal="true" aria-labelledby="pk-buy" onKeyDown={(e) => { if (e.key === "Escape") setBuy(null); }}><div className="pk-dialog">
       <span className="pk-kicker">{v.name} · seat {buy.seat + 1}</span>
       <h2 id="pk-buy">Buy in</h2>
+      <label className="pk-name-field"><span>Your name at the table</span><input value={seatName} maxLength={18} autoComplete="nickname" placeholder={auto ? `Pick a name (or play as ${name})` : "Pick a name"} onChange={(e) => setSeatName(e.target.value)} /></label>
       <p>{address ? `From your play chips: ${chips(wallet ?? 0)} in your wallet today.` : "As a guest: fresh play chips for this seat. Sign in to keep what you win."}</p>
       <input type="range" className="pk-slider" min={v.buyIn.min} max={v.buyIn.max} step={v.blinds[1]} value={buy.amount} aria-label="Buy-in" onChange={(e) => setBuy({ ...buy, amount: Number(e.target.value) })} />
       <strong className="pk-buy-amount">{chips(buy.amount)} chips · {Math.round(buy.amount / v.blinds[1])} big blinds</strong>

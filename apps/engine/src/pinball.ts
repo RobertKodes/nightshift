@@ -5,6 +5,7 @@ import { parseAbi } from "viem";
 import { eth } from "./chain.js";
 import { config } from "./config.js";
 import { publicName, walletHandle } from "./names.js";
+import { savedName } from "./players.js";
 import { LOUNGE_GRACE_MS, LOUNGE_WAIT_MS, LoungeError, OwnGameError, type Expired } from "./chess.js";
 import { ATTACK_DELAY, type Attack, type Input, type Landing, MAX_TICKS, SEGMENTS, Table, replay, segmentOf } from "./pinball/engine.js";
 
@@ -152,7 +153,8 @@ function record(list: Score[], kind: keyof Boards = "duel"): void {
 
 /** A display name: letters, digits, space . - _, nothing the community guard would delete, and not one of ours (names.ts). */
 export function cleanName(name: string, wallet?: string | null): string {
-  return publicName(name, { max: 18 }) ?? walletHandle(wallet) ?? "Night crew";
+  // a signed-in player plays under the name saved on their wallet
+  return savedName(wallet) ?? publicName(name, { max: 18 }) ?? walletHandle(wallet) ?? "Night crew";
 }
 
 /** NIGHT FROGS on Ethereum. */

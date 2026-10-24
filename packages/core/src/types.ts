@@ -250,6 +250,8 @@ export interface Company {
   connections?: Connections;
   /** The owner's chat with the CEO (the owner's alone). */
   chat?: ChatLine[];
+  /** How the company was started (the website, an agent over MCP, the API) and where its founder came from. */
+  origin?: { via: "web" | "mcp" | "api"; from?: string };
   /** What the company paid for the strong model, from its own USDC, over the last two days. */
   aiSpend?: { at: number; usdc: bigint; tx: string | null }[];
   /** Everything the company ever paid for the strong model (USDC base units). */

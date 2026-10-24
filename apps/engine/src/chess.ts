@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { Chess, type Color, type Move } from "chess.js";
 import { config } from "./config.js";
 import { publicName, walletHandle } from "./names.js";
+import { savedName } from "./players.js";
 
 /**
  * Chess duels. Moves, elapsed time and results are decided here, never by a browser. Queue games
@@ -91,7 +92,8 @@ export const onChess = (f: (e: ChessEvent) => void) => { arcade.push(f); };
 const opposite = (c: Color): Color => c === "w" ? "b" : "w";
 /** A display name by the shared rule (names.ts): not one of ours however it is spelled, nothing the community guard deletes. */
 export function cleanName(name: string, wallet?: string | null): string {
-  return publicName(name, { max: 18 }) ?? walletHandle(wallet) ?? "Night crew";
+  // a signed-in player plays under the name saved on their wallet
+  return savedName(wallet) ?? publicName(name, { max: 18 }) ?? walletHandle(wallet) ?? "Night crew";
 }
 /** A player's rating key: their wallet when they have one (one row whatever name they use), else their name. */
 const keyOf = (p: Pick<Player, "name" | "wallet">) => (p.wallet ? `w:${p.wallet.toLowerCase()}` : `n:${p.name.toLowerCase()}`);

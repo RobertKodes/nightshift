@@ -2,6 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import type { Company, Product } from "@nightshift/core";
+import { NameError, saveName, savedName } from "./players.js";
 import { fromImd, fromUsdc } from "@nightshift/core";
 import { type PaymentPayload, USDC, challenge as challenge402, decodeHeader, encodeHeader, requirement, verifyPayment } from "@nightshift/x402";
 import { balances, eth, sales } from "./chain.js";
@@ -551,6 +552,13 @@ export function serve(engine: Engine) {
         return json(res, 200, { board: stakingBoard(20), me: /^0x[0-9a-fA-F]{40}$/.test(w) ? stakingOf(w) : null });
       }
       if (await spectateRoutes(req, res, p, { json, limited })) return;
+      // the player's name, saved on the signed-in wallet and used in every game
+      if (p === "/api/player" && req.method === "GET") return json(res, 200, { name: savedName(owner), signedIn: Boolean(owner) });
+      if (p === "/api/player/name" && req.method === "POST") {
+        if (!owner) return json(res, 401, { error: "Sign in to save your name on your wallet." });
+        if (limited(req, `player-name:${owner}`, 10, 3600_000)) return json(res, 429, { error: "Ten name changes an hour at most." });
+        try { return json(res, 200, { name: saveName(owner, (await body(req)).name) }); } catch (e) { return json(res, e instanceof NameError ? 400 : 500, { error: (e as Error).message }); }
+      }
       if (p.startsWith("/api/chess/") && await chessRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/pool/") && await poolRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/poker/") && await pokerRoutes(req, res, p, { json, body, limited, owner, url })) return;
@@ -825,7 +833,9 @@ export function serve(engine: Engine) {
         if (config.requireAuth && !owner) return json(res, 401, { error: "Sign in with your wallet to start a company." });
         if (limited(req, "create", 10, 3600_000)) return json(res, 429, { error: "Too many new companies from here; try again later." });
         const b = await body(req);
-        const c = await engine.create(String(b.idea ?? ""), (b.policy ?? {}) as never, owner);
+        // where the founder came from, as the site saw it on their first visit: a referrer's host or a campaign tag
+        const from = String(b.from ?? "").toLowerCase().replace(/[^a-z0-9.:_-]/g, "").slice(0, 60) || undefined;
+        const c = await engine.create(String(b.idea ?? ""), (b.policy ?? {}) as never, owner, { via: b.via === "web" ? "web" : "api", ...(from ? { from } : {}) });
         return json(res, 201, { id: c.id, slug: c.slug });
       }
       if (seg[0] === "api" && seg[1] === "companies" && seg[2]) {

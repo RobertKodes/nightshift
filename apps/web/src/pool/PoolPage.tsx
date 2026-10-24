@@ -4,6 +4,7 @@ import { Icon } from "../Icon";
 import { LITE, PHONE, pixelRatio } from "../lite";
 import { go } from "../router";
 import { useSession } from "../session";
+import { keepName, localName } from "../games/handle";
 import { erc20Abi, formatUnits } from "viem";
 import { STAKE_TOKENS, type Seat, StakeLobby, StakeResult, rpc, tokenLabel, useEscrow } from "../stakes";
 import { SEAT_KEY, doneWaiting, keepWaiting, Lounge, primeAlerts, alertJoined, useLounge, waitText } from "../games/lounge";
@@ -49,9 +50,10 @@ function Showcase() {
 /** A handle of the player's own, kept on this device: never one name shared by everyone. */
 const HANDLES = ["Shark", "Hustler", "Banker", "Kicker", "Railbird", "Breaker", "Cutter", "Stroker", "Masse", "Bankshot"];
 function handle(): string {
-  try { const n = localStorage.getItem("np-name")?.trim(); if (n && n !== "Night crew") return n; } catch { /* private window */ }
+  const n = localName();
+  if (n) return n;
   const h = `${HANDLES[Math.floor(Math.random() * HANDLES.length)]}-${100 + Math.floor(Math.random() * 900)}`;
-  try { localStorage.setItem("np-name", h); } catch { /* private window */ }
+  keepName(h, false);
   return h;
 }
 const shortAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -189,7 +191,8 @@ export function PoolPage() {
   const start = async (practiceMode = false) => {
     if (busy) return;
     setBusy(true); setErr(null); setClosedNote(null); setReward(null); primeAlerts();
-    try { localStorage.setItem("np-name", name); localStorage.setItem("np-rules", rules); } catch { /* private window */ }
+    keepName(name, !!address);
+    try { localStorage.setItem("np-rules", rules); } catch { /* private window */ }
     try {
       source.current?.close(); current.current = null;
       if (practiceMode) { setMode("practice"); practice.current = new Practice(name, rules, me ? { ...lookOf(me), level: me.level, guide: 1 } : undefined); receive(practice.current.view()); }
@@ -244,7 +247,7 @@ export function PoolPage() {
         <div className="np-cabinet"><Showcase /></div>
       </section>
       <section className="np-panel-card np-play" aria-label="Play">
-        <div className="np-who"><span className="np-label">PLAYING AS</span><NameEdit value={name} disabled={busy || waiting} onChange={(n) => { setName(n); try { localStorage.setItem("np-name", n); } catch { /* private window */ } }} /></div>
+        <div className="np-who"><span className="np-label">PLAYING AS</span><NameEdit value={name} disabled={busy || waiting} onChange={(n) => { setName(n); keepName(n, !!address); }} /></div>
         <div className="np-money" role="group" aria-label="Play for">{(["FREE", "SHIFT", "IMD"] as const).map((k) => <button type="button" key={k} className={money === k ? "on" : ""} aria-pressed={money === k} disabled={waiting} onClick={() => setMoney(k)}>{k === "FREE" ? "FREE" : tokenLabel(k)}</button>)}</div>
         {money === "FREE" ? <>
           <div className="np-choice" role="group" aria-label="Rules">{(["wpa", "quick"] as const).map((k) => <button type="button" key={k} className={rules === k ? "on" : ""} aria-pressed={rules === k} disabled={waiting} onClick={() => setRules(k)}><b>{k === "wpa" ? "WPA RULES" : "QUICK RULES"}</b><small>{k === "wpa" ? "Call ball and pocket every shot." : "Call the 8 only."}</small></button>)}</div>

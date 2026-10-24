@@ -7,7 +7,7 @@ import { type Seat, StakeLobby, StakeResult, tokenLabel, useEscrow } from "../st
 import { SEAT_KEY, alertJoined, doneWaiting, keepWaiting, Lounge, primeAlerts, waitText } from "../games/lounge";
 import { useStakedSeat } from "../games/staked";
 import { WeeklyPrizes } from "../games/prizes";
-import { handleFor, nameOr, typedName } from "../games/handle";
+import { handleFor, keepName, localName, nameOr, typedName } from "../games/handle";
 import { Emote } from "../pool/cosmetics";
 import "../chess/chess.css";
 import "../games/live.css";
@@ -52,8 +52,8 @@ export function PokerPage() {
   const { address, signIn, busy: signing } = useSession();
   const params = new URLSearchParams(location.search);
   const verifying = location.pathname === "/games/poker/verify";
-  const [name, setName] = useState(() => { try { const n = localStorage.getItem("nk-name"); return typedName(n) ? n! : handleFor(); } catch { return handleFor(); } });
-  useEffect(() => { try { if (!typedName(localStorage.getItem("nk-name"))) setName(handleFor(address)); } catch { /* private window */ } }, [address]);
+  const [name, setName] = useState(() => { try { return localName() ?? handleFor(); } catch { return handleFor(); } });
+  useEffect(() => { try { if (!localName()) setName(handleFor(address)); } catch { /* private window */ } }, [address]);
   const playName = nameOr(name, address);
   const [money, setMoney] = useState<"FREE" | "IMD" | "SHIFT">(() => { const t = params.get("token"); return t === "IMD" || t === "SHIFT" ? t : "FREE"; });
   const escrow = useEscrow();
@@ -160,7 +160,7 @@ export function PokerPage() {
   const start = async (practiceMode = false) => {
     if (busy) return;
     setBusy(true); setErr(null); setClosedNote(null); sound.current?.unlock(); if (!practiceMode) primeAlerts();
-    try { if (typedName(name) && name !== handleFor(address)) localStorage.setItem("nk-name", name); } catch { /* private window */ }
+    try { if (typedName(name) && name !== handleFor(address)) keepName(name, !!address); } catch { /* private window */ }
     try {
       source.current?.close(); current.current = null;
       const r = await poker<{ match: MatchView; player: string }>(practiceMode ? "practice" : "queue", { name: playName });
@@ -212,7 +212,7 @@ export function PokerPage() {
         {address ? <span className="pk-wallet"><Icon name="user" size={15} /><span>{address.slice(0, 6)}…{address.slice(-4)}</span></span> : <button type="button" className="pk-btn ghost small" disabled={signing} onClick={() => void signIn()}><Icon name="user" size={15} /><span>{signing ? "SIGNING IN" : "SIGN IN"}</span></button>}
       </div>
     </header>
-    <FreeTable id={tableId} name={playName} address={address} sound={sound.current} onExit={() => openTable(null)} />
+    <FreeTable id={tableId} name={playName} address={address} sound={sound.current} onName={(n) => { setName(n); keepName(n, !!address); }} onExit={() => openTable(null)} />
   </div>;
 
   if (verifying) return <div className="pk pk-page">
@@ -237,7 +237,7 @@ export function PokerPage() {
         <div className="pk-cabinet"><PokerTable hand={DEMO_HAND} players={DEMO_PLAYERS} seats={2} you={0} clock={null} skew={0} emotes={[]} /></div>
       </section>
       <section className="pk-panel pk-play" aria-label="Play">
-        <div className="pk-playas"><span className="pk-label">Playing as</span><NameEdit value={playName} disabled={busy || waiting} onChange={(n) => { setName(n); try { localStorage.setItem("nk-name", n); } catch { /* private window */ } }} /></div>
+        <div className="pk-playas"><span className="pk-label">Playing as</span><NameEdit value={playName} disabled={busy || waiting} onChange={(n) => { setName(n); keepName(n, !!address); }} /></div>
         <div className="pk-money" role="group" aria-label="Play for">{(["FREE", "SHIFT", "IMD"] as const).map((k) => <button type="button" key={k} className={money === k ? "on" : ""} aria-pressed={money === k} disabled={waiting} onClick={() => setMoney(k)}>{k === "FREE" ? "FREE" : tokenLabel(k)}{k !== "FREE" && !escrow?.live && <Icon name="lock" size={12} />}</button>)}</div>
         <ul className="pk-facts"><li><b>2,000</b><span>chips each · 100 big blinds</span></li><li><b>3 min</b><span>blind levels</span></li><li><b>20 s</b><span>a move · +45 s time bank</span></li></ul>
         {money === "FREE" ? <>

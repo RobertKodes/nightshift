@@ -16,7 +16,7 @@ import { type Seat, StakeLobby, StakeResult, tokenLabel, useEscrow } from "./sta
 import { alertJoined, doneWaiting, keepWaiting, Lounge, primeAlerts, useLounge, waitingOn, waitText } from "./games/lounge";
 import { useStakedSeat } from "./games/staked";
 import { WeeklyPrizes } from "./games/prizes";
-import { handleFor, nameOr, typedName } from "./games/handle";
+import { handleFor, keepName, localName, nameOr, typedName } from "./games/handle";
 
 const OPENING = new Chess().fen();
 const DEMO = "r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 4 7";
@@ -48,8 +48,8 @@ function PlayerCard({ player, ms, active, captured, advantage, label, away }: { 
 export function ChessPage() {
   const { address, signIn, busy: signing } = useSession();
   // the name typed once, else the player's own handle (never a name everyone shares)
-  const [name,setName] = useState(()=>{try{const n=localStorage.getItem("nc-name");return typedName(n) ? n! : handleFor();}catch{return handleFor();}});
-  useEffect(()=>{try{if(!typedName(localStorage.getItem("nc-name")))setName(handleFor(address));}catch { /* private window */ }},[address]);
+  const [name,setName] = useState(()=>{try{return localName() ?? handleFor();}catch{return handleFor();}});
+  useEffect(()=>{try{if(!localName())setName(handleFor(address));}catch { /* private window */ }},[address]);
   const playName=nameOr(name,address);
   const [tc,setTc] = useState<TimeControl>("3+2");
   // ?accept=<match>&token=IMD (from the lounge): the stake lobby, where that challenge is accepted
@@ -171,7 +171,7 @@ export function ChessPage() {
   },[time,running,match?.turn,myColor]);
   const start = async (practiceMode=false) => {
     if(actionPending.current)return;actionPending.current=true;setBusy(true);setErr(null);setClosedNote(null);sound.current?.unlock();if(!practiceMode)primeAlerts();
-    try {if(typedName(name) && name!==handleFor(address))localStorage.setItem("nc-name",name);}catch { /* private window */ }
+    if(typedName(name) && name!==handleFor(address))keepName(name,!!address);
     try {
       source.current?.close();setSelected(null);setConfirm(null);offset.current=0;shownPly.current=0;current.current=null;
       if(practiceMode){setMode("practice");practice.current=new Practice(playName,tc);receive(practice.current.state);setConnected(true);}
@@ -202,7 +202,7 @@ export function ChessPage() {
   useStakedSeat("chess",seat,{busy:!!match && !match.done && !match.escrow && (mode==="practice" || !!match.startedAt),following:match?.escrow ? match.id : null,open:(s)=>{if(!new URLSearchParams(location.search).get("token"))setMoney((m)=>m==="FREE" ? s.token : m);}});
   const lobby=()=>{if(watching.current){watching.current=null;setWatchId(null);setViewers(0);window.history.replaceState(null,"","/games/chess");document.title="NIGHT CHESS · NIGHTSHIFT";}if(current.current)doneWaiting("chess",current.current.id);source.current?.close();source.current=null;practice.current=null;current.current=null;setMatch(null);setToken("");setSelected(null);setPromotion(null);setConfirm(null);setErr(null);setConnected(true);try{sessionStorage.removeItem("nc-match");}catch { /* private window */ }};
   /** A seat from the lounge on this page: the same as a seat from the queue. */
-  const loungeSeat=(_game: string,id: string,player: string)=>{source.current?.close();practice.current=null;current.current=null;offset.current=0;shownPly.current=0;setErr(null);setClosedNote(null);setMode("online");try{if(typedName(name) && name!==handleFor(address))localStorage.setItem("nc-name",name);}catch { /* private window */ }follow(id,player);};
+  const loungeSeat=(_game: string,id: string,player: string)=>{source.current?.close();practice.current=null;current.current=null;offset.current=0;shownPly.current=0;setErr(null);setClosedNote(null);setMode("online");if(typedName(name) && name!==handleFor(address))keepName(name,!!address);follow(id,player);};
   const cancelSearch=async()=>{
     if(!match || actionPending.current)return;actionPending.current=true;setBusy(true);
     try {await api(`match/${match.id}/leave`,{player:token});lobby();}

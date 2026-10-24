@@ -89,7 +89,7 @@ function build(engine: Engine, owner: string | null) {
     inputSchema: { idea: z.string().min(12).max(1000), dailyBudgetUsd: z.number().min(0).max(10000).default(10), askOverUsd: z.number().min(0).default(5), autopilot: z.boolean().default(true) },
   }, run(async (a: { idea: string; dailyBudgetUsd: number; askOverUsd: number; autopilot: boolean }) => {
     if (config.requireAuth && !owner) throw new Error("This key has no owner.");
-    const c = await engine.create(a.idea, { dailyBudgetUsd: a.dailyBudgetUsd, approvalOverUsd: a.askOverUsd, autopilot: a.autopilot }, owner);
+    const c = await engine.create(a.idea, { dailyBudgetUsd: a.dailyBudgetUsd, approvalOverUsd: a.askOverUsd, autopilot: a.autopilot }, owner, { via: "mcp", from: "mcp" });
     return { ok: true, ...brief(c), fund: config.mode === "live" ? `Send IMD (and a little ETH for the one-time Permit2 approval) to ${c.wallet} on Ethereum.` : "Simulation: it starts with 20 simulated IMD." };
   }));
 

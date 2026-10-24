@@ -5,7 +5,7 @@ import { useSession } from "../session";
 import { type ChallengeView, StakeResult, tokenLabel } from "../stakes";
 import { type LiveGame, LiveRow } from "./live";
 import { isClosedHere, seatPath, useMyStakes } from "./staked";
-import { nameOr } from "./handle";
+import { keepName, localName, nameOr } from "./handle";
 import "./lounge.css";
 
 /**
@@ -123,8 +123,8 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return j as T;
 }
 type Seated = { match: { id: string; startedAt: number | null; waitingSince?: number; tc?: string | null; status?: string }; player: string };
-const NAME_KEY: Record<Game, string> = { chess: "nc-name", pinball: "pb-name", pool: "np-name", poker: "nk-name" };
-const savedName = (game: Game) => { try { return nameOr(localStorage.getItem(NAME_KEY[game])); } catch { return nameOr(""); } };
+/** The player's one name, the same in every game. */
+const savedName = (_game: Game) => nameOr(localName());
 /** NIGHT POOL's rules for new tables: WPA (every shot called) unless the player picked quick. */
 const poolRules = () => { try { return localStorage.getItem("np-rules") === "quick" ? "quick" : "wpa"; } catch { return "wpa"; } };
 /** A seat taken from the lounge: the board if the game is on, else this tab waits (banner) wherever it goes. */
@@ -191,6 +191,25 @@ function OpenRow({ g, now, skew, mine, busy, onJoin, onCancel }: { g: OpenGame; 
  * (the Game Room page; the game pages have their own). `onSeat` takes a seat on the page itself
  * instead of navigating to it.
  */
+/** The player's name for every game: typed once, kept here, and on the wallet when signed in. */
+function PlayingAs({ signedIn }: { signedIn: boolean }) {
+  const [name, setName] = useState(() => localName() ?? ""), [edit, setEdit] = useState(!localName()), [note, setNote] = useState<string | null>(null);
+  const keepIt = () => {
+    const n = name.trim().slice(0, 18);
+    if (!n) return;
+    keepName(n, signedIn);
+    setEdit(false);
+    setNote(signedIn ? "Saved on your wallet: every game seats you under it." : "Saved on this device. Sign in to keep it on your wallet.");
+  };
+  return <div className="lg-me">
+    <span className="lg-me-label">PLAYING AS</span>
+    {edit
+      ? <form className="lg-me-form" onSubmit={(e) => { e.preventDefault(); keepIt(); }}><input value={name} maxLength={18} autoComplete="nickname" placeholder="Pick your name" aria-label="Your player name" onChange={(e) => setName(e.target.value)} /><button type="submit" className="lg-btn" disabled={!name.trim()}>SAVE</button></form>
+      : <button type="button" className="lg-me-name" onClick={() => setEdit(true)} aria-label={`Your player name: ${name}. Change it`}><b>{name}</b><Icon name="edit" size={14} /></button>}
+    {note && <small className="lg-me-note">{note}</small>}
+  </div>;
+}
+
 export function Lounge({ game, create = false, onSeat }: { game?: Game; create?: boolean; onSeat?: (game: Game, id: string, player: string) => void }) {
   const l = useLounge(), now = useNow(), mine = useWaiting(), { address } = useSession();
   const [pick, setPick] = useState<Game>(game ?? "chess");
@@ -213,6 +232,7 @@ export function Lounge({ game, create = false, onSeat }: { game?: Game; create?:
   const waiting = l ? (game === "pinball" ? l.waiting.pinball : game === "pool" ? l.waiting.pool ?? 0 : game === "poker" ? l.waiting.poker ?? 0 : game === "chess" ? Object.values(l.waiting.chess).reduce((a, b) => a + b, 0) : open.length) : 0;
   const createFor = create ? pick : game;
   return <section className="lg" aria-labelledby={`lg-title-${game ?? "all"}`}>
+    <PlayingAs signedIn={!!address} />
     <div className="lg-head"><div><b id={`lg-title-${game ?? "all"}`}>THE LOUNGE</b><span>{l === null ? "Connecting…" : `${waiting} waiting for a rival · ${live.length} live`}</span></div><span className={`lg-state ${open.length ? "on" : ""}`}><i />{open.length ? `${open.length} OPEN ${open.length === 1 ? "TABLE" : "TABLES"}` : "NO ONE WAITING"}</span></div>
 
     {create && <div className="lg-create">

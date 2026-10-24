@@ -1023,7 +1023,7 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
     };
   }
 
-  async create(idea: string, policy: Partial<Policy> = {}, owner: string | null = null): Promise<Company> {
+  async create(idea: string, policy: Partial<Policy> = {}, owner: string | null = null, origin?: Company["origin"]): Promise<Company> {
     if (owner) {
       const mine = [...this.store.companies.values()].filter((x) => x.owner === owner.toLowerCase()).length;
       // NIGHT FROGS holders may run a few more companies.
@@ -1045,6 +1045,7 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
       cycle: 0, nextShiftAt: p.autopilot ? Date.now() + 3000 : null,
       site: null, products: [], tasks: [], journal: [], marketing: [],
       ...(config.mode === "sim" ? { sim: true } : {}),
+      ...(origin ? { origin } : {}),
     };
     this.store.companies.set(id, c);
     if (config.mode === "sim") {

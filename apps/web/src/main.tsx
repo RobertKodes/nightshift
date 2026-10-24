@@ -1,6 +1,6 @@
 import { Component, type ReactNode, StrictMode, Suspense, lazy, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { type Health, api } from "./api";
+import { type Health, api, noteFirstTouch } from "./api";
 import { CompanyPage } from "./CompanyPage";
 import { Home } from "./Home";
 import { type Active } from "./landing/chrome";
@@ -37,6 +37,9 @@ import { StakedBanner } from "./games/staked";
 import "./styles.css";
 import "./lite"; // marks <html data-lite> before the first paint
 import "./landing/landing.css";
+
+// where this visitor first came from, kept for the company they may start
+noteFirstTouch();
 
 const LaunchpadPage = lazy(() => import("./launchpad/LaunchpadPage").then((x) => ({ default: x.LaunchpadPage })));
 const ArenaPage = lazy(() => import("./ArenaPage").then((x) => ({ default: x.ArenaPage })));

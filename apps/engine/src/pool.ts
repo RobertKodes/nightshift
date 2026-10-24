@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { LOUNGE_GRACE_MS, LOUNGE_WAIT_MS, LoungeError, OwnGameError, type Expired } from "./chess.js";
 import { config } from "./config.js";
 import { publicName, walletHandle } from "./names.js";
+import { savedName } from "./players.js";
 import { type Ball, type Frame, HEAD_Y, POCKETED, type Shot, STILL, fits, isInt, simulate, validShot } from "./pool/physics.js";
 import { type Call, type Choice, type Options, QUICK, type Rack, type Seat, type Verdict, WPA, badCall, decide as rulesDecide, defaultChoice, newRack, onEight, standing, summarize, targets, timeFoul, judge } from "./pool/rules.js";
 
@@ -82,7 +83,8 @@ export type PoolEvent = {
 };
 const ended: ((e: PoolEvent) => void)[] = [];
 export const onPool = (f: (e: PoolEvent) => void) => { ended.push(f); };
-export function cleanName(name: string, wallet?: string | null): string { return publicName(name, { max: 18 }) ?? walletHandle(wallet) ?? "Night crew"; }
+/** A signed-in player plays under the name saved on their wallet; else the name typed, else a handle. */
+export function cleanName(name: string, wallet?: string | null): string { return savedName(wallet) ?? publicName(name, { max: 18 }) ?? walletHandle(wallet) ?? "Night crew"; }
 const keyOf = (p: Pick<Player, "name" | "wallet">) => JSON.stringify([p.name.toLowerCase(), p.wallet?.toLowerCase() ?? ""]);
 const other = (s: Seat): Seat => (s === 0 ? 1 : 0);
 

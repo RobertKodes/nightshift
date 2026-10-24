@@ -154,6 +154,13 @@ export class RingTables {
     t.seats[i] = null;
     this.emit(t);
   }
+  /** A new name at the table (a signed-in player's saved name wins, as when sitting down). */
+  rename(id: string, token: string, name: unknown) {
+    const t = this.table(id), s = t.seats[this.seatOf(t, token)]!;
+    s.name = cleanName(String(name ?? ""), s.wallet);
+    this.emit(t);
+    return { table: this.view(t, s.id) };
+  }
   /** Sit out (not dealt in) or come back. */
   sitOut(id: string, token: string, on: unknown) {
     const t = this.table(id), s = t.seats[this.seatOf(t, token)]!;

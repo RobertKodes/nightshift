@@ -159,6 +159,23 @@ export interface Desk {
 }
 
 /**
+ * Where this visitor first came from (a campaign tag, else the site that linked here), kept from their
+ * first page: a new company records it, so we know which channels bring founders. No personal data.
+ */
+const FIRST = "ns-from";
+export function noteFirstTouch(): void {
+  try {
+    if (localStorage.getItem(FIRST)) return;
+    const q = new URLSearchParams(location.search), utm = q.get("utm_source") ?? q.get("ref");
+    let host = "";
+    try { host = document.referrer ? new URL(document.referrer).hostname.replace(/^www\./, "") : ""; } catch { /* no referrer */ }
+    if (host === location.hostname) host = "";
+    localStorage.setItem(FIRST, (utm ?? host) || "direct");
+  } catch { /* private window */ }
+}
+const firstTouch = (): string => { try { return localStorage.getItem(FIRST) ?? "direct"; } catch { return "direct"; } };
+
+/**
  * A session token the page holds itself, only where no cookie can reach (a framed page). Nothing sets
  * one since the Telegram Mini App was removed: the session stays in the HttpOnly cookie.
  */
@@ -189,7 +206,7 @@ export const api = {
   companies: (mine = false) => req<CompanyCard[]>("GET", `/api/companies${mine ? "?mine=1" : ""}`),
   company: (id: string) => req<CompanyFull>("GET", `/api/companies/${id}`),
   publicCompany: (slug: string, via?: string | null) => req<PublicCompany>("GET", `/api/public/${slug}${via ? `?via=${encodeURIComponent(via)}` : ""}`),
-  create: (idea: string, policy: Partial<Policy>) => req<{ id: string; slug: string }>("POST", "/api/companies", { idea, policy }),
+  create: (idea: string, policy: Partial<Policy>) => req<{ id: string; slug: string }>("POST", "/api/companies", { idea, policy, via: "web", from: firstTouch() }),
   shift: (id: string) => req("POST", `/api/companies/${id}/shift`),
   closeOut: (id: string) => req<{ ok: boolean; txs: string[]; returned: string[] }>("POST", `/api/companies/${id}/close`, {}),
   pause: (id: string) => req("POST", `/api/companies/${id}/pause`),

@@ -104,6 +104,7 @@ export async function pokerRoutes(req: IncomingMessage, res: ServerResponse, p: 
       if (action === "seed") return reply(200, tables.seed(id, player, b.hand, b.seed));
       if (action === "emote") { tables.emote(id, player, String(b.emote ?? "")); return reply(200, { ok: true }); }
       if (action === "sitout") return reply(200, tables.sitOut(id, player, b.on));
+      if (action === "rename") return reply(200, tables.rename(id, player, b.name));
       if (action === "topup") return reply(200, tables.topUp(id, player));
       return reply(200, tables.leave(id, player));
     }
