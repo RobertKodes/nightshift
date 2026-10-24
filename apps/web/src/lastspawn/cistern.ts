@@ -41,7 +41,8 @@ export async function buildCistern(q: Quality, scene: THREE.Scene): Promise<Plac
   for (let x = -12; x <= 12; x += 4) for (let z = -12; z <= 12; z += 4) {
     const r = Math.hypot(x, z);
     if (r > R + 2 || r < CISTERN.pool + 1.4) continue;
-    g.add(dress(piece(stone, tiles[k++ % tiles.length]!, { x, y: 0, z, ry: (k % 4) * Math.PI / 2 }), STONE, { shadows: false }));
+    // a tile's top is 5 cm above its origin: sunk so its face is the ground the frogs stand on
+    g.add(dress(piece(stone, tiles[k++ % tiles.length]!, { x, y: -0.05, z, ry: (k % 4) * Math.PI / 2 }), STONE, { shadows: false }));
   }
   // the basin follows the same ground the server checks, so you wade down into it
   const prof: THREE.Vector2[] = [];
@@ -53,7 +54,8 @@ export async function buildCistern(q: Quality, scene: THREE.Scene): Promise<Plac
   const lipG: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 26; i++) {
     const a = (i / 26) * Math.PI * 2, b = new THREE.BoxGeometry(1.15, 0.22, 0.55);
-    b.rotateY(-a + Math.PI / 2); b.translate(Math.cos(a) * (CISTERN.pool + 0.75), 0.06 + (i % 3) * 0.015, Math.sin(a) * (CISTERN.pool + 0.75));
+    // the lip stones rise only a finger's width above the floor, so feet stand on them, not in them
+    b.rotateY(-a + Math.PI / 2); b.translate(Math.cos(a) * (CISTERN.pool + 0.75), -0.07 + (i % 3) * 0.01, Math.sin(a) * (CISTERN.pool + 0.75));
     lipG.push(b);
   }
   const lip = new THREE.Mesh(mergeGeometries(lipG), toonWithRim({ color: new THREE.Color(0x7d8698), rim: 0.15 }));

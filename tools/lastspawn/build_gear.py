@@ -89,6 +89,9 @@ bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=16, radius=1.0)
 for v in [v for v in bm.verts if v.co.y > 0.05]: bm.verts.remove(v)
 bmesh.ops.scale(bm, vec=(0.44, 0.17, 0.4), verts=bm.verts)
 shell = obj_from(bm, "shell", SHELL)
+# a real thickness: a dome with an inside, so it is never see-through from behind
+mod = shell.modifiers.new("thick", "SOLIDIFY"); mod.thickness = 0.035; mod.offset = 1.0
+bpy.context.view_layer.objects.active = shell; bpy.ops.object.modifier_apply(modifier=mod.name)
 parts = [shell]
 def scute(cx, cz, r):
     b = bmesh.new()

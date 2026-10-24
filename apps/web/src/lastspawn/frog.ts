@@ -86,7 +86,8 @@ async function gear(): Promise<THREE.Object3D> {
     const name = (m.material as THREE.Material).name;
     let mat = gearMats.get(name);
     if (!mat) {
-      mat = name === "gear_glow" ? new THREE.MeshBasicMaterial({ color: new THREE.Color(0xd8ff8a).multiplyScalar(2.2) }) : new THREE.MeshToonMaterial({ color: GEAR_COLORS[name] ?? 0x888888, gradientMap: toonRamp() });
+      // both faces: thin pieces (a blade, a cage bar) never show a hole from the far side
+      mat = name === "gear_glow" ? new THREE.MeshBasicMaterial({ color: new THREE.Color(0xd8ff8a).multiplyScalar(2.2) }) : new THREE.MeshToonMaterial({ color: GEAR_COLORS[name] ?? 0x888888, gradientMap: toonRamp(), side: THREE.DoubleSide });
       gearMats.set(name, mat);
     }
     m.material = mat; m.castShadow = true;

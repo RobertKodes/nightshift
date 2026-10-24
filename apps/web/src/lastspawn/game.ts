@@ -130,14 +130,18 @@ export class Game {
   openCreator(look: Look) {
     const me = this.#me!;
     this.#look = look; me.applyLook(look); me.root.visible = true;
-    this.#pos.set(0, 0.06, -(CISTERN.pool + 0.8)); this.#ry = 0;
-    me.play({ clip: "Idle", loop: true });
+    this.#pos.set(0, 0.03, -(CISTERN.pool + 0.8)); this.#ry = 0;
+    me.play({ clip: this.#cls === "reedguard" ? "2H_Melee_Idle" : "Idle", loop: true });
     void me.equip(this.#cls);
     this.controls.enabled = false;
     this.#set({ phase: "create", error: null });
   }
   setLook(look: Look) { this.#look = look; this.#me?.applyLook(look); }
-  previewClass(cls: ClassId) { this.#cls = cls; void this.#me?.equip(cls); }
+  previewClass(cls: ClassId) {
+    this.#cls = cls; void this.#me?.equip(cls);
+    // the glaive is held ready in both hands; the others stand easy
+    this.#me?.play({ clip: cls === "reedguard" ? "2H_Melee_Idle" : "Idle", loop: true });
+  }
   get lookCode() { return encodeLook(this.#look); }
 
   /** Make the frog on the server: it answers with the world. */
