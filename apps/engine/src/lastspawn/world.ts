@@ -1,15 +1,15 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import {
-  ABILITIES, CLASSES, COMMON_ABILITIES, GCD_MS, MAX_LEVEL, MOBS, NPCS, PROTOCOL_VERSION,
-  QUESTS, SPEED, TICK_HZ, VIEW_RADIUS, ZONES, floorAt, inBounds, validLook, xpNext,
+  ABILITIES, ARMOR_K, CLASSES, COMMON_ABILITIES, GCD_MS, ITEMS, MAX_LEVEL, MOBS, NPCS, PROTOCOL_VERSION,
+  QUESTS, SLOTS, SPEED, TICK_HZ, VIEW_RADIUS, ZONES, floorAt, inBounds, validLook, xpNext,
 } from "@nightshift/lastspawn";
 import type {
   Ability, CharSummary, ClientMsg, CombatEvent, EntitySnap, ItemStack, MobCamp, QuestDef,
-  Spot, Stats, ZoneId,
+  Slot, Spot, Stats, ZoneId,
 } from "@nightshift/lastspawn";
 import type { Actor, Character, Connection, Mob, Npc, Player, Session } from "./state.js";
-import { distance, horizontal, own } from "./state.js";
+import { distance, horizontal, own, starterEquip } from "./state.js";
 import { loadCharacters, saveCharacters, validName } from "./store.js";
 
 export type { Connection } from "./state.js";
@@ -27,7 +27,12 @@ const npcLines: Record<string, string> = {
 };
 const summaries = (c: Character): CharSummary => ({ id: c.id, name: c.name, cls: c.cls, level: c.level, look: c.look, zone: c.zone });
 const health = (c: Character) => CLASSES[c.cls].hp + CLASSES[c.cls].hpPerLevel * (c.level - 1);
-const statsOf = (p: Player): Stats => ({ hp: p.hp, hpMax: p.hpMax, level: p.level, xp: p.xp, xpNext: xpNext(p.level) });
+const gearBonus = (p: Player, stat: "armor" | "power") => SLOTS.reduce((sum, slot) => {
+  const id = p.equip[slot];
+  return sum + (id ? ITEMS[id]?.[stat] ?? 0 : 0);
+}, 0);
+const statsOf = (p: Player): Stats => ({ hp: p.hp, hpMax: p.hpMax, level: p.level, xp: p.xp,
+  xpNext: xpNext(p.level), armor: gearBonus(p, "armor"), power: gearBonus(p, "power") });
 
 export class World {
   private readonly file: string;
@@ -77,7 +82,10 @@ export class World {
     const p = s.player;
     if (!p) return;
     if (msg.t === "say") { this.say(p, msg.text); return; }
-    if (p.hp <= 0) return;
+    if (p.hp <= 0) {
+      if (msg.t === "equip" || msg.t === "unequip" || msg.t === "use") this.error(s, "You cannot do that while dead.");
+      return;
+    }
     switch (msg.t) {
       case "move": this.move(p, msg); break;
       case "leap": this.leap(p, msg.ry); break;
@@ -89,6 +97,9 @@ export class World {
       case "interact": this.interact(p, msg.id); break;
       case "choose": this.choose(p, msg.npc, msg.option); break;
       case "quest": this.quest(p, msg.action, msg.id); break;
+      case "equip": this.equip(p, msg.item); break;
+      case "unequip": this.unequip(p, msg.slot); break;
+      case "use": this.use(p, msg.item); break;
       // Loot is awarded on death, so there is no client-controlled loot operation.
       case "loot": break;
     }
@@ -169,7 +180,7 @@ export class World {
     if (all.filter((c) => c.account === s.conn.account).length >= 3) { this.error(s, "An account may have three characters."); return; }
     const c: Character = { id: randomUUID(), account: s.conn.account, name: msg.name, cls: msg.cls, look: msg.look,
       level: 1, xp: 0, zone: "cistern", ...ZONES.cistern.spawn, hp: CLASSES[msg.cls].hp,
-      quests: [], bag: [], flags: {}, createdAt: this.now(), lastSeen: this.now() };
+      quests: [], bag: [], equip: starterEquip(msg.cls), flags: {}, createdAt: this.now(), lastSeen: this.now() };
     this.characters.set(c.id, c);
     this.play(s, c.id);
     this.save();
@@ -209,7 +220,7 @@ export class World {
   private enter(p: Player): void {
     p.session.fullSnapshot = true;
     p.session.conn.send({ t: "enter", you: p.id, zone: p.zone, char: summaries(p), stats: statsOf(p),
-      quests: structuredClone(p.quests), bag: structuredClone(p.bag), tick: this.step });
+      quests: structuredClone(p.quests), bag: structuredClone(p.bag), equip: { ...p.equip }, tick: this.step });
   }
 
   private correct(p: Player, seq = p.seq): void {
@@ -381,7 +392,8 @@ export class World {
     if (immune || this.hasAura(dst, "leaping")) {
       this.event(dst, { k: "miss", src: src.id, dst: dst.id, ability, why: immune ? "immune" : "dodge" }); return;
     }
-    if (src.k === "player") this.breakStealth(src);
+    if (src.k === "player") { this.breakStealth(src); amount *= 1 + gearBonus(src, "power") / 100; }
+    if (dst.k === "player") amount *= ARMOR_K / (gearBonus(dst, "armor") + ARMOR_K);
     if (src.k === "mob" && src.def.trait === "swarm" && dst.k === "player") this.breakStealth(dst);
     if (dst.k === "mob" && dst.def.trait === "armored_front" && !this.hasAura(dst, "flipped")) {
       const angle = Math.atan2(src.x - dst.x, src.z - dst.z);
@@ -410,7 +422,7 @@ export class World {
 
   private heal(src: Player, dst: Actor, amount: number, ability: string, crit = false): void {
     if (dst.k !== "player" || dst.hp <= 0) return;
-    const healed = Math.min(amount, dst.hpMax - dst.hp);
+    const healed = Math.min(amount * (1 + gearBonus(src, "power") / 100), dst.hpMax - dst.hp);
     this.setHp(dst, dst.hp + healed);
     this.event(dst, { k: "hit", src: src.id, dst: dst.id, ability, amount: healed, crit, kind: "heal" });
     for (const mob of this.mobs.values()) {
@@ -493,8 +505,43 @@ export class World {
       if (stack) stack.n += item.n;
       else p.bag.push({ ...item });
     }
-    p.session.conn.send({ t: "bag", bag: structuredClone(p.bag) });
+    this.sendBag(p);
     this.refreshQuests(p);
+  }
+
+  private sendBag(p: Player): void { p.session.conn.send({ t: "bag", bag: structuredClone(p.bag), equip: { ...p.equip } }); }
+
+  private takeItem(p: Player, stack: ItemStack): void {
+    stack.n--;
+    if (!stack.n) p.bag = p.bag.filter((s) => s !== stack);
+  }
+
+  private equip(p: Player, id: string): void {
+    const item = own(ITEMS, id) ? ITEMS[id] : undefined, stack = p.bag.find((s) => s.id === id && s.n > 0);
+    if (!stack || !item || item.kind !== "gear" || !item.slot) { this.error(p.session, "Choose gear from your bag."); return; }
+    if (item.cls && !item.cls.includes(p.cls)) { this.error(p.session, "Your class cannot wear that gear."); return; }
+    if (p.level < (item.level ?? 1)) { this.error(p.session, "Your level is too low for that gear."); return; }
+    const previous = p.equip[item.slot];
+    this.takeItem(p, stack);
+    p.equip[item.slot] = id;
+    this.addItems(p, previous ? [{ id: previous, n: 1 }] : []);
+    p.session.conn.send({ t: "stats", stats: statsOf(p) });
+  }
+
+  private unequip(p: Player, slot: Slot): void {
+    if (!(SLOTS as readonly string[]).includes(slot) || !p.equip[slot]) { this.error(p.session, "There is no gear in that slot."); return; }
+    const id = p.equip[slot]!;
+    delete p.equip[slot];
+    this.addItems(p, [{ id, n: 1 }]);
+    p.session.conn.send({ t: "stats", stats: statsOf(p) });
+  }
+
+  private use(p: Player, id: string): void {
+    const item = own(ITEMS, id) ? ITEMS[id] : undefined, stack = p.bag.find((s) => s.id === id && s.n > 0);
+    if (!stack || !item || item.kind !== "consumable" || !item.heal) { this.error(p.session, "Choose a healing consumable from your bag."); return; }
+    this.takeItem(p, stack);
+    this.heal(p, p, item.heal, "use");
+    this.sendBag(p); this.refreshQuests(p);
   }
 
   private spawnMob(zone: ZoneId, camp: MobCamp, campIndex: number, n: number): void {
@@ -741,7 +788,8 @@ export class World {
     if (a.k === "npc") return { ...base, name: a.name, npc: a.npc, look: NPCS[a.npc]!.look, anim: "idle", mark: this.mark(viewer, a) };
     const fighter = { ...base, hp: a.hp, hpMax: a.hpMax, level: a.level, anim: a.anim, tgt: a.target };
     return a.k === "mob" ? { ...fighter, name: a.def.name, mob: a.def.id }
-      : { ...fighter, name: a.name, cls: a.cls, look: a.look, agent: a.session.conn.agent };
+      : { ...fighter, name: a.name, cls: a.cls, look: a.look, agent: a.session.conn.agent,
+        gear: SLOTS.map((slot) => { const id = a.equip[slot]; return id ? ITEMS[id]?.model : undefined; }).filter(Boolean).join(",") };
   }
 
   private snapshot(s: Session): void {

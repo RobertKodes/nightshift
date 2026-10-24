@@ -79,20 +79,56 @@ export interface MobDef {
   loot: { item: string; chance: number; n?: [number, number] }[];
 }
 export const MOBS: Record<string, MobDef> = {
-  bog_leech: { id: "bog_leech", name: "Bog Leech", level: [1, 2], hp: 32, hpPerLevel: 8, dmg: [2, 4], swingMs: 2200, reach: 2.2, speed: 2.2, aggro: 5.5, leash: 30, respawnMs: 25000, xp: 22, weight: "light", trait: "latch", loot: [{ item: "leech_tooth", chance: 0.6 }, { item: "egg_jelly", chance: 0.35 }] },
+  bog_leech: { id: "bog_leech", name: "Bog Leech", level: [1, 2], hp: 32, hpPerLevel: 8, dmg: [2, 4], swingMs: 2200, reach: 2.2, speed: 2.2, aggro: 5.5, leash: 30, respawnMs: 25000, xp: 22, weight: "light", trait: "latch", loot: [{ item: "leech_tooth", chance: 0.6 }, { item: "egg_jelly", chance: 0.35 }, { item: "leech_hide_wraps", chance: 0.1 }] },
   midge_swarm: { id: "midge_swarm", name: "Midge Swarm", level: [2, 3], hp: 26, hpPerLevel: 6, dmg: [2, 3], swingMs: 1000, reach: 3, speed: 4, aggro: 7, leash: 26, respawnMs: 30000, xp: 18, weight: "immune", trait: "swarm", loot: [] },
   reed_rat: { id: "reed_rat", name: "Reed Rat", level: [2, 3], hp: 46, hpPerLevel: 10, dmg: [4, 6], swingMs: 1600, reach: 2.4, speed: 5.2, aggro: 11, leash: 34, respawnMs: 35000, xp: 28, weight: "light", trait: "pack_flee", loot: [{ item: "rat_tail", chance: 0.5 }, { item: "glow_moss", chance: 0.2 }] },
   snapper: { id: "snapper", name: "Snapper", level: [3, 4], hp: 120, hpPerLevel: 22, dmg: [8, 12], swingMs: 2600, reach: 2.8, speed: 2, aggro: 8, leash: 28, respawnMs: 60000, xp: 60, weight: "heavy", trait: "armored_front", loot: [{ item: "shell_shard", chance: 0.7, n: [1, 2] }] },
 };
 
-export interface ItemDef { id: string; name: string; kind: "quest" | "junk" | "consumable" | "gear"; desc: string; sell?: number; heal?: number }
+/** Where a piece of gear is worn. */
+export const SLOTS = ["main", "off", "head", "shoulders", "chest", "hands", "waist", "feet"] as const;
+export type Slot = (typeof SLOTS)[number];
+export type Equip = Partial<Record<Slot, string>>;
+export interface ItemDef {
+  id: string; name: string; kind: "quest" | "junk" | "consumable" | "gear"; desc: string; sell?: number; heal?: number;
+  /** gear: where it goes, what it gives (armour cuts damage taken, power adds to damage and healing), who may wear it */
+  slot?: Slot; armor?: number; power?: number; cls?: ClassId[]; level?: number;
+  /** the piece the client draws on the frog */
+  model?: string;
+}
 export const ITEMS: Record<string, ItemDef> = {
   egg_jelly: { id: "egg_jelly", name: "Egg Jelly", kind: "quest", desc: "Spent jelly from your own clutch. The leeches have been following it." },
   leech_tooth: { id: "leech_tooth", name: "Leech Tooth", kind: "junk", desc: "Three-sided and still sharp.", sell: 2 },
   rat_tail: { id: "rat_tail", name: "Rat Tail", kind: "junk", desc: "The mill buys them for string.", sell: 3 },
   shell_shard: { id: "shell_shard", name: "Shell Shard", kind: "junk", desc: "A piece of snapper shell. Reedguards cut shields from these.", sell: 6 },
   glow_moss: { id: "glow_moss", name: "Glow Moss", kind: "consumable", desc: "Eat it: it mends 30 health over a few breaths.", heal: 30 },
+
+  // ---------- gear: what each class comes up out of the water with ----------
+  reed_glaive: { id: "reed_glaive", name: "Reed Glaive", kind: "gear", slot: "main", power: 4, cls: ["reedguard"], model: "glaive", desc: "A fen reed as long as two frogs, a bone blade bound on with red cord." },
+  shell_shield: { id: "shell_shield", name: "Shell Shield", kind: "gear", slot: "off", armor: 12, cls: ["reedguard"], model: "shield", desc: "The back of a turtle that died before the Long Night. Wend kept it oiled." },
+  shell_vest: { id: "shell_vest", name: "Shell Vest", kind: "gear", slot: "chest", armor: 10, cls: ["reedguard"], model: "shell_vest", desc: "Plates of shell laced over the chest and belly." },
+  reed_bracers: { id: "reed_bracers", name: "Reed Bracers", kind: "gear", slot: "hands", armor: 3, model: "reed_bracers", desc: "Split reed, woven tight round the forearms." },
+  reed_blowgun: { id: "reed_blowgun", name: "Reed Blowgun", kind: "gear", slot: "main", power: 5, cls: ["dartsinger"], model: "blowgun", desc: "A hollow reed, carved at the mouth, wrapped where the hands go." },
+  leaf_hood: { id: "leaf_hood", name: "Leaf Hood", kind: "gear", slot: "head", armor: 3, cls: ["dartsinger"], model: "leaf_hood", desc: "Dried water-leaf stitched into a cowl. It smells of the Cut." },
+  dart_harness: { id: "dart_harness", name: "Dart Harness", kind: "gear", slot: "chest", armor: 5, cls: ["dartsinger"], model: "dart_harness", desc: "Leather straps across the chest, a row of darts in each." },
+  wrap_boots: { id: "wrap_boots", name: "Wrapped Feet", kind: "gear", slot: "feet", armor: 2, model: "wrap_boots", desc: "Strips of cloth wound round the feet. Quiet on boards." },
+  firefly_lantern: { id: "firefly_lantern", name: "Firefly Lantern", kind: "gear", slot: "off", power: 6, cls: ["lampwright"], model: "lantern", desc: "An iron cage, a glass, and the fireflies that agreed to stay." },
+  tallow_hood: { id: "tallow_hood", name: "Lamplighter's Hood", kind: "gear", slot: "head", armor: 2, cls: ["lampwright"], model: "tallow_hood", desc: "Waxed against the drip of the stair. The old guild's cut." },
+  moth_mantle: { id: "moth_mantle", name: "Moth Mantle", kind: "gear", slot: "shoulders", armor: 4, cls: ["lampwright"], model: "moth_mantle", desc: "A short cape of grey moth-silk, warm in the cold of the night." },
+  keeper_sash: { id: "keeper_sash", name: "Keeper's Sash", kind: "gear", slot: "waist", armor: 2, model: "keeper_sash", desc: "A cord sash with a brass ring for keys nobody uses any more." },
+  // found and earned in Chapter One
+  leech_hide_wraps: { id: "leech_hide_wraps", name: "Leech-Hide Wraps", kind: "gear", slot: "hands", armor: 4, level: 1, model: "leech_wraps", desc: "Tough, rubbery, and better not thought about.", sell: 4 },
+  wend_cloak: { id: "wend_cloak", name: "Wend's Old Cloak", kind: "gear", slot: "shoulders", armor: 5, power: 2, level: 1, model: "wend_cloak", desc: "He wore it up the stair for forty-one years. It still smells of lamp oil." },
 };
+
+/** What each class wears when it first comes up out of the water. */
+export const STARTER_GEAR: Record<ClassId, string[]> = {
+  reedguard: ["reed_glaive", "shell_shield", "shell_vest", "reed_bracers"],
+  dartsinger: ["reed_blowgun", "leaf_hood", "dart_harness", "wrap_boots"],
+  lampwright: ["firefly_lantern", "tallow_hood", "moth_mantle", "keeper_sash"],
+};
+/** Armour cuts damage taken by armour / (armour + 60); power adds power % to damage and healing done. */
+export const ARMOR_K = 60;
 
 export interface NpcDef { id: string; name: string; title?: string; look: string; anim?: string; dialog: string }
 export const NPCS: Record<string, NpcDef> = {
@@ -119,7 +155,7 @@ export const QUESTS: Record<string, QuestDef> = {
     offer: "Your old jelly, the stuff you hatched out of. It's what they follow. Some went down the drain with the first water. Bring it back before something with longer legs finds it.",
     steps: [{ text: "Recover egg jelly from the leeches", kind: "collect", target: "egg_jelly", n: 3 }],
     done: "That's the last of it. Now there's nothing in the drains that says a child was born here. Except you.",
-    xp: 110, next: "up_the_stairs",
+    xp: 110, reward: [{ item: "wend_cloak", n: 1 }], next: "up_the_stairs",
   },
   up_the_stairs: {
     id: "up_the_stairs", name: "Up the Stairs", giver: "keeper_wend", turnIn: "brother_cress", level: 2,

@@ -20,6 +20,7 @@ export class Controls {
   onCycle: () => void = () => {};
   onPick: (ndc: THREE.Vector2) => void = () => {};
   onChat: () => void = () => {};
+  onBag: () => void = () => {};
   enabled = true;
   #keys = new Set<string>();
   #joyId: number | null = null;
@@ -40,6 +41,7 @@ export class Controls {
       const k = e.key.toLowerCase();
       if (k === "tab") { e.preventDefault(); this.onCycle(); return; }
       if (k === "enter") { this.onChat(); return; }
+      if (k === "i" || k === "b") { if (!e.repeat) this.onBag(); return; }
       if (k === " ") { e.preventDefault(); if (!e.repeat) this.onLeap(); return; }
       if (k === "e" || k === "f") { if (!e.repeat) this.onInteract(); return; }
       if (/^[1-7]$/.test(k)) { if (!e.repeat) this.onAbility(Number(k) - 1); return; }

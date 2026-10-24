@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
+import { gzipSync } from "node:zlib";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import type { Company, Product } from "@nightshift/core";
 import { NameError, saveName, savedName } from "./players.js";
@@ -321,10 +322,12 @@ function crossSite(req: IncomingMessage): boolean {
   try { return new URL(origin).host !== req.headers.host && new URL(origin).origin !== new URL(config.publicUrl).origin; } catch { return true; }
 }
 
-const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".mp4": "video/mp4", ".webmanifest": "application/manifest+json", ".txt": "text/plain; charset=utf-8" };
+const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".json": "application/json", ".woff2": "font/woff2", ".webp": "image/webp", ".jpg": "image/jpeg", ".mp4": "video/mp4", ".webmanifest": "application/manifest+json", ".txt": "text/plain; charset=utf-8", ".glb": "model/gltf-binary", ".gltf": "model/gltf+json", ".bin": "application/octet-stream" };
+/** The game's 3D models, gzipped once and kept: the proxy in front does not compress them, and they shrink by half. */
+const gzipped = new Map<string, { at: number; buf: Buffer }>();
 
 /** A file of the built app (dot folders like /.well-known included), else the app's page. HEAD gets the headers only. */
-function serveStatic(res: ServerResponse, path: string, head = false): boolean {
+function serveStatic(res: ServerResponse, path: string, head = false, gzipOk = false): boolean {
   if (!existsSync(config.webDist)) return false;
   const safe = normalize(path).replace(/^([/\\])+/, "").replace(/\.\.[/\\]?/g, "");
   let f = resolve(config.webDist, safe);
@@ -335,6 +338,13 @@ function serveStatic(res: ServerResponse, path: string, head = false): boolean {
   // the app's page carries this route's title, description and a readable summary for crawlers
   const page = f.endsWith("index.html") && f.startsWith(resolve(config.webDist)), tg = page && isTgPage(path);
   const data = page ? Buffer.from(tg ? withTelegramScript(readFileSync(f, "utf8")) : withPageHead(readFileSync(f, "utf8"), path)) : readFileSync(f);
+  if (gzipOk && /\.(glb|gltf|bin)$/.test(f)) {
+    const at = statSync(f).mtimeMs; let z = gzipped.get(f);
+    if (!z || z.at !== at) { z = { at, buf: gzipSync(data, { level: 6 }) }; gzipped.set(f, z); }
+    res.writeHead(200, { "Content-Type": type, "Content-Encoding": "gzip", "Content-Length": z.buf.length, Vary: "Accept-Encoding", "Cache-Control": "public, max-age=3600" });
+    res.end(head ? undefined : z.buf);
+    return true;
+  }
   // inside Telegram Web /tg is framed: no X-Frame-Options there, and its frame-ancestors name Telegram
   if (tg) res.removeHeader("X-Frame-Options");
   res.writeHead(200, { "Content-Type": type, "Content-Length": data.length, ...(type.startsWith("text/html") ? { "Content-Security-Policy": tg ? TG_CSP : CSP, "Cache-Control": "no-cache" } : {}) });
@@ -1064,7 +1074,7 @@ export function serve(engine: Engine) {
       }
 
       // an unknown API path is a 404, not the app's page
-      if ((req.method === "GET" || req.method === "HEAD") && !p.startsWith("/api/") && serveStatic(res, p, req.method === "HEAD")) return;
+      if ((req.method === "GET" || req.method === "HEAD") && !p.startsWith("/api/") && serveStatic(res, p, req.method === "HEAD", /gzip/.test(String(req.headers["accept-encoding"] ?? "")))) return;
       return json(res, 404, { error: "not found" });
     } catch (err) {
       console.error(err);

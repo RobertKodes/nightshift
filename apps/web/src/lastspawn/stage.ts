@@ -11,7 +11,8 @@ export function pickQuality(): Quality {
   } catch { /* no storage */ }
   const coarse = matchMedia("(pointer: coarse)").matches;
   const cores = navigator.hardwareConcurrency ?? 4;
-  if (coarse) return cores >= 8 ? "medium" : "low";
+  // most phones of the last few years draw the medium look smoothly: shadows, sharp edges
+  if (coarse) return cores >= 6 ? "medium" : "low";
   return cores >= 6 ? "high" : "medium";
 }
 
@@ -45,6 +46,8 @@ export class Stage {
 
   resize(w: number, h: number) {
     this.camera.aspect = w / Math.max(1, h);
+    // held upright a phone sees a narrow strip: a wider lens keeps the frog and its surroundings in view
+    this.camera.fov = this.camera.aspect < 0.8 ? 66 : 52;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h, false);

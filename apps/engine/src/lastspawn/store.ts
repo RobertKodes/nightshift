@@ -1,16 +1,18 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { CLASSES, ITEMS, MAX_LEVEL, QUESTS, ZONES, floorAt, inBounds, validLook } from "@nightshift/lastspawn";
+import { CLASSES, ITEMS, MAX_LEVEL, QUESTS, SLOTS, ZONES, floorAt, inBounds, validLook } from "@nightshift/lastspawn";
 import { writeAtomic } from "../atomic.js";
 import type { Character } from "./state.js";
-import { own } from "./state.js";
+import { own, starterEquip } from "./state.js";
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const integer = (v: unknown): v is number => finite(v) && Number.isSafeInteger(v) && v >= 0;
 export const validName = (s: string) => /^[A-Za-z][A-Za-z0-9 '\-]{2,15}$/.test(s);
 const record = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 
-function validCharacter(v: unknown): v is Character {
+type StoredCharacter = Omit<Character, "equip"> & Partial<Pick<Character, "equip">>;
+
+function validCharacter(v: unknown): v is StoredCharacter {
   if (!record(v) || typeof v.id !== "string" || !v.id || typeof v.account !== "string"
     || !/^(w:.+|g:[a-f0-9]{64})$/.test(v.account) || typeof v.name !== "string" || !validName(v.name)
     || typeof v.cls !== "string" || !own(CLASSES, v.cls) || typeof v.look !== "string" || !validLook(v.look)
@@ -21,6 +23,12 @@ function validCharacter(v: unknown): v is Character {
   if (v.hp > cls.hp + cls.hpPerLevel * (v.level - 1)) return false;
   if (!Array.isArray(v.bag) || !v.bag.every((s: unknown) => record(s) && typeof s.id === "string"
     && own(ITEMS, s.id) && integer(s.n) && s.n > 0)) return false;
+  if (v.equip !== undefined && (!record(v.equip) || !Object.entries(v.equip).every(([slot, id]) => {
+    if (!(SLOTS as readonly string[]).includes(slot) || typeof id !== "string" || !own(ITEMS, id)) return false;
+    const item = ITEMS[id]!;
+    return item.kind === "gear" && item.slot === slot && (!item.cls || item.cls.includes(v.cls as Character["cls"]))
+      && (v.level as number) >= (item.level ?? 1);
+  }))) return false;
   if (!Array.isArray(v.quests) || !v.quests.every((q: unknown) => {
     if (!record(q) || typeof q.id !== "string" || !own(QUESTS, q.id) || !integer(q.step)
       || typeof q.done !== "boolean" || !Array.isArray(q.progress)) return false;
@@ -37,7 +45,8 @@ export function loadCharacters(file: string): Map<string, Character> {
     const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
     if (!Array.isArray(raw) || !raw.every(validCharacter)) throw new Error("Invalid characters");
     const chars = new Map<string, Character>(), names = new Set<string>(), accounts = new Map<string, number>();
-    for (const c of raw as Character[]) {
+    for (const stored of raw) {
+      const c: Character = { ...stored, equip: stored.equip ?? starterEquip(stored.cls) };
       const name = c.name.toLowerCase(), n = (accounts.get(c.account) ?? 0) + 1;
       if (chars.has(c.id) || names.has(name) || n > 3 || new Set(c.bag.map((s) => s.id)).size !== c.bag.length
         || new Set(c.quests.map((q) => q.id)).size !== c.quests.length) throw new Error("Duplicate characters");
@@ -57,7 +66,7 @@ export function loadCharacters(file: string): Map<string, Character> {
 export function saveCharacters(file: string, chars: Iterable<Character>): void {
   const rows = Array.from(chars, (c): Character => ({
     id: c.id, account: c.account, name: c.name, cls: c.cls, look: c.look, level: c.level, xp: c.xp,
-    zone: c.zone, x: c.x, y: c.y, z: c.z, ry: c.ry, hp: c.hp, quests: c.quests, bag: c.bag,
+    zone: c.zone, x: c.x, y: c.y, z: c.z, ry: c.ry, hp: c.hp, quests: c.quests, bag: c.bag, equip: c.equip,
     flags: c.flags, createdAt: c.createdAt, lastSeen: c.lastSeen,
   }));
   mkdirSync(dirname(file), { recursive: true });

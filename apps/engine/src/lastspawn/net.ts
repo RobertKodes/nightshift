@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import { CLASSES, MAX_MSGS_PER_SEC, TICK_HZ } from "@nightshift/lastspawn";
-import type { Anim, ClientMsg } from "@nightshift/lastspawn";
+import { CLASSES, MAX_MSGS_PER_SEC, SLOTS, TICK_HZ } from "@nightshift/lastspawn";
+import type { Anim, ClientMsg, Slot } from "@nightshift/lastspawn";
 import type { Connection } from "./world.js";
 import { World } from "./world.js";
 import { own } from "./state.js";
@@ -46,6 +46,10 @@ export function parseClientMsg(raw: string): ClientMsg | null {
         return { t: "quest", action: m.action, id: m.id };
       break;
     case "loot": if (string(m.id)) return { t: "loot", id: m.id }; break;
+    case "equip": case "use": if (string(m.item)) return { t: m.t, item: m.item }; break;
+    case "unequip":
+      if (typeof m.slot === "string" && (SLOTS as readonly string[]).includes(m.slot)) return { t: "unequip", slot: m.slot as Slot };
+      break;
     case "ping": if (finite(m.at)) return { t: "ping", at: m.at }; break;
   }
   return null;

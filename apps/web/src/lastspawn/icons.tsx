@@ -18,6 +18,23 @@ const P: Record<string, React.ReactNode> = {
   leap: <><path d="M4 18c2-8 10-12 16-10" /><path d="M20 8l-3.2-1.6M20 8l-1.4 3" /><path d="M3 20h5" /></>,
 };
 
+/** Item icons, by what the thing is: the same hand-drawn line set as the abilities. */
+const ITEM: Record<string, React.ReactNode> = {
+  glaive: P.thrust, blowgun: P.dart, shield: P.shell_wall, lantern: P.lantern_ward,
+  head: <><path d="M5 15c0-5 3-10 7-10s7 5 7 10" /><path d="M5 15c2 2 4 3 7 3s5-1 7-3" /><path d="M9 11h.01M15 11h.01" /></>,
+  shoulders: <><path d="M4 13c1-4 4-6 8-6s7 2 8 6" /><path d="M4 13l2 5M20 13l-2 5" /><path d="M9 9v3M15 9v3" /></>,
+  chest: <><path d="M7 4l-3 4 2 3v9h12v-9l2-3-3-4" /><path d="M9 4c1 2 5 2 6 0" /><path d="M12 10v7" /></>,
+  hands: <><path d="M8 4h8v8l-1 8H9l-1-8z" /><path d="M8 8h8M8 12h8" /></>,
+  waist: <><path d="M3 11h18v4H3z" /><circle cx="12" cy="13" r="1.8" /></>,
+  feet: <><path d="M8 3v11l-4 3v3h11l5-3-3-3h-4V3" /><path d="M8 8h5" /></>,
+  consumable: <><path d="M12 20c-5 0-8-3-8-7 3 0 6 1 8 4 2-5 5-9 8-11 0 7-3 14-8 14z" /><path d="M12 17v-4" /></>,
+  junk: <><path d="M6 18l6-13 6 13z" /><path d="M10 14h4" /></>,
+  quest: <><path d="M12 4c4 0 7 4 7 8s-3 8-7 8-7-4-7-8 3-8 7-8z" /><circle cx="10" cy="10" r="1.6" /><circle cx="14.5" cy="13.5" r="1.1" /></>,
+};
+export function ItemIcon({ kind, size = 28 }: { kind: string; size?: number }) {
+  return <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ITEM[kind] ?? ITEM.junk}</svg>;
+}
+
 export function AbilityIcon({ id }: { id: string }) {
   return <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{P[id] ?? <circle cx="12" cy="12" r="6" />}</svg>;
 }

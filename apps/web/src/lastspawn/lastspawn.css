@@ -136,6 +136,9 @@
 .ls-label span { font: 400 16px/1 "Instrument Serif", Georgia, serif; color: var(--ink); text-shadow: 0 1px 3px #000, 0 0 8px rgba(0, 0, 0, 0.8); }
 .ls-label.npc span { color: var(--gold); }
 .ls-label.mob span { font: 600 12px/1 Inter, sans-serif; color: #ffb3a8; }
+.ls-label b { display: block; width: 54px; height: 5px; margin-top: 3px; border-radius: 2px; background: linear-gradient(90deg, #e0533f calc(var(--hp) * 100%), rgba(0, 0, 0, 0.6) 0); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.ls-label.on span { color: #fff; }
+.ls-label.on b { width: 70px; height: 6px; }
 .ls-label i { font: 400 34px/0.9 "Instrument Serif", Georgia, serif; font-style: normal; color: #ffd76a; text-shadow: 0 0 12px rgba(255, 210, 90, 0.8), 0 2px 3px #000; }
 .ls-label em { font: 600 9px/1 "JetBrains Mono", monospace; font-style: normal; letter-spacing: 0.2em; text-transform: uppercase; color: var(--moon); border: 1px solid rgba(169, 188, 255, 0.4); padding: 2px 4px; border-radius: 2px; }
 .ls-xp { height: 4px; margin-top: 6px; background: rgba(0, 0, 0, 0.5); border-radius: 2px; overflow: hidden; }
@@ -155,3 +158,54 @@
 .ls-float.hurt { color: #ff7a6e; } .ls-float.loot { color: var(--gold); font-size: 15px; }
 .ls-talk-btn { position: absolute; right: 108px; bottom: 126px; width: 48px; height: 48px; border-radius: 50%; background: var(--panel); border: 1px solid var(--line); color: var(--dim); font: 600 11px Inter, sans-serif; }
 .ls-touch .ls-chat { bottom: 210px; }
+
+/* a phone held upright: the bar along the bottom, the thumbs' buttons just above it, frames at the top */
+@media (orientation: portrait) and (pointer: coarse) {
+  .ls-touch .ls-bar { left: 8px; right: 8px; bottom: 10px; max-width: none; justify-content: space-between; gap: 5px; padding: 6px; overflow: visible; }
+  .ls-touch .ls-ab { width: auto; flex: 1 1 0; height: 54px; }
+  .ls-touch .ls-ab small { font-size: 8px; }
+  .ls-touch .ls-leap { bottom: 88px; right: 14px; width: 74px; height: 74px; }
+  .ls-touch .ls-cycle { bottom: 172px; right: 22px; width: 54px; height: 54px; }
+  .ls-touch .ls-talk-btn { bottom: 96px; right: 100px; width: 46px; height: 46px; }
+  .ls-touch .ls-joy-hint { left: 22px; bottom: 96px; }
+  .ls-me { width: calc(52vw - 14px); }
+  .ls-me-name { font-size: 16px; flex-direction: column; align-items: flex-start; gap: 2px; }
+  .ls-quest { top: 14px; bottom: auto; right: 14px; width: calc(44vw - 14px); font-size: 11.5px; padding: 8px 10px; }
+  .ls-quest b { font-size: 15px; }
+  .ls-touch .ls-target { top: 96px; left: 14px; width: calc(52vw - 14px); }
+  .ls-touch .ls-caption { bottom: 260px; width: calc(100% - 32px); font-size: 17px; }
+  .ls-touch .ls-chat { bottom: 250px; width: 62vw; }
+  .ls-prompt { bottom: 254px; }
+  .ls-dialog { bottom: 80px; }
+  .ls-keys { display: none; }
+}
+
+/* the bag */
+.ls-bag-btn { position: absolute; right: 14px; bottom: 16px; width: 52px; height: 52px; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--gold-d); color: var(--gold); border-radius: 4px; cursor: pointer; }
+.ls-bag-btn i { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--gold); color: #1a1408; font: 700 11px/18px Inter, sans-serif; font-style: normal; }
+.ls-bag { position: absolute; right: 14px; bottom: 84px; width: min(560px, calc(100% - 28px)); max-height: calc(100% - 120px); display: grid; grid-template-rows: auto 1fr auto; background: rgba(9, 11, 19, 0.94); border: 1px solid var(--line); border-radius: 4px; animation: ls-in 0.25s ease both; z-index: 5; }
+.ls-bag-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.ls-bag-head b { font: 400 22px/1 "Instrument Serif", Georgia, serif; }
+.ls-bag-head span { flex: 1; color: var(--dim); font-size: 12px; }
+.ls-x { background: none; border: 0; color: var(--dim); font-size: 26px; line-height: 1; cursor: pointer; width: 36px; height: 36px; }
+.ls-bag-body { display: grid; grid-template-columns: 210px 1fr; gap: 12px; padding: 12px 14px; overflow: auto; }
+.ls-worn { display: grid; gap: 5px; align-content: start; }
+.ls-slot { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 4px 8px; text-align: left; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(214, 179, 106, 0.14); color: var(--dim); border-radius: 3px; cursor: pointer; font: 500 13px Inter, sans-serif; }
+.ls-slot.full { color: var(--ink); border-color: var(--line); }
+.ls-slot.full svg { color: var(--gold); }
+.ls-slot.on, .ls-item.on { border-color: var(--gold); background: rgba(214, 179, 106, 0.12); }
+.ls-slot span { display: grid; gap: 1px; } .ls-slot small { font-size: 10px; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
+.ls-carried { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; align-content: start; }
+.ls-item { position: relative; aspect-ratio: 1; display: grid; place-items: center; background: radial-gradient(circle at 50% 35%, rgba(214, 179, 106, 0.12), rgba(0, 0, 0, 0.45)); border: 1px solid var(--line); color: var(--gold); border-radius: 4px; cursor: pointer; }
+.ls-item.junk { color: var(--dim); } .ls-item.quest { color: #c8b3ff; } .ls-item.consumable { color: var(--mend); }
+.ls-item i { position: absolute; right: 4px; bottom: 2px; font: 700 11px Inter, sans-serif; font-style: normal; color: var(--ink); text-shadow: 0 1px 2px #000; }
+.ls-empty { color: var(--dim); font-size: 13px; grid-column: 1 / -1; margin: 4px 0; }
+.ls-pick { padding: 12px 14px; border-top: 1px solid var(--line); display: grid; gap: 6px; }
+.ls-pick b { font: 400 20px/1.1 "Instrument Serif", Georgia, serif; color: var(--gold); display: block; }
+.ls-pick small { color: var(--dim); font-size: 12px; }
+.ls-pick p { margin: 0; color: var(--ink); font: 400 16px/1.4 "Instrument Serif", Georgia, serif; }
+.ls-pick-act { display: flex; gap: 8px; }
+.ls-pick-act .ls-btn { min-height: 40px; padding: 0 18px; font-size: 13px; }
+.ls-touch .ls-bag-btn { bottom: auto; top: 86px; right: 14px; width: 46px; height: 46px; }
+@media (max-width: 560px) { .ls-bag-body { grid-template-columns: 1fr; } .ls-worn { grid-template-columns: 1fr 1fr; } .ls-bag { bottom: 76px; } }
+@media (orientation: portrait) and (pointer: coarse) { .ls-touch .ls-bag-btn { top: auto; bottom: 172px; right: 90px; } }

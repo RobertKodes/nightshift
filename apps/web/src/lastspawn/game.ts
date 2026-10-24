@@ -1,11 +1,11 @@
 import * as THREE from "three";
 import {
   ABILITIES, BASE_LOOK, CISTERN, CLASSES, type CharSummary, type ClassId, type CombatEvent, type EntitySnap, GCD_MS, ITEMS, type Look,
-  QUESTS, type QuestState, SPEED, type ServerMsg, ZONES, decodeLook, encodeLook, floorAt, inBounds,
+  type Equip, type ItemStack, QUESTS, type QuestState, SLOTS, SPEED, type ServerMsg, type Slot, ZONES, decodeLook, encodeLook, floorAt, inBounds,
 } from "@nightshift/lastspawn";
 import { type Place, buildCistern } from "./cistern";
 import { Controls } from "./controls";
-import { Frog, frogBase } from "./frog";
+import { Frog, frogBase, modelsOf } from "./frog";
 import { Leech } from "./leech";
 import { Net, type NetStatus } from "./net";
 import { type Quality, Stage } from "./stage";
@@ -16,7 +16,8 @@ export interface Hud {
   net: NetStatus;
   chars: CharSummary[];
   error: string | null;
-  name: string; cls: ClassId; level: number; hp: number; hpMax: number; xp: number; xpNext: number;
+  name: string; cls: ClassId; level: number; hp: number; hpMax: number; xp: number; xpNext: number; armor: number; power: number;
+  bag: ItemStack[]; equip: Equip;
   target: { id: string; name: string; hp: number; hpMax: number; level: number; kind: string } | null;
   prompt: string | null;
   dialog: { npc: string; name: string; text: string; options: { id: string; text: string }[] } | null;
@@ -49,7 +50,9 @@ interface Ent {
 }
 
 const decode = (code: string | undefined): Look => (code ? decodeLook(code) : { ...BASE_LOOK });
-const statsHud = (s: { hp: number; hpMax: number; level: number; xp: number; xpNext: number }) => ({ hp: s.hp, hpMax: s.hpMax, level: s.level, xp: s.xp, xpNext: s.xpNext });
+const statsHud = (s: { hp: number; hpMax: number; level: number; xp: number; xpNext: number; armor?: number; power?: number }) => ({ hp: s.hp, hpMax: s.hpMax, level: s.level, xp: s.xp, xpNext: s.xpNext, armor: s.armor ?? 0, power: s.power ?? 0 });
+/** The worn items' models, in slot order. */
+const wornModels = (e: Equip) => modelsOf(SLOTS.map((s) => e[s]).filter((i): i is string => Boolean(i)));
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /**
@@ -89,6 +92,9 @@ export class Game {
   /** a soft light that travels with the camera, so a frog's colours read in the dark (as games do) */
   #fill = new THREE.PointLight(0xffe6c8, 9, 14, 1.6);
   #captionTimer = 0;
+  /** auto-attack: after you hit something, the class's first move repeats on it while you stand and it lives */
+  #fighting: string | null = null;
+  #ring: THREE.Mesh;
   /** development only: walk the frog to a point by itself (the screenshot tests use it) */
   #auto: THREE.Vector2 | null = null;
 
@@ -96,7 +102,7 @@ export class Game {
     this.stage = new Stage(canvas, q);
     this.controls = new Controls(canvas);
     this.hud = {
-      phase: "loading", net: "connecting", chars: [], error: null, name: "", cls: "reedguard", level: 1, hp: 1, hpMax: 1, xp: 0, xpNext: 100,
+      phase: "loading", net: "connecting", chars: [], error: null, name: "", cls: "reedguard", level: 1, hp: 1, hpMax: 1, xp: 0, xpNext: 100, armor: 0, power: 0, bag: [], equip: {},
       target: null, prompt: null, dialog: null, caption: null, quests: [], cooldowns: {}, gcdUntil: 0, casting: null, floats: [], chat: [], dead: false,
     };
     this.controls.onLeap = () => this.#doLeap();
@@ -104,6 +110,10 @@ export class Game {
     this.controls.onAbility = (i) => { const d = this.hud.dialog; if (d) { const o = d.options[i]; if (o) this.choose(o.id); } else this.useSlot(i); };
     this.controls.onCycle = () => this.#cycleTarget();
     this.controls.onPick = (ndc) => this.#pick(ndc);
+    // the ring under what you have targeted
+    this.#ring = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.12, 48), new THREE.MeshBasicMaterial({ color: 0xff5a4a, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.#ring.rotation.x = -Math.PI / 2; this.#ring.visible = false; this.#ring.renderOrder = 3;
+    this.stage.scene.add(this.#ring);
     this.#net = new Net((s) => this.#set({ net: s, chars: this.#net?.chars ?? this.hud.chars }));
     this.#net.on((m) => this.#onMsg(m));
   }
@@ -157,15 +167,19 @@ export class Game {
   #onMsg(m: ServerMsg) {
     switch (m.t) {
       case "welcome": this.#set({ chars: m.chars }); break;
-      case "error": this.#set({ error: m.msg }); if (this.hud.phase === "play") this.#float(m.msg, "miss"); break;
+      case "error":
+        this.#set({ error: m.msg });
+        // a move pressed a moment early is not news; anything else is said where you look
+        if (this.hud.phase === "play" && !/not ready|cooldown/i.test(m.msg)) this.#float(m.msg, "miss");
+        break;
       case "enter": {
         this.#you = m.you; this.#placed = false;
         this.#cls = m.char.cls; this.#look = decode(m.char.look);
-        this.#me!.applyLook(this.#look); void this.#me!.equip(m.char.cls, true);
+        this.#me!.applyLook(this.#look); void this.#me!.wear(wornModels(m.equip ?? {}), true);
         for (const id of [...this.#ents.keys()]) this.#drop(id);
         this.controls.enabled = true;
         const first = this.hud.phase !== "play";
-        this.#set({ phase: "play", name: m.char.name, cls: m.char.cls, ...statsHud(m.stats), quests: this.#questHud(m.quests), error: null, dead: false });
+        this.#set({ phase: "play", name: m.char.name, cls: m.char.cls, ...statsHud(m.stats), quests: this.#questHud(m.quests), bag: m.bag, equip: m.equip ?? {}, error: null, dead: false });
         if (first && m.char.level <= 1 && !m.quests.length) this.#say("Keeper Wend", "Breathe. That's it. Breathe. Come out of the water, child. Slowly.", 7000);
         break;
       }
@@ -178,6 +192,10 @@ export class Game {
       case "dialog": this.#set({ dialog: { npc: m.npc, name: this.#ents.get(m.npc)?.snap.name ?? "", text: m.text, options: m.options } }); break;
       case "chat": this.#set({ chat: [...this.hud.chat.slice(-7), { id: ++this.#chatId, name: m.name, text: m.text, ch: m.ch }] }); break;
       case "ev": for (const e of m.e) this.#event(e); break;
+      case "bag":
+        this.#set({ bag: m.bag, equip: m.equip ?? {} });
+        void this.#me?.wear(wornModels(m.equip ?? {}), true);
+        break;
       default: break;
     }
   }
@@ -199,7 +217,10 @@ export class Game {
       this.stage.scene.add(e.root);
       e.root.position.set(s.x, s.y, s.z); e.root.rotation.y = s.ry;
       void this.#dress(e);
-    } else Object.assign(e.snap, s);
+    } else {
+      Object.assign(e.snap, s);
+      if (s.gear !== undefined) void e.frog?.wear(s.gear ? s.gear.split(",") : []);
+    }
     e.samples.push({ t: now, x: s.x, y: s.y, z: s.z, ry: s.ry });
     if (e.samples.length > 4) e.samples.shift();
     if (this.hud.target?.id === s.id && (s.hp !== undefined || s.hpMax !== undefined)) this.#set({ target: { ...this.hud.target, hp: e.snap.hp ?? 0, hpMax: e.snap.hpMax ?? 1 } });
@@ -214,7 +235,7 @@ export class Game {
       const f = await Frog.create(look);
       if (!this.#ents.has(e.id)) { f.dispose(); return; }
       e.frog = f; e.root.add(f.root);
-      if (s.k === "player") void f.equip(s.cls ?? null);
+      if (s.k === "player") void f.wear(e.snap.gear ? e.snap.gear.split(",") : []);
       f.play({ clip: s.k === "npc" ? NPC_POSE[s.npc ?? ""] ?? "Idle" : "Idle", loop: true });
     }
     if (this.#labels && this.#ents.has(e.id)) {
@@ -309,6 +330,9 @@ export class Game {
     this.#set({ dialog: null });
   }
   say(text: string) { const t = text.trim(); if (t) this.#net.send({ t: "say", text: t.slice(0, 200) }); }
+  equipItem(item: string) { this.#net.send({ t: "equip", item }); }
+  unequip(slot: Slot) { this.#net.send({ t: "unequip", slot }); }
+  useItem(item: string) { this.#net.send({ t: "use", item }); }
 
   get bar(): string[] { return [...CLASSES[this.hud.cls].abilities, "tongue"]; }
   useSlot(i: number) { const id = this.bar[i]; if (id) this.cast(id); }
@@ -324,6 +348,7 @@ export class Game {
       this.#sendMove(true);
     }
     this.#net.send({ t: "cast", ability: id, target: a.target === "self" ? null : t?.id ?? null });
+    if (a.target === "enemy" && t) this.#fighting = t.id;
     this.#me?.once(a.anim, a.castMs ? Math.max(0.6, 1400 / a.castMs) : 1.15);
     const cds = { ...this.hud.cooldowns }; if (a.cooldownMs) cds[id] = now + a.cooldownMs;
     this.#set({ cooldowns: cds, gcdUntil: a.gcd ? now + GCD_MS : this.hud.gcdUntil, casting: a.castMs ? { ability: id, until: now + a.castMs, ms: a.castMs } : null });
@@ -331,6 +356,7 @@ export class Game {
     if (a.castMs) window.setTimeout(() => { if (this.hud.casting?.ability === id) this.#set({ casting: null }); }, a.castMs + 400);
   }
   #target(e: Ent | null) {
+    if (e?.id !== this.#fighting) this.#fighting = null;
     this.#net.send({ t: "target", id: e?.id ?? null });
     this.#set({ target: e ? { id: e.id, name: e.snap.name ?? "", hp: e.snap.hp ?? 0, hpMax: e.snap.hpMax ?? 1, level: e.snap.level ?? 1, kind: e.snap.k } : null });
   }
@@ -432,6 +458,7 @@ export class Game {
         this.#wet = g.swim ? 1 : Math.max(0, this.#wet - dt * 0.08);
       }
       this.#sendMove();
+      this.#autoAttack();
       const npc = this.#nearest("npc", 3.6);
       const prompt = this.hud.dialog ? null : npc ? `Talk to ${npc.snap.name}` : null;
       if (prompt !== this.hud.prompt) this.#set({ prompt });
@@ -442,6 +469,19 @@ export class Game {
     me.root.visible = this.hud.phase === "create" || (this.hud.phase === "play" && this.#placed);
     me.update(dt);
     this.#entities(dt);
+  }
+
+  /** Keep fighting what you fight: the first move again whenever it is ready, the target alive and in reach. */
+  #autoAttack() {
+    const id = this.#fighting; if (!id) return;
+    const t = this.#ents.get(id), a = ABILITIES[this.bar[0]!];
+    if (!t || (t.snap.hp ?? 1) <= 0 || !a || a.target !== "enemy") { this.#fighting = null; return; }
+    const now = performance.now();
+    if (this.#leap || this.hud.casting || this.hud.dialog || this.hud.dead || this.controls.move.lengthSq() > 0.01) return;
+    // a little after our own cooldown ends: the server's tick may not have reached it yet
+    if (this.hud.gcdUntil + 150 > now || (this.hud.cooldowns[a.id] ?? 0) + 150 > now) return;
+    if (Math.hypot(t.root.position.x - this.#pos.x, t.root.position.z - this.#pos.z) > a.range + 0.6) return;
+    this.cast(a.id);
   }
 
   /** Everyone else, drawn 120 ms behind the newest word from the server, so they move smoothly. */
@@ -483,15 +523,28 @@ export class Game {
         const head = e.snap.k === "mob" ? 0.9 : NPC_POSE[e.snap.npc ?? ""] ? 1.9 : 2.35;
         const p = new THREE.Vector3(x, y + head, z).project(cam);
         const near = e.root.position.distanceTo(this.#pos) < 26;
-        const show = this.hud.phase === "play" && p.z < 1 && near && (e.snap.k !== "mob" || this.hud.target?.id === e.id || (e.snap.hp ?? 1) < (e.snap.hpMax ?? 1));
+        const alive = (e.snap.hp ?? 1) > 0;
+        const show = this.hud.phase === "play" && p.z < 1 && near && (e.snap.k !== "mob" || alive);
         e.label.style.display = show ? "" : "none";
         if (show) {
           e.label.style.transform = `translate(${((p.x + 1) / 2) * w}px, ${((1 - p.y) / 2) * h}px) translate(-50%, -100%)`;
-          const html = `${e.snap.mark ? `<i>${e.snap.mark}</i>` : ""}<span>${escapeHtml(e.snap.name ?? "")}</span>${e.snap.agent ? "<em>agent</em>" : ""}`;
+          const hp = e.snap.k === "mob" ? `<b style="--hp:${Math.max(0, Math.min(1, (e.snap.hp ?? 0) / Math.max(1, e.snap.hpMax ?? 1)))}"></b>` : "";
+          const html = `${e.snap.mark ? `<i>${e.snap.mark}</i>` : ""}<span>${escapeHtml(e.snap.name ?? "")}</span>${hp}${e.snap.agent ? "<em>agent</em>" : ""}`;
+          e.label.classList.toggle("on", this.hud.target?.id === e.id);
           if (e.label.innerHTML !== html) e.label.innerHTML = html;
         }
       }
     }
+  }
+
+  #targetRing(t: number) {
+    const e = this.hud.target ? this.#ents.get(this.hud.target.id) : null;
+    this.#ring.visible = Boolean(e) && this.hud.phase === "play";
+    if (!e) return;
+    this.#ring.position.set(e.root.position.x, e.root.position.y + 0.04, e.root.position.z);
+    const s = e.snap.k === "mob" ? 1.25 : 0.8;
+    this.#ring.scale.setScalar(s * (1 + Math.sin(t * 4) * 0.04));
+    (this.#ring.material as THREE.MeshBasicMaterial).color.set(e.snap.k === "mob" ? 0xff5a4a : 0xd6b36a);
   }
 
   // ---------- the camera, and the light that travels with it ----------
@@ -503,14 +556,17 @@ export class Game {
       cam.lookAt(0, 1.2, 0);
       return;
     }
+    const portrait = cam.aspect < 0.8;
     if (this.hud.phase === "create") {
-      cam.position.lerp(new THREE.Vector3(this.#pos.x + 0.6, 1.55, this.#pos.z + 4.6), 1 - Math.exp(-dt * 4));
-      cam.lookAt(this.#pos.x, 1.15, this.#pos.z);
+      // upright, the creator's panel covers the lower half: stand back and show the frog above it
+      const back = portrait ? 6.2 : 4.6;
+      cam.position.lerp(new THREE.Vector3(this.#pos.x + 0.5, portrait ? 1.1 : 1.55, this.#pos.z + back), 1 - Math.exp(-dt * 4));
+      cam.lookAt(this.#pos.x, portrait ? 0.25 : 1.15, this.#pos.z);
       return;
     }
     const target = this.#pos.clone().add(new THREE.Vector3(0, 1.45, 0));
     this.#camTarget.lerp(target, 1 - Math.exp(-dt * 10));
-    const cp = Math.cos(c.pitch), want = new THREE.Vector3(Math.sin(c.yaw) * cp, Math.sin(c.pitch), Math.cos(c.yaw) * cp).multiplyScalar(c.dist).add(this.#camTarget);
+    const cp = Math.cos(c.pitch), want = new THREE.Vector3(Math.sin(c.yaw) * cp, Math.sin(c.pitch), Math.cos(c.yaw) * cp).multiplyScalar(c.dist * (portrait ? 1.18 : 1)).add(this.#camTarget);
     const r = Math.hypot(want.x, want.z);
     if (r > CISTERN.radius - 0.6) { want.x *= (CISTERN.radius - 0.6) / r; want.z *= (CISTERN.radius - 0.6) / r; }
     want.y = THREE.MathUtils.clamp(want.y, floorAt("cistern", want.x, want.z).y + 0.35, 7.4);
@@ -519,7 +575,7 @@ export class Game {
   }
   #lights() {
     this.#fill.position.copy(this.stage.camera.position).lerp(this.#pos.clone().add(new THREE.Vector3(0, 2.2, 0)), 0.55);
-    this.#fill.intensity = this.hud.phase === "create" ? 14 : this.hud.phase === "play" ? 9 : 4;
+    this.#fill.intensity = this.hud.phase === "create" ? 7 : this.hud.phase === "play" ? 8 : 4;
   }
 
   /** Development only: walk the frog to a point (the screenshot tests use it). */
@@ -534,6 +590,7 @@ export class Game {
     this.#step(dt);
     this.#camera(dt);
     this.#lights();
+    this.#targetRing(this.#t);
     this.#place?.update(this.#t, dt);
     this.stage.render(dt);
   };

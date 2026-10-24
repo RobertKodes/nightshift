@@ -321,6 +321,181 @@ for o in parts:
 for kb in body.data.shape_keys.key_blocks:
     if kb.name == "Smug": kb.value = 0.3
 
+# ---------- 8b. armour: cut from the frog's own skin and lifted off it, so every piece fits every frog ----------
+# Each piece is a region of the body surface pushed out along its normals, with a thick turned edge. It
+# keeps the body's skin weights (it bends with the same bones) and the body's creator shape keys (a
+# fat belly or a wide head moves the armour with it). Small solid details ride one bone each.
+from mathutils.kdtree import KDTree as _KD
+
+def amat(name, rgb, rough=0.6):
+    m = bpy.data.materials.new(name)
+    b = m.node_tree.nodes.get("Principled BSDF")
+    b.inputs["Base Color"].default_value = (*rgb, 1); b.inputs["Roughness"].default_value = rough
+    return m
+A = {
+    "shell": amat("armor_shell", (0.25, 0.21, 0.11)), "scute": amat("armor_scute", (0.46, 0.39, 0.2)),
+    "reed": amat("armor_reed", (0.45, 0.36, 0.18)), "leaf": amat("armor_leaf", (0.2, 0.3, 0.12)),
+    "leather": amat("armor_leather", (0.25, 0.14, 0.08)), "bone": amat("armor_bone", (0.82, 0.77, 0.62)),
+    "cloth": amat("armor_cloth", (0.42, 0.36, 0.28)), "wax": amat("armor_wax", (0.78, 0.68, 0.45)),
+    "silk": amat("armor_silk", (0.45, 0.46, 0.5)), "cord": amat("armor_cord", (0.5, 0.17, 0.1)),
+    "brass": amat("armor_brass", (0.72, 0.55, 0.24), 0.35), "hide": amat("armor_hide", (0.16, 0.18, 0.12), 0.4),
+    "wool": amat("armor_wool", (0.33, 0.24, 0.16)),
+}
+BODY = body.data
+KD_BODY = _KD(len(BODY.vertices))
+for v in BODY.vertices: KD_BODY.insert(v.co, v.index)
+KD_BODY.balance()
+GROUP = {g.name: g.index for g in body.vertex_groups}
+
+class Piece:
+    """A piece of armour being built: one bmesh, the body vertex each of its vertices follows, its materials."""
+    def __init__(self, name):
+        self.name = name; self.bm = bmesh.new(); self.deform = self.bm.verts.layers.deform.verify()
+        self.src = []; self.mats = []
+    def mat_index(self, m):
+        if m not in self.mats: self.mats.append(m)
+        return self.mats.index(m)
+
+    def skin(self, keep, off, lip, material):
+        """The body faces `keep(centre, normal)` chooses, lifted `off` off the skin, with an edge `lip` wide."""
+        polys = [p for p in BODY.polygons if keep(p.center, p.normal)]
+        ids = sorted({i for p in polys for i in p.vertices})
+        made = {}
+        for i in ids:
+            v = BODY.vertices[i]
+            nv = self.bm.verts.new(v.co + v.normal * off)
+            for g in v.groups: nv[self.deform][g.group] = g.weight
+            made[i] = nv; self.src.append(i)
+        mi = self.mat_index(material)
+        faces = []
+        for p in polys:
+            try:
+                f = self.bm.faces.new([made[i] for i in p.vertices]); f.material_index = mi; f.smooth = True; faces.append(f)
+            except ValueError: pass
+        # smooth the hem: the cut follows the mesh's triangles, so walk each edge vertex toward its two neighbours
+        back = {nv: i for i, nv in made.items()}
+        for _ in range(8):
+            moves = {}
+            for v in [v for v in back if v.is_boundary]:
+                nb = [e.other_vert(v) for e in v.link_edges if e.is_boundary]
+                if len(nb) == 2: moves[v] = (nb[0].co + nb[1].co) / 2
+            for v, c in moves.items(): v.co = v.co.lerp(c, 0.5)
+        if lip:
+            # turn the edge outward, so the piece shows a thickness where it ends
+            bnd = [e for e in self.bm.edges if e.is_boundary and all(v in back for v in e.verts)]
+            res = bmesh.ops.extrude_edge_only(self.bm, edges=bnd)
+            for x in res["geom"]:
+                if isinstance(x, bmesh.types.BMVert):
+                    # the new vertex sits where its source boundary vertex is: find that one
+                    near = min(back, key=lambda o: (o.co - x.co).length_squared)
+                    i = back[near]; x.co = near.co + BODY.vertices[i].normal * lip
+                    for gi, w in near[self.deform].items(): x[self.deform][gi] = w
+                    self.src.append(i)
+                elif isinstance(x, bmesh.types.BMFace): x.material_index = mi; x.smooth = True
+        return self
+
+    def solid(self, make, bone, material):
+        """A small solid detail (a scute, a dart, a ring) that rides one bone."""
+        b = bmesh.new(); make(b)
+        mi = self.mat_index(material); idx = GROUP[bone]
+        vmap = {}
+        for v in b.verts:
+            nv = self.bm.verts.new(v.co); nv[self.deform][idx] = 1.0; vmap[v] = nv
+            self.src.append(KD_BODY.find(v.co)[1])
+        for f in b.faces:
+            try:
+                nf = self.bm.faces.new([vmap[v] for v in f.verts]); nf.material_index = mi; nf.smooth = True
+            except ValueError: pass
+        b.free()
+        return self
+
+    def build(self):
+        me = bpy.data.meshes.new(self.name)
+        bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)
+        self.bm.to_mesh(me); self.bm.free()
+        o = bpy.data.objects.new(self.name, me); scene.collection.objects.link(o)
+        for m in self.mats: me.materials.append(m)
+        for g in body.vertex_groups: o.vertex_groups.new(name=g.name)
+        # the creator's shape keys, carried over from each vertex's body vertex
+        keys = BODY.shape_keys.key_blocks
+        o.shape_key_add(name="Basis")
+        for kb in keys[1:]:
+            k = o.shape_key_add(name=kb.name)
+            for i, (v, src) in enumerate(zip(me.vertices, self.src)):
+                k.data[i].co = v.co + (kb.data[src].co - keys[0].data[src].co)
+            k.value = kb.value
+        am = o.modifiers.new("rig", "ARMATURE"); am.object = rig
+        o.parent = rig
+        return o
+
+def hexagon(r, at, normal):
+    def make(b):
+        bmesh.ops.create_cone(b, cap_ends=True, segments=6, radius1=r, radius2=r * 0.8, depth=0.022)
+        q = Vector((0, 0, 1)).rotation_difference(normal).to_matrix().to_4x4()
+        bmesh.ops.transform(b, matrix=Matrix.Translation(at) @ q, verts=b.verts)
+    return make
+def cone(r0, r1, depth, at, direction, segs=8):
+    def make(b):
+        bmesh.ops.create_cone(b, cap_ends=True, segments=segs, radius1=r0, radius2=r1, depth=depth)
+        q = Vector((0, 0, 1)).rotation_difference(Vector(direction).normalized()).to_matrix().to_4x4()
+        bmesh.ops.transform(b, matrix=Matrix.Translation(Vector(at)) @ q, verts=b.verts)
+    return make
+def torus(major, minor, at, axis):
+    def make(b):
+        segs, ring = 24, 8
+        rows = []
+        for i in range(segs):
+            a = 2 * math.pi * i / segs
+            row = []
+            for j in range(ring):
+                c = 2 * math.pi * j / ring
+                row.append(b.verts.new(((major + minor * math.cos(c)) * math.cos(a), (major + minor * math.cos(c)) * math.sin(a), minor * math.sin(c))))
+            rows.append(row)
+        for i in range(segs):
+            for j in range(ring):
+                b.faces.new((rows[i][j], rows[(i + 1) % segs][j], rows[(i + 1) % segs][(j + 1) % ring], rows[i][(j + 1) % ring]))
+        q = Vector((0, 0, 1)).rotation_difference(Vector(axis).normalized()).to_matrix().to_4x4()
+        bmesh.ops.transform(b, matrix=Matrix.Translation(Vector(at)) @ q, verts=b.verts)
+    return make
+def on_body(x, z, front=True):
+    """A point on the body's surface and its normal, seen from the front (or the back)."""
+    hit, nrm, _, _ = BVH_BODY.ray_cast(Vector((x, -2.0 if front else 2.0, z)), Vector((0, 1 if front else -1, 0)))
+    return hit, nrm
+
+from mathutils.bvhtree import BVHTree as _BVH
+BVH_BODY = _BVH.FromObject(body, bpy.context.evaluated_depsgraph_get(), deform=False)
+ARMOR = {}
+arm_free = lambda c: not (abs(c.x) > 0.34 and c.z > 0.95)          # keep the arms out of body armour
+
+# Reedguard: a cuirass of shell over chest and belly, four scutes down the front, red-cord bracers
+p = Piece("Gear_shell_vest").skin(lambda c, n: 0.62 < c.z < 1.13 and arm_free(c), 0.03, 0.03, A["shell"])
+for x, z, r in ((0, 1.0, 0.085), (-0.13, 0.87, 0.075), (0.13, 0.87, 0.075), (0, 0.74, 0.075)):
+    hit, nrm = on_body(x, z)
+    if hit: p.solid(hexagon(r, hit + nrm * 0.045, nrm), "chest" if z > 0.95 else "spine", A["scute"])
+ARMOR["shell_vest"] = p.build()
+ARMOR["reed_bracers"] = Piece("Gear_reed_bracers").skin(lambda c, n: 0.52 < abs(c.x) < 0.74 and 0.98 < c.z < 1.24, 0.022, 0.018, A["reed"]).build()
+ARMOR["leech_wraps"] = Piece("Gear_leech_wraps").skin(lambda c, n: 0.6 < abs(c.x) < 0.82 and 0.98 < c.z < 1.24, 0.02, 0.014, A["hide"]).build()
+# Dartsinger: a cowl of dried leaf over the back of the head and the nape, crossed straps with darts, wrapped feet
+ARMOR["leaf_hood"] = Piece("Gear_leaf_hood").skin(lambda c, n: (c.z > 1.36 and c.y > -0.02) or (1.16 < c.z <= 1.36 and c.y > 0.08 and abs(c.x) < 0.42), 0.035, 0.03, A["leaf"]).build()
+strap = lambda c: 0.64 < c.z < 1.12 and arm_free(c) and min(abs((c.z - 0.9) - 0.78 * c.x), abs((c.z - 0.9) + 0.78 * c.x)) < 0.045
+p = Piece("Gear_dart_harness").skin(lambda c, n: strap(c), 0.022, 0.012, A["leather"])
+for k in range(5):
+    x = (k - 2) * 0.06; z = 0.9 + 0.78 * x
+    hit, nrm = on_body(x, z)
+    if hit: p.solid(cone(0.009, 0.003, 0.12, hit + nrm * 0.035 + Vector((0, 0, 0.05)), (0, 0, 1)), "chest" if z > 0.95 else "spine", A["bone"])
+ARMOR["dart_harness"] = p.build()
+ARMOR["wrap_boots"] = Piece("Gear_wrap_boots").skin(lambda c, n: 0.05 < c.z < 0.3 and abs(abs(c.x) - 0.171) < 0.13 and c.y > -0.1, 0.018, 0.014, A["cloth"]).build()
+# Lampwright: a waxed hood with a point at the back, a moth-silk mantle, a cord sash with a brass ring
+p = Piece("Gear_tallow_hood").skin(lambda c, n: (c.z > 1.33 and c.y > -0.1) or (1.15 < c.z <= 1.33 and c.y > 0.06 and abs(c.x) < 0.44), 0.035, 0.03, A["wax"])
+ARMOR["tallow_hood"] = p.build()
+ARMOR["moth_mantle"] = Piece("Gear_moth_mantle").skin(lambda c, n: 0.92 < c.z < 1.24 and abs(c.x) < 0.46 and (c.y > -0.12 or abs(c.x) > 0.22), 0.035, 0.035, A["silk"]).build()
+p = Piece("Gear_keeper_sash").skin(lambda c, n: 0.53 < c.z < 0.65 and abs(c.x) < 0.4, 0.025, 0.012, A["cord"])
+hit, nrm = on_body(0.2, 0.57)
+if hit: p.solid(torus(0.045, 0.01, hit + nrm * 0.05 + Vector((0, 0, -0.04)), nrm), "hips", A["brass"])
+ARMOR["keeper_sash"] = p.build()
+ARMOR["wend_cloak"] = Piece("Gear_wend_cloak").skin(lambda c, n: (c.y > 0.02 and 0.42 < c.z < 1.24 and abs(c.x) < 0.36) or (1.12 < c.z < 1.24 and abs(c.x) < 0.4 and c.y > -0.15), 0.045, 0.04, A["wool"]).build()
+print("armour pieces", len(ARMOR), sorted(ARMOR))
+
 # ---------- 9. export ----------
 KEEP = {"Idle", "Unarmed_Idle", "Walking_A", "Walking_Backwards", "Running_A", "Running_Strafe_Left", "Running_Strafe_Right",
         "Jump_Start", "Jump_Idle", "Jump_Land", "Jump_Full_Short", "Dodge_Forward", "Dodge_Backward", "Dodge_Left", "Dodge_Right",

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
-import { type ClassId, type Look, decodeLook, signed, unit } from "@nightshift/lastspawn";
+import { type ClassId, ITEMS, type Look, STARTER_GEAR, decodeLook, signed, unit } from "@nightshift/lastspawn";
 import { load, toonRamp } from "./assets";
 
 /** HSV bytes (0-255 each) as a colour. */
@@ -66,6 +66,16 @@ outgoingLight += vec3(0.55, 0.7, 0.9) * spec * (0.12 + uWet * 0.4) * (1.0 - lip)
   return { mat, u };
 }
 
+const armorMats = new Map<string, THREE.Material>();
+/** One toon material per armour cloth, both faces drawn (a piece is a single lifted skin). */
+function armorMat(name: string): THREE.Material {
+  let m = armorMats.get(name);
+  if (!m) {
+    m = new THREE.MeshToonMaterial({ color: ARMOR_COLORS[name] ?? 0x777777, gradientMap: toonRamp(), side: THREE.DoubleSide });
+    armorMats.set(name, m);
+  }
+  return m;
+}
 const flatMat = (color: THREE.ColorRepresentation, shine = 0) => {
   const m = new THREE.MeshToonMaterial({ color, gradientMap: toonRamp() });
   if (shine) m.emissive = new THREE.Color(color).multiplyScalar(shine);
@@ -76,28 +86,36 @@ const flatMat = (color: THREE.ColorRepresentation, shine = 0) => {
 const GEAR_COLORS: Record<string, number> = {
   gear_reed: 0x8a7442, gear_reed_node: 0x5a4524, gear_cord: 0x8e3022, gear_bone: 0xd9d0b4, gear_shell: 0x4a4024, gear_scute: 0x80703c, gear_iron: 0x3c3836,
 };
-let gearScene: THREE.Object3D | null = null;
+let gearScene: Promise<THREE.Object3D> | null = null;
 const gearMats = new Map<string, THREE.Material>();
-async function gear(): Promise<THREE.Object3D> {
-  if (gearScene) return gearScene;
-  gearScene = (await load("gear")).scene;
-  gearScene.traverse((c) => {
+/** The held gear, loaded and recoloured once (two frogs dressing at the same moment share the one load). */
+function gear(): Promise<THREE.Object3D> {
+  gearScene ??= load("gear").then((g) => { recolor(g.scene); return g.scene; });
+  return gearScene;
+}
+function recolor(scene: THREE.Object3D) {
+  scene.traverse((c) => {
     const m = c as THREE.Mesh; if (!m.isMesh) return;
     const name = (m.material as THREE.Material).name;
     let mat = gearMats.get(name);
     if (!mat) {
       // both faces: thin pieces (a blade, a cage bar) never show a hole from the far side
       mat = name === "gear_glow" ? new THREE.MeshBasicMaterial({ color: new THREE.Color(0xd8ff8a).multiplyScalar(2.2) }) : new THREE.MeshToonMaterial({ color: GEAR_COLORS[name] ?? 0x888888, gradientMap: toonRamp(), side: THREE.DoubleSide });
+      mat.name = name;
       gearMats.set(name, mat);
     }
     m.material = mat; m.castShadow = true;
   });
-  return gearScene;
 }
-/** What each class carries, in which hand: the right hand's slot holds a weapon blade-up, as the rig's swords do. */
-const KIT: Record<ClassId, { right?: string; left?: string }> = {
-  reedguard: { right: "glaive", left: "shield" }, dartsinger: { right: "blowgun" }, lampwright: { left: "lantern" },
+/** Which hand holds what: the right hand's slot holds a weapon blade-up, as the rig's swords do. */
+const HELD: Record<string, "right" | "left"> = { glaive: "right", blowgun: "right", shield: "left", lantern: "left" };
+/** Worn armour, drawn in the toon light, by material name. */
+const ARMOR_COLORS: Record<string, number> = {
+  armor_shell: 0x4f4326, armor_scute: 0x8a7840, armor_reed: 0x8c7442, armor_leaf: 0x46602c, armor_leather: 0x5a3a24, armor_bone: 0xd9d0b4,
+  armor_cloth: 0x8a7a62, armor_wax: 0xc8b07a, armor_silk: 0x8a8e9c, armor_cord: 0x8e3022, armor_brass: 0xc09a4a, armor_hide: 0x2e3624, armor_wool: 0x6a4c32,
 };
+/** The model ids an item list draws (a class's starter set, or what a player wears). */
+export const modelsOf = (items: string[]) => items.map((i) => ITEMS[i]?.model).filter((m): m is string => Boolean(m));
 
 /** Clips by name, as the rig names them. */
 export type Clips = Map<string, THREE.AnimationClip>;
@@ -142,7 +160,8 @@ export class Frog {
       if ((c as THREE.Bone).isBone) this.#bones.set(c.name, c as THREE.Bone);
       if (!m.isMesh) return;
       const name = (m.material as THREE.Material).name;
-      m.material = name === "frog_skin" ? this.#skin.mat : name === "frog_iris" ? this.#iris : name === "frog_pupil" ? pupil : eyeWhite;
+      m.material = name === "frog_skin" ? this.#skin.mat : name === "frog_iris" ? this.#iris : name === "frog_pupil" ? pupil
+        : name.startsWith("armor_") ? armorMat(name) : eyeWhite;
       m.castShadow = true; m.receiveShadow = true;
       m.frustumCulled = false;
       if (m.morphTargetDictionary) this.#morphs.push({ mesh: m, dict: m.morphTargetDictionary });
@@ -160,6 +179,7 @@ export class Frog {
     this.mixer = new THREE.AnimationMixer(this.model);
     this.look = typeof look === "string" ? decodeLook(look) : look;
     this.applyLook(this.look);
+    void this.wear([]);
     this.play({ clip: "Idle", loop: true });
   }
 
@@ -192,12 +212,25 @@ export class Frog {
   setWet(v: number) { this.#skin.u.uWet.value = v; }
 
   #gear: THREE.Object3D[] = [];
-  /** Put the class's gear in the frog's hands (a lantern brings its own small light). */
-  async equip(cls: ClassId | null, light = false) {
+  /** what is drawn now (never matches a real list until the first `wear`, which hides every piece not worn) */
+  #wearing = "?";
+  /** A class's starting gear, for the creator's preview. */
+  equip(cls: ClassId | null, light = false) { return this.wear(cls ? modelsOf(STARTER_GEAR[cls]) : [], light); }
+  /** Dress the frog: armour pieces are part of its model and only shown; held pieces go in its hands. */
+  async wear(models: string[], light = false) {
+    const key = models.join(",") + (light ? "+" : "");
+    if (key === this.#wearing) return;
+    this.#wearing = key;
+    // a piece with several materials arrives as a group of meshes: show or hide the group, its meshes follow
+    this.model.traverse((c) => {
+      if (!c.name.startsWith("Gear_")) return;
+      if (c.parent?.name.startsWith("Gear_")) { c.visible = true; return; }
+      c.visible = models.includes(c.name.slice(5));
+    });
+    const src = await gear();
+    if (key !== this.#wearing) return;
     for (const g of this.#gear) g.removeFromParent();
     this.#gear = [];
-    if (!cls) return;
-    const src = await gear(), kit = KIT[cls];
     const put = (piece: string | undefined, slot: string, at: THREE.Vector3, ry: number) => {
       // the loader strips dots from node names: "handslot.r" arrives as "handslotr"
       const bone = this.#bones.get(THREE.PropertyBinding.sanitizeNodeName(slot)), from = src.getObjectByName(piece ?? "");
@@ -206,8 +239,10 @@ export class Frog {
       if (piece === "lantern" && light) { const l = new THREE.PointLight(0xc8ff8a, 3.2, 6, 2); l.position.set(0, -0.3, 0); o.add(l); }
       bone.add(o); this.#gear.push(o);
     };
-    put(kit.right, "handslot.r", new THREE.Vector3(0, 0.033, 0), Math.PI);
-    put(kit.left, "handslot.l", kit.left === "shield" ? new THREE.Vector3(0, 0.017, 0.156) : new THREE.Vector3(0, 0.02, 0), 0);
+    for (const m of models) {
+      if (HELD[m] === "right") put(m, "handslot.r", new THREE.Vector3(0, 0.033, 0), Math.PI);
+      if (HELD[m] === "left") put(m, "handslot.l", m === "shield" ? new THREE.Vector3(0, 0.017, 0.156) : new THREE.Vector3(0, 0.02, 0), 0);
+    }
   }
 
   /** Loop a move (idle, walk, run...), crossfading from the last one. */
@@ -219,6 +254,7 @@ export class Frog {
     next.reset(); next.enabled = true; next.setLoop(a.loop === false ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
     next.clampWhenFinished = a.loop === false; next.timeScale = a.speed ?? 1;
     next.play();
+    if (this.#oneShot) { this.#oneShot.fadeOut(0.12); this.#oneShot = null; this.#oneShotEnd = 0; }
     if (this.#current) this.#current.crossFadeTo(next, a.fade ?? 0.22, false);
     this.#current = next; this.#currentName = a.clip;
   }
@@ -228,16 +264,21 @@ export class Frog {
     const c = this.#clips.get(clip);
     if (!c) return;
     const act = this.mixer.clipAction(c);
-    if (this.#oneShot && this.#oneShot !== act) this.#oneShot.fadeOut(0.1);
-    act.reset(); act.setLoop(THREE.LoopOnce, 1); act.clampWhenFinished = false; act.timeScale = speed;
-    act.setEffectiveWeight(1); act.fadeIn(0.08); act.play();
-    this.#oneShot = act; this.#oneShotEnd = performance.now() + (c.duration / speed) * 1000 - 120;
+    if (this.#oneShot && this.#oneShot !== act) this.#oneShot.stop();
+    act.reset(); act.enabled = true; act.setLoop(THREE.LoopOnce, 1); act.clampWhenFinished = true; act.timeScale = speed;
+    act.setEffectiveWeight(1); act.play();
+    // the whole body plays the move: the loop underneath steps aside, and comes back after
+    this.#current?.fadeOut(0.08);
+    this.#oneShot = act; this.#oneShotEnd = performance.now() + (c.duration / speed) * 1000 - 160;
   }
 
   get busy() { return performance.now() < this.#oneShotEnd; }
 
   update(dt: number) {
-    if (this.#oneShot && performance.now() >= this.#oneShotEnd) { this.#oneShot.fadeOut(0.15); this.#oneShot = null; }
+    if (this.#oneShot && performance.now() >= this.#oneShotEnd) {
+      this.#oneShot.fadeOut(0.18); this.#oneShot = null;
+      if (this.#current) { this.#current.enabled = true; this.#current.setEffectiveTimeScale(this.#current.timeScale || 1); this.#current.fadeIn(0.18); }
+    }
     this.mixer.update(dt);
   }
 

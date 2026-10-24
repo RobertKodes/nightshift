@@ -3,7 +3,7 @@
  * speak the same protocol and pass the same server checks. Positions are world units (three.js, y up;
  * a frog stands about 2 units tall); angles are radians; times are milliseconds.
  */
-import type { ClassId } from "./data.js";
+import type { ClassId, Equip, Slot } from "./data.js";
 
 export type ZoneId = "cistern" | "hollowmere";
 export type EntityKind = "player" | "mob" | "npc";
@@ -27,11 +27,15 @@ export type ClientMsg =
   | { t: "choose"; npc: string; option: string }
   | { t: "quest"; action: "accept" | "turnin" | "abandon"; id: string }
   | { t: "loot"; id: string }
+  /** wear a piece from the bag (what was in its slot goes back to the bag), take one off, eat or use an item */
+  | { t: "equip"; item: string }
+  | { t: "unequip"; slot: Slot }
+  | { t: "use"; item: string }
   | { t: "ping"; at: number };
 
 // ---------- server to client ----------
 export interface CharSummary { id: string; name: string; cls: ClassId; level: number; look: string; zone: ZoneId }
-export interface Stats { hp: number; hpMax: number; level: number; xp: number; xpNext: number }
+export interface Stats { hp: number; hpMax: number; level: number; xp: number; xpNext: number; armor: number; power: number }
 export interface QuestState { id: string; step: number; progress: number[]; done: boolean }
 export interface ItemStack { id: string; n: number }
 
@@ -45,6 +49,8 @@ export interface EntitySnap {
   hp?: number; hpMax?: number; level?: number;
   /** players: appearance code and class; mobs: their type; npcs: their id in the zone data */
   look?: string; cls?: ClassId; mob?: string; npc?: string;
+  /** players: the worn pieces others see, as model ids joined by "," */
+  gear?: string;
   /** who it is attacking or casting at */
   tgt?: string | null;
   /** an AI agent playing (shown with a lantern sigil) */
@@ -66,7 +72,7 @@ export type CombatEvent =
 
 export type ServerMsg =
   | { t: "welcome"; version: number; guest?: string; chars: CharSummary[] }
-  | { t: "enter"; you: string; zone: ZoneId; char: CharSummary; stats: Stats; quests: QuestState[]; bag: ItemStack[]; tick: number }
+  | { t: "enter"; you: string; zone: ZoneId; char: CharSummary; stats: Stats; quests: QuestState[]; bag: ItemStack[]; equip: Equip; tick: number }
   /** About 10 times a second: what changed around you, and what left your view. */
   | { t: "snap"; tick: number; ents: EntitySnap[]; gone?: string[]; ack?: number }
   /** The server moved you (a bad move, a leap, a zone change): put the frog here. */
@@ -76,7 +82,7 @@ export type ServerMsg =
   | { t: "chat"; from: string; name: string; text: string; ch: "say" | "zone" | "system" }
   | { t: "dialog"; npc: string; text: string; options: { id: string; text: string }[] }
   | { t: "quests"; quests: QuestState[] }
-  | { t: "bag"; bag: ItemStack[] }
+  | { t: "bag"; bag: ItemStack[]; equip: Equip }
   | { t: "error"; msg: string }
   | { t: "pong"; at: number; now: number };
 

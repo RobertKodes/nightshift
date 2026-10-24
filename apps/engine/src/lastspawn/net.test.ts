@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket, WebSocketServer } from "ws";
 import type { ClientMsg, ServerMsg } from "@nightshift/lastspawn";
-import { MAX_MSGS_PER_SEC, encodeLook } from "@nightshift/lastspawn";
+import { MAX_MSGS_PER_SEC, SLOTS, encodeLook } from "@nightshift/lastspawn";
 import { attachLastspawn, parseClientMsg } from "./net.js";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -55,8 +55,19 @@ async function server() {
 describe("LASTSPAWN WebSocket transport", () => {
   it.each(["{", "null", "[]", '{"t":"unknown"}', '{"t":"move","seq":1}',
     '{"t":"move","seq":1,"x":0,"y":0,"z":0,"ry":0,"anim":"fly"}',
-    '{"t":"hello","version":1,"agent":"yes"}', '{"t":"create","name":"Frog","cls":"constructor","look":"abc"}'])
+    '{"t":"hello","version":1,"agent":"yes"}', '{"t":"create","name":"Frog","cls":"constructor","look":"abc"}',
+    '{"t":"equip"}', '{"t":"equip","item":{}}', '{"t":"use","item":3}', '{"t":"use","item":null}',
+    '{"t":"unequip"}', '{"t":"unequip","slot":"constructor"}', '{"t":"unequip","slot":"bag"}', '{"t":"unequip","slot":[]}'])
   ("ignores malformed and unknown messages: %s", (raw) => { expect(parseClientMsg(raw)).toBeNull(); });
+
+  it("parses equip and use item ids and all valid equipment slots", () => {
+    for (const t of ["equip", "use"] as const) {
+      const msg = { t, item: t === "equip" ? "leech_hide_wraps" : "glow_moss" };
+      expect(parseClientMsg(JSON.stringify({ ...msg, ignored: "extra" }))).toEqual(msg);
+      expect(parseClientMsg(JSON.stringify({ t, item: "x".repeat(129) }))).toBeNull();
+    }
+    for (const slot of SLOTS) expect(parseClientMsg(JSON.stringify({ t: "unequip", slot }))).toEqual({ t: "unequip", slot });
+  });
 
   it("welcomes guests, creates a character and snapshots it, tolerating bad JSON", async () => {
     const s = await server(), c = await s.open();
@@ -64,6 +75,12 @@ describe("LASTSPAWN WebSocket transport", () => {
     c.send({ t: "hello", version: 1 }); expect((await c.next("welcome")).guest).toMatch(/^[A-Za-z0-9_-]{32}$/);
     c.send({ t: "create", name: "Net Frog", cls: "reedguard", look: encodeLook({}) });
     const enter = await c.next("enter"), snap = await c.next("snap");
+    expect(enter).toMatchObject({ equip: { main: "reed_glaive", off: "shell_shield", chest: "shell_vest", hands: "reed_bracers" },
+      bag: [], stats: { armor: 25, power: 4 } });
+    expect(snap.ents.find((e) => e.id === enter.you)?.gear).toBe("glaive,shield,shell_vest,reed_bracers");
+    c.send({ t: "unequip", slot: "hands" });
+    expect(await c.next("bag")).toMatchObject({ bag: [{ id: "reed_bracers", n: 1 }], equip: { main: "reed_glaive" } });
+    expect((await c.next("stats")).stats).toMatchObject({ armor: 22, power: 4 });
     expect(snap.ents.some((e) => e.id === enter.you)).toBe(true); expect(s.world.stats().players).toBe(1);
     expect(s.logs).toEqual([]);
     s.close(); expect(s.world.stats().connections).toBe(0); s.close();

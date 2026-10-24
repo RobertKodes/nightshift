@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ABILITIES, BASE_LOOK, CLASSES, type ClassId, type Look, type LookKey, PATTERNS } from "@nightshift/lastspawn";
 import { Game, type Hud } from "./game";
+import { Bag } from "./Bag";
 import { AbilityIcon } from "./icons";
 import { pickQuality } from "./stage";
 import "./lastspawn.css";
@@ -122,6 +123,8 @@ function Range({ s, v, on }: { s: Slider; v: number; on: (v: number) => void }) 
 function PlayHud({ hud, game, touch }: { hud: Hud; game: Game; touch: boolean }) {
   const [, tick] = useState(0);
   const [typing, setTyping] = useState(false);
+  const [bag, setBag] = useState(false);
+  useEffect(() => { game.controls.onBag = () => setBag((b) => !b); }, [game]);
   const [line, setLine] = useState("");
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => { const i = setInterval(() => tick((x) => x + 1), 100); return () => clearInterval(i); }, []);
@@ -169,6 +172,11 @@ function PlayHud({ hud, game, touch }: { hud: Hud; game: Game; touch: boolean })
     </div>
     {hud.floats.map((f) => <div key={f.id} className={`ls-float ${f.kind}`} style={{ left: `${f.x * 100}%`, top: `${f.y * 100}%` }}>{f.text}</div>)}
     {hud.dead && <div className="ls-dead">You are down</div>}
+    {bag && <Bag hud={hud} game={game} onClose={() => setBag(false)} />}
+    <button type="button" className="ls-bag-btn" aria-label="Bag" title="Bag (I)" onClick={() => setBag((b) => !b)}>
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8h12l1 12H5z" /><path d="M9 8V6a3 3 0 0 1 6 0v2" /></svg>
+      {hud.bag.length > 0 && <i>{hud.bag.reduce((n, b) => n + b.n, 0)}</i>}
+    </button>
     {touch && <>
       {joy.active && <div className="ls-joy" style={{ left: joy.ox, top: joy.oy }}><i style={{ transform: `translate(${joy.x * 56}px, ${joy.y * 56}px)` }} /></div>}
       {!joy.active && <div className="ls-joy-hint">Move</div>}
@@ -176,7 +184,7 @@ function PlayHud({ hud, game, touch }: { hud: Hud; game: Game; touch: boolean })
       <button type="button" className="ls-cycle" onClick={() => game.controls.onCycle()}>Target</button>
       <button type="button" className="ls-talk-btn" onClick={() => { setTyping(true); setTimeout(() => input.current?.focus(), 0); }}>Say</button>
     </>}
-    {!touch && <div className="ls-keys">WASD move · Shift walk · Space leap · Tab target · 1-6 abilities · E talk · Enter chat · drag to look</div>}
+    {!touch && <div className="ls-keys">WASD move · Shift walk · Space leap · Tab target · 1-6 abilities · E talk · I bag · Enter chat · drag to look</div>}
   </>;
 }
 

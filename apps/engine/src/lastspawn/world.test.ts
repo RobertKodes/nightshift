@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ABILITIES, CLASSES, GCD_MS, MOBS, PROTOCOL_VERSION, TICK_HZ, ZONES, encodeLook, floorAt, xpNext } from "@nightshift/lastspawn";
-import type { ClassId, CombatEvent, ServerMsg, Spot, ZoneId } from "@nightshift/lastspawn";
+import { ABILITIES, ARMOR_K, CLASSES, GCD_MS, ITEMS, MOBS, PROTOCOL_VERSION, STARTER_GEAR, TICK_HZ, ZONES, encodeLook, floorAt, xpNext } from "@nightshift/lastspawn";
+import type { ClassId, CombatEvent, Equip, ServerMsg, Slot, Spot, ZoneId } from "@nightshift/lastspawn";
 import { World } from "./world.js";
 import type { Connection } from "./world.js";
 import type { Character } from "./state.js";
@@ -32,7 +32,8 @@ class FakeConnection implements Connection {
 
 function character(id = "frog", options: Partial<Character> = {}): Character {
   const c: Character = { id, account: `w:${id}`, name: id[0]!.toUpperCase() + id.slice(1), cls: "reedguard", look,
-    level: 1, xp: 0, zone: "cistern", ...ZONES.cistern.spawn, hp: CLASSES.reedguard.hp, quests: [], bag: [], flags: {}, createdAt: 1, lastSeen: 1, ...options };
+    // Combat fixtures are explicitly unequipped; create and legacy-save tests cover starter gear.
+    level: 1, xp: 0, zone: "cistern", ...ZONES.cistern.spawn, hp: CLASSES.reedguard.hp, quests: [], bag: [], equip: {}, flags: {}, createdAt: 1, lastSeen: 1, ...options };
   c.hp = options.hp ?? CLASSES[c.cls].hp + CLASSES[c.cls].hpPerLevel * (c.level - 1);
   return c;
 }
@@ -41,7 +42,7 @@ function seeded(seed: number): () => number {
   return () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
 }
 
-function game(chars: Character[] = [], random: () => number = () => 0.5) {
+function game(chars: (Character | Omit<Character, "equip">)[] = [], random: () => number = () => 0.5) {
   const dir = temp(), file = join(dir, "lastspawn", "characters.json");
   if (chars.length) { mkdirSync(join(dir, "lastspawn")); writeFileSync(file, JSON.stringify(chars)); }
   let now = 100000, rng = random, serial = 0;
@@ -82,6 +83,27 @@ function approachMob(g: ReturnType<typeof game>, c: FakeConnection, from: Spot, 
 }
 
 describe("LASTSPAWN accounts and characters", () => {
+  it.each([
+    ["reedguard", 25, 4], ["dartsinger", 10, 5], ["lampwright", 8, 6],
+  ] as const)("creates a %s wearing starter gear outside the bag", (cls, armor, power) => {
+    const g = game(), c = g.open();
+    create(g.world, c, "New Frog", cls);
+    const equip = Object.fromEntries(STARTER_GEAR[cls].map((id) => [ITEMS[id]!.slot, id]));
+    expect(c.last("enter")).toMatchObject({ equip, bag: [], stats: { armor, power } });
+    const saved = JSON.parse(readFileSync(g.file, "utf8")) as Character[];
+    expect(saved[0]!.equip).toEqual(equip); expect(saved[0]!.bag).toEqual([]);
+  });
+
+  it.each(["reedguard", "dartsinger", "lampwright"] as const)("restores starter gear for an old %s save", (cls) => {
+    const frog = character("frog", { cls, bag: [{ id: "glow_moss", n: 1 }] }), { equip: _equip, ...legacy } = frog;
+    const g = game([legacy]), c = g.play(frog);
+    const equip = Object.fromEntries(STARTER_GEAR[cls].map((id) => [ITEMS[id]!.slot, id]));
+    expect(c.last("enter")).toMatchObject({ equip, bag: frog.bag });
+    g.world.save();
+    expect((JSON.parse(readFileSync(g.file, "utf8")) as Character[])[0]!.equip).toEqual(equip);
+    expect(existsSync(`${g.file}.bad`)).toBe(false);
+  });
+
   it("issues a 24-byte guest token, restores its account, and prefers a signed-in wallet", () => {
     const g = game(), guest = g.open();
     const token = guest.last("welcome").guest!;
@@ -132,6 +154,106 @@ describe("LASTSPAWN accounts and characters", () => {
     g.world.disconnect(first);
     expect(g.world.stats().players).toBe(1);
     g.world.handle(first, { t: "say", text: "stale socket" }); expect(second.all("chat")).toHaveLength(0);
+  });
+});
+
+describe("LASTSPAWN inventory and equipment", () => {
+  it("swaps one item from a stack, merges displaced gear, and unequips back to the bag", () => {
+    const frog = character("frog", { equip: { hands: "reed_bracers" },
+      bag: [{ id: "leech_hide_wraps", n: 2 }, { id: "reed_bracers", n: 1 }] });
+    const g = game([frog]), c = g.play(frog);
+    g.world.handle(c, { t: "equip", item: "leech_hide_wraps" });
+    expect(c.last("bag")).toEqual({ t: "bag", bag: [{ id: "leech_hide_wraps", n: 1 }, { id: "reed_bracers", n: 2 }],
+      equip: { hands: "leech_hide_wraps" } });
+    expect(c.last("stats").stats).toMatchObject({ armor: 4, power: 0 });
+    g.world.handle(c, { t: "equip", item: "leech_hide_wraps" });
+    expect(c.last("bag").bag).toEqual([{ id: "reed_bracers", n: 2 }, { id: "leech_hide_wraps", n: 1 }]);
+    g.world.handle(c, { t: "unequip", slot: "hands" });
+    expect(c.last("bag")).toEqual({ t: "bag", bag: [{ id: "reed_bracers", n: 2 }, { id: "leech_hide_wraps", n: 2 }], equip: {} });
+    expect(c.last("stats").stats).toMatchObject({ armor: 0, power: 0 });
+    expect(c.all("bag")).toHaveLength(3); expect(c.all("stats")).toHaveLength(3);
+    g.world.handle(c, { t: "unequip", slot: "hands" });
+    g.world.handle(c, { t: "unequip", slot: "constructor" as Slot });
+    expect(c.all("error")).toHaveLength(2); expect(c.all("bag")).toHaveLength(3);
+    g.world.save();
+    const restored = new World({ dataDir: g.dir }), conn = new FakeConnection("restored", frog.account);
+    restored.connect(conn); restored.handle(conn, { t: "hello", version: 1 }); restored.handle(conn, { t: "play", charId: frog.id });
+    expect(conn.last("enter")).toMatchObject({ equip: {}, bag: c.last("bag").bag });
+  });
+
+  it("checks bag ownership, gear kind, slot, class and minimum level without consuming rejected gear", () => {
+    const frog = character("frog", { bag: [{ id: "reed_blowgun", n: 1 }, { id: "glow_moss", n: 1 }, { id: "wend_cloak", n: 1 }] });
+    const g = game([frog]), c = g.play(frog), cloak = ITEMS.wend_cloak!, level = cloak.level, slot = cloak.slot;
+    for (const item of ["missing", "constructor", "shell_shield", "glow_moss", "reed_blowgun"]) g.world.handle(c, { t: "equip", item });
+    expect(c.last("error").msg).toMatch(/class/);
+    try {
+      cloak.level = 2;
+      g.world.handle(c, { t: "equip", item: "wend_cloak" });
+      expect(c.last("error").msg).toMatch(/level/);
+      cloak.level = undefined; cloak.slot = undefined;
+      g.world.handle(c, { t: "equip", item: "wend_cloak" });
+      expect(c.all("error")).toHaveLength(7); expect(c.all("bag")).toEqual([]); expect(c.all("stats")).toEqual([]);
+      g.world.handle(c, { t: "play", charId: frog.id });
+      expect(c.last("enter")).toMatchObject({ bag: frog.bag, equip: {} });
+      cloak.slot = slot;
+      g.world.handle(c, { t: "equip", item: "wend_cloak" });
+      expect(c.last("bag").equip).toEqual({ shoulders: "wend_cloak" });
+      expect(c.last("stats").stats).toMatchObject({ armor: 5, power: 2 });
+    } finally { cloak.level = level; cloak.slot = slot; }
+    const veteran = character("veteran", { level: 2, bag: [{ id: "wend_cloak", n: 1 }] });
+    const eligible = game([veteran]), v = eligible.play(veteran);
+    try {
+      cloak.level = 2;
+      eligible.world.handle(v, { t: "equip", item: "wend_cloak" });
+      expect(v.last("bag")).toMatchObject({ equip: { shoulders: "wend_cloak" }, bag: [] });
+    } finally { cloak.level = level; }
+  });
+
+  it("uses glow moss one at a time, caps healing, and broadcasts the use event nearby", () => {
+    const frog = character("frog", { hp: 80, bag: [{ id: "glow_moss", n: 2 }] }), peer = character("peer");
+    const g = game([frog, peer]), c = g.play(frog), observer = g.play(peer);
+    g.world.handle(c, { t: "use", item: "glow_moss" });
+    expect(c.last("stats").stats).toMatchObject({ hp: 110, armor: 0, power: 0 });
+    expect(c.last("bag")).toEqual({ t: "bag", bag: [{ id: "glow_moss", n: 1 }], equip: {} });
+    expect(observer.events("hit")).toContainEqual(expect.objectContaining({ src: frog.id, dst: frog.id, kind: "heal", ability: "use", amount: 30 }));
+    g.world.handle(c, { t: "use", item: "glow_moss" });
+    expect(c.last("stats").stats.hp).toBe(120); expect(c.last("bag").bag).toEqual([]);
+    expect(c.events("hit").at(-1)).toMatchObject({ kind: "heal", ability: "use", amount: 10 });
+    g.world.handle(c, { t: "use", item: "glow_moss" });
+    expect(c.last("error")).toBeDefined(); expect(c.all("stats")).toHaveLength(2); expect(c.all("bag")).toHaveLength(2);
+  });
+
+  it("rejects use of missing items, gear, junk, and consumables while dead", () => {
+    const frog = character("frog", { hp: 1, bag: [{ id: "leech_hide_wraps", n: 1 }, { id: "leech_tooth", n: 1 }, { id: "glow_moss", n: 1 }] });
+    const g = game([frog]), c = g.play(frog);
+    for (const item of ["missing", "constructor", "egg_jelly", "leech_hide_wraps", "leech_tooth"]) g.world.handle(c, { t: "use", item });
+    expect(c.all("error")).toHaveLength(5); expect(c.all("bag")).toEqual([]);
+    approachMob(g, c, frog, leech.reach / 2); g.advance(leech.swingMs + 100);
+    expect(c.last("stats").stats.hp).toBe(0);
+    c.clear(); g.world.handle(c, { t: "use", item: "glow_moss" });
+    expect(c.last("error").msg).toMatch(/dead/); expect(c.all("stats")).toEqual([]); expect(c.all("bag")).toEqual([]);
+    g.world.save(); expect((JSON.parse(readFileSync(g.file, "utf8")) as Character[])[0]!.bag).toEqual(frog.bag);
+  });
+
+  it("sends worn models in slot order, including sparse changes and removing the last piece", () => {
+    const frog = character("frog", { zone: "hollowmere", ...at("hollowmere", 100, -100),
+      equip: { hands: "reed_bracers", chest: "shell_vest", main: "reed_glaive", off: "shell_shield" }, bag: [{ id: "leech_hide_wraps", n: 1 }] });
+    const peer = character("peer", { zone: frog.zone, ...at(frog.zone, 101, -100) });
+    const g = game([frog, peer]), c = g.play(frog), observer = g.play(peer);
+    g.world.tick();
+    for (const conn of [c, observer]) expect(conn.last("snap").ents.find((e) => e.id === frog.id)?.gear).toBe("glaive,shield,shell_vest,reed_bracers");
+    g.world.handle(c, { t: "equip", item: "leech_hide_wraps" }); g.world.tick();
+    expect(observer.last("snap").ents.find((e) => e.id === frog.id)).toEqual({ id: frog.id, k: "player", ...at(frog.zone, 100, -100), gear: "glaive,shield,shell_vest,leech_wraps" });
+    for (const slot of ["main", "off", "chest", "hands"] as const) g.world.handle(c, { t: "unequip", slot });
+    g.world.tick(); expect(observer.last("snap").ents.find((e) => e.id === frog.id)?.gear).toBe("");
+    g.world.tick(); expect(observer.last("snap").ents).toEqual([]);
+  });
+
+  it.each([
+    { hands: "missing" }, { hands: "glow_moss" }, { main: "reed_bracers" }, { main: "reed_blowgun" }, { invalid: "reed_bracers" }, null,
+  ])("rejects invalid persisted equipment: %j", (equip) => {
+    const frog = character(), g = game([{ ...frog, equip: equip as Equip }]);
+    expect(g.world.stats().characters).toBe(0); expect(existsSync(`${g.file}.bad`)).toBe(true);
   });
 });
 
@@ -212,6 +334,47 @@ describe("LASTSPAWN movement and snapshots", () => {
 });
 
 describe("LASTSPAWN combat", () => {
+  it("reduces swings and periodic latch damage by the total worn armor", () => {
+    const run = (equip: Equip) => {
+      const frog = character("frog", { equip }), g = game([frog]), c = g.play(frog);
+      approachMob(g, c, frog, leech.reach / 2); g.advance(2 * leech.swingMs + 1100);
+      return { conn: c, damage: c.events("hit").filter((e) => e.kind === "dmg" && e.dst === frog.id) };
+    };
+    const bare = run({}), armored = run({ off: "shell_shield", chest: "shell_vest", hands: "reed_bracers" });
+    expect(armored.conn.last("enter").stats).toMatchObject({ armor: 25, power: 0 });
+    expect(bare.damage.some((e) => e.ability === "latch")).toBe(true);
+    expect(armored.damage).toHaveLength(bare.damage.length);
+    armored.damage.forEach((hit, i) => expect(hit.amount).toBeCloseTo(bare.damage[i]!.amount * ARMOR_K / (25 + ARMOR_K)));
+    expect(armored.conn.all("stats").every((m) => m.stats.armor === 25 && m.stats.power === 0)).toBe(true);
+  });
+
+  it("adds worn power to direct and periodic damage", () => {
+    const run = (equip: Equip) => {
+      const frog = character("frog", { cls: "dartsinger", equip }), g = game([frog]), c = g.play(frog);
+      approachMob(g, c, frog, leech.aggro + 1);
+      cast(g.world, c, "venom_dart", leechId); g.advance(2000); cast(g.world, c, "dart", leechId);
+      return c;
+    };
+    const bare = run({}), powered = run({ main: "reed_blowgun", shoulders: "wend_cloak" });
+    expect(powered.last("enter").stats).toMatchObject({ armor: 5, power: 7 });
+    const damage = powered.events("hit").filter((e) => e.kind === "dmg"), baseline = bare.events("hit").filter((e) => e.kind === "dmg");
+    expect(damage).toHaveLength(4);
+    damage.forEach((hit, i) => expect(hit.amount).toBeCloseTo(baseline[i]!.amount * 1.07));
+  });
+
+  it("adds the healer's worn power to healing spells and consumables", () => {
+    const healer = character("healer", { cls: "lampwright", hp: 40, zone: "hollowmere", ...at("hollowmere", 100, -100),
+      equip: { off: "firefly_lantern", shoulders: "wend_cloak" }, bag: [{ id: "glow_moss", n: 1 }] });
+    const friend = character("friend", { hp: 30, zone: healer.zone, ...at(healer.zone, 101, -100), equip: { main: "reed_glaive" } });
+    const g = game([healer, friend]), c = g.play(healer), f = g.play(friend);
+    cast(g.world, c, "mending_glow", friend.id); g.advance(ABILITIES.mending_glow!.castMs);
+    const healed = f.events("hit").find((e) => e.ability === "mending_glow" && e.kind === "heal")!;
+    expect(healed.amount).toBeCloseTo(21 * 1.08);
+    g.world.handle(c, { t: "use", item: "glow_moss" });
+    expect(c.events("hit").find((e) => e.ability === "use")!.amount).toBeCloseTo(30 * 1.08);
+    expect(c.last("stats").stats).toMatchObject({ armor: 5, power: 8 });
+  });
+
   it("checks class, target, range, cooldown and GCD before dealing damage", () => {
     const frog = character(), g = game([frog]), c = g.play(frog);
     approachMob(g, c, frog, leech.reach / 2);
@@ -356,7 +519,7 @@ describe("LASTSPAWN combat", () => {
     expect(c.events("level")).toContainEqual(expect.objectContaining({ id: frog.id, level: 2 }));
     const hpMax = CLASSES[frog.cls].hp + CLASSES[frog.cls].hpPerLevel;
     expect(c.last("stats").stats).toMatchObject({ level: 2, xp: frog.xp + xp - xpNext(frog.level), hp: hpMax, hpMax });
-    expect(c.last("bag").bag).toEqual([{ id: "leech_tooth", n: 1 }, { id: "egg_jelly", n: 1 }]);
+    expect(c.last("bag")).toEqual({ t: "bag", bag: [{ id: "leech_tooth", n: 1 }, { id: "egg_jelly", n: 1 }, { id: "leech_hide_wraps", n: 1 }], equip: {} });
     g.clock(leech.respawnMs); const mob = g.snap(c).ents.find((e) => e.id === leechId)!;
     expect(mob.hp).toBe(hp);
   });
@@ -502,6 +665,8 @@ describe("LASTSPAWN quests, chat and persistence", () => {
     expect(c.last("quests").quests[0]).toMatchObject({ progress: [3], done: true });
     g.world.handle(c, { t: "quest", action: "turnin", id: "the_jelly" });
     expect(c.last("bag").bag.some((s) => s.id === "egg_jelly")).toBe(false);
+    expect(c.last("bag").bag).toContainEqual({ id: "wend_cloak", n: 1 });
+    expect(c.last("bag").equip).toEqual({});
     g.world.handle(c, { t: "quest", action: "accept", id: "up_the_stairs" });
     const portal = ZONES.cistern.portals[0]!;
     g.walk(c, "cistern", wend, portal.at); expect(c.last("enter").zone).toBe("hollowmere");
@@ -542,7 +707,8 @@ describe("LASTSPAWN quests, chat and persistence", () => {
   });
 
   it("round-trips persisted characters and writes only the persistent fields", () => {
-    const frog = character("frog", { ...at("cistern", 3.4, -5.4), bag: [{ id: "egg_jelly", n: 2 }], flags: { warmth: true, visits: 3 } });
+    const frog = character("frog", { ...at("cistern", 3.4, -5.4), bag: [{ id: "egg_jelly", n: 2 }],
+      equip: { shoulders: "wend_cloak", hands: "leech_hide_wraps" }, flags: { warmth: true, visits: 3 } });
     const g = game([frog]), c = g.play(frog);
     g.world.handle(c, { t: "quest", action: "accept", id: "first_breath" });
     g.clock(1000); g.move(c, "cistern", 4, -5);
@@ -550,10 +716,12 @@ describe("LASTSPAWN quests, chat and persistence", () => {
     expect(existsSync(`${g.file}.tmp`)).toBe(false);
     const saved = JSON.parse(readFileSync(g.file, "utf8")) as Character[];
     expect(Object.keys(saved[0]!).sort()).toEqual(Object.keys(frog).sort());
+    expect(saved[0]!.equip).toEqual(frog.equip);
     const restored = new World({ dataDir: g.dir, now: () => 200000, random: () => 0.5 });
     const conn = new FakeConnection("restored", frog.account); restored.connect(conn);
     restored.handle(conn, { t: "hello", version: 1 }); restored.handle(conn, { t: "play", charId: frog.id });
-    expect(conn.last("enter")).toMatchObject({ bag: frog.bag, quests: [{ id: "first_breath", progress: [0], done: false }] });
+    expect(conn.last("enter")).toMatchObject({ bag: frog.bag, equip: frog.equip, quests: [{ id: "first_breath", progress: [0], done: false }] });
+    expect(conn.last("enter").stats).toMatchObject({ armor: 9, power: 2 });
     restored.tick(); expect(conn.last("snap").ents.find((e) => e.id === frog.id)).toMatchObject({ x: 4, z: -5 });
     expect(saved[0]!.flags).toEqual(frog.flags);
     expect(saved[0]!.lastSeen).toBeGreaterThan(frog.lastSeen);

@@ -17,7 +17,7 @@ function leechGeometry(): THREE.BufferGeometry {
     for (let j = 0; j <= ring; j++) {
       const a = (j / ring) * Math.PI * 2;
       const x = Math.cos(a) * r, y = Math.sin(a) * r;
-      pos.push(x, y < 0 ? y * 0.35 : y * 0.85, z); uv.push(j / ring, t);
+      pos.push(x, y < 0 ? y * 0.45 : y * 1.05, z); uv.push(j / ring, t);
     }
   }
   for (let i = 0; i < segs; i++) for (let j = 0; j < ring; j++) {
@@ -41,7 +41,7 @@ export class Leech {
   dead = false;
 
   constructor() {
-    const mat = new THREE.MeshToonMaterial({ color: 0x1f2414, gradientMap: toonRamp() });
+    const mat = new THREE.MeshToonMaterial({ color: 0x3f5a1c, gradientMap: toonRamp() });
     const u = this.#u;
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, u);
@@ -65,7 +65,7 @@ export class Leech {
           float rings = 0.88 + 0.12 * sin(vUv2.y * 150.0);
           float belly = smoothstep(0.55, 0.75, abs(vUv2.x - 0.75) < 0.2 ? 1.0 : 0.0);
           vec3 c = diffuse * rings;
-          c = mix(c, vec3(0.62, 0.3, 0.07), stripe * 0.9);
+          c = mix(c, vec3(1.0, 0.52, 0.16), stripe);
           c = mix(c, vec3(0.25, 0.2, 0.12), belly * 0.5);
           c = mix(c, vec3(0.9, 0.35, 0.25), uHit);
           vec4 diffuseColor = vec4(c, opacity);`)
@@ -73,14 +73,17 @@ export class Leech {
           vec3 vd = normalize(vViewPosition);
           float rim = pow(1.0 - saturate(dot(normal, vd)), 3.0);
           float spec = pow(saturate(dot(reflect(-vd, normal), normalize(vec3(0.2, 1.0, 0.3)))), 40.0);
-          outgoingLight += vec3(0.5, 0.65, 0.8) * (rim * 0.25 + spec * 0.9);
+          // a wet shine and a bright rim, so a leech reads on dark stone; the stripes glow a little
+          outgoingLight += vec3(0.55, 0.7, 0.9) * (rim * 0.22 + spec * 0.45);
+          float side2 = abs(vUv2.x - 0.25);
+          outgoingLight += vec3(1.0, 0.45, 0.1) * smoothstep(0.07, 0.05, abs(side2 - 0.11)) * 0.35;
           #include <opaque_fragment>`);
     };
     mat.customProgramCacheKey = () => "leech";
     const body = new THREE.Mesh(leechGeometry(), mat);
     body.castShadow = true; body.receiveShadow = true;
     // big enough to read as a threat next to a frog
-    body.scale.setScalar(1.35);
+    body.scale.setScalar(1.7);
     this.root.add(body);
   }
 

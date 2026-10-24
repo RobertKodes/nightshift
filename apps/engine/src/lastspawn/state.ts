@@ -1,6 +1,7 @@
 import type {
-  Ability, Anim, ClassId, ItemStack, MobCamp, MobDef, QuestState, ServerMsg, Spot, ZoneId,
+  Ability, Anim, ClassId, Equip, ItemStack, MobCamp, MobDef, QuestState, ServerMsg, Spot, ZoneId,
 } from "@nightshift/lastspawn";
+import { ITEMS, STARTER_GEAR } from "@nightshift/lastspawn";
 
 export interface Connection {
   id: string;
@@ -22,6 +23,7 @@ export interface Character extends Spot {
   hp: number;
   quests: QuestState[];
   bag: ItemStack[];
+  equip: Equip;
   flags: Record<string, string | number | boolean>;
   createdAt: number;
   lastSeen: number;
@@ -96,6 +98,11 @@ export interface Npc extends Spot {
 }
 
 export type Actor = Player | Mob;
+export function starterEquip(cls: ClassId): Equip {
+  const equip: Equip = {};
+  for (const id of STARTER_GEAR[cls]) equip[ITEMS[id]!.slot!] = id;
+  return equip;
+}
 export const distance = (a: Pick<Spot, "x" | "y" | "z">, b: Pick<Spot, "x" | "y" | "z">) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 export const horizontal = (a: Pick<Spot, "x" | "z">, b: Pick<Spot, "x" | "z">) => Math.hypot(a.x - b.x, a.z - b.z);
 export const own = <T extends object>(table: T, key: string): key is Extract<keyof T, string> => Object.hasOwn(table, key);
