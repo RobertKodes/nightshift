@@ -6,7 +6,8 @@ import { frogImage } from "./pinball.js";
  * A NIGHT FROG as a PNG, for places that can't show its onchain SVG (Telegram photos, link previews).
  * Rendered from the tokenURI art with a bundled monospace font, since the server has no system fonts.
  */
-const FONT = fileURLToPath(new URL("../assets/fonts/JetBrainsMono-Bold.ttf", import.meta.url));
+/** The one font the art is drawn with, bundled: the server has no system fonts. */
+export const FONT = fileURLToPath(new URL("../assets/fonts/JetBrainsMono-Bold.ttf", import.meta.url));
 const pngs = new Map<string, Buffer>();
 
 /** Any onchain SVG as a PNG (its first frame: animations are not played), with the bundled font. */

@@ -6,6 +6,7 @@ import { Resvg } from "@resvg/resvg-js";
 import gifenc from "gifenc";
 import { writeAtomic } from "./atomic.js";
 import { config } from "./config.js";
+import { FONT } from "./frogpng.js";
 import { type Forged, forgedSvg } from "./forge.js";
 
 /**
@@ -98,7 +99,8 @@ export function animatedGif(svg: string, o: { size?: number; fps?: number; loop?
   const gif = GIFEncoder();
   const n = Math.round(fps * loop);
   for (let i = 0; i < n; i++) {
-    const rgba = new Uint8Array(new Resvg(svgAt(svg, i / fps), { fitTo: { mode: "width", value: size } }).render().pixels);
+    // the bundled font, as for every PNG: the server has no system fonts, and the art's words would vanish
+    const rgba = new Uint8Array(new Resvg(svgAt(svg, i / fps), { fitTo: { mode: "width", value: size }, font: { loadSystemFonts: false, fontFiles: [FONT], defaultFontFamily: "JetBrains Mono", monospaceFamily: "JetBrains Mono" } }).render().pixels);
     const palette = quantize(rgba, 256);
     gif.writeFrame(applyPalette(rgba, palette), size, size, { palette, delay: Math.round(1000 / fps), repeat: 0 });
   }
@@ -108,7 +110,7 @@ export function animatedGif(svg: string, o: { size?: number; fps?: number; loop?
 
 const dir = () => join(config.dataDir, "forge-gif");
 /** One file per Night Watcher (a Night Boss's name, set once, gives it a new file). */
-const fileOf = (f: Forged) => join(dir(), `${f.n}-${f.tier}${f.name ? `-${f.name.replace(/[^\w-]/g, "").slice(0, 24)}` : ""}.gif`);
+const fileOf = (f: Forged) => join(dir(), `v2-${f.n}-${f.tier}${f.name ? `-${f.name.replace(/[^\w-]/g, "").slice(0, 24)}` : ""}.gif`);
 
 /** A Night Watcher's GIF, made once and kept. Slow (about 20 s): the engine only calls it from makeGifs' worker. */
 export function watcherGif(f: Forged): Buffer {
