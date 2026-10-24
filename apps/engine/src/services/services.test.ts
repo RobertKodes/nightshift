@@ -202,6 +202,25 @@ describe("x402 on the services", () => {
     expect((feed.body as X402.Challenge).accepts[0]!.amount).toBe("1000");
   });
 
+  it("quotes half price to a wallet that holds, and full price to anyone else", async () => {
+    const { ctx } = ctxOn("shift");
+    const holderWallet = privateKeyToAccount(generatePrivateKey()).address;
+    const { payer } = fakePayer({ settled: [] });
+    const s = R.services(ctx, { ...payer, holder: async (w) => w.toLowerCase() === holderWallet.toLowerCase() });
+    type Ch = X402.Challenge & { priceUsd: number; holderPrice: boolean; holderPriceUsd: number; holders: string };
+    const full = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`)))!.body as Ch;
+    expect(full.accepts[0]!.amount).toBe("20000");
+    expect(full).toMatchObject({ priceUsd: 0.02, holderPrice: false, holderPriceUsd: 0.01 });
+    expect(full.holders).toMatch(/500,000\+ \$SHIFT/);
+    const half = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, { holder: holderWallet })))!.body as Ch;
+    expect(half.accepts[0]!.amount).toBe("10000");
+    expect(half).toMatchObject({ priceUsd: 0.01, holderPrice: true });
+    const other = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, { holder: privateKeyToAccount(generatePrivateKey()).address })))!.body as Ch;
+    expect(other.accepts[0]!.amount).toBe("20000");
+    const header = (await s.handle(io(`/api/v1/hook/${HOOK}`, {}, { "x-holder-wallet": holderWallet })))!.body as Ch;
+    expect(header.accepts[0]!.amount).toBe("25000");
+  });
+
   it("checks a signed payment, computes the answer, then settles, and never settles a failed answer", async () => {
     const { ctx } = ctxOn("shift");
     const settled: string[] = [];

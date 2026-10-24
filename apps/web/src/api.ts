@@ -1,4 +1,6 @@
 export interface Health { ok: boolean; mode: "sim" | "live"; llm: boolean; imdUsd: number | null; salesChainId: number; requireAuth: boolean; platformFeeBps: number }
+/** This week on the MCP servers, as counts: sessions, tool calls, the clients agents announce, the tools they call. */
+export interface McpStats { days: number; sessions: number; toolCalls: number; callerDays: number; clients: { name: string; count: number }[]; tools: { name: string; count: number }[] }
 
 export interface TaskView {
   id: string; cycle: number; kind: string; title: string; why: string; status: string;
@@ -194,6 +196,7 @@ export interface ApiKeyView { id: string; label: string; createdAt: number; last
 
 export const api = {
   health: () => req<Health>("GET", "/api/health"),
+  mcpStats: () => req<McpStats>("GET", "/api/mcp/stats"),
   me: () => req<{ address: string | null; requireAuth: boolean }>("GET", "/api/auth/me"),
   nonce: (address: string) => req<{ nonce: string; message: string }>("GET", `/api/auth/nonce?address=${address}`),
   verify: (address: string, nonce: string, signature: string) => req<{ token?: string; address: string }>("POST", "/api/auth/verify", { address, nonce, signature }),

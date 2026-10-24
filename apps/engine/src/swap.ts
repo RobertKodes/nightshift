@@ -40,7 +40,7 @@ export const FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
 export const SHIFT = "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac";
 export const FREE_SHIFT = 5_000_000n * 10n ** 18n;
 const BALANCE = parseAbi(["function balanceOf(address) view returns (uint256)"]);
-export async function readHoldings(wallet: string): Promise<boolean> {
+export async function readHoldings(wallet: string, minShift = FREE_SHIFT): Promise<boolean> {
   const who = wallet as `0x${string}`;
   const forge = /^0x[0-9a-fA-F]{40}$/.test(config.forge.address) ? (config.forge.address as `0x${string}`) : null;
   const l = launchState(), rewards = (l?.contracts?.rewards ?? null) as `0x${string}` | null;
@@ -52,7 +52,7 @@ export async function readHoldings(wallet: string): Promise<boolean> {
     read(token).catch(() => 0n),
     rewards ? read(rewards).catch(() => 0n) : 0n,
   ]);
-  return frogs + watchers > 0n || shift + staked >= FREE_SHIFT;
+  return frogs + watchers > 0n || shift + staked >= minShift;
 }
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;

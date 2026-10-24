@@ -5,7 +5,8 @@ import { eth, sales } from "../chain.js";
 import { PendingError } from "../checkout.js";
 import { config } from "../config.js";
 import type { Engine } from "../engine.js";
-import { OFFERS, type Offer } from "./catalog.js";
+import { readHoldings } from "../swap.js";
+import { HOLDER_SHIFT, OFFERS, type Offer, holderPriceOf } from "./catalog.js";
 import { context } from "./context.js";
 import { liveNet, liveRpc } from "./net.js";
 import { type Payer, services } from "./routes.js";
@@ -55,20 +56,33 @@ export function enginePayer(engine: Engine): Payer {
   const house = () => engine.store.companies.get(HOUSE_ID) ?? ensureHouse(engine);
   const hits = new Map<string, { n: number; reset: number }>();
   const limited = (k: string, n: number, ms: number) => { const now = Date.now(); const h = hits.get(k); if (!h || h.reset < now) { hits.set(k, { n: 1, reset: now + ms }); return false; } h.n++; return h.n > n; };
+  // the holder price, read on Ethereum and kept 10 minutes a wallet
+  const holders = new Map<string, { at: number; v: boolean }>();
+  const holder = async (wallet: string): Promise<boolean> => {
+    const k = wallet.toLowerCase(), hit = holders.get(k);
+    if (hit && Date.now() - hit.at < 600_000) return hit.v;
+    const v = await readHoldings(k, BigInt(HOLDER_SHIFT) * 10n ** 18n).catch(() => hit?.v ?? false);
+    if (holders.size > 20_000) holders.clear();
+    holders.set(k, { at: Date.now(), v });
+    return v;
+  };
   return {
     mode: config.mode,
     chainId: config.salesChainId,
     payTo: () => house().wallet,
+    holder,
     async check(o: Offer, header: string, ip: string) {
       const c = house();
-      const req = requirement(config.salesChainId, c.wallet, o.priceUsdc);
       let payment: PaymentPayload;
       try { payment = decodeHeader<PaymentPayload>(header); } catch { return { ok: false, status: 402, reason: "invalid_payload", challenge: true }; }
       const auth = payment?.payload?.authorization;
+      // the holder price is the paying wallet's: whoever signs pays half only if that wallet holds
+      const half = Boolean(auth?.from && /^0x[0-9a-fA-F]{40}$/.test(auth.from) && auth.value && BigInt(auth.value) < o.priceUsdc && (await holder(auth.from)));
+      const req = requirement(config.salesChainId, c.wallet, half ? holderPriceOf(o) : o.priceUsdc);
       // a retry of a payment already settled is checked as of its first try, at the price paid then
       const prior = auth?.from && auth.nonce ? engine.checkout.recordOf(auth.from, auth.nonce) : undefined;
       const v = await verifyPayment(payment, prior ? requirement(config.salesChainId, c.wallet, prior.value) : req, prior ? Math.floor(prior.at / 1000) : undefined);
-      if (!v.ok) return { ok: false, status: 402, reason: v.reason, challenge: true };
+      if (!v.ok) return { ok: false, status: 402, reason: v.reason === "insufficient_amount" && !half && auth?.value && BigInt(auth.value) >= holderPriceOf(o) ? `the holder price is for a paying wallet with ${HOLDER_SHIFT.toLocaleString("en-US")}+ $SHIFT (wallet plus staked), a NIGHT FROG or a Night Watcher` : v.reason, challenge: true };
       if (prior && prior.productId !== o.id) return { ok: false, status: 409, reason: "This payment was made for another service." };
       if (config.mode === "sim") return { ok: true, payment, payer: v.payer };
       // settling costs the house gas on Base: per caller and per payer (the feed is cheap and polled, so it gets more room)

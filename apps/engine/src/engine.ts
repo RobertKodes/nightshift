@@ -47,6 +47,7 @@ import { balances, broadcastSales, ensurePermit2, eth, ethWallet, refusedByNode,
 import { FEE_PARTS, Payouts } from "./payout.js";
 import { Checkout, NoGasError, PendingError, type SettledBy, type Settlement, saleKey } from "./checkout.js";
 import { offerFor } from "./agentmarket.js";
+import { tokenRules } from "./shift-facts.js";
 import { MarketDesk } from "./b2b.js";
 import { companyBrain } from "./ceo-brain.js";
 import { liveMind, liveWeather } from "./mind-live.js";
@@ -804,12 +805,8 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
       token: live
         ? { symbol: "$SHIFT", status: "LIVE on Ethereum", contractAddress: config.token.address, buy: `${u}/swap (or Uniswap, paired with ETH)`, chart: `https://dexscreener.com/ethereum/${config.token.address}`, priceUsd: m?.priceUsd ?? null, marketCapUsd: m?.mcap ?? null, liquidityUsd: m?.liquidity ?? null }
         : { symbol: "$SHIFT", status: l ? "being launched through IMD right now, not trading yet" : "not launched yet, launch is coming soon (no date announced here)", network: "Ethereum mainnet, paired with ETH on Uniswap v4", howToBuyAfterLaunch: `with ETH on Ethereum, at ${u}/swap or on Uniswap, once the official CA is posted`, contractAddress: "not published yet: the only CA will be posted on getnightshift.tech, this Telegram and X after launch; anything earlier is fake" },
-      supply: "1,000,000,000 fixed, 18 decimals. No mint, no pause, no blacklist. 88.89% (888.9M) seeded in the Uniswap v4 pool, 1.11% (11.1M) dev wallet (public), 10% (100M) to the IMD swarm. No presale, no private round, no unlock schedule.",
-      launch: "Launched through IMD's swarm: built, tested twice and audited by 4 specialist agents and a judge, deployed by IMD on Ethereum. Not audited by an outside firm. The pool opened at a 10 ETH market cap. Launch was gated: only the treasury could make the first buy, against sniper bots. The treasury's first buy was 0.91 ETH for 81.49M SHIFT, paid into the pool like any buyer.",
-      fees: "Buys pay only the 1.25% pool fee (1% to the launch payer, the dev wallet; 0.25% to the IMD network). Sells also pay 5% (2.5% in SHIFT, 2.5% in ETH), which can only go down, never up.",
-      oneRule: "Every NIGHTSHIFT fee is split the same way, hard-coded: 40% rewards (half to SHIFT stakers, half to NIGHT FROGS holders), 20% dev wallet, 20% treasury, 20% burned. SHIFT is burned to 0x...dEaD; every day at 03:00 UTC the NIGHTSHIFT keeper buys IMD with the ETH part and burns it at IMD's BurnExecutor 0xe29386719c155b6847ad5a4e97c6674f10ffc750. The keeper only pays gas and cannot move funds anywhere else.",
+      ...tokenRules(u),
       burnedSoFar: { shift: burns.shift, imd: burns.imd },
-      staking: `At ${u}/stake: stake SHIFT with a lock from 0 to 730 days (24 months). Stakers share 20% of every NIGHTSHIFT fee (half of the 40% rewards part; the other half goes to NIGHT FROGS holders), streamed over 7 days in ETH and SHIFT. More stake and a longer lock earn a bigger share. Locked stake cannot be withdrawn early by anyone, the owner included. Rewards can be claimed any time; unlocked stake can be withdrawn any time.`,
       nightFrogs: { about: "500 fully onchain NIGHT FROGS on Ethereum, minted only in IMD (2 IMD each, half burned). Holders get the frog half of rewards weekly by shift hours: #1 50x, Night Watchers (Gen 2, forged from 10 at /forge, never #1) 10x-40x by rarity and never less than their 10 frogs, #2-25 3x, #26-77 2x, the rest 1x; holding an IMD seat doubles it. Claim at /frogs.", minted: frogs?.minted ?? null, contract: config.nft.address || null },
       companies: { live: companies.length, costPerSwarmJob: "0.5 IMD", platformFee: `${config.platformFeeBps / 100}% of withdrawals; 0% for SHIFT and NIGHT FROGS holders`, start: `${u} (sign in with a wallet, press Launch a company)` },
       imdPriceUsd: config.imdUsd,

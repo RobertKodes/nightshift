@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { type PaymentPayload, type Requirement, challenge as challenge402, encodeHeader, requirement } from "@nightshift/x402";
 import type { Address } from "viem";
 import { DailyQuota, Gate, TtlCache } from "./cache.js";
-import { OFFERS, type Offer, type OfferId, bazaarOf, offer, openapi, usdOf } from "./catalog.js";
+import { HOLDER_RULE, OFFERS, type Offer, type OfferId, bazaarOf, holderPriceOf, offer, openapi, usdOf } from "./catalog.js";
 import { type Ctx, RUN_BY } from "./context.js";
 import { type Feed, feed } from "./feed.js";
 import { type HookReport, KNOWN_HOOKS, decodeFlags, inspectHook } from "./hook.js";
@@ -28,6 +28,8 @@ export interface Payer {
   /** A demo sale (sim mode only): booked as simulated, no money moves. */
   sim(o: Offer): Promise<void>;
   isPending(e: unknown): boolean;
+  /** Does this wallet get the holder price (HOLDER_RULE)? Without it, nobody does. */
+  holder?(wallet: string): Promise<boolean>;
 }
 
 export type Io = { method: string; path: string; query: URLSearchParams; header(name: string): string | undefined; ip: string; base: string; limited(key: string, n: number, ms: number): boolean };
@@ -90,14 +92,20 @@ export function services(ctx: Ctx, payer: Payer) {
       note: "Free: the bits say which callbacks the PoolManager will ever call. The paid inspection ($0.05) reads the code: what each callback does, fees, owner powers, upgrades. explain=1 ($0.50) adds a written explanation with the source lines." };
   }
 
-  const terms = (o: Offer): Requirement | null => { const to = payer.payTo(); return to ? requirement(payer.chainId, to, o.priceUsdc) : null; };
-  function challengeOf(o: Offer, io: Io, error?: string) {
-    const req = terms(o);
+  const terms = (o: Offer, price = o.priceUsdc): Requirement | null => { const to = payer.payTo(); return to ? requirement(payer.chainId, to, price) : null; };
+  /** The wallet a caller asks the holder price for, if it is one and it qualifies. */
+  const holderAsked = async (io: Io): Promise<boolean> => {
+    const w = io.query.get("holder") ?? io.header("x-holder-wallet");
+    return Boolean(w && /^0x[0-9a-fA-F]{40}$/.test(w) && payer.holder && (await payer.holder(w).catch(() => false)));
+  };
+  function challengeOf(o: Offer, io: Io, error?: string, holder = false) {
+    const req = terms(o, holder ? holderPriceOf(o) : o.priceUsdc);
     if (!req) return null;
-    return { ...challenge402(req, { url: `${io.base}${io.path}${io.query.toString() ? `?${io.query}` : ""}`, description: o.description, mimeType: "application/json" }, error), extensions: bazaarOf(o, io.path), runBy: RUN_BY, priceUsd: usdOf(o) };
+    return { ...challenge402(req, { url: `${io.base}${io.path}${io.query.toString() ? `?${io.query}` : ""}`, description: o.description, mimeType: "application/json" }, error), extensions: bazaarOf(o, io.path), runBy: RUN_BY,
+      priceUsd: holder ? Number(holderPriceOf(o)) / 1e6 : usdOf(o), holderPrice: holder, holderPriceUsd: Number(holderPriceOf(o)) / 1e6, holders: HOLDER_RULE };
   }
-  const p402 = (o: Offer, io: Io, error: string): Out => {
-    const ch = challengeOf(o, io, error);
+  const p402 = (o: Offer, io: Io, error: string, holder = false): Out => {
+    const ch = challengeOf(o, io, error, holder);
     if (!ch) return { status: 503, body: { error: "The house services cannot take payments yet." } };
     return { status: 402, body: ch, headers: { "PAYMENT-REQUIRED": encodeHeader(ch) } };
   };
@@ -110,9 +118,9 @@ export function services(ctx: Ctx, payer: Payer) {
       return { status: 200, body: { ...(v as object), payment: { sim: true, priceUsd: usdOf(o), note: "Simulation: a demo sale was booked and no money moved." } } };
     }
     const sig = io.header("payment-signature") ?? io.header("x-payment");
-    if (!sig) return p402(o, io, "payment required");
+    if (!sig) return p402(o, io, "payment required", await holderAsked(io));
     const c = await payer.check(o, sig, io.ip);
-    if (!c.ok) return c.challenge ? p402(o, io, c.reason) : { status: c.status, body: { error: c.reason } };
+    if (!c.ok) return c.challenge ? p402(o, io, c.reason, await holderAsked(io)) : { status: c.status, body: { error: c.reason } };
     if (payer.mode === "sim") return { status: 400, body: { error: "sim mode does not settle real payments; add sim=1 for a demo answer" } };
     const v = await run();
     let tx: `0x${string}`;
@@ -121,7 +129,8 @@ export function services(ctx: Ctx, payer: Payer) {
       throw e;
     }
     const network = `eip155:${payer.chainId}`;
-    return { status: 200, body: { ...(v as object), payment: { tx, network, priceUsd: usdOf(o), payer: c.payer } }, headers: { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network, payer: c.payer }) } };
+    const paidUsd = Number(BigInt(c.payment.payload.authorization.value)) / 1e6;
+    return { status: 200, body: { ...(v as object), payment: { tx, network, priceUsd: paidUsd, holderPrice: paidUsd < usdOf(o), payer: c.payer } }, headers: { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network, payer: c.payer }) } };
   }
 
   /** One request. Null: not a services path. */
@@ -135,7 +144,8 @@ export function services(ctx: Ctx, payer: Payer) {
         if (io.limited("svc-free", 120, 60_000)) return { status: 429, body: { error: "slow down" } };
         return { status: 200, body: {
           provider: "NIGHTSHIFT Services", runBy: RUN_BY, house: true, x402Version: 2, network: `eip155:${payer.chainId}`, payTo: payer.payTo(), mode: payer.mode,
-          offers: OFFERS.map((o) => ({ id: o.id, name: o.name, pitch: o.pitch, priceUsd: usdOf(o), route: `${io.base}${o.route}`, example: `${io.base}${o.example}`, page: `${io.base}${o.page}`, description: o.description, accepts: terms(o) ? [terms(o)] : [] })),
+          holders: HOLDER_RULE,
+          offers: OFFERS.map((o) => ({ id: o.id, name: o.name, pitch: o.pitch, priceUsd: usdOf(o), holderPriceUsd: Number(holderPriceOf(o)) / 1e6, route: `${io.base}${o.route}`, example: `${io.base}${o.example}`, page: `${io.base}${o.page}`, description: o.description, accepts: terms(o) ? [terms(o)] : [] })),
           free: { verdictPreview: `${io.base}/api/v1/verdict/ethereum/<token>/preview`, verdictDemo: "one quick verdict per IP per day: add demo=1", hookFlags: `${io.base}/api/v1/hook/<address>/flags`, feedSample: "add sample=1 to any /api/v1/imd/* call" },
           mcp: `${io.base}/mcp/public`, openapi: `${io.base}/openapi.json`,
         } };
@@ -200,7 +210,7 @@ export function services(ctx: Ctx, payer: Payer) {
     }
   }
 
-  return { handle, verdict, hook, preview, flags, imd, paidCall: paid, challengeOf, demo, terms };
+  return { handle, verdict, hook, preview, flags, imd, paidCall: paid, challengeOf, demo, terms, holder: (w: string) => (payer.holder ? payer.holder(w) : Promise.resolve(false)) };
 }
 export type Services = ReturnType<typeof services>;
 
@@ -212,7 +222,7 @@ let makeLive: (() => Services) | null = null;
 export function useServices(make: () => Services): void { makeLive = make; live = null; }
 export function liveServices(): Services | null { if (!live && makeLive) live = makeLive(); return live; }
 
-const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE", "Access-Control-Allow-Headers": "PAYMENT-SIGNATURE, X-PAYMENT, Content-Type", "Access-Control-Allow-Methods": "GET, OPTIONS" };
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE", "Access-Control-Allow-Headers": "PAYMENT-SIGNATURE, X-PAYMENT, X-Holder-Wallet, Content-Type", "Access-Control-Allow-Methods": "GET, OPTIONS" };
 
 /** The hook line in server.ts: answers /api/v1/* and /openapi.json. */
 export async function serviceRoutes(req: IncomingMessage, res: ServerResponse, p: string, ctx: { url: URL; base: string; ip: string; limited(req: IncomingMessage, key: string, n: number, ms: number): boolean }): Promise<boolean> {

@@ -19,7 +19,9 @@ import { leagueSummary, marketView } from "./league-routes.js";
 import { type Facts, MISSIONS, MissionError, liveMissions } from "./missions.js";
 import type { Vault } from "./vault.js";
 import { clientIp } from "./auth.js";
-import { SERVICE_PAGES, agentSkills, llmsLines } from "./services/catalog.js";
+import { HOLDER_RULE, OFFERS, SERVICE_PAGES, agentSkills, holderPriceOf, llmsLines, usdOf } from "./services/catalog.js";
+import { tokenRules } from "./shift-facts.js";
+import { liveUsage } from "./usage.js";
 import { registerServiceTools } from "./services/mcp.js";
 import { liveServices } from "./services/routes.js";
 
@@ -32,6 +34,10 @@ type Context = {
   market(q: string): unknown[];
   /** The same products with their packaged text, for the agent market tools. */
   live(): { c: Company; p: Product; text: string | null }[];
+  /** $SHIFT as the token page shows it: market, supply, staked, burned. */
+  token(): Promise<unknown>;
+  /** SWARM MIND, when it is on: answers from the IMD swarm's published work. */
+  mind: { ask(q: string): Promise<unknown>; search(q: string): unknown } | null;
 };
 
 /** What the Command Room checks a wallet's missions against: its own agents, their league entries and games. */
@@ -80,6 +86,8 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   if (p === "/api/station") { if (reads()) return reply(429, { error: "slow down" }); return reply(200, await rooms(ctx)); }
   if (p === "/api/crew") { if (reads()) return reply(429, { error: "slow down" }); return reply(200, await crew()); }
   if (p === "/api/swarm/pulse") { if (reads()) return reply(429, { error: "slow down" }); return reply(200, await swarmPulse()); }
+  // this week's agent activity on the MCP servers, as counts (no one is stored)
+  if (p === "/api/mcp/stats") { if (reads()) return reply(429, { error: "slow down" }); return reply(200, liveUsage(config.dataDir).publicWeek()); }
 
   if (p.startsWith("/api/missions")) {
     if (!ctx.owner) return reply(401, { error: "Sign in with the wallet that holds your NIGHT FROGS.", code: "unauthorized" });
@@ -120,6 +128,7 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   if (p === "/mcp/public" && !(req.method === "GET" && (req.headers.accept ?? "").includes("text/html"))) {
     if (limited(req, "mcp-public", 60, 60_000)) return reply(429, { error: "slow down" });
     const b = req.method === "POST" ? await ctx.body(req) : undefined;
+    if (b) liveUsage(config.dataDir).mcp(clientIp(req), b);
     const server = publicMcp(ctx, req);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => { void transport.close(); void server.close(); });
@@ -230,7 +239,7 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     "## For AI agents",
     `- [Night League guide](${base}/league/agents.md): join a weekly paper-trading league on IMD ecosystem tokens; REST + MCP.`,
     `- [Agent Arena guide](${base}/arena/agents.md): register an agent (one key for the arena and the league) and play rated NIGHT CHESS.`,
-    `- [Public MCP, no key](${base}/mcp/public): IMD market, swarm pulse, league standings, NIGHTSHIFT products, crew roster, and the house services' free previews and paid tools.`,
+    `- [Public MCP, no key](${base}/mcp/public): start with start_here (everything an agent can do, with live numbers). SWARM MIND (swarm_mind_ask, swarm_mind_search: the IMD swarm's published work, cited), IMD market, swarm pulse, $SHIFT facts (shift_token), league standings, NIGHTSHIFT products, crew roster, and the house services' free previews and paid tools (half price for $SHIFT holders). Weekly agent activity: ${base}/api/mcp/stats`,
     `- [Owner MCP](${base}/mcp): run your NIGHTSHIFT companies (API key from your dashboard).`,
     `- NIGHT POKER deck check: ${base}/api/poker/verify?serverSeed=<64 hex>&seeds=<client seeds by seat, comma-separated>&hand=<n>&players=<2-6>&commit=<sha256> rebuilds a finished hand's deck (HMAC-SHA256 Fisher-Yates, documented at ${base}/games/poker/verify); a heads-up match reveals its server seeds when it ends.`,
     "- [IMD Kit](https://github.com/RobertKodes/imd-kit): hire the IMD swarm yourself: TypeScript SDK, CLI and MCP server for every IMD action (free check, x402 + Permit2 or onchain Intake, order following, results). MIT, by NIGHTSHIFT.",
@@ -295,7 +304,7 @@ function mcpCard() {
   const base = config.publicUrl;
   return {
     servers: [
-      { name: "nightshift-public", description: "Keyless: IMD market, swarm pulse, Night League standings, NIGHTSHIFT products and crew, plus the house services (Token Verdict, Hook Inspector, IMD Data Feed) with free previews and x402-paid tools.", url: `${base}/mcp/public`, transport: "streamable-http", auth: "none (paid tools take an x402 payment argument)" },
+      { name: "nightshift-public", description: "Keyless: start_here (what an agent can do), SWARM MIND (ask the IMD swarm's memory), IMD market, swarm pulse, $SHIFT token facts, Night League standings, NIGHTSHIFT products and crew, plus the house services (Token Verdict, Hook Inspector, IMD Data Feed) with free previews, x402-paid tools and half price for $SHIFT holders.", url: `${base}/mcp/public`, transport: "streamable-http", auth: "none (paid tools take an x402 payment argument)" },
       { name: "nightshift", description: "Run your NIGHTSHIFT companies; with an arena key (nsa_) also play the arena and trade in the league.", url: `${base}/mcp`, transport: "streamable-http", auth: "bearer (nsk_ or nsa_)" },
     ],
   };
@@ -305,7 +314,7 @@ const json2 = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.s
 /** A read-only MCP server anyone can add without a key. */
 function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
   const server = new McpServer({ name: "nightshift-public", version: "1.0.0" }, {
-    instructions: "Read-only NIGHTSHIFT and IMD data, no key needed. imd_market: tradable IMD ecosystem tokens with price, liquidity and data age. imd_swarm: the IMD agent swarm's live health. league_standings: the Night League (AI agents paper-trading IMD tokens). nightshift_products and nightshift_product: what NIGHTSHIFT's AI companies sell over x402, searchable, with free previews. nightshift_crew: the IMD agents NIGHTSHIFT has hired. House services run by NIGHTSHIFT, paid per call with an x402 payment (free previews first): verdict_preview, verdict_demo and token_verdict (pre-buy token verdict), hook_flags and hook_inspect (Uniswap v4 hooks), imd_feed_sample and imd_feed (IMD data), services_pricing. To act (trade, play), register an agent: " + `${config.publicUrl}/arena/agents.md`,
+    instructions: "Start with start_here: a map of everything an agent can do on NIGHTSHIFT, with live numbers. Read-only NIGHTSHIFT and IMD data, no key needed. swarm_mind_ask and swarm_mind_search: the IMD agent swarm's published work (research, audits, contracts), cited. shift_token: live facts about $SHIFT and what holding it gets a wallet (house services at half price). imd_market: tradable IMD ecosystem tokens with price, liquidity and data age. imd_swarm: the IMD agent swarm's live health. league_standings: the Night League (AI agents paper-trading IMD tokens). nightshift_products and nightshift_product: what NIGHTSHIFT's AI companies sell over x402, searchable, with free previews. nightshift_crew: the IMD agents NIGHTSHIFT has hired. House services run by NIGHTSHIFT, paid per call with an x402 payment (free previews first): verdict_preview, verdict_demo and token_verdict (pre-buy token verdict), hook_flags and hook_inspect (Uniswap v4 hooks), imd_feed_sample and imd_feed (IMD data), services_pricing. To act (trade, play), register an agent: " + `${config.publicUrl}/arena/agents.md`,
   });
   const safe = <A,>(fn: (a: A) => Promise<unknown> | unknown) => async (a: A) => { try { return json2(await fn(a)); } catch (e) { return { ...json2({ error: (e as Error).message }), isError: true }; } };
   server.registerTool("imd_market", { title: "IMD market", description: "IMD and every IMD launch on Ethereum with real liquidity (>= $2,000): price, liquidity, 24h volume, 1h/24h change, pool fee and chart link, from DexScreener, with the data's age.", inputSchema: {} }, safe(async () => marketView(await imdMarket())));
@@ -330,6 +339,78 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
   }));
   server.registerTool("nightshift_crew", { title: "NIGHTSHIFT crew", description: "Every IMD swarm agent (seat) that worked on orders NIGHTSHIFT paid for: role, model, runtime, accepted steps, jobs.", inputSchema: {} }, safe(() => crew()));
   const svc = liveServices();
+  const base = config.publicUrl;
+  server.registerTool("start_here", {
+    title: "Start here: what an AI agent can do on NIGHTSHIFT",
+    description: "Call this first. A map of everything an AI agent can do on NIGHTSHIFT (free data, pay-per-call services, rated chess, a trading league, running AI companies), with the exact tool or endpoint for each, the station's live numbers and this week's agent activity on this server. Free.",
+    inputSchema: {},
+  }, safe(async () => ({
+    nightshift: "A space station of autonomous AI companies, agent games and IMD ecosystem data, built on IMD (imd.fun), the AI agent swarm. Everything here works for AI agents as well as people.",
+    live: { ...(await rooms(ctx)), agentsThisWeekOnMcp: liveUsage(config.dataDir).publicWeek() },
+    free: [
+      { tool: "swarm_mind_ask", use: "Ask the IMD swarm's memory a question; the answer cites the published works it used" },
+      { tool: "swarm_mind_search", use: "Find the IMD swarm's research, audits, contracts and sites on a topic" },
+      { tool: "imd_market", use: "Every tradable IMD ecosystem token with price, liquidity and data age" },
+      { tool: "imd_swarm", use: "The IMD swarm's live health: agents online, jobs, accepted steps" },
+      { tool: "verdict_preview / verdict_demo", use: "Is this Ethereum token an IMD launch, its market and hook; one full verdict a day free" },
+      { tool: "hook_flags", use: "A Uniswap v4 hook's permission bits from its address" },
+      { tool: "imd_feed_sample", use: "A sample of the IMD Data Feed (launches, tokens, swarm, seats)" },
+      { tool: "nightshift_products / nightshift_product", use: "What NIGHTSHIFT's AI companies sell over x402, with free previews" },
+      { tool: "league_standings", use: "This week's AI-agent paper-trading standings" },
+      { tool: "nightshift_crew", use: "The IMD agents NIGHTSHIFT has hired, with their work" },
+      { tool: "shift_token", use: "Live $SHIFT facts and whether a wallet gets the holder price" },
+    ],
+    paid: {
+      how: "x402 v2: call without `payment` to get the exact terms, sign an EIP-3009 USDC authorization on Base, call again with it as `payment`. A failed answer is never charged.",
+      holders: HOLDER_RULE,
+      services: OFFERS.map((o) => ({ id: o.id, name: o.name, priceUsd: usdOf(o), holderPriceUsd: Number(holderPriceOf(o)) / 1e6 })),
+      tools: ["token_verdict", "hook_inspect", "imd_feed"],
+      products: "Products of the AI companies: nightshift_products, then pay the product's buy URL over x402.",
+    },
+    act: [
+      { what: "Play rated NIGHT CHESS against agents and people (free or staked)", how: `Register an agent (a wallet signature, no account): ${base}/arena/agents.md, then the arena tools on ${base}/mcp with the nsa_ key` },
+      { what: "Trade in the Night League: weekly paper trading of IMD tokens at real prices and real pool costs", how: `${base}/league/agents.md` },
+      { what: "Run your own AI company: it builds with the IMD swarm and sells for USDC", how: `An owner key (nsk_) from ${base}/my, then ${base}/mcp (nightshift_create, nightshift_order, nightshift_limits, ...)` },
+    ],
+    docs: { llms: `${base}/llms.txt`, openapi: `${base}/openapi.json`, agentCard: `${base}/.well-known/agent-card.json`, mcp: `${base}/mcp` },
+  })));
+  server.registerTool("shift_token", {
+    title: "$SHIFT: live token facts",
+    description: "Live facts about $SHIFT, NIGHTSHIFT's token on Ethereum: price, market cap, liquidity, supply, staked and burned, the fee rules, where to buy it, and what holding it gets a wallet (NIGHTSHIFT house services at half price, no platform fee, a share of fees when staked). Pass a wallet to check whether it gets the holder price. Facts read live, not financial advice. Free.",
+    inputSchema: { wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional().describe("a wallet to check for the holder price") },
+  }, safe(async (a: { wallet?: string }) => ({
+    token: await ctx.token(),
+    rules: tokenRules(base),
+    buy: { onNightshift: `${base}/swap`, uniswap: config.token.buyUrl || null, chart: config.token.address ? `https://dexscreener.com/ethereum/${config.token.address}` : null, contract: config.token.address || null, network: "Ethereum mainnet, paired with ETH on Uniswap v4" },
+    holding: [
+      HOLDER_RULE,
+      "0% NIGHTSHIFT platform fee on company withdrawals for $SHIFT and NIGHT FROGS holders (1.5% otherwise).",
+      "No NIGHTSHIFT swap fee for a wallet with 5M+ $SHIFT (wallet plus staked), a NIGHT FROG or a Night Watcher.",
+      `Stakers share 20% of every NIGHTSHIFT fee, paid in ETH and $SHIFT, with a lock from 0 to 730 days: ${base}/stake`,
+      `Games can be staked in $SHIFT or IMD through the GameEscrow contract; the winner takes 95%: ${base}/games`,
+    ],
+    ...(a.wallet ? { wallet: { address: a.wallet.toLowerCase(), holderPrice: svc ? await svc.holder(a.wallet).catch(() => false) : false } } : {}),
+    note: "Read live from Ethereum and DexScreener. Facts, not financial advice.",
+  })));
+  if (ctx.mind) {
+    const mind = ctx.mind;
+    server.registerTool("swarm_mind_ask", {
+      title: "SWARM MIND: ask the IMD swarm's memory",
+      description: "Answers a question only from what the IMD agent swarm has published (research reports, audits with their findings, contracts, sites), citing each work used with its explorer.imd.fun link. Ten questions per 10 minutes per caller. Free.",
+      inputSchema: { question: z.string().min(3).max(500) },
+    }, safe(async (a: { question: string }) => {
+      if (ctx.limited(req, "mind-ask", 10, 10 * 60_000)) throw new Error("Ten questions per 10 minutes: ask again in a moment.");
+      return { q: a.question, ...(await mind.ask(a.question) as object) };
+    }));
+    server.registerTool("swarm_mind_search", {
+      title: "SWARM MIND: search the IMD swarm's work",
+      description: "The IMD swarm's published works (research, audits, contracts, sites) that match a query, best first, with explorer links. Free.",
+      inputSchema: { query: z.string().min(2).max(300) },
+    }, safe((a: { query: string }) => {
+      if (ctx.limited(req, "mind-search", 60, 60_000)) throw new Error("Slow down.");
+      return { results: mind.search(a.query) };
+    }));
+  }
   if (svc) registerServiceTools(server, svc, { ip: clientIp(req), base: config.publicUrl, limited: (k, n, ms) => ctx.limited(req, k, n, ms) });
   return server;
 }

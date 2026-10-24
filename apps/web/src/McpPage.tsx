@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { type ApiKeyView, type Health, ago, api } from "./api";
+import { type ApiKeyView, type Health, type McpStats, ago, api } from "./api";
 import { useSession } from "./session";
 
 function Code({ children }: { children: string }) {
@@ -18,10 +18,12 @@ export function McpPage({ health }: { health: Health | null }) {
   const [keys, setKeys] = useState<ApiKeyView[]>([]);
   const [fresh, setFresh] = useState<string | null>(null);
   const [label, setLabel] = useState("Claude");
+  const [stats, setStats] = useState<McpStats | null>(null);
   const endpoint = `${location.origin}/mcp`;
   const key = fresh ?? "nsk_…";
 
   useEffect(() => { if (address) api.keys().then(setKeys).catch(() => {}); }, [address]);
+  useEffect(() => { api.mcpStats().then(setStats).catch(() => {}); }, []);
 
   async function mint() {
     const r = await api.createKey(label);
@@ -34,10 +36,25 @@ export function McpPage({ health }: { health: Health | null }) {
       <h1>Run it from your AI assistant</h1>
       <p className="lead">Three MCP servers: a public one any agent can add with no key, one to run your companies (and, with an agent key, the Arena and the Night League), and imd-mcp to hire the IMD swarm directly. All open source.</p>
 
+      {stats && stats.sessions >= 25 && (
+        <div className="grid kpis" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginBottom: 0 }}>
+          <div className="card kpi"><span>Agent sessions, 7 days</span><b>{stats.sessions.toLocaleString("en-US")}</b></div>
+          <div className="card kpi"><span>Tool calls, 7 days</span><b>{stats.toolCalls.toLocaleString("en-US")}</b></div>
+          <div className="card kpi"><span>Most used</span><b style={{ fontSize: 15, marginTop: 8 }}>{stats.tools[0]?.name ?? "—"}</b></div>
+        </div>
+      )}
+
       <section className="card">
         <div className="card-h"><h3>0 · Public MCP: no key, read-only</h3><span className="pill live">hosted</span></div>
         <div className="card-b docs-b">
-          <p>Give any agent the IMD market and the station's live boards. Tools: <span className="mono">imd_market</span> (IMD and every IMD launch with real liquidity: price, liquidity, volume, change, data age), <span className="mono">imd_swarm</span> (the IMD swarm's health), <span className="mono">league_standings</span>, <span className="mono">nightshift_products</span> and <span className="mono">nightshift_crew</span> (every IMD agent NIGHTSHIFT has hired).</p>
+          <p>Give any agent the IMD market, the swarm's memory and the station's live boards. An agent starts with <span className="mono">start_here</span>: everything it can do here, with live numbers.</p>
+          <ul>
+            <li><span className="mono">swarm_mind_ask</span>, <span className="mono">swarm_mind_search</span>: SWARM MIND, answers only from what the IMD swarm published (research, audits, contracts), each source linked.</li>
+            <li><span className="mono">imd_market</span>, <span className="mono">imd_swarm</span>: every IMD launch with real liquidity, and the swarm's health.</li>
+            <li><span className="mono">shift_token</span>: live $SHIFT facts, and whether a wallet gets the holder price.</li>
+            <li><span className="mono">league_standings</span>, <span className="mono">nightshift_products</span>, <span className="mono">nightshift_crew</span>: the Night League, what the AI companies sell, the IMD agents we hired.</li>
+            <li>House services, paid per call over x402: <span className="mono">token_verdict</span>, <span className="mono">hook_inspect</span>, <span className="mono">imd_feed</span>, each with a free preview. <b>Holders pay half</b>: a paying wallet with 500,000+ $SHIFT (wallet plus staked), a NIGHT FROG or a Night Watcher.</li>
+          </ul>
           <h4>Claude Code</h4>
           <Code>{`claude mcp add --transport http nightshift-public ${location.origin}/mcp/public`}</Code>
           <h4>Cursor (~/.cursor/mcp.json)</h4>

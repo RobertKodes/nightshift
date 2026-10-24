@@ -127,6 +127,15 @@ export const OFFERS: Offer[] = [
 export const offer = (id: OfferId) => OFFERS.find((o) => o.id === id)!;
 export const usdOf = (o: Offer) => Number(o.priceUsdc) / 1e6;
 
+/**
+ * Holders pay half: a paying wallet holding HOLDER_SHIFT or more $SHIFT (in the wallet plus staked in
+ * ShiftRewards), a NIGHT FROG or a Night Watcher. The house services are NIGHTSHIFT's own, so the
+ * discount costs no company owner anything.
+ */
+export const HOLDER_SHIFT = 500_000;
+export const holderPriceOf = (o: Offer) => o.priceUsdc / 2n;
+export const HOLDER_RULE = `Holders pay half: a paying wallet that holds ${HOLDER_SHIFT.toLocaleString("en-US")}+ $SHIFT (in the wallet plus staked), a NIGHT FROG or a Night Watcher gets every NIGHTSHIFT house service at 50%. Ask with holder=<that wallet> (MCP: holderWallet) to get the holder terms, then pay from that wallet.`;
+
 /** The route as the Bazaar's template (`/api/v1/hook/:address`), when it is one plain path. */
 const patternOf = (o: Offer) => { const r = o.route.split("?")[0]!; return r.includes("|") ? undefined : r.replace(/\{(\w+)\}/g, ":$1"); };
 /**
@@ -172,7 +181,8 @@ export function llmsLines(base: string): string[] {
     `- [Token Verdict](${base}/services/verdict): GET ${base}/api/v1/verdict/ethereum/<token>?depth=quick ($0.02) or depth=deep ($0.25). Safe / caution / avoid for an Ethereum token, made for IMD launches and v4 hook tokens, every reason with evidence. Free: ${base}/api/v1/verdict/ethereum/<token>/preview, and one full quick verdict per IP per day with demo=1.`,
     `- [Hook Inspector](${base}/services/hook): GET ${base}/api/v1/hook/<address> ($0.05), explain=1 ($0.50). Free: ${base}/api/v1/hook/<address>/flags.`,
     `- [IMD Data Feed](${base}/services/imd-feed): GET ${base}/api/v1/imd/launches, /imd/launches/<n>, /imd/tokens, /imd/swarm, /imd/agents/<seat> ($0.001 each; sample=1 free; since= for polling).`,
-    `- OpenAPI: ${base}/openapi.json · prices and payment terms: ${base}/api/v1/services · MCP tools on ${base}/mcp/public: verdict_preview, verdict_demo, token_verdict, hook_flags, hook_inspect, imd_feed_sample, imd_feed, services_pricing.`,
+    `- OpenAPI: ${base}/openapi.json · prices and payment terms: ${base}/api/v1/services · MCP tools on ${base}/mcp/public: verdict_preview, verdict_demo, token_verdict, hook_flags, hook_inspect, imd_feed_sample, imd_feed, services_pricing (paid tools take holderWallet for the holder price).`,
+    `- ${HOLDER_RULE}`,
   ];
 }
 

@@ -4,7 +4,7 @@
  */
 const seen = new Map<string, number>();
 let open = 0;
-const BOT = /bot|crawl|spider|slurp|preview|monitor|curl|wget|python|headless|lighthouse|facebookexternalhit|embed/i;
+export const BOT = /bot|crawl|spider|slurp|preview|monitor|curl|wget|python|headless|lighthouse|facebookexternalhit|embed/i;
 
 export function sawVisitor(ip: string, ua: string | undefined, now = Date.now()): void {
   if (!ip || BOT.test(ua ?? "")) return;

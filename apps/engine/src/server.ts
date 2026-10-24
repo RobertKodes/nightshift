@@ -10,7 +10,8 @@ import { type PaymentPayload, USDC, challenge as challenge402, decodeHeader, enc
 import { balances, eth, sales } from "./chain.js";
 import { NoGasError, PaymentRefused, PendingError } from "./checkout.js";
 import { findPool } from "./v4.js";
-import { liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
+import { BOT, liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
+import { liveUsage } from "./usage.js";
 import { KEEPER_LOW, KEEPER_RESERVE, burnStatus, keeperAccount, keeperBurnRate, keeperState } from "./keeper.js";
 import { type CompanyClaim, rewardsOf } from "./rewards.js";
 import { frogPng } from "./frogpng.js";
@@ -519,6 +520,7 @@ export function serve(engine: Engine) {
           return json(res, 200, { ok: true, orders: orders() });
         }
         if (p === "/api/admin/live" && req.method === "GET") return json(res, 200, liveStats());
+        if (p === "/api/admin/usage" && req.method === "GET") return json(res, 200, liveUsage(config.dataDir).report(Math.min(90, Math.max(1, Number(url.searchParams.get("days") ?? 30) || 30))));
         if (p === "/api/admin/keeper" && req.method === "GET") {
           const a = keeperAccount(engine.vault).address;
           const wei = await eth.getBalance({ address: a }).catch(() => null);
@@ -588,7 +590,8 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
       if ((p.startsWith("/api/league") || p === "/league/agents.md") && await leagueRoutes(req, res, p, { json, body, limited, url, vault: engine.vault })) return;
-      if (await stationRoutes(req, res, p, { json, body, limited, owner, vault: engine.vault, market: (q) => engine.market(q), live: () => liveProducts(engine) })) return;
+      if (await stationRoutes(req, res, p, { json, body, limited, owner, vault: engine.vault, market: (q) => engine.market(q), live: () => liveProducts(engine), token: tokenOverview,
+        mind: engine.mind ? { ask: (q) => engine.mind!.ask(q, engine.llm, config.chatModel), search: (q) => engine.mind!.search(q, 12) } : null })) return;
       // the owners' connected accounts: OAuth callbacks, Gumroad's sale pings, product covers
       if (p.startsWith("/api/connect/") && await connectRoutes(req, res, p, { json, body, limited, url, connect: engine.connect, owner, find: (x) => engine.get(x) })) return;
       if (p.startsWith("/api/pinball/")) {
@@ -796,6 +799,7 @@ export function serve(engine: Engine) {
         const key = (req.headers.authorization ?? "").slice(-16) || "anon";
         if (limited(req, "mcp", 120, 60_000) || limited(req, `mcp-key:${key}`, 240, 60_000)) return json(res, 429, { error: "slow down" });
         const b = req.method === "POST" ? await body(req) : undefined;
+        if (b) liveUsage(config.dataDir).mcp(clientIp(req), b, "nightshift");
         return await handleMcp(engine, req, res, b);
       }
 
@@ -963,6 +967,10 @@ export function serve(engine: Engine) {
       }
       if (seg[0] === "api" && seg[1] === "public" && seg[2]) {
         const c = engine.get(seg[2]);
+        // the shop page loads this: one visit per visitor per 10 minutes (bots left out), the number the CEO reads as traffic
+        if (c && !seg[3] && !BOT.test(String(req.headers["user-agent"] ?? "x")) && !limited(req, `visit:${c.id}`, 1, 600_000)) {
+          const v = engine.store.metricsOf(c.id).visits; v.push(Date.now()); if (v.length > 5000) v.splice(0, v.length - 5000); engine.store.markDirty();
+        }
         // a visit that came from one of the company's own posts (its link carries ?via=<channel>), once per visitor per 10 minutes
         const via = url.searchParams.get("via") ?? "";
         if (c && (CHANNELS as string[]).includes(via) && !limited(req, `via:${c.id}`, 1, 600_000)) {
@@ -1062,7 +1070,7 @@ export function serve(engine: Engine) {
         const c = id ? engine.store.companies.get(id) : undefined;
         if (!c) return json(res, 404, { error: "no such site" });
         // one visit per visitor per 10 minutes, and a bounded history
-        if (!limited(req, `visit:${c.id}`, 1, 600_000)) { const v = engine.store.metricsOf(c.id).visits; v.push(Date.now()); if (v.length > 5000) v.splice(0, v.length - 5000); }
+        if (!limited(req, `visit:${c.id}`, 1, 600_000)) { const v = engine.store.metricsOf(c.id).visits; v.push(Date.now()); if (v.length > 5000) v.splice(0, v.length - 5000); engine.store.markDirty(); }
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": SANDBOX_CSP });
         return res.end(engine.sim.site(c));
       }
@@ -1074,7 +1082,11 @@ export function serve(engine: Engine) {
       }
 
       // an unknown API path is a 404, not the app's page
-      if ((req.method === "GET" || req.method === "HEAD") && !p.startsWith("/api/") && serveStatic(res, p, req.method === "HEAD", /gzip/.test(String(req.headers["accept-encoding"] ?? "")))) return;
+      if ((req.method === "GET" || req.method === "HEAD") && !p.startsWith("/api/") && serveStatic(res, p, req.method === "HEAD", /gzip/.test(String(req.headers["accept-encoding"] ?? "")))) {
+        // a page (not a file) shown to a browser: counted by path and by where the visitor came from
+        if (req.method === "GET" && !extname(p) && (req.headers.accept ?? "").includes("text/html")) liveUsage(config.dataDir).page(clientIp(req), p, req.headers.referer, req.headers["user-agent"], url.searchParams, url.hostname);
+        return;
+      }
       return json(res, 404, { error: "not found" });
     } catch (err) {
       console.error(err);
