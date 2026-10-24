@@ -9,7 +9,11 @@ Every model in `apps/web/public/lastspawn` is built by a script here. Nothing is
 | `pack_kit.py` | `stone.glb` and `marsh.glb`: the KayKit pieces the zones use, packed into one file per kit | `blender -b --factory-startup --python pack_kit.py -- <pack's gltf folder> <out.glb> <piece names...>` |
 | `render_frog.py` | Preview renders of a built frog | `blender -b <out>/frog.blend --python render_frog.py -- <out> hand foot idle` |
 
-After building, compress the files with `npx @gltf-transform/cli@4.5.1 resample` (frog only), then `meshopt`.
+After building:
+- **Frog:** `npx @gltf-transform/cli@4.5.1 resample`, then `dedup`.
+- **Kits:** `copy <kit>.glb <kit>/<kit>.gltf`, so their textures are separate files.
+
+Don't use meshopt or embedded textures. The site's content policy allows neither WebAssembly decoders nor blob URLs, and the server gzips the files anyway.
 
 **Sources:**
 - Blender 5.1.

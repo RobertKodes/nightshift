@@ -1,13 +1,17 @@
 import * as THREE from "three";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 
-/** The game's models, loaded once: the frog (with its rig and animations) and the two prop kits. */
-const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+/**
+ * The game's models, loaded once: the frog (with its rig and animations), its gear and two prop kits.
+ * Plain glTF on purpose: the site's content policy allows neither WebAssembly decoders nor blob
+ * textures, so nothing is meshopt-compressed (the server gzips them) and the kits' textures are files.
+ */
+const loader = new GLTFLoader();
+const FILES = { frog: "frog.glb", gear: "gear.glb", stone: "stone/stone.gltf", marsh: "marsh/marsh.gltf" } as const;
 const cache = new Map<string, Promise<GLTF>>();
 export function load(name: "frog" | "stone" | "marsh" | "gear"): Promise<GLTF> {
   let p = cache.get(name);
-  if (!p) { p = loader.loadAsync(`/lastspawn/${name}.glb`); cache.set(name, p); }
+  if (!p) { p = loader.loadAsync(`/lastspawn/${FILES[name]}`); cache.set(name, p); }
   return p;
 }
 
