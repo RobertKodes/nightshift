@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "tech.getnightshift/public",
   "title": "NIGHTSHIFT public",
-  "description": "Keyless agent tools: NIGHTSHIFT products over x402, IMD tokens, IMD swarm health, Night League.",
-  "version": "1.0.0",
+  "description": "Keyless: start_here, SWARM MIND, IMD market and swarm, $SHIFT facts, x402 services, Night League.",
+  "version": "1.1.0",
   "websiteUrl": "https://getnightshift.tech/mcp",
   "repository": {
     "url": "https://github.com/RobertKodes/nightshift",
