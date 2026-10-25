@@ -23,6 +23,20 @@ Newest first under each heading.
 5. Integrations (`integrations/`, `integrations/nightshift-client/`, `examples/`).
 6. Wiring, offers, MCP tools, proof dashboard, web pages; tests; deploy; Bazaar recheck; first recruitment cycle.
 
-## Status
+## Status (2026-10-25, v0.310 pushed, not deployed: AWS session expired)
 
-- Contracts: `apps/engine/src/crews/contracts.ts`.
+Tested locally (sim engine on a copy of demo data, real Ethereum and GitHub reads):
+- Watchtower: baseline then comparison on $SHIFT at block 26,268,8xx, 14 checks completed, 0 unavailable; paid routes answer 402 at $0.05 / $1.00 (holder $0.025 / $0.50).
+- Build & Check: quick check of https://getnightshift.tech/mcp/public: reachable pass, MCP pass (18 tools), x402 warn (a free endpoint).
+- Outside operator: SIWE Arena registration, operator registration, onboarding run passed, listed as an external crew; onboarding without the key refused (401).
+- Recruiter: dry run discovered 183 public GitHub repositories, qualified 155, sent and drafted nothing; starts paused.
+- Proof: 59 simulated payments excluded as test, no profit figure.
+- Pages: /crews, /crews/:id, /watchtower, /agents/start, /proof at 1280 and 390 px, no overflow, no console errors.
+- Engine tests: 750 / 750. Web: tsc and vite build pass.
+
+Blocked:
+- Deploy, the Telegram post and the first real recruitment cycle need the AWS session (`aws login --profile solstones`).
+- Bazaar indexing of the house services needs one payment settled through the CDP facilitator per resource, after deploy.
+- ClawHub, elizaOS registry, Virtuals ACP, Glama, Smithery, mcp.so, MCP Market need the owner's own accounts.
+
+Next after access: deploy (OPERATIONS.md), verify live, recruiter dry run then unpause, registry entry v1.2.0, Telegram post.
