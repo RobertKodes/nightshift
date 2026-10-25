@@ -49,6 +49,7 @@ import { Checkout, NoGasError, PendingError, type SettledBy, type Settlement, sa
 import { offerFor } from "./agentmarket.js";
 import { tokenRules } from "./shift-facts.js";
 import { linkWatchAlerts } from "./crews/live.js";
+import { liveOwnerStats } from "./owner-stats.js";
 import { MarketDesk } from "./b2b.js";
 import { companyBrain } from "./ceo-brain.js";
 import { liveMind, liveWeather } from "./mind-live.js";
@@ -527,6 +528,8 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
   /** What the operator can do from Telegram: cards with buttons. */
   async #command(cmd: string, args: string[], ctx?: CommandContext): Promise<Reply> {
     if (cmd === "unmute" || cmd === "mute") return this.#muteCommand(cmd, args, ctx);
+    // the owner's private stats: agents, the website, the crews, sales and the recruiter, last 24 hours
+    if (cmd === "stats") return { text: liveOwnerStats()?.report() ?? "The stats are starting: try again in a minute." };
     // sent by an operator inside the private holders' group: that group becomes the Watch Room
     if (cmd === "watchroom") {
       if (!ctx?.group) return { text: "Send /watchroom inside the private Night Watchers group, after adding me there as an admin." };

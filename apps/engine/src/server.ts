@@ -24,6 +24,10 @@ import { blueskyChannel, telegramChannel } from "./recruiter/adapters.js";
 import { recruiterRoutes } from "./recruiter/routes.js";
 import { chats } from "./community.js";
 import { isAdmin as adminReq } from "./admin.js";
+import { OwnerStats, liveOwnerStats, setOwnerStats } from "./owner-stats.js";
+import { onCrewEvent } from "./crews/live.js";
+import { payerClass } from "./proof.js";
+import { telegram } from "./social.js";
 import { KEEPER_LOW, KEEPER_RESERVE, burnStatus, keeperAccount, keeperBurnRate, keeperState } from "./keeper.js";
 import { type CompanyClaim, rewardsOf } from "./rewards.js";
 import { frogPng } from "./frogpng.js";
@@ -440,6 +444,33 @@ export function serve(engine: Engine) {
   liveServices();
   setInterval(() => void liveWatchtower()?.tick().catch((e) => console.error("watchtower", (e as Error).message)), 60_000).unref();
   setInterval(() => void liveRecruiter(engine).tick().catch((e) => console.error("recruiter", (e as Error).message)), 60_000).unref();
+  // the owner's private stats: a report at 09:00 and 21:00 Bucharest, /stats, and pings as things happen
+  const stats = new OwnerStats({
+    file: join(config.dataDir, "owner-stats.json"),
+    sources: {
+      usage: liveUsage(config.dataDir), live: liveStats,
+      jobs: (since) => crewLedger().list({ since, limit: 5000 }).map((j) => ({ crew: j.crew, status: j.status, free: j.free, kind: j.kind, paid: j.payment ? { usd: j.payment.usd, class: j.payment.class } : null })),
+      operators: () => crewOperators().all(),
+      sales: (since) => {
+        const all = [...engine.store.companies.values()];
+        return all.flatMap((c) => engine.store.metricsOf(c.id).sales.filter((x) => x.at >= since && payerClass(x.payer, c, all, x.sim) === "customer")
+          .map((x) => ({ usd: Number(BigInt(x.usdc)) / 1e6, what: c.products.find((p) => p.id === x.productId)?.name ?? c.name, wallet: `${x.payer.slice(0, 6)}…${x.payer.slice(-4)}` })));
+      },
+      recruiter: () => {
+        const d = liveRecruiter(engine).dashboard() as unknown as { state: string; prospects: unknown[]; queue: { status: string }[]; sent: { sent?: { utc?: string } | null }[] };
+        const today = new Date().toISOString().slice(0, 10);
+        return { state: d.state, prospects: d.prospects.length, waiting: d.queue.filter((q) => q.status === "awaiting_approval").length, sentToday: d.sent.filter((x) => x.sent?.utc?.startsWith(today)).length };
+      },
+    },
+    // the owner's own chat with the bot; the alert chat only if no private chat took it
+    send: async (text) => {
+      const dms = config.telegramToken ? await Promise.all(config.telegramAdmins.filter((x) => Number(x) > 0).map((id) => telegram(config.telegramToken, id, text).catch(() => false))) : [];
+      return dms.some(Boolean) || engine.alert(text.replace(/<[^>]+>/g, ""), `owner-stats-${Date.now()}`);
+    },
+  });
+  setOwnerStats(stats);
+  onCrewEvent((e) => stats.onCrewEvent(e));
+  setInterval(() => void stats.tick().catch((e) => console.error("owner stats", (e as Error).message)), 60_000).unref();
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", config.publicUrl);
     const p = url.pathname;
@@ -559,6 +590,8 @@ export function serve(engine: Engine) {
         }
         if (p === "/api/admin/live" && req.method === "GET") return json(res, 200, liveStats());
         if (p === "/api/admin/usage" && req.method === "GET") return json(res, 200, liveUsage(config.dataDir).report(Math.min(90, Math.max(1, Number(url.searchParams.get("days") ?? 30) || 30))));
+        // the owner's private stats, sent now (also sent at 09:00 and 21:00 Bucharest, and on /stats)
+        if (p === "/api/admin/stats" && req.method === "POST") return json(res, 200, { sent: (await liveOwnerStats()?.sendReport().catch(() => false)) ?? false });
         // the recruiter's owner dashboard: queue, prospects, sends, conversions, pause and stop
         if (p.startsWith("/api/admin/recruiter") && await recruiterRoutes(req, res, p, { json, body, isAdmin: adminReq, recruiter: liveRecruiter(engine) })) return;
         if (p === "/api/admin/keeper" && req.method === "GET") {

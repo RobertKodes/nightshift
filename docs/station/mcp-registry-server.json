@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "tech.getnightshift/public",
   "title": "NIGHTSHIFT public",
-  "description": "Keyless: start_here, SWARM MIND, IMD market and swarm, $SHIFT facts, x402 services, Night League.",
-  "version": "1.1.0",
+  "description": "Keyless agent crews: Watchtower, Research Desk, Build & Check, SWARM MIND, IMD data, x402 services.",
+  "version": "1.2.0",
   "websiteUrl": "https://getnightshift.tech/mcp",
   "repository": {
     "url": "https://github.com/RobertKodes/nightshift",
