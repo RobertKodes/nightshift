@@ -128,6 +128,8 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   // the Play Store app (a Trusted Web Activity) is this site only when its signing key is listed here
   if (p === "/.well-known/assetlinks.json" && config.androidCertSha256.length) return text(res, "application/json", JSON.stringify(assetLinks(config.androidCertSha256), null, 2));
   if (p === "/.well-known/mcp.json" || p === "/.well-known/mcp/server-card.json") return text(res, "application/json", JSON.stringify(mcpCard(), null, 2));
+  // Glama's ownership claim for this domain (an account-bound token with no personal data): it must stay published
+  if (p === "/.well-known/glama.json") return text(res, "application/json", JSON.stringify({ $schema: "https://glama.ai/mcp/schemas/connector.json", claim: GLAMA_CLAIM }, null, 2));
   if (p === "/mcp/public" && !(req.method === "GET" && (req.headers.accept ?? "").includes("text/html"))) {
     if (limited(req, "mcp-public", 60, 60_000)) return reply(429, { error: "slow down" });
     const b = req.method === "POST" ? await ctx.body(req) : undefined;
@@ -321,6 +323,8 @@ function mcpCard() {
   };
 }
 
+/** Glama (glama.ai) verifies that getnightshift.tech owns its MCP connector listing with this token. */
+const GLAMA_CLAIM = "glama_claim_f4OiIBxQ4QpzO3FFEa7SScC82_e-Ibii";
 const json2 = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] });
 /** A read-only MCP server anyone can add without a key. */
 function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
