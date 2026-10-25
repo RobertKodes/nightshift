@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { liveBus } from "../live/bus.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeAtomic } from "../atomic.js";
@@ -156,6 +157,7 @@ export class PublicWatch {
         const name = `$${esc(t.symbol)}${t.launch ? ` (IMD #${t.launch})` : ""}`;
         const lines = [`🛰 <b>Watchtower spotted a change</b> · ${name}`, "", ...big.slice(0, 4).map((c) => `• <b>${esc(c.field)}</b> (${c.severity}): ${val(c.before)} → ${val(c.after)}, between block ${c.beforeBlock} and ${c.afterBlock}`), "", `Evidence: <a href="https://etherscan.io/address/${t.address}">Etherscan</a>${big[0]!.evidence[0] ? ` · <a href="${esc(big[0]!.evidence[0]!)}">source</a>` : ""}`, "Check any token free: <code>/watchtower &lt;address&gt;</code>", "<i>A change is not a verdict on the token: it is what changed, with the evidence.</i>"];
         if (await this.o.post(lines.join("\n"), [[{ text: "🛰 Full report", url: `${config.publicUrl}/watchtower?address=${t.address}` }]]).catch(() => false)) {
+          liveBus.emit("watchtower.change", { token: t.symbol, summary: big.slice(0, 4).map((c) => `${c.field}: ${c.severity}`).join("; ") });
           this.#st.posted = [...this.#st.posted, key].slice(-500); this.#st.postsToday++; posted++; this.#save();
         }
       }

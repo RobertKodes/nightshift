@@ -1,4 +1,5 @@
 import { forgeReply } from "./forge-bot.js";
+import { liveBus } from "./live/bus.js";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { board as pinballBoard } from "./pinball.js";
 import { join } from "node:path";
@@ -183,6 +184,7 @@ ${tx}`, [[{ text: "🔒 Stake", url: `${config.publicUrl}/token` }]], "milestone
         if (!r?.logs.some((x) => x.address.toLowerCase() === c.splitter!.toLowerCase()) && String(b.args.from).toLowerCase() !== c.splitter!.toLowerCase()) continue;
         const amount = tok(b.args.value ?? 0n);
         st[key] = (st[key] ?? 0) + amount;
+        if (key === "burnedShift") liveBus.emit("shift.burn", { amount });
         await toCommunity(`🔥 <b>${num(amount)} ${label} burned</b>
 
 ${label === "IMD"
@@ -344,6 +346,8 @@ export function startCommunity(): void {
         for (const b of await scanBuys(st)) {
           const c = buyCard(b);
           await toCommunity(c.text, c.buttons, b.usd >= 2500 || (b.wallet ?? 0) >= 10_000 ? "whale" : "buy");
+          const liveTrade = await eth.getTransaction({ hash: b.tx as `0x${string}` }).catch(() => null);
+          liveBus.emit("shift.buy", { usd: b.usd, eth: liveTrade ? Number(liveTrade.value) / 1e18 : null, buyer: b.buyer, test: b.test });
           st.buys = (st.buys ?? 0) + 1;
         }
         const m = market;

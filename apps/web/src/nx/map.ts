@@ -78,6 +78,7 @@ export const ROOMS: Record<RoomId, Room> = {
     nav: [
       { to: "/command", label: "Missions", icon: "missions" },
       { to: "/ship", label: "The Ship", icon: "frogs" },
+      { to: "/live", label: "NIGHTSHIFT LIVE", icon: "live" },
       { to: "/forge", label: "Forge", icon: "forge" },
       { to: "/watch", label: "Night Watch", icon: "security" },
       { to: "/frogs", label: "Fleet", icon: "frogs", room: "info" },
@@ -97,7 +98,7 @@ export function roomOf(path: string): RoomId | null {
   if (a === "geek" || a === "sniper" || a === "mind" || a === "services" || a === "league" || a === "companies" || a === "my" || a === "launch" || a === "co" || a === "c" || a === "mcp" || a === "launchpad" || a === "guide" || a === "setup") return "geek";
   if (a === "info" || a === "whitepaper" || a === "token" || a === "tokenomics" || a === "frogs" || a === "stake" || a === "staking" || a === "swap" || a === "security" || a === "terms" || a === "privacy") return "info";
   if (a === "economy" || a === "hr" || a === "market" || a === "impact" || a === "proof") return "economy";
-  if (a === "command" || a === "forge" || a === "watch" || a === "ship") return "command";
+  if (a === "command" || a === "forge" || a === "watch" || a === "ship" || a === "live") return "command";
   return "geek";
 }
 

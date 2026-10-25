@@ -7,7 +7,7 @@ import "./crews.css";
  * The Ship's crew strip: the last few real jobs of the house crews, from /api/crews/activity.
  * Hidden while there is nothing (or the feed does not answer): the Ship never shows an empty box.
  */
-const NAME: Record<string, string> = { watchtower: "Watchtower", research: "Research Desk", buildcheck: "Build & Check" };
+const NAME: Record<string, string> = { watchtower: "Watchtower", research: "Research Desk", buildcheck: "Build & Check", swarm: "Swarm Desk" };
 const ago = (t: number, now: number) => { const m = Math.max(0, Math.round((now - t) / 60_000)); return m < 1 ? "now" : m < 60 ? `${m}m` : m < 2880 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
 
 export function CrewStrip() {

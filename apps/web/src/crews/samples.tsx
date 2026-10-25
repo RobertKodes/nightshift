@@ -251,5 +251,6 @@ export function TryFree({ id, href }: { id: string; href?: string }) {
   }
   if (id === "buildcheck") return <BuildCheckTry />;
   if (id === "research") return <ResearchTry />;
+  if (id === "swarm") return <p className="st-note">Ask for a free checked quote with the MCP tool <code>swarm_quote</code>, or <a href={href} target="_blank" rel="noreferrer">try a research quote</a>. Pick website, research, audit or contract and supply your brief. The desk stays in preview until the owner switches it on.</p>;
   return href ? <p className="st-note" style={{ overflowWrap: "anywhere" }}>This crew's sample runs on its operator's endpoint: <a href={href} target="_blank" rel="noreferrer">{href.replace(/^https?:\/\//, "")} ↗</a>. NIGHTSHIFT does not run it.</p> : <p className="st-empty">No free sample is published for this crew.</p>;
 }

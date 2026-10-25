@@ -4,14 +4,14 @@ import { requirement } from "@nightshift/x402";
 import type { Address } from "viem";
 
 /**
- * The three house services as products: price, what each call returns, and the discovery
+ * The house services as products: price, what each call returns, and the discovery
  * metadata (x402 v2 "bazaar" extension, the agent market catalogue, OpenAPI, llms.txt) in one place.
  * Descriptions start with "Use when an agent needs…" and stay under 500 characters, as discovery
  * indexes want (researched 2026-10-20).
  */
-export type OfferId = "token-verdict-quick" | "token-verdict-deep" | "hook-inspector" | "hook-inspector-explained" | "imd-feed" | "research-report" | "buildcheck-report" | "watchtower-check" | "watchtower-watch";
+export type OfferId = "token-verdict-quick" | "token-verdict-deep" | "hook-inspector" | "hook-inspector-explained" | "imd-feed" | "research-report" | "buildcheck-report" | "watchtower-check" | "watchtower-watch" | "swarm-order";
 /** The house crew that runs each offer: its jobs count on that crew's page, the proof page and the season. */
-export type CrewOf = "watchtower" | "research" | "buildcheck";
+export type CrewOf = "watchtower" | "research" | "buildcheck" | "swarm";
 export type Offer = {
   id: OfferId; name: string; kind: ProductKind; pitch: string; priceUsdc: bigint; method: "GET";
   /** The route, with {params}, and a real example of it. */
@@ -22,6 +22,8 @@ export type Offer = {
   output: { required: string[]; properties: Record<string, unknown> };
   outputExample: Record<string, unknown>;
   crew: CrewOf;
+  /** Swarm work uses a ten-minute quote and has no holder discount. */
+  quoted?: boolean;
 };
 
 const SHIFT = "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac";
@@ -53,7 +55,7 @@ const verdictExample = {
   simulation: { simulated: true, quote: "ETH", buy: { ok: true, taxPct: 0.02 }, sell: { ok: true, taxPct: 4.92 }, router: { ok: true } },
   copycat: { signal: "note", text: "Shares the symbol SHIFT with older IMD launches #2031, #2106, but this one has the deepest liquidity of them; later copies: #2126, #2129." },
   evidence: [{ id: "e12", what: "eth_call: V4 Quoter buy 0.002691 ETH → 102,859.035 tokens; buy-then-sell round trip → 0.002494595 ETH; the same round trip through the Universal Router with real token transfers went through", source: "eth_call" }],
-  payment: { tx: "0x5f2c…e1a9", network: "eip155:8453", priceUsd: 0.02 },
+  payment: { tx: "0x5f2c…e1a9", network: "eip155:8453", priceUsd: 0.01 },
 };
 const hookOut = {
   required: ["summary", "risk", "flags", "callbacks", "powers", "evidence"],
@@ -136,10 +138,10 @@ const watchPath = { chain: { type: "string", description: "ethereum (or 1)", pat
 const tokenPath = { chain: { type: "string", description: "ethereum (or 1)", pattern: "^(ethereum|eth|mainnet|1)$" }, token: { type: "string", description: "ERC-20 token address", pattern: "^0x[0-9a-fA-F]{40}$" } };
 export const OFFERS: Offer[] = [
   {
-    id: "token-verdict-quick", name: "Token Verdict (quick)", kind: "tool", pitch: "Before you buy: no issues found, caution or avoid, with reasons and evidence.", priceUsdc: 20_000n, method: "GET",
+    id: "token-verdict-quick", name: "Token Verdict (quick)", kind: "tool", pitch: "Before you buy: no issues found, caution or avoid, with reasons and evidence.", priceUsdc: 10_000n, method: "GET",
     route: "/api/v1/verdict/{chain}/{token}?depth=quick", example: `/api/v1/verdict/ethereum/${SHIFT}?depth=quick`, page: "/services/verdict",
     description: "Use when an agent needs a pre-buy verdict on an Ethereum token, made for IMD launches and Uniswap v4 hook tokens: no_issues_found / caution / avoid with cited reasons and the checks that could not run. Checks IMD launch match, verified source, owner powers (mint, pause, blacklist, fees, proxy), liquidity and v4 pool, holders, a buy-then-sell simulation and copycat symbols. Run by NIGHTSHIFT.",
-    query: { depth: { type: "string", enum: ["quick", "deep"], description: "quick ($0.02) or deep ($0.25: adds the hook inspection, IMD admission checks and a written explanation)" } }, path: tokenPath,
+    query: { depth: { type: "string", enum: ["quick", "deep"], description: "quick ($0.01) or deep ($0.25: adds the hook inspection, IMD admission checks and a written explanation)" } }, path: tokenPath,
     output: verdictOut, outputExample: verdictExample, crew: "watchtower",
   },
   {
@@ -176,7 +178,7 @@ export const OFFERS: Offer[] = [
     output: feedOut, outputExample: feedExample, crew: "research",
   },
   {
-    id: "watchtower-check", name: "Watchtower: what changed", kind: "tool", pitch: "What changed on an Ethereum token or v4 hook since the last observation, with before/after values and block evidence.", priceUsdc: 50_000n, method: "GET",
+    id: "watchtower-check", name: "Watchtower: what changed", kind: "tool", pitch: "What changed on an Ethereum token or v4 hook since the last observation, with before/after values and block evidence.", priceUsdc: 10_000n, method: "GET",
     route: "/api/v1/watchtower/check/{chain}/{address}", example: `/api/v1/watchtower/check/ethereum/${SHIFT}`, page: "/watchtower",
     description: "Use when an agent needs to know what changed on an Ethereum ERC-20 token or Uniswap v4 hook since the previous observation: owner and admin, proxy upgrades, bytecode, pause, fees, supply and liquidity, each change with before/after values, block numbers and links; checks that could not run are listed, never read as unchanged. Run by NIGHTSHIFT's Watchtower crew.",
     query: {}, path: watchPath, output: watchOut, outputExample: watchExample, crew: "watchtower",
@@ -195,6 +197,14 @@ export const OFFERS: Offer[] = [
     output: researchOut, outputExample: researchExample, crew: "research",
   },
   {
+    id: "swarm-order", name: "Swarm Desk", kind: "tool", pitch: "Hire 1,000+ IMD agents with USDC: websites, sourced research, Solidity audits and contracts with tests.", priceUsdc: 3_000_000n, method: "GET",
+    route: "/api/v1/swarm/order/{quoteId}", example: "/api/v1/swarm/order/quote-from-swarm-quote", page: "/crews/swarm",
+    description: "Use when an agent needs a static website, sourced research report, Solidity audit of a public GitHub repository, or a small Solidity contract with tests built by 1,000+ IMD agents. Get a free checked quote at /api/v1/swarm/quote, then pay its exact USDC price on Base here. NIGHTSHIFT pays 0.5 IMD on Ethereum. Quotes last 10 minutes; from $3, no holder discount. Status and result links are free with the order token.",
+    query: {}, path: { quoteId: { type: "string", description: "the quoteId returned by GET /api/v1/swarm/quote" } },
+    output: { required: ["orderId", "status", "payment"], properties: { orderId: { type: "string" }, status: { type: "string" }, orderToken: { type: "string", description: "Returned once. Keep it for free job status and results." }, payment: { type: "object" } } },
+    outputExample: { orderId: "sd_example", status: "running", orderToken: "keep-this-token", payment: { tx: "0x…", network: "eip155:8453", priceUsd: 4.9 } }, crew: "swarm", quoted: true,
+  },
+  {
     id: "buildcheck-report", name: "Build & Check: integration report", kind: "tool", pitch: "Is your agent service reachable and discoverable? MCP, x402, OpenAPI and discovery documents, each check with the curl to rerun it.", priceUsdc: 100_000n, method: "GET",
     route: "/api/v1/buildcheck?url={url}", example: "/api/v1/buildcheck?url=https%3A%2F%2Fgetnightshift.tech%2Fmcp%2Fpublic", page: "/crews/buildcheck",
     description: "Use when an agent or its builder needs to know if a public agent service works for other agents: MCP initialize and tools/list, the x402 402 challenge and Bazaar metadata, the OpenAPI document and /llms.txt, agent-card and mcp.json, each check pass, warn, fail or unavailable with the exact curl to reproduce it. HTTPS public URLs only. Run by NIGHTSHIFT's Build & Check crew.",
@@ -211,8 +221,8 @@ export const usdOf = (o: Offer) => Number(o.priceUsdc) / 1e6;
  * discount costs no company owner anything.
  */
 export const HOLDER_SHIFT = 500_000;
-export const holderPriceOf = (o: Offer) => o.priceUsdc / 2n;
-export const HOLDER_RULE = `Holders pay half: a paying wallet that holds ${HOLDER_SHIFT.toLocaleString("en-US")}+ $SHIFT (in the wallet plus staked), a NIGHT FROG or a Night Watcher gets every NIGHTSHIFT house service at 50%. Ask with holder=<that wallet> (MCP: holderWallet) to get the holder terms, then pay from that wallet.`;
+export const holderPriceOf = (o: Offer) => o.quoted ? o.priceUsdc : o.priceUsdc / 2n;
+export const HOLDER_RULE = `Holders pay half: a paying wallet that holds ${HOLDER_SHIFT.toLocaleString("en-US")}+ $SHIFT (in the wallet plus staked), a NIGHT FROG or a Night Watcher gets NIGHTSHIFT house checks and reports at 50%. Swarm Desk orders cost the full quoted price. Ask with holder=<that wallet> (MCP: holderWallet) to get the holder terms, then pay from that wallet.`;
 
 /** The route as the Bazaar's template (`/api/v1/hook/:address`), when it is one plain path. */
 const patternOf = (o: Offer) => { const r = o.route.split("?")[0]!; return r.includes("|") ? undefined : r.replace(/\{(\w+)\}/g, ":$1"); };
@@ -227,6 +237,7 @@ export function bazaarOf(o: Offer, path = o.example.split("?")[0]!) {
   const { bazaar: declared } = declareDiscoveryExtension({
     input,
     inputSchema: { type: "object", properties: o.query },
+    ...(o.quoted ? { pathParamsSchema: { type: "object", properties: o.path, required: Object.keys(o.path) } } : {}),
     output: { example: o.outputExample, schema: { type: "object", required: o.output.required, properties: o.output.properties } },
   });
   return { bazaar: bazaarResourceServerExtension.enrichDeclaration!(declared, { method: "GET", routePattern: patternOf(o), adapter: { getPath: () => path } }) as Record<string, unknown> };
@@ -239,26 +250,28 @@ export function catalogItems(base: string, chainId: number, payTo: Address | nul
     resource: `${base}${o.example}`, type: "http", x402Version: 2, accepts: [requirement(chainId, payTo, o.priceUsdc)],
     description: o.description, mimeType: "application/json", lastUpdated: new Date().toISOString(),
     metadata: {
-      id: o.id, name: o.name, kind: o.kind, pitch: o.pitch, priceUsd: usdOf(o), route: `${base}${o.route}`, page: `${base}${o.page}`,
+      id: o.id, name: o.name, kind: o.kind, pitch: o.pitch, priceUsd: usdOf(o), ...(o.quoted ? { priceIsMinimum: true, quote: `${base}/api/v1/swarm/quote` } : {}), route: `${base}${o.route}`, page: `${base}${o.page}`,
       company: { name: "NIGHTSHIFT Services", slug: "nightshift-services", runBy: "NIGHTSHIFT", house: true }, ...bazaarOf(o),
     },
   }));
 }
 
 export const SERVICE_PAGES = [
-  { path: "/services", title: "NIGHTSHIFT Services", about: "House services run by NIGHTSHIFT, sold per call over x402 and MCP: Token Verdict, Hook Inspector and the IMD Data Feed." },
-  { path: "/services/verdict", title: "Token Verdict", about: "Before you buy an Ethereum token: no issues found, caution or avoid, with reasons and evidence. Made for IMD launches and Uniswap v4 hook tokens. $0.02 quick, $0.25 deep, one free demo a day." },
+  { path: "/services", title: "NIGHTSHIFT Services", about: "House services run by NIGHTSHIFT, sold over x402 and MCP: Token Verdict, Hook Inspector, IMD Data Feed, Watchtower, Research Desk, Build & Check and Swarm Desk." },
+  { path: "/services/verdict", title: "Token Verdict", about: "Before you buy an Ethereum token: no issues found, caution or avoid, with reasons and evidence. Made for IMD launches and Uniswap v4 hook tokens. $0.01 quick, $0.25 deep, one free demo a day." },
   { path: "/services/hook", title: "Hook Inspector", about: "What a Uniswap v4 hook can do: permission bits, callbacks, fees, owner powers, upgrades and known templates. $0.05, or $0.50 explained." },
   { path: "/services/imd-feed", title: "IMD Data Feed", about: "IMD launches, tokens, swarm health and seat work history as JSON for agents and bots. $0.001 per call, free samples." },
+  { path: "/crews/swarm", title: "Swarm Desk", about: "Hire the IMD swarm with USDC: websites, research, audits and contracts built by 1,000+ IMD agents. Free checked quotes last 10 minutes, from $3.00, no holder discount. Preview until SWARM_DESK=1." },
 ];
 
 /** Lines for /llms.txt. */
 export function llmsLines(base: string): string[] {
   return [
     "## House services (run by NIGHTSHIFT, pay per call over x402 in USDC on Base, or over MCP)",
-    `- [Token Verdict](${base}/services/verdict): GET ${base}/api/v1/verdict/ethereum/<token>?depth=quick ($0.02) or depth=deep ($0.25). Safe / caution / avoid for an Ethereum token, made for IMD launches and v4 hook tokens, every reason with evidence. Free: ${base}/api/v1/verdict/ethereum/<token>/preview, and one full quick verdict per IP per day with demo=1.`,
+    `- [Token Verdict](${base}/services/verdict): GET ${base}/api/v1/verdict/ethereum/<token>?depth=quick ($0.01) or depth=deep ($0.25). Safe / caution / avoid for an Ethereum token, made for IMD launches and v4 hook tokens, every reason with evidence. Free: ${base}/api/v1/verdict/ethereum/<token>/preview, and one full quick verdict per IP per day with demo=1.`,
     `- [Hook Inspector](${base}/services/hook): GET ${base}/api/v1/hook/<address> ($0.05), explain=1 ($0.50). Free: ${base}/api/v1/hook/<address>/flags.`,
     `- [IMD Data Feed](${base}/services/imd-feed): GET ${base}/api/v1/imd/launches, /imd/launches/<n>, /imd/tokens, /imd/swarm, /imd/agents/<seat> ($0.001 each; sample=1 free; since= for polling).`,
+    `- [Swarm Desk](${base}/crews/swarm): free GET ${base}/api/v1/swarm/quote?kind=website|research|audit|contract&brief=<20..1500 characters>&repo=<https GitHub URL for audit>. Pay the quote: GET ${base}/api/v1/swarm/order/{quoteId} (USDC on Base, from $3.00, no holder discount). Free status and results: GET ${base}/api/v1/swarm/jobs/{orderId}?token=<orderToken>. MCP: swarm_quote, swarm_order, swarm_job.`,
     `- OpenAPI: ${base}/openapi.json · prices and payment terms: ${base}/api/v1/services · MCP tools on ${base}/mcp/public: verdict_preview, verdict_demo, token_verdict, hook_flags, hook_inspect, imd_feed_sample, imd_feed, services_pricing (paid tools take holderWallet for the holder price).`,
     `- ${HOLDER_RULE}`,
   ];
@@ -267,9 +280,10 @@ export function llmsLines(base: string): string[] {
 /** Skills for the agent card. */
 export function agentSkills(base: string) {
   return [
-    { id: "token-verdict", name: "Token Verdict", description: "Pre-buy verdict (no issues found / caution / avoid) for Ethereum tokens, specialised on IMD launches and Uniswap v4 hook tokens, with cited evidence. x402: $0.02 quick, $0.25 deep.", tags: ["x402", "token-safety", "imd", "uniswap-v4"], examples: [`${base}/api/v1/verdict/ethereum/${SHIFT}?depth=quick`] },
+    { id: "token-verdict", name: "Token Verdict", description: "Pre-buy verdict (no issues found / caution / avoid) for Ethereum tokens, specialised on IMD launches and Uniswap v4 hook tokens, with cited evidence. x402: $0.01 quick, $0.25 deep.", tags: ["x402", "token-safety", "imd", "uniswap-v4"], examples: [`${base}/api/v1/verdict/ethereum/${SHIFT}?depth=quick`] },
     { id: "hook-inspector", name: "Hook Inspector", description: "Decodes a Uniswap v4 hook: permission bits, callbacks, fees, owner powers, upgradeability, known templates. x402: $0.05, $0.50 explained.", tags: ["x402", "uniswap-v4", "hooks", "security"], examples: [`${base}/api/v1/hook/${HOOK}`] },
     { id: "imd-feed", name: "IMD Data Feed", description: "IMD launches, tokens, swarm health and seat work history as JSON, with since= polling. x402: $0.001 per call, free samples.", tags: ["x402", "imd", "data"], examples: [`${base}/api/v1/imd/launches?sample=1`] },
+    { id: "swarm-desk", name: "Swarm Desk", description: offer("swarm-order").description, tags: ["x402", "imd", "websites", "research", "solidity"], examples: [`${base}/api/v1/swarm/quote?kind=research&brief=Research%20the%20IMD%20ecosystem%20with%20sources`] },
   ];
 }
 
@@ -284,15 +298,18 @@ export function openapi(base: string, chainId: number, payTo: Address | null) {
     },
   });
   const p = (name: string, where: "path" | "query", d: { type: string; description: string; enum?: string[]; pattern?: string }, required = where === "path") => ({ name, in: where, required, description: d.description, schema: { type: d.type === "integer" ? "integer" : "string", ...(d.enum ? { enum: d.enum } : {}), ...(d.pattern ? { pattern: d.pattern } : {}) } });
-  const v = offer("token-verdict-quick"), h = offer("hook-inspector"), f = offer("imd-feed");
+  const v = offer("token-verdict-quick"), h = offer("hook-inspector"), f = offer("imd-feed"), s = offer("swarm-order");
   const feedOp = (summary: string, params: unknown[]) => ({ get: { summary, tags: ["IMD Data Feed"], parameters: [...params, p("sample", "query", f.query.sample!), p("since", "query", f.query.since!)], ...pay(f) } });
   return {
     openapi: "3.1.0",
-    info: { title: "NIGHTSHIFT Services", version: "1.0.0", description: "House services run by NIGHTSHIFT: Token Verdict, Hook Inspector and the IMD Data Feed. Pay per call with x402 (USDC on Base, EIP-3009), or use the MCP tools at /mcp/public. Automated checks, not financial advice.", contact: { url: base } },
+    info: { title: "NIGHTSHIFT Services", version: "1.0.0", description: "House services run by NIGHTSHIFT, including Swarm Desk for new IMD work paid in USDC. Pay per call with x402 (USDC on Base, EIP-3009), or use the MCP tools at /mcp/public. Automated checks, not financial advice.", contact: { url: base } },
     servers: [{ url: base }],
     paths: {
       "/api/v1/services": { get: { summary: "Every service with its price and payment terms (free)", tags: ["Services"], responses: { 200: { description: "Offers" } } } },
-      "/api/v1/verdict/{chain}/{token}": { get: { summary: "Token Verdict: no issues found / caution / avoid with evidence ($0.02 quick, $0.25 deep)", tags: ["Token Verdict"], parameters: [p("chain", "path", v.path.chain!), p("token", "path", v.path.token!), p("depth", "query", v.query.depth!), p("demo", "query", { type: "string", description: "1: the free demo, one quick verdict per IP per day" })], ...pay(v) } },
+      "/api/v1/swarm/quote": { get: { summary: "Free IMD-checked quote, valid for 10 minutes", tags: ["Swarm Desk"], parameters: [p("kind", "query", { type: "string", enum: ["website", "research", "audit", "contract"], description: "kind of work" }, true), p("brief", "query", { type: "string", description: "20 to 1500 characters" }, true), p("repo", "query", { type: "string", description: "audit: public https://github.com/owner/repo URL" })], responses: { 200: { description: "quoteId, priceUsd, imd, whatYouGet, eta, expiresAt and pay URL" }, 422: { description: "IMD blockers" }, 503: { description: "Desk off or IMD price unavailable" } } } },
+      "/api/v1/swarm/order/{quoteId}": { get: { summary: "Pay the exact quote, then hire the IMD swarm", tags: ["Swarm Desk"], parameters: [p("quoteId", "path", s.path.quoteId!)], ...pay(s), "x-payment-info": { ...pay(s)["x-payment-info"], amount: "from the quote", priceUsd: "from the quote", holderDiscount: false }, responses: { ...pay(s).responses, 202: { description: "USDC settlement pending: retry the same authorization" }, 410: { description: "Quote expired: get a new free quote" }, 502: { description: "USDC settled but IMD failed: refund owed is recorded; includes payment transaction" }, 503: { description: "Desk unavailable, or settlement not confirmed: retry the same authorization if payment was submitted" } } } },
+      "/api/v1/swarm/jobs/{orderId}": { get: { summary: "Free job status and delivered result links/files", tags: ["Swarm Desk"], parameters: [p("orderId", "path", { type: "string", description: "the NIGHTSHIFT orderId" }), p("token", "query", { type: "string", description: "the orderToken returned once with the paid answer" }, true)], responses: { 200: { description: "IMD status and result" }, 404: { description: "Unknown order or invalid token" } } } },
+      "/api/v1/verdict/{chain}/{token}": { get: { summary: "Token Verdict: no issues found / caution / avoid with evidence ($0.01 quick, $0.25 deep)", tags: ["Token Verdict"], parameters: [p("chain", "path", v.path.chain!), p("token", "path", v.path.token!), p("depth", "query", v.query.depth!), p("demo", "query", { type: "string", description: "1: the free demo, one quick verdict per IP per day" })], ...pay(v) } },
       "/api/v1/verdict/{chain}/{token}/preview": { get: { summary: "Free preview: IMD launch match, market, copycat signal and hook bits, no verdict", tags: ["Token Verdict"], parameters: [p("chain", "path", v.path.chain!), p("token", "path", v.path.token!)], responses: { 200: { description: "Preview" } } } },
       "/api/v1/hook/{address}": { get: { summary: "Hook Inspector ($0.05; explain=1 $0.50)", tags: ["Hook Inspector"], parameters: [p("address", "path", h.path.address!), p("explain", "query", h.query.explain!)], ...pay(h) } },
       "/api/v1/hook/{address}/flags": { get: { summary: "Free: the hook's permission bits from its address and a known-template match", tags: ["Hook Inspector"], parameters: [p("address", "path", h.path.address!)], responses: { 200: { description: "Flags" } } } },

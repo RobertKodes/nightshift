@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { liveBus } from "./live/bus.js";
 import { join } from "node:path";
 import type { Address, Hex } from "viem";
 import { writeAtomic } from "./atomic.js";
@@ -389,6 +390,7 @@ export function createSniper(d: SniperDeps) {
         const c = token ? await tokenCall(l, det, token) : l.kind === "evm_contracts" ? await nftCall(l, det) : null;
         if (!c) continue;
         st.calls.push(c);
+        liveBus.emit("imd.launch", { launch: c.launch, name: c.symbol ?? c.name ?? "IMD launch", verdict: c.verdict, summary: c.summary });
         save();
         await d.push(c, "holders").catch(() => undefined);
       }

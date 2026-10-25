@@ -36,6 +36,9 @@ export const config = {
   imdUsd: num(env.IMD_USD, 6.87),
   imdUsdPinned: Boolean(env.IMD_USD),
   imdUsdAt: 0,
+  /** Swarm Desk's kill switch and cap apply as soon as settings are saved. */
+  get swarmDesk() { return (readSettings().SWARM_DESK ?? process.env.SWARM_DESK) === "1"; },
+  get swarmDeskDailyImd() { return Math.max(0, num(readSettings().SWARM_DESK_DAILY_IMD ?? process.env.SWARM_DESK_DAILY_IMD, 3)); },
   ethRpc: env.ETH_RPC ?? "https://ethereum-rpc.publicnode.com",
   /** Where products are sold: Base (8453) or Base Sepolia (84532). */
   salesChainId: num(env.SALES_CHAIN_ID, 84532),

@@ -6,7 +6,7 @@ import { TryFree } from "./samples";
 import { BuyBox, Feed, Hero, type Loaded, MetricStats, Pending, PriceTable, RunBy, StatusTag, count, day, dur, pct, plural, price, splitCrews, toMs, txUrl, useLoad, useServices, when } from "./shared";
 
 /**
- * /crews: watch agents work, hire a crew, connect your agent. The three house crews with their
+ * /crews: watch agents work, hire a crew, connect your agent. The four house crews with their
  * free samples, prices, limits and live numbers; Season 1 (house and outside crews ranked apart);
  * the live feed of crew jobs. /crews/:id: one crew's public profile and delivery history.
  */
@@ -38,7 +38,7 @@ function CrewCard({ p }: { p: CrewProfile }) {
       <p>{p.service}</p>
       <p className="cr-for"><b>For</b>{p.customer}</p>
       <ul className="cr-prices">
-        {(p.pricing ?? []).map((r) => <li key={r.offer}><b>{r.label}</b><span>{price(r.usd)}</span><small>holders {price(r.holderUsd)}</small></li>)}
+        {(p.pricing ?? []).map((r) => <li key={r.offer}><b>{r.label}</b><span>{p.id === "swarm" ? "from " : ""}{price(r.usd)}</span><small>{p.id === "swarm" ? "exact quote, no holder discount" : `holders ${price(r.holderUsd)}`}</small></li>)}
         {p.sample && <li><b>{p.sample.label}</b><span>free</span></li>}
         {!(p.pricing ?? []).length && p.operator?.kind === "house" && <li><b>Paid calls</b><span className="dim">not open yet</span></li>}
       </ul>
@@ -224,7 +224,7 @@ export function CrewPage({ id, health }: { id: string; health: Health | null }) 
       <Hero docTitle={p.name} trail={<><Link to="/crews">CREWS</Link> · {house ? "HOUSE CREW" : "OUTSIDE CREW"}</>} title={p.name} line={p.service}>
         <div className="st-row"><RunBy p={p} /><StatusTag p={p} /></div>
         <div className="st-stats">
-          {first ? <Stat label={first.label} value={price(first.usd)} note={`holders ${price(first.holderUsd)}`} /> : <Stat label="Paid calls" value="—" note={house ? "not open yet" : "priced by the operator"} />}
+          {first ? <Stat label={first.label} value={`${p.id === "swarm" ? "from " : ""}${price(first.usd)}`} note={p.id === "swarm" ? "exact quote, no holder discount" : `holders ${price(first.holderUsd)}`} /> : <Stat label="Paid calls" value="—" note={house ? "not open yet" : "priced by the operator"} />}
           <Stat label="Sample" value="free" note={p.sample?.label} />
           <Stat label="Jobs done" value={count(m?.done)} note={m ? `success ${pct(m.successRate)}` : undefined} />
           <Stat label="Repeat wallets" value={count(m?.repeatWallets)} note={m ? `of ${plural(m.payingWallets ?? 0, "paying wallet")}` : undefined} />

@@ -17,6 +17,8 @@ import { buildCheck } from "./crews/buildcheck.js";
 import { crewLedger, crewOperators, crewProfiles, crewSeason } from "./crews/live.js";
 import { crewRoutes } from "./crews/routes.js";
 import { proof } from "./proof.js";
+import { liveRoutes } from "./live/routes.js";
+import { startLiveSources } from "./live/sources.js";
 import { crewHighlights, liveWatchtower } from "./crews/live.js";
 import { watchtowerRoutes } from "./watchtower/index.js";
 import { Recruiter } from "./recruiter/recruiter.js";
@@ -444,6 +446,8 @@ export function serve(engine: Engine) {
   useServices(() => liveHouseServices(engine));
   // built now, not on the first request: Watchtower's watches and the recruiter keep their schedules after a restart
   liveServices();
+  // NIGHTSHIFT LIVE: real swarm, $SHIFT, crew and agent events for the stream page
+  const stopLive = startLiveSources({ token: tokenOverview });
   setInterval(() => void liveWatchtower()?.tick().catch((e) => console.error("watchtower", (e as Error).message)), 60_000).unref();
   setInterval(() => void liveRecruiter(engine).tick().catch((e) => console.error("recruiter", (e as Error).message)), 60_000).unref();
   // the owner's private stats: a report at 09:00 and 21:00 Bucharest, /stats, and pings as things happen
@@ -635,6 +639,8 @@ export function serve(engine: Engine) {
       // An API key reaches /mcp and a few reads only; everything that changes state needs the wallet's session.
       const caller = engine.auth.caller(req);
       const owner = caller && (caller.via === "session" || keyAllowed(req.method, p)) ? caller.addr : null;
+      // the live stream's state, its event stream and the holders' Spotlight queue
+      if (p.startsWith("/api/live/") && await liveRoutes(req, res, p, { json, body, limited, owner: caller?.via === "session" ? caller.addr : null })) return;
       // Reads that reach the chain or IMD when their cache is cold: plenty for pages, not for a loop.
       if (["/api/staked", "/api/token/overview", "/api/token", "/api/frogs", "/api/frogs/claims", "/api/frogs/staking", "/api/impact", "/api/landing"].includes(p) && limited(req, "reads", 240, 60_000)) return json(res, 429, { error: "slow down" });
 
@@ -1213,6 +1219,7 @@ export function serve(engine: Engine) {
   });
   // LASTSPAWN: the MMORPG's world, one WebSocket on this same server (LASTSPAWN=0 turns it off)
   if (process.env.LASTSPAWN !== "0") attachLastspawn(server, { dataDir: config.dataDir, wallet: (req) => engine.auth.caller(req)?.addr ?? null, savedName, log: (s) => console.error(s) });
+  server.once("close", stopLive);
   server.listen(config.port, () => console.log(`NIGHTSHIFT engine on ${config.publicUrl} (${config.mode} mode${engine.llm ? `, CEO model ${config.model}` : ", playbook CEO: set OPENROUTER_API_KEY for the model"})`));
   return server;
 }

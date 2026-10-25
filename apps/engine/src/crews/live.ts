@@ -10,6 +10,7 @@ import { type HousePrice, externalProfiles, houseProfiles } from "./profiles.js"
 import { season } from "./season.js";
 import type { Highlight } from "../recruiter/recruiter.js";
 import type { JobEvent as WatchJob, Watch, WatchReport, Watchtower } from "../watchtower/index.js";
+import type { PaidRecord } from "../services/routes.js";
 
 /**
  * The crews as the running engine sees them: one job ledger and one operator registry on disk, the
@@ -86,21 +87,22 @@ export const housePrices = (): HousePrice[] => OFFERS.map((o) => ({ offer: o.id,
 
 export function crewProfiles(): CrewProfile[] {
   const l = crewLedger();
-  return [...houseProfiles({ prices: housePrices(), metrics: (c) => l.metrics(c), base: config.publicUrl }), ...externalProfiles(crewOperators(), (c) => l.metrics(c))];
+  return [...houseProfiles({ prices: housePrices(), metrics: (c) => l.metrics(c), base: config.publicUrl, swarmEnabled: config.swarmDesk && config.mode === "live" && config.salesChainId === 8453, swarmDailyImd: config.swarmDeskDailyImd }), ...externalProfiles(crewOperators(), (c) => l.metrics(c))];
 }
 export const crewSeason = () => season(crewLedger(), { startAt: seasonStart(), operators: crewOperators().all() });
 
 /**
  * One paid call of a house service, recorded once (keyed on the payment's payer and nonce). The answer
- * was computed before the payment was settled, so a failed answer is recorded as failed and was never charged.
+ * may precede settlement for checks, or follow settlement for Swarm Desk. Pending swarm jobs finish
+ * when their delivery or refund owed is recorded.
  */
-export function recordPaid(o: Offer, r: { payer: string; nonce: string; usd: number; tx: string | null; network: string; ok: boolean; summary?: string; error?: string; sim?: boolean }): void {
+export function recordPaid(o: Offer, r: PaidRecord): void {
   const l = crewLedger();
   const job = l.start({
-    key: `${r.payer.toLowerCase()}:${r.nonce.toLowerCase()}`, crew: o.crew, operator: "house", kind: o.id, free: false,
+    key: `${r.payer.toLowerCase()}:${r.nonce.toLowerCase()}`, crew: o.crew, operator: "house", kind: r.kind ?? o.id, free: false,
     payment: { usd: r.usd, payer: r.payer, tx: r.tx, network: r.network, sim: r.sim }, customer: `w:${r.payer.toLowerCase()}`,
   });
-  if (job.status !== "running") return;
-  if (r.ok) l.done(job.id, { summary: r.summary ?? `${o.name}: answered and settled` });
-  else l.fail(job.id, r.error ?? "the answer failed; nothing was charged");
+  if (job.status !== "running" || r.pending) return;
+  if (r.ok) l.done(job.id, { summary: r.summary ?? `${o.name}: answered and settled`, costUsd: r.costUsd });
+  else l.fail(job.id, r.error ?? "the answer failed; nothing was charged", r.costUsd);
 }

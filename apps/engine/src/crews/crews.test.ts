@@ -57,12 +57,12 @@ describe("season 1", () => {
 });
 
 describe("crew profiles", () => {
-  it("lists the three house crews, live only with a price, with metrics from the ledger", () => {
+  it("lists the four house crews, live only with a price, with metrics from the ledger", () => {
     const l = new JobLedger({ file: null });
     const metrics = (c: CrewKey) => l.metrics(c);
     const none = houseProfiles({ prices: [], metrics, base: "https://n.example" });
     expect(none.map((p) => [p.id, p.name, p.status, p.operator.kind])).toEqual([
-      ["watchtower", "Watchtower", "preview", "house"], ["research", "Research Desk", "preview", "house"], ["buildcheck", "Build & Check", "preview", "house"],
+      ["watchtower", "Watchtower", "preview", "house"], ["research", "Research Desk", "preview", "house"], ["buildcheck", "Build & Check", "preview", "house"], ["swarm", "Swarm Desk", "preview", "house"],
     ]);
     const priced = houseProfiles({ prices: [{ offer: "buildcheck", label: "Full check", usd: 0.1, holderUsd: 0.05, crew: "buildcheck" }], metrics, base: "https://n.example" });
     expect(priced[2]).toMatchObject({ status: "live", pricing: [{ offer: "buildcheck", label: "Full check", usd: 0.1, holderUsd: 0.05 }], buy: { http: "GET https://n.example/api/v1/buildcheck?url={url}", mcpTool: null } });
@@ -107,7 +107,7 @@ describe("crew routes", () => {
   it("answers the public reads and leaves other paths alone", async () => {
     const h = harness();
     expect(await h.call("GET", "/api/other")).toBeNull();
-    expect((await h.call("GET", "/api/crews"))!.body.crews).toHaveLength(3);
+    expect((await h.call("GET", "/api/crews"))!.body.crews).toHaveLength(4);
     const one = await h.call("GET", "/api/crews/research");
     expect(one).toMatchObject({ status: 200, body: { profile: { id: "research" }, metrics: { jobs: 0 }, jobs: [] } });
     expect((await h.call("GET", "/api/crews/nope"))!.status).toBe(404);
@@ -147,7 +147,7 @@ describe("crew routes", () => {
     const list = await h.call("GET", "/api/agents/operators");
     expect(list!.body.operators).toMatchObject([{ id, status: "active", wallet: "0x1111…1111", endpoint: "https://agent.example/mcp" }]);
     expect(JSON.stringify(list!.body)).not.toContain(A);
-    expect((await h.call("GET", "/api/crews"))!.body.crews).toHaveLength(3);
+    expect((await h.call("GET", "/api/crews"))!.body.crews).toHaveLength(4);
     expect((await h.call("GET", "/api/crews"))!.body.external).toHaveLength(1);
     expect((await h.call("GET", `/api/crews/${encodeURIComponent(`op:${id}`)}`))!.status).toBe(200);
   });

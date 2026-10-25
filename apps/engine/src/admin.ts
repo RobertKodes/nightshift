@@ -41,6 +41,7 @@ export async function setupState(engine: Engine) {
     GUMROAD_CLIENT_ID: config.gumroad.clientId,
     HOUSE_GAMES: config.houseGames ? "1" : "0", HOUSE_GAMES_MAX_REAL: String(config.houseGamesMaxReal),
     WEEKLY_PRIZES: config.weeklyPrizes ? "1" : "0", PRIZE_HOURS: config.prizeHours.join(","),
+    SWARM_DESK: config.swarmDesk ? "1" : "0", SWARM_DESK_DAILY_IMD: String(config.swarmDeskDailyImd),
     DIGEST: config.digest ? "1" : "0", DIGEST_HOUR: String(config.digestHour), CHANGELOG_POST: config.changelogPost ? "1" : "0",
     // read live by /api/wallet-config: a saved change applies at once, never "pending a restart"
     WALLET_SOCIAL_LOGIN: socialLogin() ? "1" : "0",
@@ -114,7 +115,7 @@ function swapRunning(): Record<string, string> {
 /** Settings that move money or trust: every change is announced, so a leaked admin token cannot act quietly. */
 export const ANNOUNCED = ["NIGHTSHIFT_MODE", "PLATFORM_TREASURY", "PLATFORM_DEV", "PLATFORM_FEE_BPS", "ETH_RPC", "SALES_RPC", "SALES_CHAIN_ID", "TOKEN_ADDRESS", "NFT_ADDRESS", "REQUIRE_AUTH",
   "X402_FACILITATOR", "CDP_API_KEY_ID", "CDP_API_KEY_SECRET", "BETPOOL_ADDRESS", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS", "LAUNCH_NOTIFY", "PUBLIC_URL", "GUMROAD_CLIENT_ID", "GUMROAD_CLIENT_SECRET",
-  "SWAP_FEE_BPS", "SWAP_FEE_WALLET", "LIFI_INTEGRATOR"];
+  "SWAP_FEE_BPS", "SWAP_FEE_WALLET", "LIFI_INTEGRATOR", "SWARM_DESK", "SWARM_DESK_DAILY_IMD"];
 
 /** Saved settings that differ from what runs now, by name: what a restart would apply. */
 export function pendingChanges(): string[] {
@@ -126,6 +127,7 @@ export function pendingChanges(): string[] {
     TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","), PUBLIC_URL: config.publicUrl, REQUIRE_AUTH: config.requireAuth ? "1" : "0",
     GUMROAD_CLIENT_ID: config.gumroad.clientId,
     WALLET_SOCIAL_LOGIN: socialLogin() ? "1" : "0",
+    SWARM_DESK: config.swarmDesk ? "1" : "0", SWARM_DESK_DAILY_IMD: String(config.swarmDeskDailyImd),
     // read live by the swap routes: a saved change applies at once
     ...swapRunning(),
   };
@@ -135,6 +137,9 @@ export function pendingChanges(): string[] {
 /** Checks a /setup change without saving it: an error for the operator, or null. */
 export function checkSetup(patch: Record<string, unknown>): string | null {
   const v = (k: string) => (k in patch ? String(patch[k] ?? "").trim() : undefined);
+  const swarm = v("SWARM_DESK"), cap = v("SWARM_DESK_DAILY_IMD");
+  if (swarm && swarm !== "0" && swarm !== "1") return "SWARM_DESK is 1 (on) or 0 (off)";
+  if (cap && (!Number.isFinite(Number(cap)) || Number(cap) < 0)) return "SWARM_DESK_DAILY_IMD must be a nonnegative finite number";
   const mode = v("NIGHTSHIFT_MODE");
   if (mode && mode !== "sim" && mode !== "live") return "NIGHTSHIFT_MODE is sim or live";
   const chain = v("SALES_CHAIN_ID");

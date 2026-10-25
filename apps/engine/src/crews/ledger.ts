@@ -58,7 +58,7 @@ export function eventOf(j: Job): CrewEvent {
   return { at: j.endedAt ?? j.startedAt, crew: j.crew, kind: j.kind, status: j.status, summary: j.summary, paid: j.payment?.class === "customer", house: j.operator === "house" };
 }
 
-const CREW = /^(watchtower|research|buildcheck|op:[a-z0-9_-]{1,40})$/;
+const CREW = /^(watchtower|research|buildcheck|swarm|op:[a-z0-9_-]{1,40})$/;
 const KIND = /^[a-z0-9][a-z0-9._-]{0,39}$/;
 /** One plain line: no control characters, bounded. */
 const line = (s: unknown, n: number) => String(s ?? "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, n);
@@ -101,7 +101,7 @@ export class JobLedger {
     this.#sweep();
   }
 
-  /** Fails the jobs a restart cut off, once they have been running for STALE_MS. */
+  /** Fails interrupted local jobs. Swarm Desk follows its own jobs after a restart. */
   #sweep(): void {
     if (!this.#orphans.size) return;
     const now = this.#now();
@@ -109,7 +109,7 @@ export class JobLedger {
     for (const id of [...this.#orphans]) {
       const j = this.#byId.get(id);
       if (!j || j.status !== "running") { this.#orphans.delete(id); continue; }
-      if (j.startedAt < this.#boot && now - j.startedAt > STALE_MS) {
+      if (j.crew !== "swarm" && j.startedAt < this.#boot && now - j.startedAt > STALE_MS) {
         this.#orphans.delete(id);
         Object.assign(j, { status: "failed", endedAt: now, latencyMs: now - j.startedAt, error: "interrupted" });
         this.#emit(j); changed = true;

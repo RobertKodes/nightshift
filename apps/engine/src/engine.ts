@@ -51,6 +51,7 @@ import { tokenRules } from "./shift-facts.js";
 import { linkWatchAlerts } from "./crews/live.js";
 import { liveOwnerStats } from "./owner-stats.js";
 import { telegramBuildcheck, telegramCrews, telegramWatchtower } from "./crews/growth.js";
+import { liveTelegram } from "./live/bus.js";
 import { MarketDesk } from "./b2b.js";
 import { companyBrain } from "./ceo-brain.js";
 import { liveMind, liveWeather } from "./mind-live.js";
@@ -285,8 +286,13 @@ export class Engine {
       telegramCommands(config.telegramToken, config.telegramAdmins, {
         admin: (cmd, args, ctx) => this.#command(cmd, args, ctx),
         // the crews in the chat: Watchtower and Build & Check run free right here, /crews lists who does the work
-        open: async (cmd, args) => (cmd === "ask" || cmd === "mind" ? this.#askSwarm(args) : cmd === "weather" ? this.#weatherReply() : cmd === "brief" ? this.#briefReply(args)
-          : cmd === "watchtower" ? telegramWatchtower(args) : cmd === "buildcheck" ? telegramBuildcheck(args) : cmd === "crews" ? telegramCrews() : publicCommand(cmd, args)),
+        open: async (cmd, args) => {
+          const reply = await (cmd === "ask" || cmd === "mind" ? this.#askSwarm(args) : cmd === "weather" ? this.#weatherReply() : cmd === "brief" ? this.#briefReply(args)
+            : cmd === "watchtower" ? telegramWatchtower(args) : cmd === "buildcheck" ? telegramBuildcheck(args) : cmd === "crews" ? telegramCrews() : publicCommand(cmd, args));
+          // a viewer's request from the chat shows up on the live stream (anonymous)
+          if ((cmd === "ask" || cmd === "watchtower" || cmd === "buildcheck") && args.length) liveTelegram(cmd, args.join(" "));
+          return reply;
+        },
         guard: async (m) => { const removed = await this.#guard(m); if (!removed) void this.#ask(m).catch(() => {}); return removed; },
         ask: (m) => this.#ask(m),
         // Raids are off: a shared X post is not reposted to the community.
@@ -990,9 +996,9 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
         mode: "live",
         capabilities: () => http.capabilities(),
         check: (a, i) => http.check(a, i),
-        open: async (a, i) => {
+        open: async (a, i, hooks) => {
           if (!permitted) { const tx = await ensurePermit2(account); if (tx) note(c, this.#deps(c), "note", `Approved Permit2 for IMD once: ${tx}`); permitted = true; }
-          return http.open(a, i);
+          return http.open(a, i, hooks);
         },
         order: (o) => http.order(o),
         job: (j) => http.job(j),

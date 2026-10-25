@@ -22,11 +22,11 @@ export const mcpHere = () => `${location.origin}/mcp/public`;
 export const RESEARCH_SAMPLE = "What has the IMD swarm published about Uniswap v4 hooks?";
 export const EXAMPLES = "https://github.com/RobertKodes/nightshift/tree/main/examples";
 /** What the engine says when a holder price applies; shown until /api/v1/services answers with its own words. */
-export const HOLDER_FALLBACK = "Holders pay half: a paying wallet with 500,000+ $SHIFT (wallet plus staked), a NIGHT FROG or a Night Watcher.";
+export const HOLDER_FALLBACK = "Holders pay half on house checks and reports: a paying wallet with 500,000+ $SHIFT (wallet plus staked), a NIGHT FROG or a Night Watcher. Swarm Desk orders cost the full quote.";
 
 export const isAddr = (a: string) => /^0x[0-9a-fA-F]{40}$/.test(a.trim());
 export const shortAddr = (a: string) => (a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
-/** A dollar amount with as many decimals as it needs: $0.05, $0.025, $1.00. */
+/** A dollar amount with as many decimals as it needs: $0.01, $0.005, $1.00. */
 export const price = (n: number | null | undefined) => (n == null || !Number.isFinite(n) ? "—" : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: n !== 0 && Math.abs(n) < 0.01 ? 6 : 4 })}`);
 /** A share (0 to 1) as a percentage. */
 export const pct = (x: number | null | undefined) => (x == null || !Number.isFinite(x) ? "—" : `${Math.round(x * 1000) / 10}%`);
@@ -168,11 +168,11 @@ export function PriceTable({ p, holders }: { p: CrewProfile; holders?: string | 
         <thead><tr><th>Offer</th><th className="cr-num">Price</th><th className="cr-num">Holder price</th><th>Call</th></tr></thead>
         <tbody>
           {rows.length ? rows.map((r) => (
-            <tr key={r.offer}><td><b>{r.label}</b></td><td className="cr-num">{price(r.usd)}</td><td className="cr-num">{price(r.holderUsd)}</td><td className="mono dim">{r.offer}</td></tr>
+            <tr key={r.offer}><td><b>{r.label}</b></td><td className="cr-num">{p.id === "swarm" ? "from " : ""}{price(r.usd)}</td><td className="cr-num">{p.id === "swarm" ? "full quote" : price(r.holderUsd)}</td><td className="mono dim">{r.offer}</td></tr>
           )) : <tr><td colSpan={4} className="dim" style={{ whiteSpace: "normal" }}>{p.operator?.kind === "house" ? "No price is set yet: this crew is in preview, only the free sample runs." : "Prices are set by the operator, not by NIGHTSHIFT: see its endpoint."}</td></tr>}
         </tbody>
       </table>
-      {rows.length > 0 && <p className="st-note svc-pad">USDC on Base over x402, paid per call: no account, no subscription. {holders ?? HOLDER_FALLBACK}</p>}
+      {rows.length > 0 && <p className="st-note svc-pad">USDC on Base over x402, paid per call: no account, no subscription. {p.id === "swarm" ? "The free quote sets the exact price for 10 minutes. No holder discount." : holders ?? HOLDER_FALLBACK}</p>}
     </div>
   );
 }
@@ -198,7 +198,18 @@ export function BuyBox({ p }: { p: CrewProfile }) {
     <div className="st-two">
       <section className="st-panel">
         <h3>Over HTTP (x402)</h3>
-        {routes.length ? (
+        {p.id === "swarm" ? (
+          <>
+            <ol className="st-steps">
+              <li>Call <code>/api/v1/swarm/quote</code> with a kind and a brief (20–1500 characters). Audits also need a public GitHub repo URL. IMD checks the exact job for free.</li>
+              <li>Call the returned <code>pay</code> URL to get its x402 terms. Quotes expire after 10 minutes and cost the full quoted price.</li>
+              <li>Sign those terms and call the same pay URL with <code>PAYMENT-SIGNATURE</code>. USDC settles before NIGHTSHIFT orders the job. If IMD fails, NIGHTSHIFT records the refund owed and alerts the owner.</li>
+              <li>Keep the <code>orderToken</code> returned once. Read status and results free at <code>/api/v1/swarm/jobs/ORDER_ID?token=ORDER_TOKEN</code>. Retry pending payments with the same authorization.</li>
+            </ol>
+            <Copy label="1 · free example quote" code={`curl ${sh(p.sample.href)}`} />
+            <Copy label="2 · pay the quote's pay URL" code={'curl -H "PAYMENT-SIGNATURE: $PAYMENT" "$PAY_URL"'} />
+          </>
+        ) : routes.length ? (
           <>
             <div className="st-code">{routes.map((r) => <div key={r.url}><span>{r.note ?? r.method}</span><code>{r.method} {r.url}</code></div>)}</div>
             <ol className="st-steps">

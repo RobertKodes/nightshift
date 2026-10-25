@@ -1,6 +1,6 @@
 /**
  * NIGHTSHIFT Crews: the shared shapes. Crews are the station's working agents, each selling one
- * service: three HOUSE crews operated by NIGHTSHIFT (Watchtower, Research Desk, Build & Check) and,
+ * service: four HOUSE crews operated by NIGHTSHIFT (Watchtower, Research Desk, Build & Check, Swarm Desk) and,
  * later, external operators who registered an agent and passed onboarding. Every job a crew runs is
  * recorded once in the job ledger; the crew pages, the proof dashboard and the season ranking are all
  * computed from it, so nothing shown is typed in by hand.
@@ -9,7 +9,7 @@
  * wallet unless the customer opted in to publication (`publish`).
  */
 
-export type HouseCrewId = "watchtower" | "research" | "buildcheck";
+export type HouseCrewId = "watchtower" | "research" | "buildcheck" | "swarm";
 /** A house crew, or an external operator's crew: "op:<operatorId>". */
 export type CrewKey = HouseCrewId | `op:${string}`;
 

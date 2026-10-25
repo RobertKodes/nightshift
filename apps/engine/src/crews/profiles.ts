@@ -10,22 +10,23 @@ export const HOUSE_CREWS: { id: HouseCrewId; name: string }[] = [
   { id: "watchtower", name: "Watchtower" },
   { id: "research", name: "Research Desk" },
   { id: "buildcheck", name: "Build & Check" },
+  { id: "swarm", name: "Swarm Desk" },
 ];
 
 /** $SHIFT on Ethereum (IMD launch #2124): a real ERC-20 with a Uniswap v4 hook, used as Watchtower's sample. */
 const SHIFT = "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac";
-export const HOLDER_NOTE = "Holders of 500,000+ $SHIFT (wallet plus staked), a NIGHT FROG or a Night Watcher pay half on every house crew.";
+export const HOLDER_NOTE = "Holders of 500,000+ $SHIFT (wallet plus staked), a NIGHT FROG or a Night Watcher pay half on house checks and reports. Swarm Desk orders cost the full quoted price.";
 const NO_RECURRING = "No recurring charges: each call is paid once over x402 (USDC on Base).";
 
 export type HousePrice = { offer: string; label: string; usd: number; holderUsd: number; crew: HouseCrewId };
 
-export function houseProfiles(input: { prices: HousePrice[]; metrics: (crew: CrewKey) => CrewMetrics; base: string }): CrewProfile[] {
+export function houseProfiles(input: { prices: HousePrice[]; metrics: (crew: CrewKey) => CrewMetrics; base: string; swarmEnabled?: boolean; swarmDailyImd?: number }): CrewProfile[] {
   const { base } = input;
   const price = (crew: HouseCrewId) => input.prices.filter((p) => p.crew === crew).map(({ offer, label, usd, holderUsd }) => ({ offer, label, usd, holderUsd }));
   const house = { kind: "house", name: "NIGHTSHIFT" } as const;
   const make = (id: HouseCrewId, p: Omit<CrewProfile, "id" | "name" | "operator" | "pricing" | "metrics" | "status">): CrewProfile => {
     const pricing = price(id);
-    return { id, name: HOUSE_CREWS.find((c) => c.id === id)!.name, operator: house, ...p, pricing, metrics: input.metrics(id), status: pricing.length ? "live" : "preview" };
+    return { id, name: HOUSE_CREWS.find((c) => c.id === id)!.name, operator: house, ...p, pricing, metrics: input.metrics(id), status: pricing.length && (id !== "swarm" || input.swarmEnabled) ? "live" : "preview" };
   };
   return [
     make("watchtower", {
@@ -58,6 +59,13 @@ export function houseProfiles(input: { prices: HousePrice[]; metrics: (crew: Cre
         HOLDER_NOTE,
       ],
       buy: { http: `GET ${base}/api/v1/buildcheck?url={url}`, mcpTool: null, docs: `${base}/api/crews/buildcheck` },
+    }),
+    make("swarm", {
+      service: "Hire the IMD swarm with USDC: websites, research, audits and contracts built by 1,000+ IMD agents",
+      customer: "Agents with USDC on Base who need new work built by the IMD swarm.",
+      sample: { label: "Free IMD-checked quote (MCP: swarm_quote)", href: `${base}/api/v1/swarm/quote?kind=research&brief=Research%20the%20IMD%20agent%20ecosystem%20with%20sources`, free: true },
+      limits: ["Quotes last 10 minutes. Pay the exact quote in USDC on Base, from $3.00; no holder discount.", "One job.open per order, costing 0.5 IMD on Ethereum; at most 3 jobs in flight.", `At most ${input.swarmDailyImd ?? 3} IMD per UTC day. Off unless SWARM_DESK=1.`, "Keep the order token returned once with the paid answer: status and result links are free.", "If IMD fails after payment, NIGHTSHIFT records the refund owed and alerts the owner.", NO_RECURRING],
+      buy: { http: `GET ${base}/api/v1/swarm/quote?kind={website|research|audit|contract}&brief={brief}&repo={audit GitHub URL}; then GET ${base}/api/v1/swarm/order/{quoteId}`, mcpTool: "swarm_quote", docs: `${base}/api/crews/swarm` },
     }),
   ];
 }

@@ -98,7 +98,7 @@ export function ServicesPage() {
     <div className="st-room">
       <Hero title="House services" deck="RUN BY NIGHTSHIFT" line="Three services NIGHTSHIFT runs itself, sold per call to AI agents, bots and traders over x402 and MCP: the answers we already read from IMD and the chain, packaged and cited.">
         <div className="st-stats">
-          <Stat label="Token Verdict" value="$0.02" note="deep $0.25 · 1 free a day" />
+          <Stat label="Token Verdict" value="$0.01" note="deep $0.25 · 1 free a day" />
           <Stat label="Hook Inspector" value="$0.05" note="explained $0.50" />
           <Stat label="IMD Data Feed" value="$0.001" note="per call · samples free" />
         </div>
@@ -193,7 +193,7 @@ export function VerdictPage() {
   return (
     <div className="st-room">
       <Hero title="Token Verdict" deck="BEFORE YOU BUY" line="No issues found, caution or avoid for an Ethereum token, with every reason tied to its evidence. Made for IMD launches and Uniswap v4 hook tokens, where nobody else looks.">
-        <div className="st-stats"><Stat label="Quick" value="$0.02" note="the verdict" /><Stat label="Deep" value="$0.25" note="+ hook inspection, IMD checks, memo" /><Stat label="Free" value="1 a day" note="per IP, below" /></div>
+        <div className="st-stats"><Stat label="Quick" value="$0.01" note="the verdict" /><Stat label="Deep" value="$0.25" note="+ hook inspection, IMD checks, memo" /><Stat label="Free" value="1 a day" note="per IP, below" /></div>
       </Hero>
       <div className="st-body">
         <h2>Try it free</h2>

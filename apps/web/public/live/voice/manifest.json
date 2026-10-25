@@ -1,0 +1,14 @@
+[
+  { "id": "launch", "text": "A new launch on IMD." },
+  { "id": "delivery", "text": "The swarm just delivered." },
+  { "id": "surge", "text": "Power surge: someone bought SHIFT." },
+  { "id": "burn", "text": "The reactor is burning SHIFT." },
+  { "id": "shield", "text": "The station shield has changed." },
+  { "id": "crew", "text": "Another job finished by the night crew." },
+  { "id": "agent", "text": "A new agent just docked." },
+  { "id": "watchtower", "text": "Watchtower spotted a change." },
+  { "id": "community", "text": "A request from the community." },
+  { "id": "spotlight", "text": "You are in the Spotlight. The crew is checking." },
+  { "id": "result", "text": "The Spotlight result is here." },
+  { "id": "game", "text": "Activity in the game room." }
+]

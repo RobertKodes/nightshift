@@ -9,7 +9,7 @@ const A = "0x1111111111111111111111111111111111111111";
 const B = "0x2222222222222222222222222222222222222222";
 const DEV = "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5";
 const T0 = Date.parse("2026-10-25T10:00:00Z");
-const pay = (payer: string, usd = 0.05, extra: { network?: string; test?: boolean; sim?: boolean } = {}) => ({ usd, payer, tx: "0xabc", network: extra.network ?? "eip155:8453", ...extra });
+const pay = (payer: string, usd = 0.01, extra: { network?: string; test?: boolean; sim?: boolean } = {}) => ({ usd, payer, tx: "0xabc", network: extra.network ?? "eip155:8453", ...extra });
 
 describe("job ledger", () => {
   it("counts the same payment key once", () => {
@@ -20,7 +20,7 @@ describe("job ledger", () => {
     l.done(a.id, { summary: "Checked 1 token: no changes" });
     l.start({ key: `${A}:nonce-1`, crew: "watchtower", operator: "house", kind: "watch.check", free: false, payment: pay(A) });
     const m = l.metrics("watchtower");
-    expect(m).toMatchObject({ jobs: 1, done: 1, paidJobs: 1, customerPaidJobs: 1, revenueUsd: 0.05, payingWallets: 1, repeatWallets: 0 });
+    expect(m).toMatchObject({ jobs: 1, done: 1, paidJobs: 1, customerPaidJobs: 1, revenueUsd: 0.01, payingWallets: 1, repeatWallets: 0 });
   });
 
   it("classes payments: our wallets internal, simulations and test networks test, the rest customer", () => {
@@ -89,7 +89,7 @@ describe("job ledger", () => {
     const pub = publicJob(l.done(j.id, { summary: "3 checks: 3 pass" }));
     const text = JSON.stringify(pub);
     for (const secret of [A, "telegram", "svc.example", "0xabc", "w:"]) expect(text).not.toContain(secret);
-    expect(pub).toMatchObject({ paid: true, payment: { usd: 0.05, network: "eip155:8453", class: "customer" }, summary: "3 checks: 3 pass" });
+    expect(pub).toMatchObject({ paid: true, payment: { usd: 0.01, network: "eip155:8453", class: "customer" }, summary: "3 checks: 3 pass" });
     const shown = publicJob(l.start({ crew: "buildcheck", operator: "house", kind: "buildcheck.report", free: true, publish: true, target: "https://svc.example/mcp" }));
     expect(shown.target).toBe("https://svc.example/mcp");
   });

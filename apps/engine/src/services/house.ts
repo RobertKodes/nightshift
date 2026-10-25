@@ -16,6 +16,9 @@ import { HOLDER_SHIFT, OFFERS, type Offer, holderPriceOf } from "./catalog.js";
 import { context } from "./context.js";
 import { liveNet, liveRpc } from "./net.js";
 import { type Payer, type SettleTerms, services } from "./routes.js";
+import { IMD_MAINNET } from "@nightshift/imd";
+import { SwarmDesk } from "../crews/swarm.js";
+import { saleKey } from "../checkout.js";
 
 /**
  * NIGHTSHIFT Services, the house company: the platform's own seller for the house services.
@@ -34,7 +37,7 @@ export function ensureHouse(engine: Engine): Company {
     try { wallet = engine.vault.account(HOUSE_ID).address; } catch { wallet = engine.vault.create(HOUSE_ID); }
     c = {
       id: HOUSE_ID, slug: HOUSE_ID, name: "NIGHTSHIFT Services",
-      idea: "House services run by NIGHTSHIFT: Token Verdict, Hook Inspector and the IMD Data Feed, sold per call over x402 and MCP.",
+      idea: "House services run by NIGHTSHIFT: Token Verdict, Hook Inspector, IMD Data Feed and Swarm Desk, sold per call over x402 and MCP.",
       mission: "Answer the questions agents and traders ask about the IMD ecosystem before they buy, with evidence.",
       audience: "AI agents, trading bots and IMD launch teams",
       createdAt: now, owner: config.platformTreasury ? config.platformTreasury.toLowerCase() : null, wallet,
@@ -83,7 +86,7 @@ export function enginePayer(engine: Engine): Payer {
       try { payment = decodeHeader<PaymentPayload>(header); } catch { return { ok: false, status: 402, reason: "invalid_payload", challenge: true }; }
       const auth = payment?.payload?.authorization;
       // the holder price is the paying wallet's: whoever signs pays half only if that wallet holds
-      const half = Boolean(auth?.from && /^0x[0-9a-fA-F]{40}$/.test(auth.from) && auth.value && BigInt(auth.value) < o.priceUsdc && (await holder(auth.from)));
+      const half = Boolean(!o.quoted && auth?.from && /^0x[0-9a-fA-F]{40}$/.test(auth.from) && auth.value && BigInt(auth.value) < o.priceUsdc && (await holder(auth.from)));
       const req = requirement(config.salesChainId, c.wallet, half ? holderPriceOf(o) : o.priceUsdc);
       // a retry of a payment already settled is checked as of its first try, at the price paid then
       const prior = auth?.from && auth.nonce ? engine.checkout.recordOf(auth.from, auth.nonce) : undefined;
@@ -116,7 +119,7 @@ export function enginePayer(engine: Engine): Payer {
 
 /** The live services: chain.ts's Ethereum client, the public APIs, the house payer, and the house crews. */
 export function liveHouseServices(engine: Engine) {
-  ensureHouse(engine);
+  const house = ensureHouse(engine);
   const ctx = context({ net: liveNet, rpc: liveRpc(eth as never), now: Date.now, etherscanKey: config.etherscanKey, watchtowerUrl: config.watchtowerUrl });
   const mind = engine.mind;
   // Watchtower reads through the same Ethereum and DexScreener doors as the other house services
@@ -126,7 +129,27 @@ export function liveHouseServices(engine: Engine) {
     onJob: recordWatchJob,
   });
   setLiveWatchtower(wt);
+  const plane = engine.plane(house);
+  const swarm = new SwarmDesk({
+    file: join(config.dataDir, "swarm-desk.json"),
+    plane: { ...plane, open: async (a, body, hooks) => { await engine.store.flush(); return plane.open(a, body, hooks); } },
+    enabled: () => config.swarmDesk && config.mode === "live" && config.salesChainId === 8453,
+    dailyImd: () => config.swarmDeskDailyImd,
+    price: () => ({ usd: config.imdUsd, at: config.imdUsdAt, pinned: config.imdUsdPinned }),
+    funds: async () => {
+      const [imd, gas, fee] = await Promise.all([
+        eth.readContract({ address: IMD_MAINNET, abi: erc20Abi, functionName: "balanceOf", args: [house.wallet] }),
+        eth.getBalance({ address: house.wallet }), eth.getGasPrice(),
+      ]);
+      return { imd, eth: gas, gasRequired: fee * 120_000n * 2n };
+    },
+    settled: (payer, nonce) => { const s = engine.store.settlements.get(saleKey(payer, nonce)); return s?.booked && s.hash ? s.hash : null; },
+    pending: (payer, nonce) => engine.store.settlements.has(saleKey(payer, nonce)),
+    record: recordPaid, alert: (text, topic) => engine.alert(text, topic),
+  });
+  swarm.start();
   return services(ctx, enginePayer(engine), {
+    swarm,
     watchtower: wt,
     telegramLink: (code) => (config.telegramBotName ? `https://t.me/${config.telegramBotName}?start=wt_${code}` : null),
     research: mind ? (q) => researchReport({ ask: (x) => mind.ask(x, engine.llm, config.chatModel), search: (x) => mind.search(x, 12) }, q) : undefined,

@@ -188,7 +188,7 @@ describe("x402 on the services", () => {
     type Bz = { info: { input: unknown }; schema: { properties: { output: { properties: { example: { required: string[] } } } } } };
     const b = out.body as X402.Challenge & { extensions: { bazaar: Bz } };
     expect(b.x402Version).toBe(2);
-    expect(b.accepts[0]).toMatchObject({ scheme: "exact", network: "eip155:8453", amount: "20000", payTo, asset: P.USDC[8453]!.address });
+    expect(b.accepts[0]).toMatchObject({ scheme: "exact", network: "eip155:8453", amount: "10000", payTo, asset: P.USDC[8453]!.address });
     expect(b.resource.url).toBe(`https://getnightshift.tech/api/v1/verdict/ethereum/${SHIFT}?depth=quick`);
     expect(b.resource.description.length).toBeLessThan(500);
     expect(b.extensions.bazaar.info.input).toMatchObject({ type: "http", method: "GET" });
@@ -209,14 +209,14 @@ describe("x402 on the services", () => {
     const s = R.services(ctx, { ...payer, holder: async (w) => w.toLowerCase() === holderWallet.toLowerCase() });
     type Ch = X402.Challenge & { priceUsd: number; holderPrice: boolean; holderPriceUsd: number; holders: string };
     const full = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`)))!.body as Ch;
-    expect(full.accepts[0]!.amount).toBe("20000");
-    expect(full).toMatchObject({ priceUsd: 0.02, holderPrice: false, holderPriceUsd: 0.01 });
+    expect(full.accepts[0]!.amount).toBe("10000");
+    expect(full).toMatchObject({ priceUsd: 0.01, holderPrice: false, holderPriceUsd: 0.005 });
     expect(full.holders).toMatch(/500,000\+ \$SHIFT/);
     const half = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, { holder: holderWallet })))!.body as Ch;
-    expect(half.accepts[0]!.amount).toBe("10000");
-    expect(half).toMatchObject({ priceUsd: 0.01, holderPrice: true });
+    expect(half.accepts[0]!.amount).toBe("5000");
+    expect(half).toMatchObject({ priceUsd: 0.005, holderPrice: true });
     const other = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, { holder: privateKeyToAccount(generatePrivateKey()).address })))!.body as Ch;
-    expect(other.accepts[0]!.amount).toBe("20000");
+    expect(other.accepts[0]!.amount).toBe("10000");
     const header = (await s.handle(io(`/api/v1/hook/${HOOK}`, {}, { "x-holder-wallet": holderWallet })))!.body as Ch;
     expect(header.accepts[0]!.amount).toBe("25000");
   });
@@ -228,10 +228,10 @@ describe("x402 on the services", () => {
     const s = R.services(ctx, payer);
     const buyer = privateKeyToAccount(generatePrivateKey());
     const pay = async (amount: bigint) => P.encodeHeader(await P.signPayment(buyer, P.requirement(8453, payTo, amount)));
-    const short = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, {}, { "payment-signature": await pay(10_000n) })))!;
+    const short = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, {}, { "payment-signature": await pay(5_000n) })))!;
     expect(short.status).toBe(402);
     expect((short.body as X402.Challenge).error).toBe("insufficient_amount");
-    const ok = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, {}, { "payment-signature": await pay(20_000n) })))!;
+    const ok = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, {}, { "payment-signature": await pay(10_000n) })))!;
     expect(ok.status).toBe(200);
     expect((ok.body as { verdict: string; payment: { tx: string } }).verdict).toBe("no_issues_found");
     expect((ok.body as { payment: { tx: string } }).payment.tx).toMatch(/^0x0+aa$/);
@@ -240,7 +240,7 @@ describe("x402 on the services", () => {
     // a token the tape has never seen: the read fails, the answer is 503 and the payment is not settled
     const quiet = console.error;
     console.error = () => {}; // the handler logs the failed read
-    const fail = (await s.handle(io("/api/v1/verdict/ethereum/0x9999999999999999999999999999999999999999", {}, { "payment-signature": await pay(20_000n) })).finally(() => { console.error = quiet; }))!;
+    const fail = (await s.handle(io("/api/v1/verdict/ethereum/0x9999999999999999999999999999999999999999", {}, { "payment-signature": await pay(10_000n) })).finally(() => { console.error = quiet; }))!;
     expect(fail.status).toBe(503);
     expect(settled).toHaveLength(1);
   });
@@ -278,7 +278,7 @@ describe("caching and rate limits", () => {
     expect((first.body as { demo: { free: boolean; left: number } }).demo).toMatchObject({ free: true, left: 0 });
     const second = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, { demo: "1" })))!;
     expect(second.status).toBe(429);
-    expect((second.body as { payment: X402.Challenge }).payment.accepts[0]!.amount).toBe("20000");
+    expect((second.body as { payment: X402.Challenge }).payment.accepts[0]!.amount).toBe("10000");
     expect(second.headers!["PAYMENT-REQUIRED"]).toBeTruthy();
     const otherIp = (await s.handle({ ...io(`/api/v1/verdict/ethereum/${SHIFT}`, { demo: "1" }), ip: "198.51.100.1" }))!;
     expect(otherIp.status).toBe(200);
@@ -316,12 +316,12 @@ describe("MCP and discovery", () => {
     const client = new Client({ name: "t", version: "1" });
     await client.connect(b);
     const tools = (await client.listTools()).tools.map((t) => t.name);
-    expect(tools).toEqual(expect.arrayContaining(M.SERVICE_TOOLS));
+    expect(tools).toEqual(expect.arrayContaining([...M.SERVICE_TOOLS, ...M.CREW_TOOLS]));
     const paid = await client.callTool({ name: "token_verdict", arguments: { token: SHIFT } });
     expect(paid.isError).toBe(true);
     const terms = JSON.parse((paid.content as { text: string }[])[0]!.text);
     expect(terms.paymentRequired).toBe(true);
-    expect(terms.challenge.accepts[0].amount).toBe("20000");
+    expect(terms.challenge.accepts[0].amount).toBe("10000");
     const flags = await client.callTool({ name: "hook_flags", arguments: { address: HOOK } });
     expect(JSON.parse((flags.content as { text: string }[])[0]!.text).flags.hex).toBe("0x20cc");
     await client.close();
@@ -331,7 +331,7 @@ describe("MCP and discovery", () => {
     for (const o of K.OFFERS) expect(o.description.length, o.id).toBeLessThan(500);
     const items = K.catalogItems("https://getnightshift.tech", 8453, "0x1111111111111111111111111111111111111111");
     expect(items).toHaveLength(K.OFFERS.length);
-    expect(items[0]).toMatchObject({ type: "http", x402Version: 2, accepts: [{ amount: "20000", network: "eip155:8453" }] });
+    expect(items[0]).toMatchObject({ type: "http", x402Version: 2, accepts: [{ amount: "10000", network: "eip155:8453" }] });
     expect((items[0]!.metadata.bazaar as { info: { output: { example: unknown } } }).info.output.example).toMatchObject({ verdict: "no_issues_found" });
     // every service's block passes x402's own validation, the check the CDP facilitator runs before listing
     for (const o of K.OFFERS) expect(validateDiscoveryExtension(K.bazaarOf(o).bazaar as never), o.id).toEqual({ valid: true });

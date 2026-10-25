@@ -55,6 +55,7 @@ const InfoPage = lazy(() => import("./station/Rooms").then((x) => ({ default: x.
 const EconomyPage = lazy(() => import("./station/EconomyCommand").then((x) => ({ default: x.EconomyPage })));
 const CommandPage = lazy(() => import("./station/EconomyCommand").then((x) => ({ default: x.CommandPage })));
 const LivePage = lazy(() => import("./LivePage").then((x) => ({ default: x.LivePage })));
+const NightshiftLivePage = lazy(() => import("./live/LivePage").then((x) => ({ default: x.LivePage })));
 const TgMoved = lazy(() => import("./TgMoved").then((x) => ({ default: x.TgMoved })));
 const ServicesPage = lazy(() => import("./station/Services").then((x) => ({ default: x.ServicesPage })));
 const MindPage = lazy(() => import("./station/Mind").then((x) => ({ default: x.MindPage })));
@@ -78,6 +79,7 @@ function App() {
   // The gate: choose your way. The cinematic landing is now the story; every other page lives in a room.
   if (seg.length === 0) return <Gate />;
   if (seg[0] === "story") return <Landing />;
+  if (seg[0] === "live") return <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#040611" }} />}><NightshiftLivePage /></Suspense>;
   // Where the Telegram Mini App was: the games are on the website and its app now. Outside Telegram
   // this sends the visitor to the same place on the site; inside a Mini App it says the Game Room moved.
   if (seg[0] === "tg") { document.title = "NIGHTSHIFT Game Room"; return <Suspense fallback={<div style={{ minHeight: "100dvh", background: "#03020a" }} />}><TgMoved /></Suspense>; }
@@ -157,9 +159,15 @@ if ("serviceWorker" in navigator && location.protocol === "https:") void navigat
 class Crash extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
   static getDerivedStateFromError(error: Error) { return { error }; }
-  componentDidCatch(error: Error) { console.error("page crashed", error); }
+  componentDidCatch(error: Error) { console.error("page crashed", error); if (location.pathname === "/live") setTimeout(() => location.reload(), 30_000); }
   render() {
     if (!this.state.error) return this.props.children;
+    if (location.pathname === "/live") {
+      let saved: { stats?: { agentsOnline?: number; jobsToday?: number; launchesToday?: number; priceUsd?: number } } = {};
+      try { saved = JSON.parse(localStorage.getItem("nightshift-live-state") ?? "{}"); } catch { /* keep the station visible */ }
+      const value = (n: unknown) => typeof n === "number" && Number.isFinite(n) ? n : "—";
+      return <div style={{ position: "fixed", inset: 0, overflow: "hidden", color: "#edf1fb", background: "#040611 url('/art/station/gate-station-2400x1350.webp') center/cover", padding: "5vw", fontFamily: "Space Grotesk, sans-serif" }}><img src="/brand/nightshift-wordmark-mono.svg" alt="NIGHTSHIFT LIVE" style={{ width: "20vw" }} /><p style={{ color: "#c1fa79" }}>LIVE · LAST RECEIVED STATE · RECONNECTING</p><h1>The night never stops.</h1><p>IMD agents: {value(saved?.stats?.agentsOnline)} · Jobs observed today: {value(saved?.stats?.jobsToday)} · Launches today: {value(saved?.stats?.launchesToday)} · SHIFT: {value(saved?.stats?.priceUsd)}</p><p style={{ position: "absolute", bottom: "4vw" }}>Join t.me/getnightshift · /ask · /watchtower · /buildcheck</p></div>;
+    }
     return (
       <div className="docs" style={{ maxWidth: 560, margin: "16vh auto", textAlign: "center" }}>
         <h1>Something went wrong on this page.</h1>
@@ -174,7 +182,7 @@ class Crash extends Component<{ children: ReactNode }, { error: Error | null }> 
 /** The banners that follow you across the site (a waiting table, a staked game): never on /tg, where the Mini App was. */
 function Banners() {
   const path = useRoute();
-  return path === "/tg" || path.startsWith("/tg/") ? null : <><WaitingBanner /><StakedBanner /></>;
+  return path === "/live" || path.startsWith("/live/") || path === "/tg" || path.startsWith("/tg/") ? null : <><WaitingBanner /><StakedBanner /></>;
 }
 
 createRoot(document.getElementById("root")!).render(<StrictMode><Crash><SessionProvider><App /><Banners /></SessionProvider></Crash></StrictMode>);

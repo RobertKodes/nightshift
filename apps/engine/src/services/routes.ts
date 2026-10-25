@@ -12,12 +12,14 @@ import { type VerdictReport, ServiceError, tokenVerdict } from "./verdict.js";
 import { parseTarget } from "../crews/buildcheck.js";
 import type { Watchtower } from "../watchtower/index.js";
 import { researchQuestion } from "../crews/research.js";
+import { SwarmError, type SwarmDesk } from "../crews/swarm.js";
 
 /**
  * The house services over HTTP: /api/v1/verdict, /api/v1/hook, /api/v1/imd/* and /openapi.json.
  * Paid calls follow x402 v2 like every product on NIGHTSHIFT: no payment → 402 with the terms;
  * a signed payment is checked, the answer is computed (a failure is never charged), then the
- * payment is settled on Base and the answer returned with the settlement.
+ * payment is settled on Base and the answer returned with the settlement. Swarm Desk settles first,
+ * then orders the checked IMD work and records a refund owed if ordering fails.
  */
 export interface Payer {
   mode: "sim" | "live";
@@ -44,6 +46,7 @@ export type SettleTerms = X402Offer;
 
 export type Io = { method: string; path: string; query: URLSearchParams; header(name: string): string | undefined; ip: string; base: string; limited(key: string, n: number, ms: number): boolean };
 export type Out = { status: number; body: unknown; headers?: Record<string, string> };
+export type PaidRecord = { payer: string; nonce: string; usd: number; tx: string | null; network: string; ok: boolean; summary?: string; error?: string; sim?: boolean; kind?: string; pending?: boolean; costUsd?: number };
 
 /**
  * What the house crews add to the router: the Research Desk and Build & Check answers, and the job
@@ -52,7 +55,8 @@ export type Out = { status: number; body: unknown; headers?: Record<string, stri
 export type CrewDeps = {
   research?(q: string): Promise<unknown>;
   buildCheck?(url: string): Promise<unknown>;
-  record?(o: Offer, r: { payer: string; nonce: string; usd: number; tx: string | null; network: string; ok: boolean; summary?: string; error?: string; sim?: boolean }): void;
+  record?(o: Offer, r: PaidRecord): void;
+  swarm?: SwarmDesk;
   watchtower?: Watchtower;
   /** The bot link that turns on a watch's Telegram alerts. */
   telegramLink?(code: string): string | null;
@@ -100,7 +104,7 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
         sameSymbolLaunches: same,
         hook: hk && hk !== "0x0000000000000000000000000000000000000000" ? { address: hk, flags: decodeFlags(hk).hex, template: KNOWN_HOOKS[hk]?.template ?? (l && hookOf(l)?.address.toLowerCase() === hk ? hookOf(l)!.name : null) } : null,
         verdict: null, next: { quick: `/api/v1/verdict/ethereum/${t}?depth=quick`, deep: `/api/v1/verdict/ethereum/${t}?depth=deep`, demo: `/api/v1/verdict/ethereum/${t}?depth=quick&demo=1` },
-        note: "A free preview: no verdict. The verdict ($0.02 quick, $0.25 deep) adds verified source, owner powers, holders, a buy-then-sell simulation and the reasons with their evidence. One quick verdict per IP per day is free with demo=1.",
+        note: "A free preview: no verdict. The verdict ($0.01 quick, $0.25 deep) adds verified source, owner powers, holders, a buy-then-sell simulation and the reasons with their evidence. One quick verdict per IP per day is free with demo=1.",
         generatedAt: new Date(ctx.d.now()).toISOString(),
       };
     })).v;
@@ -122,6 +126,7 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
     return Boolean(w && /^0x[0-9a-fA-F]{40}$/.test(w) && payer.holder && (await payer.holder(w).catch(() => false)));
   };
   function challengeOf(o: Offer, io: Io, error?: string, holder = false) {
+    holder = holder && !o.quoted;
     const req = terms(o, holder ? holderPriceOf(o) : o.priceUsdc);
     if (!req) return null;
     const resource = { url: `${io.base}${io.path}${io.query.toString() ? `?${io.query}` : ""}`, description: o.description, mimeType: "application/json", serviceName: "NIGHTSHIFT Services", tags: ["nightshift", o.kind, ...o.id.split("-").slice(0, 2)], ...(io.base.startsWith("https://") ? { iconUrl: `${io.base}/app/icon-512.png` } : {}) };
@@ -180,10 +185,34 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
         return { status: 200, body: {
           provider: "NIGHTSHIFT Services", runBy: RUN_BY, house: true, x402Version: 2, network: `eip155:${payer.chainId}`, payTo: payer.payTo(), mode: payer.mode,
           holders: HOLDER_RULE,
-          offers: OFFERS.map((o) => ({ id: o.id, name: o.name, pitch: o.pitch, priceUsd: usdOf(o), holderPriceUsd: Number(holderPriceOf(o)) / 1e6, route: `${io.base}${o.route}`, example: `${io.base}${o.example}`, page: `${io.base}${o.page}`, description: o.description, accepts: terms(o) ? [terms(o)] : [] })),
+          offers: OFFERS.map((o) => ({ id: o.id, name: o.name, pitch: o.pitch, priceUsd: usdOf(o), holderPriceUsd: Number(holderPriceOf(o)) / 1e6, ...(o.quoted ? { priceIsMinimum: true, quote: `${io.base}/api/v1/swarm/quote`, holderDiscount: false } : {}), route: `${io.base}${o.route}`, example: `${io.base}${o.example}`, page: `${io.base}${o.page}`, description: o.description, accepts: o.quoted ? [] : terms(o) ? [terms(o)] : [] })),
           free: { verdictPreview: `${io.base}/api/v1/verdict/ethereum/<token>/preview`, verdictDemo: "one quick verdict per IP per day: add demo=1", hookFlags: `${io.base}/api/v1/hook/<address>/flags`, feedSample: "add sample=1 to any /api/v1/imd/* call" },
           mcp: `${io.base}/mcp/public`, openapi: `${io.base}/openapi.json`,
         } };
+      }
+      if (seg[2] === "swarm") {
+        const desk = crews.swarm;
+        if (!desk) return { status: 503, body: { error: "Swarm Desk is off in this engine." } };
+        if (io.method !== "GET") return { status: 405, body: { error: "GET only" } };
+        if (io.limited("svc-swarm", 10, 60_000)) return { status: 429, body: { error: "slow down: 10 Swarm Desk calls a minute per IP" } };
+        if (seg[3] === "quote" && !seg[4]) return { status: 200, body: await desk.quote(io.query.get("kind"), io.query.get("brief"), io.query.get("repo"), io.base) };
+        if (seg[3] === "jobs" && seg[4] && !seg[5]) return { status: 200, body: await desk.job(seg[4], io.query.get("token")) };
+        if (seg[3] === "order" && seg[4] && !seg[5]) {
+          const o = desk.quotedOffer(seg[4]);
+          const sig = io.header("payment-signature") ?? io.header("x-payment");
+          if (!sig) return p402(o, io, "payment required");
+          const c = await payer.check(o, sig, io.ip);
+          if (!c.ok) return c.challenge ? p402(o, io, c.reason) : { status: c.status, body: { error: c.reason } };
+          if (payer.mode !== "live" || payer.chainId !== 8453) return { status: 503, body: { error: "Swarm Desk requires live USDC payments on Base." } };
+          const auth = c.payment.payload.authorization;
+          if (BigInt(auth.value) !== o.priceUsdc) return p402(o, io, "Pay the exact quoted price. Swarm Desk has no holder discount.");
+          const ch = challengeOf(o, io)!;
+          const out = await desk.order(seg[4], { payer: c.payer, nonce: auth.nonce, usd: Number(BigInt(auth.value)) / 1e6, network: `eip155:${payer.chainId}`, validBefore: Number(auth.validBefore) }, () => payer.settle(o, c.payment, { requirement: ch.accepts[0]!, resource: ch.resource, extensions: ch.extensions }), (e) => payer.isPending(e));
+          const body = out.body as { payment?: { tx?: string } };
+          if (body.payment?.tx) out.headers = { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: body.payment.tx, network: `eip155:${payer.chainId}`, payer: c.payer }) };
+          return out;
+        }
+        return { status: 404, body: { error: "Swarm Desk routes: quote, order/{quoteId}, jobs/{orderId}?token=" } };
       }
       // ---- Watchtower: what changed since the last observation, once or watched for a prepaid term
       if (seg[2] === "watchtower" && (seg[3] === "check" || seg[3] === "watch") && seg[4] && seg[5] && !seg[6]) {
@@ -234,7 +263,7 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
           if (depth !== "quick") return { status: 400, body: { error: "The free demo is a quick verdict: drop depth=deep." } };
           if (!demo.take(io.ip)) {
             const ch = challengeOf(o, io, "free demo used today");
-            return { status: 429, body: { error: "Your free verdict for today is used. Pay $0.02 per verdict over x402 (USDC on Base), or come back tomorrow.", nextFreeAt: new Date(demo.resetsAt()).toISOString(), payment: ch }, headers: ch ? { "PAYMENT-REQUIRED": encodeHeader(ch) } : {} };
+            return { status: 429, body: { error: "Your free verdict for today is used. Pay $0.01 per verdict over x402 (USDC on Base), or come back tomorrow.", nextFreeAt: new Date(demo.resetsAt()).toISOString(), payment: ch }, headers: ch ? { "PAYMENT-REQUIRED": encodeHeader(ch) } : {} };
           }
           return { status: 200, body: { ...(await verdict(seg[3], seg[4], "quick")), demo: { free: true, left: demo.left(io.ip), nextFreeAt: new Date(demo.resetsAt()).toISOString() } } };
         }
@@ -270,6 +299,7 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
       }
       return { status: 404, body: { error: "not found", see: `${io.base}/api/v1/services` } };
     } catch (e) {
+      if (e instanceof SwarmError) return { status: e.status, body: { error: e.message, ...(e.blockers ? { blockers: e.blockers } : {}) } };
       const st = e instanceof ServiceError ? e.status : (e as { status?: number }).status;
       if (typeof st === "number") return { status: st, body: { error: (e as Error).message } };
       console.error("services", e);
