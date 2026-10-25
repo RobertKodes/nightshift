@@ -44,6 +44,8 @@ export type Job = {
   summary: string | null;
   /** The customer allowed this job's summary and target to be shown publicly. */
   publish: boolean;
+  /** What the job ran on (a URL, an address). Kept only when `publish` is true, so a private job never stores it. */
+  target?: string | null;
   /** Attribution tag from the link that brought the customer (utm_source / via / ref), if any. */
   ref: string | null;
   /** Known operating cost of this job in USD (RPC, model and IMD spend we can measure). */

@@ -204,15 +204,15 @@ describe("hooks, launchers and NFT launches", () => {
 
 describe("the launch verdict", () => {
   it("does not hold an empty pool or an IMD repo's source against a launch", () => {
-    expect(launchVerdict(verdict("safe")).verdict).toBe("safe");
-    expect(launchVerdict(verdict("safe")).summary).toContain("No red flags at launch");
+    expect(launchVerdict(verdict("no_issues_found")).verdict).toBe("safe");
+    expect(launchVerdict(verdict("no_issues_found")).summary).toContain("No red flags at launch");
     expect(launchVerdict(verdict("caution")).verdict).toBe("caution");
     expect(launchVerdict(verdict("avoid"))).toMatchObject({ verdict: "avoid", summary: "1 red flag." });
     expect(launchVerdict(verdict("avoid")).reasons[0]).toEqual({ impact: "avoid", text: "The owner can mint without limit" });
     expect(launchVerdict(verdict("caution")).summary).toBe("1 thing to watch.");
   });
   it("still counts unverified source outside IMD", () => {
-    const v = { ...verdict("safe"), imd: { isLaunch: false } } as unknown as VerdictReport;
+    const v = { ...verdict("no_issues_found"), imd: { isLaunch: false } } as unknown as VerdictReport;
     expect(launchVerdict(v).verdict).toBe("caution");
   });
 });

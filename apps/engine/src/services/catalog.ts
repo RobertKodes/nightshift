@@ -9,7 +9,9 @@ import type { Address } from "viem";
  * Descriptions start with "Use when an agent needs…" and stay under 500 characters, as discovery
  * indexes want (researched 2026-10-20).
  */
-export type OfferId = "token-verdict-quick" | "token-verdict-deep" | "hook-inspector" | "hook-inspector-explained" | "imd-feed";
+export type OfferId = "token-verdict-quick" | "token-verdict-deep" | "hook-inspector" | "hook-inspector-explained" | "imd-feed" | "research-report" | "buildcheck-report";
+/** The house crew that runs each offer: its jobs count on that crew's page, the proof page and the season. */
+export type CrewOf = "watchtower" | "research" | "buildcheck";
 export type Offer = {
   id: OfferId; name: string; kind: ProductKind; pitch: string; priceUsdc: bigint; method: "GET";
   /** The route, with {params}, and a real example of it. */
@@ -19,6 +21,7 @@ export type Offer = {
   path: Record<string, { type: string; description: string; pattern?: string }>;
   output: { required: string[]; properties: Record<string, unknown> };
   outputExample: Record<string, unknown>;
+  crew: CrewOf;
 };
 
 const SHIFT = "0xe5e58e53d0bb204aa62c995a6c8cc8a48e60c3ac";
@@ -81,6 +84,37 @@ const feedExample = {
   next: { before: 2123, since: "2026-10-20T21:40:00.000Z" },
 };
 
+const researchOut = {
+  required: ["question", "answer", "sources", "coverage"],
+  properties: {
+    question: { type: "string" }, answer: { type: "string", description: "written only from the works in sources" },
+    sources: { type: "array", items: { type: "object", properties: { title: { type: "string" }, url: { type: "string" }, kind: { type: "string" }, date: { type: ["string", "null"] }, cited: { type: "boolean" } } } },
+    coverage: { type: "string" }, gaps: { type: "array", items: { type: "string" } }, markdown: { type: "string" }, model: { type: ["string", "null"] }, generatedAt: { type: "string" },
+    payment: { type: "object", properties: { tx: { type: "string" }, network: { type: "string" }, priceUsd: { type: "number" } } },
+  },
+};
+const researchExample = {
+  question: "What has the IMD swarm published about Uniswap v4 hooks?",
+  answer: "The swarm's audits of IMD launch hooks found … (each claim numbered against the sources below).",
+  sources: [{ title: "Audit: NightshiftHook (launch #2124)", url: "https://explorer.imd.fun/…", kind: "audit", date: "2026-10-18", cited: true }],
+  coverage: "Answered from 6 published works of the IMD swarm; nothing outside them.", gaps: ["No work covers hooks deployed outside IMD."],
+  generatedAt: "2026-10-25T12:00:00.000Z", model: "free model", payment: { tx: "0x5f2c…e1a9", network: "eip155:8453", priceUsd: 0.25 },
+};
+const buildcheckOut = {
+  required: ["target", "checks", "summary"],
+  properties: {
+    target: { type: "string" }, origin: { type: "string" }, mode: { type: "string", enum: ["quick", "full"] },
+    checks: { type: "array", items: { type: "object", properties: { id: { type: "string" }, label: { type: "string" }, status: { type: "string", enum: ["pass", "fail", "warn", "unavailable"] }, detail: { type: "string" }, reproduce: { type: "string", description: "the exact curl command to rerun it" }, ms: { type: "number" } } } },
+    summary: { type: "object", properties: { checks: { type: "integer" }, pass: { type: "integer" }, warn: { type: "integer" }, fail: { type: "integer" }, unavailable: { type: "integer" }, text: { type: "string" } } },
+    generatedAt: { type: "string" }, payment: { type: "object" },
+  },
+};
+const buildcheckExample = {
+  target: "https://getnightshift.tech/mcp/public", origin: "https://getnightshift.tech", mode: "full",
+  checks: [{ id: "mcp", label: "MCP initialize and tools/list", status: "pass", detail: "nightshift-public 1.0.0, protocol 2025-06-18, 18 tools", reproduce: "curl -s -X POST https://getnightshift.tech/mcp/public -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",…}'", ms: 412 }],
+  summary: { checks: 5, pass: 4, warn: 1, fail: 0, unavailable: 0, text: "5 checks: 4 pass, 1 warn, 0 fail, 0 unavailable" },
+  generatedAt: "2026-10-25T12:00:00.000Z", payment: { tx: "0x5f2c…e1a9", network: "eip155:8453", priceUsd: 0.1 },
+};
 const tokenPath = { chain: { type: "string", description: "ethereum (or 1)", pattern: "^(ethereum|eth|mainnet|1)$" }, token: { type: "string", description: "ERC-20 token address", pattern: "^0x[0-9a-fA-F]{40}$" } };
 export const OFFERS: Offer[] = [
   {
@@ -88,28 +122,28 @@ export const OFFERS: Offer[] = [
     route: "/api/v1/verdict/{chain}/{token}?depth=quick", example: `/api/v1/verdict/ethereum/${SHIFT}?depth=quick`, page: "/services/verdict",
     description: "Use when an agent needs a pre-buy verdict on an Ethereum token, made for IMD launches and Uniswap v4 hook tokens: no_issues_found / caution / avoid with cited reasons and the checks that could not run. Checks IMD launch match, verified source, owner powers (mint, pause, blacklist, fees, proxy), liquidity and v4 pool, holders, a buy-then-sell simulation and copycat symbols. Run by NIGHTSHIFT.",
     query: { depth: { type: "string", enum: ["quick", "deep"], description: "quick ($0.02) or deep ($0.25: adds the hook inspection, IMD admission checks and a written explanation)" } }, path: tokenPath,
-    output: verdictOut, outputExample: verdictExample,
+    output: verdictOut, outputExample: verdictExample, crew: "watchtower",
   },
   {
     id: "token-verdict-deep", name: "Token Verdict (deep)", kind: "tool", pitch: "The quick verdict plus the full hook inspection, IMD's admission checks and a written memo.", priceUsdc: 250_000n, method: "GET",
     route: "/api/v1/verdict/{chain}/{token}?depth=deep", example: `/api/v1/verdict/ethereum/${SHIFT}?depth=deep`, page: "/services/verdict",
     description: "Use when an agent needs the full pre-buy check on an Ethereum token before a larger trade: everything in the quick Token Verdict plus a full Uniswap v4 hook inspection, IMD admission checks and assurances, a longer holder scan and a written explanation, each claim tied to evidence. Run by NIGHTSHIFT.",
     query: { depth: { type: "string", enum: ["deep"], description: "deep" } }, path: tokenPath,
-    output: verdictOut, outputExample: { ...verdictExample, depth: "deep", explanation: "$SHIFT (0xe5e5…c3ac) on Ethereum: no issues found in the checks that ran, with high confidence (100% of the checks ran). …", payment: { tx: "0x5f2c…e1a9", network: "eip155:8453", priceUsd: 0.25 } },
+    output: verdictOut, outputExample: { ...verdictExample, depth: "deep", explanation: "$SHIFT (0xe5e5…c3ac) on Ethereum: no issues found in the checks that ran, with high confidence (100% of the checks ran). …", payment: { tx: "0x5f2c…e1a9", network: "eip155:8453", priceUsd: 0.25 } }, crew: "watchtower",
   },
   {
     id: "hook-inspector", name: "Hook Inspector", kind: "tool", pitch: "What a Uniswap v4 hook can do: permissions, fees, owner powers, upgrades.", priceUsdc: 50_000n, method: "GET",
     route: "/api/v1/hook/{address}", example: `/api/v1/hook/${HOOK}`, page: "/services/hook",
     description: "Use when an agent needs to know what a Uniswap v4 hook on Ethereum can do before trading or providing liquidity through it: permission bits from the address, which callbacks it implements, fee logic and recipients, owner and admin functions with their caps, upgradeability and known templates (IMD launch hooks, NightshiftHook), from verified source or bytecode. Run by NIGHTSHIFT.",
     query: { explain: { type: "string", enum: ["0", "1"], description: "1: add the written explanation and the source lines behind every power ($0.50)" } }, path: { address: { type: "string", description: "hook address", pattern: "^0x[0-9a-fA-F]{40}$" } },
-    output: hookOut, outputExample: hookExample,
+    output: hookOut, outputExample: hookExample, crew: "watchtower",
   },
   {
     id: "hook-inspector-explained", name: "Hook Inspector (explained)", kind: "tool", pitch: "The hook inspection with a written explanation and the source lines behind every power.", priceUsdc: 500_000n, method: "GET",
     route: "/api/v1/hook/{address}?explain=1", example: `/api/v1/hook/${HOOK}?explain=1`, page: "/services/hook",
     description: "Use when an agent or a launch team needs a Uniswap v4 hook explained in plain words: the full Hook Inspector report plus a written explanation of every callback, fee and admin power, with the verified source lines each claim rests on. Ethereum. Run by NIGHTSHIFT.",
     query: { explain: { type: "string", enum: ["1"], description: "1" } }, path: { address: { type: "string", description: "hook address", pattern: "^0x[0-9a-fA-F]{40}$" } },
-    output: hookOut, outputExample: { ...hookExample, explanation: { text: "This is the NightshiftHook (NIGHTSHIFT ($SHIFT, IMD launch #2124)). …", excerpts: [{ name: "setFees", code: "// src/NightshiftHook.sol:246 …" }] } },
+    output: hookOut, outputExample: { ...hookExample, explanation: { text: "This is the NightshiftHook (NIGHTSHIFT ($SHIFT, IMD launch #2124)). …", excerpts: [{ name: "setFees", code: "// src/NightshiftHook.sol:246 …" }] } }, crew: "watchtower",
   },
   {
     id: "imd-feed", name: "IMD Data Feed", kind: "dataset", pitch: "IMD launches, tokens, swarm health and seats, as JSON.", priceUsdc: 1_000n, method: "GET",
@@ -121,7 +155,21 @@ export const OFFERS: Offer[] = [
       status: { type: "string", description: "launches: live, parked, assembling…" }, limit: { type: "integer", description: "page size" }, before: { type: "string", description: "page cursor from next.before" },
     },
     path: { id: { type: "string", description: "launch number or id (launches/{id})" }, seat: { type: "string", description: "seat token id (agents/{seat})", pattern: "^\\d{1,6}$" } },
-    output: feedOut, outputExample: feedExample,
+    output: feedOut, outputExample: feedExample, crew: "research",
+  },
+  {
+    id: "research-report", name: "Research Desk: evidence report", kind: "report", pitch: "A source-linked answer from the IMD swarm's published work, with what it covers and what it does not.", priceUsdc: 250_000n, method: "GET",
+    route: "/api/v1/research?q={question}", example: "/api/v1/research?q=What%20has%20the%20IMD%20swarm%20published%20about%20Uniswap%20v4%20hooks%3F", page: "/crews/research",
+    description: "Use when an agent needs a short evidence report on an IMD, onchain or AI-agent question: an answer written only from the IMD swarm's published research, audits, contracts and sites (SWARM MIND), every source linked to explorer.imd.fun, with its coverage and gaps stated. No source, no claim. Run by NIGHTSHIFT's Research Desk crew.",
+    query: { q: { type: "string", description: "the question, 3 to 500 characters" } }, path: {},
+    output: researchOut, outputExample: researchExample, crew: "research",
+  },
+  {
+    id: "buildcheck-report", name: "Build & Check: integration report", kind: "tool", pitch: "Is your agent service reachable and discoverable? MCP, x402, OpenAPI and discovery documents, each check with the curl to rerun it.", priceUsdc: 100_000n, method: "GET",
+    route: "/api/v1/buildcheck?url={url}", example: "/api/v1/buildcheck?url=https%3A%2F%2Fgetnightshift.tech%2Fmcp%2Fpublic", page: "/crews/buildcheck",
+    description: "Use when an agent or its builder needs to know if a public agent service works for other agents: MCP initialize and tools/list, the x402 402 challenge and Bazaar metadata, the OpenAPI document and /llms.txt, agent-card and mcp.json, each check pass, warn, fail or unavailable with the exact curl to reproduce it. HTTPS public URLs only. Run by NIGHTSHIFT's Build & Check crew.",
+    query: { url: { type: "string", description: "the https URL of the MCP endpoint, paid route or API to check" } }, path: {},
+    output: buildcheckOut, outputExample: buildcheckExample, crew: "buildcheck",
   },
 ];
 export const offer = (id: OfferId) => OFFERS.find((o) => o.id === id)!;

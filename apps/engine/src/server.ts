@@ -12,6 +12,11 @@ import { NoGasError, PaymentRefused, PendingError } from "./checkout.js";
 import { findPool } from "./v4.js";
 import { BOT, liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
 import { liveUsage } from "./usage.js";
+import { liveArena } from "./arena.js";
+import { buildCheck } from "./crews/buildcheck.js";
+import { crewLedger, crewOperators, crewProfiles, crewSeason } from "./crews/live.js";
+import { crewRoutes } from "./crews/routes.js";
+import { proof } from "./proof.js";
 import { KEEPER_LOW, KEEPER_RESERVE, burnStatus, keeperAccount, keeperBurnRate, keeperState } from "./keeper.js";
 import { type CompanyClaim, rewardsOf } from "./rewards.js";
 import { frogPng } from "./frogpng.js";
@@ -366,6 +371,7 @@ async function stakedNow(): Promise<number | null> {
   return stakedCache?.staked ?? null;
 }
 let overviewCache: { at: number; v: unknown } | null = null;
+let proofCache: { at: number; v: unknown } | null = null;
 /** Everything the token page shows, in one read: market, supply, burns, frogs. */
 async function tokenOverview(): Promise<unknown> {
   if (overviewCache && Date.now() - overviewCache.at < 60_000) return overviewCache.v;
@@ -590,6 +596,25 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
       if ((p.startsWith("/api/league") || p === "/league/agents.md") && await leagueRoutes(req, res, p, { json, body, limited, url, vault: engine.vault })) return;
+      // ---- the crews: house crews and outside operators, their jobs, the season
+      if ((p.startsWith("/api/crews") || p === "/api/season" || p.startsWith("/api/agents/operators")) && await crewRoutes(req, res, p, {
+        json, body, limited, ip: clientIp(req), ledger: crewLedger(), operators: crewOperators(), profiles: crewProfiles, season: crewSeason, buildCheck,
+        agentFromKey: async (h) => { const a = liveArena(() => gameLobby(engine.vault)).authenticate(String(h ?? "").replace(/^Bearer\s+/i, "").trim()); return a ? { id: a.id, owner: a.owner, name: a.name } : null; },
+      })) return;
+      // ---- the proof page: what actually happened, from the books
+      if (p === "/api/proof" && req.method === "GET") {
+        if (limited(req, "proof", 60, 60_000)) return json(res, 429, { error: "slow down" });
+        if (!proofCache || Date.now() - proofCache.at > 60_000) {
+          const ops = crewOperators().all();
+          proofCache = { at: Date.now(), v: proof({
+            companies: [...engine.store.companies.values()], metrics: (id) => engine.store.metricsOf(id), ledger: await engine.ledger.store.list(),
+            usage: liveUsage(config.dataDir).report(90), crews: crewProfiles().map((c) => ({ id: c.id, name: c.name, house: c.operator.kind === "house", metrics: c.metrics })),
+            operators: { registered: ops.length, active: ops.filter((o) => o.status === "active").length },
+            burns: burnTotals(), imdUsd: config.imdUsd || null, splitter: (launchState()?.contracts?.splitter as string | undefined) ?? null, houseId: HOUSE_ID,
+          }) };
+        }
+        return json(res, 200, proofCache.v);
+      }
       if (await stationRoutes(req, res, p, { json, body, limited, owner, vault: engine.vault, market: (q) => engine.market(q), live: () => liveProducts(engine), token: tokenOverview,
         mind: engine.mind ? { ask: (q) => engine.mind!.ask(q, engine.llm, config.chatModel), search: (q) => engine.mind!.search(q, 12) } : null })) return;
       // the owners' connected accounts: OAuth callbacks, Gumroad's sale pings, product covers

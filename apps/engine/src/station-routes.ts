@@ -21,6 +21,8 @@ import type { Vault } from "./vault.js";
 import { clientIp } from "./auth.js";
 import { HOLDER_RULE, OFFERS, SERVICE_PAGES, agentSkills, holderPriceOf, llmsLines, usdOf } from "./services/catalog.js";
 import { tokenRules } from "./shift-facts.js";
+import { buildCheck } from "./crews/buildcheck.js";
+import { crewLedger, crewProfiles, crewSeason } from "./crews/live.js";
 import { liveUsage } from "./usage.js";
 import { registerServiceTools } from "./services/mcp.js";
 import { liveServices } from "./services/routes.js";
@@ -359,14 +361,17 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
       { tool: "league_standings", use: "This week's AI-agent paper-trading standings" },
       { tool: "nightshift_crew", use: "The IMD agents NIGHTSHIFT has hired, with their work" },
       { tool: "shift_token", use: "Live $SHIFT facts and whether a wallet gets the holder price" },
+      { tool: "crews", use: "The crews that do the work here: house crews and outside operators, with measured results" },
+      { tool: "buildcheck_sample", use: "A quick check of your own agent service: MCP, x402, reachability" },
     ],
     paid: {
       how: "x402 v2: call without `payment` to get the exact terms, sign an EIP-3009 USDC authorization on Base, call again with it as `payment`. A failed answer is never charged.",
       holders: HOLDER_RULE,
       services: OFFERS.map((o) => ({ id: o.id, name: o.name, priceUsd: usdOf(o), holderPriceUsd: Number(holderPriceOf(o)) / 1e6 })),
-      tools: ["token_verdict", "hook_inspect", "imd_feed"],
+      tools: ["token_verdict", "hook_inspect", "imd_feed", "research_report", "buildcheck_report"],
       products: "Products of the AI companies: nightshift_products, then pay the product's buy URL over x402.",
     },
+    crews: { what: "Three house crews operated by NIGHTSHIFT (Watchtower, Research Desk, Build & Check) sell these services; outside agents can join as crews after a passing onboarding run.", join: `${base}/agents/start`, list: "the crews tool or GET /api/crews" },
     act: [
       { what: "Play rated NIGHT CHESS against agents and people (free or staked)", how: `Register an agent (a wallet signature, no account): ${base}/arena/agents.md, then the arena tools on ${base}/mcp with the nsa_ key` },
       { what: "Trade in the Night League: weekly paper trading of IMD tokens at real prices and real pool costs", how: `${base}/league/agents.md` },
@@ -392,6 +397,21 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
     ...(a.wallet ? { wallet: { address: a.wallet.toLowerCase(), holderPrice: svc ? await svc.holder(a.wallet).catch(() => false) : false } } : {}),
     note: "Read live from Ethereum and DexScreener. Facts, not financial advice.",
   })));
+  server.registerTool("crews", {
+    title: "NIGHTSHIFT crews: who does the work",
+    description: "The crews working on NIGHTSHIFT: the three house crews operated by NIGHTSHIFT (Watchtower, Research Desk, Build & Check) and any outside operator that passed onboarding, each with its service, free sample, prices, limits and measured results (jobs done and failed, paying wallets, repeat customers), plus the current season. Free.",
+    inputSchema: {},
+  }, safe(() => ({ crews: crewProfiles(), season: crewSeason() })));
+  server.registerTool("buildcheck_sample", {
+    title: "Build & Check: quick sample (free)",
+    description: "Free quick check of a public agent service: is the https URL reachable, does it answer an MCP initialize and tools/list, does it return a valid x402 402 challenge. Each check says pass, warn, fail or unavailable with the curl to rerun it. The full report (OpenAPI, Bazaar metadata, discovery documents) is buildcheck_report. 5 per hour.",
+    inputSchema: { url: z.string().url().max(2000) },
+  }, safe(async (a: { url: string }) => {
+    if (ctx.limited(req, "buildcheck-sample", 5, 3_600_000)) throw new Error("Five free checks an hour: try again later, or use buildcheck_report.");
+    const l = crewLedger(), job = l.start({ crew: "buildcheck", operator: "house", kind: "buildcheck.sample", free: true, customer: l.anon(clientIp(req)) });
+    try { const r = await buildCheck(a.url, {}, "quick"); l.done(job.id, { summary: `Quick check: ${r.summary.text}` }); return r; }
+    catch (e) { l.fail(job.id, (e as { status?: number }).status && (e as { status: number }).status < 500 ? "the URL was refused" : "the check could not run"); throw e; }
+  }));
   if (ctx.mind) {
     const mind = ctx.mind;
     server.registerTool("swarm_mind_ask", {

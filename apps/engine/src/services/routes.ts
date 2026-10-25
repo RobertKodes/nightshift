@@ -9,6 +9,8 @@ import { type HookReport, KNOWN_HOOKS, decodeFlags, inspectHook } from "./hook.j
 import { tokenBasics } from "./evm.js";
 import { chainIdOf, hookOf, launchUrl, tokenOf } from "./imd.js";
 import { type VerdictReport, ServiceError, tokenVerdict } from "./verdict.js";
+import { parseTarget } from "../crews/buildcheck.js";
+import { researchQuestion } from "../crews/research.js";
 
 /**
  * The house services over HTTP: /api/v1/verdict, /api/v1/hook, /api/v1/imd/* and /openapi.json.
@@ -42,7 +44,17 @@ export type SettleTerms = X402Offer;
 export type Io = { method: string; path: string; query: URLSearchParams; header(name: string): string | undefined; ip: string; base: string; limited(key: string, n: number, ms: number): boolean };
 export type Out = { status: number; body: unknown; headers?: Record<string, string> };
 
-export function services(ctx: Ctx, payer: Payer) {
+/**
+ * What the house crews add to the router: the Research Desk and Build & Check answers, and the job
+ * ledger every paid call is recorded in. Optional, so the services run (and test) without them.
+ */
+export type CrewDeps = {
+  research?(q: string): Promise<unknown>;
+  buildCheck?(url: string): Promise<unknown>;
+  record?(o: Offer, r: { payer: string; nonce: string; usd: number; tx: string | null; network: string; ok: boolean; summary?: string; error?: string; sim?: boolean }): void;
+};
+
+export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
   const verdicts = new TtlCache<VerdictReport>(10 * 60_000, 2_000, ctx.d.now);
   const hooks = new TtlCache<HookReport>(30 * 60_000, 1_000, ctx.d.now);
   const previews = new TtlCache<unknown>(5 * 60_000, 2_000, ctx.d.now);
@@ -130,7 +142,14 @@ export function services(ctx: Ctx, payer: Payer) {
     const c = await payer.check(o, sig, io.ip);
     if (!c.ok) return c.challenge ? p402(o, io, c.reason, await holderAsked(io)) : { status: c.status, body: { error: c.reason } };
     if (payer.mode === "sim") return { status: 400, body: { error: "sim mode does not settle real payments; add sim=1 for a demo answer" } };
-    const v = await run();
+    const auth = c.payment.payload.authorization, network = `eip155:${payer.chainId}`;
+    let v: unknown;
+    try { v = await run(); } catch (e) {
+      // a failed answer is never settled, so never charged: it still counts against the crew's reliability
+      const st = e instanceof ServiceError ? e.status : (e as { status?: number }).status;
+      if (!(typeof st === "number" && st < 500)) crews.record?.(o, { payer: c.payer, nonce: auth.nonce, usd: Number(BigInt(auth.value)) / 1e6, tx: null, network, ok: false, error: "a source did not answer; nothing was charged" });
+      throw e;
+    }
     // the terms this payment was made against: the holder price or the full one, as the payer signed
     const paidHalf = BigInt(c.payment.payload.authorization.value) < o.priceUsdc;
     const ch = challengeOf(o, io, undefined, paidHalf);
@@ -140,8 +159,8 @@ export function services(ctx: Ctx, payer: Payer) {
       if (payer.isPending(e)) return { status: 202, body: { ok: false, pending: true, error: (e as Error).message } };
       throw e;
     }
-    const network = `eip155:${payer.chainId}`;
-    const paidUsd = Number(BigInt(c.payment.payload.authorization.value)) / 1e6;
+    const paidUsd = Number(BigInt(auth.value)) / 1e6;
+    crews.record?.(o, { payer: c.payer, nonce: auth.nonce, usd: paidUsd, tx, network, ok: true, summary: `${o.name}: answered and settled` });
     return { status: 200, body: { ...(v as object), payment: { tx, network, priceUsd: paidUsd, holderPrice: paidUsd < usdOf(o), payer: c.payer } }, headers: { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network, payer: c.payer }) } };
   }
 
@@ -161,6 +180,20 @@ export function services(ctx: Ctx, payer: Payer) {
           free: { verdictPreview: `${io.base}/api/v1/verdict/ethereum/<token>/preview`, verdictDemo: "one quick verdict per IP per day: add demo=1", hookFlags: `${io.base}/api/v1/hook/<address>/flags`, feedSample: "add sample=1 to any /api/v1/imd/* call" },
           mcp: `${io.base}/mcp/public`, openapi: `${io.base}/openapi.json`,
         } };
+      }
+      // ---- Research Desk: an evidence report from the IMD swarm's published work
+      if (seg[2] === "research" && !seg[3]) {
+        if (!crews.research) return { status: 404, body: { error: "The Research Desk is not on in this engine." } };
+        if (io.limited("svc-research", 20, 60_000)) return { status: 429, body: { error: "slow down: 20 reports a minute per IP" } };
+        const q = researchQuestion(io.query.get("q"));
+        return await paid(io, offer("research-report"), () => crews.research!(q));
+      }
+      // ---- Build & Check: does a public agent service work for other agents?
+      if (seg[2] === "buildcheck" && !seg[3]) {
+        if (!crews.buildCheck) return { status: 404, body: { error: "Build & Check is not on in this engine." } };
+        if (io.limited("svc-buildcheck", 10, 60_000)) return { status: 429, body: { error: "slow down: 10 checks a minute per IP" } };
+        const url = parseTarget(io.query.get("url")).toString();
+        return await paid(io, offer("buildcheck-report"), () => crews.buildCheck!(url));
       }
       // ---- Token Verdict
       if (seg[2] === "verdict" && seg[3] && seg[4]) {

@@ -20,7 +20,7 @@ Newest first under each heading.
 2. Watchtower module (`apps/engine/src/watchtower/`).
 3. Crews core (`apps/engine/src/crews/`): job ledger, metrics, season, Research Desk, Build & Check, operators.
 4. Recruiter (`apps/engine/src/recruiter/`): durable outbox, caps, pause, digest.
-5. Integrations (`integrations/`, `packages/nightshift-client/`, `examples/`).
+5. Integrations (`integrations/`, `integrations/nightshift-client/`, `examples/`).
 6. Wiring, offers, MCP tools, proof dashboard, web pages; tests; deploy; Bazaar recheck; first recruitment cycle.
 
 ## Status

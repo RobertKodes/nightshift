@@ -1,0 +1,17 @@
+{
+  "name": "nightshift-acp-provider",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Virtuals ACP v2 provider adapter: sells the NIGHTSHIFT Token Verdict preview as one ACP offering.",
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "start": "node src/provider.ts"
+  },
+  "dependencies": {
+    "@account-kit/infra": "^4.88.5",
+    "@virtuals-protocol/acp-node-v2": "0.1.15",
+    "viem": "^2.57.11"
+  }
+}

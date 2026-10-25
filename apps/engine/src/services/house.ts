@@ -6,6 +6,9 @@ import { PendingError } from "../checkout.js";
 import { config } from "../config.js";
 import type { Engine } from "../engine.js";
 import { readHoldings } from "../swap.js";
+import { buildCheck } from "../crews/buildcheck.js";
+import { recordPaid } from "../crews/live.js";
+import { researchReport } from "../crews/research.js";
 import { HOLDER_SHIFT, OFFERS, type Offer, holderPriceOf } from "./catalog.js";
 import { context } from "./context.js";
 import { liveNet, liveRpc } from "./net.js";
@@ -108,9 +111,14 @@ export function enginePayer(engine: Engine): Payer {
   };
 }
 
-/** The live services: chain.ts's Ethereum client, the public APIs, the house payer. */
+/** The live services: chain.ts's Ethereum client, the public APIs, the house payer, and the house crews. */
 export function liveHouseServices(engine: Engine) {
   ensureHouse(engine);
   const ctx = context({ net: liveNet, rpc: liveRpc(eth as never), now: Date.now, etherscanKey: config.etherscanKey, watchtowerUrl: config.watchtowerUrl });
-  return services(ctx, enginePayer(engine));
+  const mind = engine.mind;
+  return services(ctx, enginePayer(engine), {
+    research: mind ? (q) => researchReport({ ask: (x) => mind.ask(x, engine.llm, config.chatModel), search: (x) => mind.search(x, 12) }, q) : undefined,
+    buildCheck: (url) => buildCheck(url, {}, "full"),
+    record: (o, r) => recordPaid(o, r),
+  });
 }

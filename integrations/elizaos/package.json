@@ -1,0 +1,21 @@
+{
+  "name": "@nightshift/plugin-nightshift",
+  "version": "0.1.0",
+  "description": "elizaOS plugin: ask the NIGHTSHIFT swarm, preview token verdicts, sample Watchtower and buildcheck reports (free endpoints only).",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "keywords": ["elizaos-plugin", "elizaos", "plugin", "nightshift", "mcp", "x402"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/*.test.mjs"
+  },
+  "peerDependencies": { "@elizaos/core": "^1.7.0" },
+  "devDependencies": {
+    "@elizaos/core": "1.7.2",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  }
+}

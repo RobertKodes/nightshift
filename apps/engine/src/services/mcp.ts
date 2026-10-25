@@ -54,9 +54,20 @@ export function registerServiceTools(server: McpServer, s: Services, io: { ip: s
   const feedQ = (a: FeedA) => ({ chain: a.chain, kind: a.kind, status: a.status, since: a.since, limit: a.limit ? String(a.limit) : undefined, before: a.before });
   server.registerTool("imd_feed_sample", { title: "IMD Data Feed sample (free)", description: "Free: a 3-item sample of any IMD Data Feed endpoint (launches, one launch, tokens, swarm health, a seat's work).", inputSchema: feedArgs },
     (a: FeedA) => call(feedPath(a), { ...feedQ(a), sample: "1" }));
+  server.registerTool("research_report", {
+    title: `Research Desk: evidence report ($${usdOf(offer("research-report"))}, half for holders)`,
+    description: `${offer("research-report").description} Free first: swarm_mind_ask. Pass the x402 payment as \`payment\`.`,
+    inputSchema: { question: z.string().min(3).max(500), holderWallet, payment },
+  }, (a: { question: string; holderWallet?: string; payment?: string }) => call("/api/v1/research", { q: a.question, holder: a.holderWallet }, a.payment));
+  server.registerTool("buildcheck_report", {
+    title: `Build & Check: integration report ($${usdOf(offer("buildcheck-report"))}, half for holders)`,
+    description: `${offer("buildcheck-report").description} Free first: buildcheck_sample. Pass the x402 payment as \`payment\`.`,
+    inputSchema: { url: z.string().url().max(2000).describe("https URL of an MCP endpoint, a paid x402 route or an API"), holderWallet, payment },
+  }, (a: { url: string; holderWallet?: string; payment?: string }) => call("/api/v1/buildcheck", { url: a.url, holder: a.holderWallet }, a.payment));
   server.registerTool("imd_feed", { title: `IMD Data Feed ($${usdOf(offer("imd-feed"))} per call, half for holders)`, description: `${offer("imd-feed").description} Pass the x402 payment as \`payment\`.`, inputSchema: { ...feedArgs, holderWallet, payment } },
     (a: FeedA) => call(feedPath(a), { ...feedQ(a), holder: a.holderWallet }, a.payment));
 }
 
+export const CREW_TOOLS = ["research_report", "buildcheck_report"];
 export const SERVICE_TOOLS = ["services_pricing", "verdict_preview", "verdict_demo", "token_verdict", "hook_flags", "hook_inspect", "imd_feed_sample", "imd_feed"];
 export const servicePrices = () => OFFERS.map((o) => ({ id: o.id, priceUsd: usdOf(o) }));
