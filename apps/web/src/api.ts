@@ -243,7 +243,115 @@ export const api = {
   quiet: (id: string, q: { from: number; to: number; tz: string }) => req("POST", `/api/companies/${id}/connect/quiet`, q),
   approvePost: (id: string, post: string) => req("POST", `/api/companies/${id}/connect/posts/${post}/approve`),
   rejectPost: (id: string, post: string) => req("POST", `/api/companies/${id}/connect/posts/${post}/reject`),
+  // ---- NIGHTSHIFT Crews: profiles, the live feed, Season 1, the proof page, the free samples and outside operators
+  crews: () => req<CrewsIndex>("GET", "/api/crews"),
+  crew: (id: string) => req<CrewDetail>("GET", `/api/crews/${encodeURIComponent(id)}`),
+  crewActivity: () => req<{ events: CrewEvent[] }>("GET", "/api/crews/activity"),
+  season: () => req<CrewSeason>("GET", "/api/season"),
+  proof: () => req<ProofView>("GET", "/api/proof"),
+  servicesIndex: () => req<ServicesIndex>("GET", "/api/v1/services"),
+  watchtowerInfo: () => req<WatchtowerInfo>("GET", "/api/watchtower/info"),
+  watchtowerSample: (address: string) => req<WatchReport>("GET", `/api/watchtower/sample?address=${encodeURIComponent(address)}`),
+  buildcheckSample: (url: string) => req<BuildCheckReport>("GET", `/api/crews/buildcheck/sample?url=${encodeURIComponent(url)}`),
+  mindAsk: (q: string) => req<MindAnswer>("POST", "/api/mind/ask", { q }),
+  operators: () => req<{ operators: PublicOperator[]; capabilities?: string[] }>("GET", "/api/agents/operators"),
+  /** The agent's own AGENT ARENA key goes in this one request's header; the page never stores it. */
+  registerOperator: async (key: string, body: { name: string; capabilities: string[]; endpoint: string }): Promise<{ operator: PublicOperator; next?: string; note?: string }> => {
+    const r = await fetch("/api/agents/operators", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!r.ok) throw Object.assign(new Error(j.error ?? `HTTP ${r.status}`), { status: r.status, code: j.code });
+    return j as { operator: PublicOperator; next?: string; note?: string };
+  },
+  onboardOperator: async (key: string, id: string): Promise<OnboardResult> => {
+    const r = await fetch(`/api/agents/operators/${encodeURIComponent(id)}/onboard`, { method: "POST", headers: { Authorization: `Bearer ${key}` } });
+    const j = await r.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!r.ok) throw Object.assign(new Error(j.error ?? `HTTP ${r.status}`), { status: r.status, code: j.code });
+    return j as OnboardResult;
+  },
 };
+
+// ---- NIGHTSHIFT Crews: the shapes of apps/engine/src/crews (contracts, season, operators), the proof page and Watchtower.
+// The pages read every field defensively: the engine side may add or leave out fields.
+export interface CrewMetrics {
+  jobs: number; done: number; failed: number; paidJobs: number; customerPaidJobs: number;
+  payingWallets: number; repeatWallets: number; revenueUsd: number; knownCostUsd: number;
+  successRate: number | null; medianLatencyMs: number | null; lastJobAt: number | null;
+}
+export interface CrewPrice { offer: string; label: string; usd: number; holderUsd: number }
+export interface CrewProfile {
+  id: string; name: string;
+  operator: { kind: "house"; name: string } | { kind: "external"; id: string; name: string; wallet: string };
+  service: string; customer: string;
+  sample: { label: string; href: string; free: true };
+  pricing: CrewPrice[]; limits: string[];
+  buy: { http: string; mcpTool: string | null; docs: string };
+  metrics: CrewMetrics; status: "live" | "preview";
+}
+export interface CrewsIndex { crews: CrewProfile[]; external?: CrewProfile[] }
+export interface CrewJob {
+  id: string; crew: string; operator: string; kind: string; status: "running" | "done" | "failed"; free: boolean; paid?: boolean;
+  payment: { usd: number; network: string; class: "customer" | "internal" | "test"; payer?: string; tx?: string | null } | null;
+  startedAt: number; endedAt: number | null; latencyMs: number | null; error: string | null; summary: string | null; publish: boolean; target?: string | null; costUsd: number;
+}
+export interface CrewDetail { profile: CrewProfile; metrics: CrewMetrics; jobs: CrewJob[] }
+export interface CrewEvent { at: number; crew: string; kind: string; status: "running" | "done" | "failed"; summary: string | null; paid: boolean; house: boolean }
+export interface CrewRanked {
+  rank?: number; crew: string; name: string; completedPaidJobs: number; acceptance: number | null; reliability: number | null;
+  repeatWallets: number; revenueUsd: number; knownCostUsd: number; coverage: number | null; score: number;
+}
+export interface CrewSeason {
+  id: string; title: string; startsAt: number | string; endsAt: number | string; day: number; status?: "upcoming" | "live" | "ended";
+  house: CrewRanked[]; external: CrewRanked[]; rules: string[];
+}
+export interface PublicOperator {
+  id: string; agentId: string; name: string; capabilities: string[]; status: "pending" | "onboarding" | "active" | "failed" | "suspended";
+  wallet: string; endpoint: string | null; createdAt: number; activatedAt: number | null;
+  onboarding: { passed: boolean | null; at: number | null; reasons?: string[]; jobId?: string | null };
+}
+export type BuildCheckStatus = "pass" | "fail" | "warn" | "unavailable";
+export interface BuildCheckReport {
+  target: string; origin?: string; mode: "quick" | "full";
+  checks: { id: string; label: string; status: BuildCheckStatus; detail: string; reproduce: string; ms?: number }[];
+  summary: { checks: number; pass: number; warn: number; fail: number; unavailable: number; text: string } | string;
+  requests?: number; generatedAt?: string; free?: boolean; full?: string;
+}
+export interface OnboardResult { operator: PublicOperator; passed: boolean | null; reasons: string[]; report?: BuildCheckReport }
+export interface MindAnswer { q: string; answer: string; sources: { n: number; title: string; kinds?: string[]; at?: number; url: string }[]; model: string | null }
+export interface ServicesIndex { network?: string; payTo?: string | null; mode?: string; holders?: string; mcp?: string; openapi?: string }
+export interface WatchCheck { label: string; group?: string; status: "ok" | "unavailable" | "unsupported"; value?: unknown; display?: string; source?: string; reason?: string; block?: number }
+export interface WatchChange {
+  id?: string; kind?: "change" | "coverage"; field: string; label?: string; severity: string;
+  before: unknown; after: unknown; beforeBlock: number | null; afterBlock: number | null; evidence: string[]; note?: string;
+}
+export interface WatchReport {
+  id?: string; address: string; chain: string; chainId?: number; kind: string; scope?: string; template?: string | null;
+  baseline: { at: string; block: number } | null;
+  observation: { at: number; block: { number: number; hash?: string | null }; template?: string | null; checks: Record<string, WatchCheck>; links?: { address: string; block: string } } | null;
+  changes: WatchChange[];
+  unavailable: { id: string; label: string; reason: string; lastValue?: unknown; lastBlock?: number | null }[];
+  unsupported: { id: string; label: string; reason: string }[];
+  counts?: { completed: number; changes: number; unavailable: number; unsupported: number };
+  stale: boolean; staleReason?: string | null; summary: string; human: string; coverageNote: string; generatedAt?: string;
+}
+/** What Watchtower supports: read defensively, the engine side decides the exact shape. */
+export interface WatchtowerInfo { scope?: string; chain?: string; chains?: string[]; kinds?: string[]; checks?: unknown; unsupported?: unknown; limits?: unknown; prices?: unknown; [k: string]: unknown }
+export interface ProofView {
+  generatedAt: string;
+  period: { payments: { from: string; to: string } | null; agentUsage: { from: string; to: string; note?: string } | null };
+  payments: {
+    customer: { wallets: number; payments: number; revenueUsd: number; repeatWallets: number; houseServices: number; companyProducts: number };
+    excluded: Record<string, number>;
+    settledBy: Record<string, number>;
+    latest: { at: string; what: string; usd: number; wallet: string; tx: string | null }[];
+  };
+  crews: { id: string; name: string; house: boolean; done: number; failed: number; paidJobs: number; payingWallets: number; repeatWallets: number; revenueUsd: number; knownCostUsd: number; successRate: number | null }[];
+  refunds: { count: number; note: string };
+  knownCosts: { swarmImd: number; swarmUsdAtTodaysPrice: number | null; aiUsd: number; notIncluded: string };
+  fees: { platformUsd: number; platformFees: { at: string; usd: number; tx: string }[]; burned: { shift: number; imd: number }; splitter: { address: string; events: string } | null };
+  agents: { mcpSessions: number; toolCalls: number; clients: { name: string; count: number; probe: boolean }[]; probeSessions: number; operators: { registered: number; active: number } };
+  flows: string[];
+  definitions: Record<string, string>;
+}
 
 /** Subscribes to the engine's live events, optionally for one company. */
 export function events(onEvent: (e: { type: string; companyId: string; payload: unknown; at: number }) => void, company?: string): () => void {

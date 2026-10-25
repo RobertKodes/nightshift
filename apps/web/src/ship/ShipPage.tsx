@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CrewStrip } from "../crews/ShipStrip";
 import { NxIcon } from "../nx/icons";
 import { NxTabs, StationBar, rememberRoom } from "../nx/Shell";
 import { Link } from "../router";
@@ -239,6 +240,7 @@ export function ShipPage() {
             </p>
           ) : <p className="sh-line">{err ?? "Reading the crew from Ethereum…"}</p>}
           {snap && <div className="sh-log-top"><ShipLog snap={snap} now={now} events={events} /></div>}
+          <CrewStrip />
         </section>
 
         <section className="sh-hud sh-tools" aria-label="Find on the ship">

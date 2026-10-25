@@ -64,6 +64,11 @@ const HookPage = lazy(() => import("./station/Services").then((x) => ({ default:
 const ShipPage = lazy(() => import("./ship/ShipPage").then((x) => ({ default: x.ShipPage })));
 const FeedPage = lazy(() => import("./station/Services").then((x) => ({ default: x.FeedPage })));
 const SniperPage = lazy(() => import("./station/Sniper").then((x) => ({ default: x.SniperPage })));
+const CrewsPage = lazy(() => import("./crews/CrewsPage").then((x) => ({ default: x.CrewsPage })));
+const CrewPage = lazy(() => import("./crews/CrewsPage").then((x) => ({ default: x.CrewPage })));
+const WatchtowerPage = lazy(() => import("./crews/WatchtowerPage").then((x) => ({ default: x.WatchtowerPage })));
+const ConnectAgentPage = lazy(() => import("./crews/ConnectAgentPage").then((x) => ({ default: x.ConnectAgentPage })));
+const ProofPage = lazy(() => import("./crews/ProofPage").then((x) => ({ default: x.ProofPage })));
 
 function App() {
   const path = useRoute();
@@ -121,6 +126,11 @@ function App() {
   if (seg[0] === "league") page = <Suspense fallback={<div className="st-room" />}><LeaguePage id={seg[1]} /></Suspense>;
   if (seg[0] === "mind") page = <Suspense fallback={<div className="st-room" />}><MindPage /></Suspense>;
   if (seg[0] === "services") page = <Suspense fallback={<div className="st-room" />}>{seg[1] === "verdict" ? <VerdictPage /> : seg[1] === "hook" ? <HookPage /> : seg[1] === "imd-feed" ? <FeedPage /> : <ServicesPage />}</Suspense>;
+  // NIGHTSHIFT Crews: the crews, one crew, Watchtower, connecting an agent, and the proof page
+  if (seg[0] === "crews") page = <Suspense fallback={<div className="st-room" />}>{seg[1] ? <CrewPage id={seg[1]} health={health} /> : <CrewsPage health={health} />}</Suspense>;
+  if (seg[0] === "watchtower") page = <Suspense fallback={<div className="st-room" />}><WatchtowerPage health={health} /></Suspense>;
+  if (seg[0] === "agents" && (!seg[1] || seg[1] === "start")) page = <Suspense fallback={<div className="st-room" />}><ConnectAgentPage /></Suspense>;
+  if (seg[0] === "proof") page = <Suspense fallback={<div className="st-room" />}><ProofPage health={health} /></Suspense>;
   if (seg[0] === "arena") page = <Suspense fallback={<div className="docs"><p className="dim">Loading the arena…</p></div>}><ArenaPage /></Suspense>;
   // the Play Store app leaves what moves money to the website
   if (webOnly(path)) page = <WebOnlyPage path={path} />;
@@ -137,7 +147,7 @@ const TITLES: Record<string, string> = {
   companies: "Companies", launch: "Launch a company", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
   market: "Market", token: "$SHIFT", frogs: "NIGHT FROGS", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
   tokenomics: "Tokenomics", games: "Game Room", launchpad: "Launchpad", arena: "Agent Arena",
-  services: "House services", breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League", forge: "The Forge", watch: "The Night Watch", ship: "The Ship",
+  services: "House services", crews: "Crews", watchtower: "Watchtower", agents: "Connect an agent", proof: "Proof", breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League", forge: "The Forge", watch: "The Night Watch", ship: "The Ship",
 };
 
 // The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.

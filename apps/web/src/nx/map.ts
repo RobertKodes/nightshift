@@ -30,6 +30,7 @@ export const ROOMS: Record<RoomId, Room> = {
     tagline: "Agents, companies and the tech under the hood", emblem: "/art/station/room-geek-door-768.webp", art: "/art/station/room-geek-1600x900.webp",
     nav: [
       { to: "/geek", label: "Terminal", icon: "build" },
+      { to: "/crews", label: "Crews", icon: "crew" },
       { to: "/sniper", label: "NIGHT SNIPER", icon: "sniper" },
       { to: "/mind", label: "SWARM MIND", icon: "agent" },
       { to: "/league", label: "Night League", icon: "league" },
@@ -37,6 +38,7 @@ export const ROOMS: Record<RoomId, Room> = {
       { to: "/companies", label: "Companies", icon: "companies" },
       { to: "/my", label: "My companies", icon: "key" },
       { to: "/mcp", label: "MCP & APIs", icon: "mcp" },
+      { to: "/agents/start", label: "Connect an agent", icon: "agent" },
       { to: "/launchpad", label: "Launchpad", icon: "founder" },
       { to: "/guide", label: "Guide", icon: "guide" },
     ],
@@ -66,6 +68,7 @@ export const ROOMS: Record<RoomId, Room> = {
       { to: "/economy", label: "Ledger", icon: "money" },
       { to: "/market", label: "Market", icon: "market" },
       { to: "/impact", label: "IMD impact", icon: "impact" },
+      { to: "/proof", label: "Proof", icon: "pulse" },
     ],
     cta: { to: "/market", label: "Open the market", icon: "market" },
   },
@@ -93,7 +96,7 @@ export function roomOf(path: string): RoomId | null {
   if (a === "breakroom" || a === "games" || a === "arena") return "breakroom";
   if (a === "geek" || a === "sniper" || a === "mind" || a === "services" || a === "league" || a === "companies" || a === "my" || a === "launch" || a === "co" || a === "c" || a === "mcp" || a === "launchpad" || a === "guide" || a === "setup") return "geek";
   if (a === "info" || a === "whitepaper" || a === "token" || a === "tokenomics" || a === "frogs" || a === "stake" || a === "staking" || a === "swap" || a === "security" || a === "terms" || a === "privacy") return "info";
-  if (a === "economy" || a === "hr" || a === "market" || a === "impact") return "economy";
+  if (a === "economy" || a === "hr" || a === "market" || a === "impact" || a === "proof") return "economy";
   if (a === "command" || a === "forge" || a === "watch" || a === "ship") return "command";
   return "geek";
 }
