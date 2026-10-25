@@ -59,7 +59,7 @@ export async function crewRoutes(req: IncomingMessage, res: ServerResponse, p: s
         }
       }
       if (ctx.limited(req, "crews-read", 240, 60_000)) return reply(429, { error: "Slow down.", code: "slow_down" });
-      if (p === "/api/crews") return reply(200, { crews: ctx.profiles() });
+      if (p === "/api/crews") { const all = ctx.profiles(); return reply(200, { crews: all.filter((c) => c.operator.kind === "house"), external: all.filter((c) => c.operator.kind === "external") }); }
       if (p === "/api/crews/activity") return reply(200, { events: ledger.events(50) });
       if (p === "/api/season") return reply(200, ctx.season());
       if (p === "/api/agents/operators") return reply(200, { operators: operators.publicList(), capabilities: CAPABILITIES });

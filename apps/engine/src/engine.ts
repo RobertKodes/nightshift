@@ -48,6 +48,7 @@ import { FEE_PARTS, Payouts } from "./payout.js";
 import { Checkout, NoGasError, PendingError, type SettledBy, type Settlement, saleKey } from "./checkout.js";
 import { offerFor } from "./agentmarket.js";
 import { tokenRules } from "./shift-facts.js";
+import { linkWatchAlerts } from "./crews/live.js";
 import { MarketDesk } from "./b2b.js";
 import { companyBrain } from "./ceo-brain.js";
 import { liveMind, liveWeather } from "./mind-live.js";
@@ -288,7 +289,7 @@ export class Engine {
         adminText: async () => null,
         joined: (chat, names) => { const w = welcome(names); void sendCard(chat, "welcome", w.text, w.buttons); },
         // /start nw_<code>: a Night Watcher holder entering the Watch Room; any other code links company alerts
-        link: (chat, code) => (code.startsWith("nw_") ? roomLink(chat, code) : this.#linkAlerts(chat, code)),
+        link: async (chat, code) => (code.startsWith("nw_") ? roomLink(chat, code) : code.startsWith("wt_") ? linkWatchAlerts(chat, code) : this.#linkAlerts(chat, code)),
         // the games: /play /live /profile /challenge and "@bot chess", each a link to the website
         games: (cmd, args, ctx) => this.gameBot.command(cmd, args, ctx),
         inline: (q) => this.gameBot.inline(q),

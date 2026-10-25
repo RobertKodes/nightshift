@@ -10,6 +10,7 @@ import { tokenBasics } from "./evm.js";
 import { chainIdOf, hookOf, launchUrl, tokenOf } from "./imd.js";
 import { type VerdictReport, ServiceError, tokenVerdict } from "./verdict.js";
 import { parseTarget } from "../crews/buildcheck.js";
+import type { Watchtower } from "../watchtower/index.js";
 import { researchQuestion } from "../crews/research.js";
 
 /**
@@ -52,6 +53,9 @@ export type CrewDeps = {
   research?(q: string): Promise<unknown>;
   buildCheck?(url: string): Promise<unknown>;
   record?(o: Offer, r: { payer: string; nonce: string; usd: number; tx: string | null; network: string; ok: boolean; summary?: string; error?: string; sim?: boolean }): void;
+  watchtower?: Watchtower;
+  /** The bot link that turns on a watch's Telegram alerts. */
+  telegramLink?(code: string): string | null;
 };
 
 export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
@@ -131,9 +135,9 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
   };
 
   /** The paid door: terms, check, compute, settle. */
-  async function paid(io: Io, o: Offer, run: () => Promise<unknown>): Promise<Out> {
+  async function paid(io: Io, o: Offer, run: (pay: { payer: string; usd: number }) => Promise<unknown>): Promise<Out> {
     if (payer.mode === "sim" && io.query.get("sim") === "1") {
-      const v = await run();
+      const v = await run({ payer: "0xdemo000000000000000000000000000000buyer", usd: usdOf(o) });
       await payer.sim(o);
       return { status: 200, body: { ...(v as object), payment: { sim: true, priceUsd: usdOf(o), note: "Simulation: a demo sale was booked and no money moved." } } };
     }
@@ -144,7 +148,7 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
     if (payer.mode === "sim") return { status: 400, body: { error: "sim mode does not settle real payments; add sim=1 for a demo answer" } };
     const auth = c.payment.payload.authorization, network = `eip155:${payer.chainId}`;
     let v: unknown;
-    try { v = await run(); } catch (e) {
+    try { v = await run({ payer: c.payer, usd: Number(BigInt(auth.value)) / 1e6 }); } catch (e) {
       // a failed answer is never settled, so never charged: it still counts against the crew's reliability
       const st = e instanceof ServiceError ? e.status : (e as { status?: number }).status;
       if (!(typeof st === "number" && st < 500)) crews.record?.(o, { payer: c.payer, nonce: auth.nonce, usd: Number(BigInt(auth.value)) / 1e6, tx: null, network, ok: false, error: "a source did not answer; nothing was charged" });
@@ -180,6 +184,24 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
           free: { verdictPreview: `${io.base}/api/v1/verdict/ethereum/<token>/preview`, verdictDemo: "one quick verdict per IP per day: add demo=1", hookFlags: `${io.base}/api/v1/hook/<address>/flags`, feedSample: "add sample=1 to any /api/v1/imd/* call" },
           mcp: `${io.base}/mcp/public`, openapi: `${io.base}/openapi.json`,
         } };
+      }
+      // ---- Watchtower: what changed since the last observation, once or watched for a prepaid term
+      if (seg[2] === "watchtower" && (seg[3] === "check" || seg[3] === "watch") && seg[4] && seg[5] && !seg[6]) {
+        const wt = crews.watchtower;
+        if (!wt) return { status: 404, body: { error: "Watchtower is not on in this engine." } };
+        if (chainIdOf(seg[4]) !== 1) return { status: 400, body: { error: "Only Ethereum is supported: /api/v1/watchtower/" + seg[3] + "/ethereum/<address>." } };
+        if (!/^0x[0-9a-fA-F]{40}$/.test(seg[5])) return { status: 400, body: { error: "The address must be a 0x address (40 hex characters)." } };
+        if (io.limited("svc-watch", 30, 60_000)) return { status: 429, body: { error: "slow down: 30 a minute per IP" } };
+        const address = seg[5];
+        if (seg[3] === "check") return await paid(io, offer("watchtower-check"), () => wt.check(address));
+        if (io.query.get("days") && io.query.get("days") !== "7") return { status: 400, body: { error: "days: 7. One prepaid term of 7 days, no renewal." } };
+        const out = await paid(io, offer("watchtower-watch"), async (pay) => {
+          const r = await wt.startWatch({ address, owner: pay.payer, days: 7, payment: { usd: pay.usd, payer: pay.payer, tx: null } });
+          return { ...r.report, watch: r.watch, manageToken: r.manageToken, telegram: crews.telegramLink?.(r.telegramCode) ?? null, stop: `POST ${io.base}/api/watchtower/watches/${r.watch.id}/stop with the header X-Watch-Token: <manageToken>` };
+        });
+        const b = out.body as { watch?: { id: string }; payment?: { tx?: string } };
+        if (out.status === 200 && b.watch?.id && b.payment?.tx) wt.confirmPayment(b.watch.id, b.payment.tx);
+        return out;
       }
       // ---- Research Desk: an evidence report from the IMD swarm's published work
       if (seg[2] === "research" && !seg[3]) {
@@ -267,7 +289,7 @@ let makeLive: (() => Services) | null = null;
 export function useServices(make: () => Services): void { makeLive = make; live = null; }
 export function liveServices(): Services | null { if (!live && makeLive) live = makeLive(); return live; }
 
-const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE", "Access-Control-Allow-Headers": "PAYMENT-SIGNATURE, X-PAYMENT, X-Holder-Wallet, Content-Type", "Access-Control-Allow-Methods": "GET, OPTIONS" };
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE", "Access-Control-Allow-Headers": "PAYMENT-SIGNATURE, X-PAYMENT, X-Holder-Wallet, X-Watch-Token, Content-Type", "Access-Control-Allow-Methods": "GET, OPTIONS" };
 
 /** The hook line in server.ts: answers /api/v1/* and /openapi.json. */
 export async function serviceRoutes(req: IncomingMessage, res: ServerResponse, p: string, ctx: { url: URL; base: string; ip: string; limited(req: IncomingMessage, key: string, n: number, ms: number): boolean }): Promise<boolean> {

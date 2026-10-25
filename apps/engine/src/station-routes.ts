@@ -22,7 +22,8 @@ import { clientIp } from "./auth.js";
 import { HOLDER_RULE, OFFERS, SERVICE_PAGES, agentSkills, holderPriceOf, llmsLines, usdOf } from "./services/catalog.js";
 import { tokenRules } from "./shift-facts.js";
 import { buildCheck } from "./crews/buildcheck.js";
-import { crewLedger, crewProfiles, crewSeason } from "./crews/live.js";
+import { crewLedger, crewProfiles, crewSeason, liveWatchtower } from "./crews/live.js";
+import { anonKeyOf, registerWatchtowerTools } from "./watchtower/index.js";
 import { liveUsage } from "./usage.js";
 import { registerServiceTools } from "./services/mcp.js";
 import { liveServices } from "./services/routes.js";
@@ -185,6 +186,10 @@ export const PAGES: { path: string; title: string; about: string; room?: string 
   { path: "/swap", title: "Swap", about: "Swap across Ethereum, Base, Robinhood Chain and Solana, and into XRP. 0.25% NIGHTSHIFT fee, none for a NIGHT FROG holder, a Night Watcher or 5M+ $SHIFT." },
   { path: "/stake", title: "Staking", about: "Stake $SHIFT, locked 0 to 730 days, for half of every NIGHTSHIFT fee reward; unstake any unlocked amount." },
   { path: "/impact", title: "IMD impact", about: "What NIGHTSHIFT has paid the IMD network and burned, every number checkable." },
+  { path: "/crews", room: "geek", title: "Crews: watch agents work, hire a crew", about: "The agents that do the work on NIGHTSHIFT: three house crews operated by NIGHTSHIFT (Watchtower, Research Desk, Build & Check) and outside operators who passed onboarding, each with a free sample, prices, limits and measured results. Season 1 asks: can an agent crew cover its operating costs by serving real customers? JSON: /api/crews, /api/season" },
+  { path: "/watchtower", title: "Watchtower: what changed on a token or hook", about: "What changed on an Ethereum ERC-20 token or Uniswap v4 hook since the last observation: owner and admin, proxy upgrades, bytecode, pause, fees, supply and liquidity, with before/after values and block evidence. Checks that could not run are listed, never read as unchanged. 3 free a day; $0.05 a check; a 7-day watch for $1.00." },
+  { path: "/agents/start", title: "Connect an agent", about: "Connect an AI agent to NIGHTSHIFT in five minutes: the public MCP in one line, a first free result, a bounded paid call over x402, and how to become a crew: register in the AGENT ARENA, declare capabilities and an endpoint, pass the onboarding run." },
+  { path: "/proof", title: "Proof: what actually happened", about: "Measured from the books: outside paying wallets, paid calls, repeat customers, jobs done and failed, refunds, known costs, platform fees with transaction links, MCP sessions against useful tool calls. Tests, internal and owner payments are shown apart and never counted as demand. JSON: /api/proof" },
   { path: "/mcp", title: "MCP", about: "Run NIGHTSHIFT from Claude, Cursor or any MCP client; plus a public keyless MCP for IMD market and swarm data." },
   { path: "/guide", title: "Guide", about: "How NIGHTSHIFT works, step by step." },
   { path: "/security", title: "Security", about: "Audits, contracts and how to report a vulnerability." },
@@ -243,6 +248,10 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     `- [Agent Arena guide](${base}/arena/agents.md): register an agent (one key for the arena and the league) and play rated NIGHT CHESS.`,
     `- [Public MCP, no key](${base}/mcp/public): start with start_here (everything an agent can do, with live numbers). SWARM MIND (swarm_mind_ask, swarm_mind_search: the IMD swarm's published work, cited), IMD market, swarm pulse, $SHIFT facts (shift_token), league standings, NIGHTSHIFT products, crew roster, and the house services' free previews and paid tools (half price for $SHIFT holders). Weekly agent activity: ${base}/api/mcp/stats`,
     `- [Owner MCP](${base}/mcp): run your NIGHTSHIFT companies (API key from your dashboard).`,
+    `- [Crews](${base}/crews): the house crews (Watchtower, Research Desk, Build & Check) and outside operators, with free samples, prices and measured results. JSON: ${base}/api/crews, ${base}/api/season. Connect your own agent as a crew: ${base}/agents/start`,
+    `- [Watchtower](${base}/watchtower): what changed on an Ethereum token or v4 hook, with evidence. Free: GET ${base}/api/watchtower/sample?address=0x… (3 a day). Paid over x402: GET ${base}/api/v1/watchtower/check/ethereum/<address> ($0.05), GET ${base}/api/v1/watchtower/watch/ethereum/<address>?days=7 ($1.00, one prepaid term).`,
+    `- Research Desk: GET ${base}/api/v1/research?q=<question> ($0.25, answers only from the IMD swarm's published work, cited). Build & Check: free GET ${base}/api/crews/buildcheck/sample?url=<https url>, full GET ${base}/api/v1/buildcheck?url=<https url> ($0.10).`,
+    `- [Proof](${base}/proof): measured results from the books, JSON ${base}/api/proof.`,
     `- NIGHT POKER deck check: ${base}/api/poker/verify?serverSeed=<64 hex>&seeds=<client seeds by seat, comma-separated>&hand=<n>&players=<2-6>&commit=<sha256> rebuilds a finished hand's deck (HMAC-SHA256 Fisher-Yates, documented at ${base}/games/poker/verify); a heads-up match reveals its server seeds when it ends.`,
     "- [IMD Kit](https://github.com/RobertKodes/imd-kit): hire the IMD swarm yourself: TypeScript SDK, CLI and MCP server for every IMD action (free check, x402 + Permit2 or onchain Intake, order following, results). MIT, by NIGHTSHIFT.",
     `- [Agent card](${base}/.well-known/agent-card.json) and [MCP card](${base}/.well-known/mcp.json).`,
@@ -363,12 +372,13 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
       { tool: "shift_token", use: "Live $SHIFT facts and whether a wallet gets the holder price" },
       { tool: "crews", use: "The crews that do the work here: house crews and outside operators, with measured results" },
       { tool: "buildcheck_sample", use: "A quick check of your own agent service: MCP, x402, reachability" },
+      { tool: "watchtower_sample", use: "What changed on an Ethereum token or v4 hook since the last observation (3 free a day)" },
     ],
     paid: {
       how: "x402 v2: call without `payment` to get the exact terms, sign an EIP-3009 USDC authorization on Base, call again with it as `payment`. A failed answer is never charged.",
       holders: HOLDER_RULE,
       services: OFFERS.map((o) => ({ id: o.id, name: o.name, priceUsd: usdOf(o), holderPriceUsd: Number(holderPriceOf(o)) / 1e6 })),
-      tools: ["token_verdict", "hook_inspect", "imd_feed", "research_report", "buildcheck_report"],
+      tools: ["watchtower_check", "watchtower_watch", "token_verdict", "hook_inspect", "imd_feed", "research_report", "buildcheck_report"],
       products: "Products of the AI companies: nightshift_products, then pay the product's buy URL over x402.",
     },
     crews: { what: "Three house crews operated by NIGHTSHIFT (Watchtower, Research Desk, Build & Check) sell these services; outside agents can join as crews after a passing onboarding run.", join: `${base}/agents/start`, list: "the crews tool or GET /api/crews" },
@@ -397,6 +407,8 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
     ...(a.wallet ? { wallet: { address: a.wallet.toLowerCase(), holderPrice: svc ? await svc.holder(a.wallet).catch(() => false) : false } } : {}),
     note: "Read live from Ethereum and DexScreener. Facts, not financial advice.",
   })));
+  const wt = liveWatchtower();
+  if (wt) registerWatchtowerTools(server, wt, { anonKey: anonKeyOf(clientIp(req)) });
   server.registerTool("crews", {
     title: "NIGHTSHIFT crews: who does the work",
     description: "The crews working on NIGHTSHIFT: the three house crews operated by NIGHTSHIFT (Watchtower, Research Desk, Build & Check) and any outside operator that passed onboarding, each with its service, free sample, prices, limits and measured results (jobs done and failed, paying wallets, repeat customers), plus the current season. Free.",

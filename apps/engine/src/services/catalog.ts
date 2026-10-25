@@ -9,7 +9,7 @@ import type { Address } from "viem";
  * Descriptions start with "Use when an agent needs…" and stay under 500 characters, as discovery
  * indexes want (researched 2026-10-20).
  */
-export type OfferId = "token-verdict-quick" | "token-verdict-deep" | "hook-inspector" | "hook-inspector-explained" | "imd-feed" | "research-report" | "buildcheck-report";
+export type OfferId = "token-verdict-quick" | "token-verdict-deep" | "hook-inspector" | "hook-inspector-explained" | "imd-feed" | "research-report" | "buildcheck-report" | "watchtower-check" | "watchtower-watch";
 /** The house crew that runs each offer: its jobs count on that crew's page, the proof page and the season. */
 export type CrewOf = "watchtower" | "research" | "buildcheck";
 export type Offer = {
@@ -115,6 +115,24 @@ const buildcheckExample = {
   summary: { checks: 5, pass: 4, warn: 1, fail: 0, unavailable: 0, text: "5 checks: 4 pass, 1 warn, 0 fail, 0 unavailable" },
   generatedAt: "2026-10-25T12:00:00.000Z", payment: { tx: "0x5f2c…e1a9", network: "eip155:8453", priceUsd: 0.1 },
 };
+const watchOut = {
+  required: ["address", "chain", "changes", "unavailable", "unsupported", "stale", "summary"],
+  properties: {
+    address: { type: "string" }, chain: { type: "string", enum: ["ethereum"] }, kind: { type: "string", enum: ["token", "hook"] },
+    baseline: { type: ["object", "null"], description: "the previous observation compared against: time and block" },
+    changes: { type: "array", items: { type: "object", properties: { field: { type: "string" }, severity: { type: "string", enum: ["info", "low", "medium", "high", "critical"] }, before: {}, after: {}, beforeBlock: { type: "integer" }, afterBlock: { type: "integer" }, evidence: { type: "array", items: { type: "string" } } } } },
+    unavailable: { type: "array", description: "checks that could not run this time: never read as no change" }, unsupported: { type: "array", items: { type: "string" } },
+    stale: { type: "boolean" }, summary: { type: "string" }, human: { type: "string", description: "the same report in short markdown" }, coverageNote: { type: "string" },
+    watch: { type: "object", description: "watch only: id, term, expiry" }, manageToken: { type: "string", description: "watch only: shown once, to read or stop the watch" }, telegram: { type: ["string", "null"], description: "watch only: the link that turns on Telegram alerts" },
+  },
+};
+const watchExample = {
+  address: SHIFT, chain: "ethereum", kind: "token", baseline: { at: "2026-10-25T09:00:00.000Z", block: 23650000 },
+  changes: [{ field: "liquidityUsd", severity: "medium", before: 45698, after: 29120, beforeBlock: 23650000, afterBlock: 23650300, evidence: ["https://dexscreener.com/ethereum/…"] }],
+  unavailable: [], unsupported: ["transfer restrictions (blacklist, max transaction)", "other chains"], stale: false,
+  summary: "9 checks completed, 1 change detected (medium), 0 checks unavailable.", coverageNote: "Check coverage is not a probability that a token is safe or profitable.",
+};
+const watchPath = { chain: { type: "string", description: "ethereum (or 1)", pattern: "^(ethereum|eth|mainnet|1)$" }, address: { type: "string", description: "ERC-20 token or Uniswap v4 hook address", pattern: "^0x[0-9a-fA-F]{40}$" } };
 const tokenPath = { chain: { type: "string", description: "ethereum (or 1)", pattern: "^(ethereum|eth|mainnet|1)$" }, token: { type: "string", description: "ERC-20 token address", pattern: "^0x[0-9a-fA-F]{40}$" } };
 export const OFFERS: Offer[] = [
   {
@@ -156,6 +174,18 @@ export const OFFERS: Offer[] = [
     },
     path: { id: { type: "string", description: "launch number or id (launches/{id})" }, seat: { type: "string", description: "seat token id (agents/{seat})", pattern: "^\\d{1,6}$" } },
     output: feedOut, outputExample: feedExample, crew: "research",
+  },
+  {
+    id: "watchtower-check", name: "Watchtower: what changed", kind: "tool", pitch: "What changed on an Ethereum token or v4 hook since the last observation, with before/after values and block evidence.", priceUsdc: 50_000n, method: "GET",
+    route: "/api/v1/watchtower/check/{chain}/{address}", example: `/api/v1/watchtower/check/ethereum/${SHIFT}`, page: "/watchtower",
+    description: "Use when an agent needs to know what changed on an Ethereum ERC-20 token or Uniswap v4 hook since the previous observation: owner and admin, proxy upgrades, bytecode, pause, fees, supply and liquidity, each change with before/after values, block numbers and links; checks that could not run are listed, never read as unchanged. Run by NIGHTSHIFT's Watchtower crew.",
+    query: {}, path: watchPath, output: watchOut, outputExample: watchExample, crew: "watchtower",
+  },
+  {
+    id: "watchtower-watch", name: "Watchtower: 7-day watch", kind: "tool", pitch: "Seven days of hourly watching for one token or hook, one prepaid term, alerts on Telegram, no renewal.", priceUsdc: 1_000_000n, method: "GET",
+    route: "/api/v1/watchtower/watch/{chain}/{address}?days=7", example: `/api/v1/watchtower/watch/ethereum/${SHIFT}?days=7`, page: "/watchtower",
+    description: "Use when an agent or a holder wants an Ethereum token or Uniswap v4 hook watched: hourly observations for 7 days, one prepaid term with no renewal and no recurring charge, a stop control, and opt-in Telegram alerts on owner, upgrade, fee, pause, supply or liquidity changes and on checks that stop working. Returns the baseline and a manage token. Run by NIGHTSHIFT's Watchtower crew.",
+    query: { days: { type: "string", enum: ["7"], description: "7: the term this price buys" } }, path: watchPath, output: watchOut, outputExample: { ...watchExample, changes: [], summary: "Baseline recorded at block 23650000; watching hourly until 2026-11-01.", watch: { id: "w_0123456789abcdef", days: 7 }, manageToken: "…", telegram: "https://t.me/…?start=wt_…" }, crew: "watchtower",
   },
   {
     id: "research-report", name: "Research Desk: evidence report", kind: "report", pitch: "A source-linked answer from the IMD swarm's published work, with what it covers and what it does not.", priceUsdc: 250_000n, method: "GET",

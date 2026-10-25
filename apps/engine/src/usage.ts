@@ -84,7 +84,7 @@ export class Usage {
     if (this.#first("web", ip)) d.web.visitors++;
     const clean = path.replace(/\/+$/, "").replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ":id").replace(/\/0x[0-9a-f]{6,}/gi, "/:address").replace(/\/\d{2,}(?=\/|$)/g, "/:n").slice(0, 80) || "/";
     bump(d.web.paths, clean);
-    const tag = (query.get("utm_source") ?? query.get("via") ?? "").toLowerCase().replace(/[^a-z0-9._-]/g, "").slice(0, 30);
+    const tag = (query.get("utm_source") ?? query.get("via") ?? query.get("ref") ?? "").toLowerCase().replace(/[^a-z0-9._-]/g, "").slice(0, 70);
     let host = "";
     try { host = referer ? new URL(referer).hostname.replace(/^www\./, "").toLowerCase() : ""; } catch { /* no referrer */ }
     if (tag) bump(d.web.from, `tag:${tag}`);
@@ -113,6 +113,13 @@ export class Usage {
       mcp: { sessions: sum.mcp.sessions, calls: sum.mcp.calls, callerDays: sum.mcp.callers, clients: top(sum.mcp.clients), tools: top(sum.mcp.tools, 25) },
       web: { views: sum.web.views, visitorDays: sum.web.visitors, pages: top(sum.web.paths, 25), from: top(sum.web.from, 25) },
     };
+  }
+
+  /** Visits that arrived with each campaign tag (?utm_source=, ?via=, ?ref=), over the kept days. */
+  tagCounts(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const d of Object.values(this.#f.days)) for (const [k, n] of Object.entries(d.web.from)) if (k.startsWith("tag:")) out[k.slice(4)] = (out[k.slice(4)] ?? 0) + n;
+    return out;
   }
 
   /** What anyone may see: this week's agent activity, as counts. */

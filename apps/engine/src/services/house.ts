@@ -7,7 +7,10 @@ import { config } from "../config.js";
 import type { Engine } from "../engine.js";
 import { readHoldings } from "../swap.js";
 import { buildCheck } from "../crews/buildcheck.js";
-import { recordPaid } from "../crews/live.js";
+import { liveWatchtower, recordPaid, recordWatchJob, setLiveWatchtower, watchAlert } from "../crews/live.js";
+import { Watchtower } from "../watchtower/index.js";
+import { telegram } from "../social.js";
+import { join } from "node:path";
 import { researchReport } from "../crews/research.js";
 import { HOLDER_SHIFT, OFFERS, type Offer, holderPriceOf } from "./catalog.js";
 import { context } from "./context.js";
@@ -116,7 +119,16 @@ export function liveHouseServices(engine: Engine) {
   ensureHouse(engine);
   const ctx = context({ net: liveNet, rpc: liveRpc(eth as never), now: Date.now, etherscanKey: config.etherscanKey, watchtowerUrl: config.watchtowerUrl });
   const mind = engine.mind;
+  // Watchtower reads through the same Ethereum and DexScreener doors as the other house services
+  const wt: Watchtower = liveWatchtower() ?? new Watchtower({
+    ctx, file: join(config.dataDir, "watchtower.json"),
+    notify: async (w, r): Promise<boolean> => (w.telegram.chatId && config.telegramToken ? telegram(config.telegramToken, w.telegram.chatId, watchAlert(w, r, `${config.publicUrl}${wt.unsubscribePath(w)}`)) : false),
+    onJob: recordWatchJob,
+  });
+  setLiveWatchtower(wt);
   return services(ctx, enginePayer(engine), {
+    watchtower: wt,
+    telegramLink: (code) => (config.telegramBotName ? `https://t.me/${config.telegramBotName}?start=wt_${code}` : null),
     research: mind ? (q) => researchReport({ ask: (x) => mind.ask(x, engine.llm, config.chatModel), search: (x) => mind.search(x, 12) }, q) : undefined,
     buildCheck: (url) => buildCheck(url, {}, "full"),
     record: (o, r) => recordPaid(o, r),

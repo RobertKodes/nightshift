@@ -118,9 +118,9 @@ describe("crew routes", () => {
     const h = harness();
     const target = encodeURIComponent("https://agent.example/mcp");
     const r = await h.call("GET", `/api/crews/buildcheck/sample?url=${target}`);
-    expect(r).toMatchObject({ status: 200, body: { mode: "quick", free: true, summary: { checks: 3, pass: 2, fail: 1 } } });
+    expect(r).toMatchObject({ status: 200, body: { mode: "quick", free: true, summary: { checks: 3, pass: 2, warn: 1, fail: 0 } } });
     const [job] = h.ledger.list({ crew: "buildcheck" });
-    expect(job).toMatchObject({ free: true, status: "done", kind: "buildcheck.report", publish: false, summary: "Quick check: 3 checks: 2 pass, 0 warn, 1 fail, 0 unavailable" });
+    expect(job).toMatchObject({ free: true, status: "done", kind: "buildcheck.report", publish: false, summary: "Quick check: 3 checks: 2 pass, 1 warn, 0 fail, 0 unavailable" });
     expect(job!.customer).toMatch(/^a:/);
     expect(JSON.stringify(job)).not.toContain("agent.example");
     await h.call("GET", `/api/crews/buildcheck/sample?url=${target}&publish=1`);
@@ -147,7 +147,8 @@ describe("crew routes", () => {
     const list = await h.call("GET", "/api/agents/operators");
     expect(list!.body.operators).toMatchObject([{ id, status: "active", wallet: "0x1111…1111", endpoint: "https://agent.example/mcp" }]);
     expect(JSON.stringify(list!.body)).not.toContain(A);
-    expect((await h.call("GET", "/api/crews"))!.body.crews).toHaveLength(4);
+    expect((await h.call("GET", "/api/crews"))!.body.crews).toHaveLength(3);
+    expect((await h.call("GET", "/api/crews"))!.body.external).toHaveLength(1);
     expect((await h.call("GET", `/api/crews/${encodeURIComponent(`op:${id}`)}`))!.status).toBe(200);
   });
 });

@@ -9,15 +9,15 @@ const now = () => Date.parse("2026-10-25T10:00:00Z");
 const status = (r: Awaited<ReturnType<typeof buildCheck>>) => Object.fromEntries(r.checks.map((c) => [c.id, c.status]));
 
 describe("build & check", () => {
-  it("passes an MCP server (JSON answers) in quick mode, and fails x402 where there are no terms", async () => {
+  it("passes an MCP server (JSON answers) in quick mode, and warns that a free endpoint is not an x402 paid route", async () => {
     const f = fakeFetch(mcpRoutes(MCP));
     const r = await buildCheck(MCP, { fetch: f.fetch, now }, "quick");
-    expect(status(r)).toEqual({ reachable: "pass", mcp: "pass", x402: "fail" });
+    expect(status(r)).toEqual({ reachable: "pass", mcp: "pass", x402: "warn" });
     const mcp = r.checks.find((c) => c.id === "mcp")!;
     expect(mcp.detail).toContain("fake-mcp 1.2.3, protocol 2025-06-18");
     expect(mcp.detail).toContain("2 tools: lookup, report");
     expect(mcp.reproduce).toMatch(/^curl -sS -X POST 'https:\/\/svc\.example\/mcp' .*"method":"initialize".* && curl .*"method":"tools\/list"/);
-    expect(r.summary).toEqual({ checks: 3, pass: 2, warn: 0, fail: 1, unavailable: 0, text: "3 checks: 2 pass, 0 warn, 1 fail, 0 unavailable" });
+    expect(r.summary).toEqual({ checks: 3, pass: 2, warn: 1, fail: 0, unavailable: 0, text: "3 checks: 2 pass, 1 warn, 0 fail, 0 unavailable" });
     expect(r.requests).toBe(4); // GET, initialize, initialized, tools/list
     // never a cookie or a credential, never a redirect followed by the fetch itself
     for (const c of f.calls) {
@@ -98,7 +98,7 @@ describe("build & check", () => {
     const r = await buildCheck(`${O}/start`, { fetch: loop.fetch, now }, "full");
     expect(loop.calls).toHaveLength(LIMITS.requests);
     expect(r.requests).toBe(LIMITS.requests);
-    expect(status(r)).toEqual({ reachable: "pass", mcp: "fail", x402: "fail", openapi: "fail", discovery: "unavailable" });
+    expect(status(r)).toEqual({ reachable: "pass", mcp: "fail", x402: "warn", openapi: "fail", discovery: "unavailable" });
     expect(r.checks[4]!.detail).toContain("the 12-request limit was reached");
   });
 
@@ -112,13 +112,13 @@ describe("build & check", () => {
       [`GET ${O}/.well-known/mcp.json`]: () => json(200, { name: "svc" }),
     });
     const r = await buildCheck(MCP, { fetch: f.fetch, now }, "full");
-    expect(status(r)).toEqual({ reachable: "pass", mcp: "pass", x402: "fail", openapi: "warn", discovery: "warn" });
+    expect(status(r)).toEqual({ reachable: "pass", mcp: "pass", x402: "warn", openapi: "warn", discovery: "warn" });
     expect(r.checks[3]!.detail).toBe("OpenAPI 3.1.0 at /openapi.json: 2 paths, 3 operations, 2 with a summary.");
     expect(r.checks[4]!.detail).toContain("/llms.txt: present (13 bytes)");
     expect(r.checks[4]!.detail).toContain("/.well-known/agent-card.json: absent (an HTML page, HTTP 200)");
     expect(r.checks[4]!.detail).toContain("/.well-known/mcp.json: present");
     expect(r.requests).toBe(8);
-    expect(r.summary.text).toBe("5 checks: 2 pass, 2 warn, 1 fail, 0 unavailable");
+    expect(r.summary.text).toBe("5 checks: 2 pass, 3 warn, 0 fail, 0 unavailable");
   });
 
   it("refuses targets it must not touch, and does not request a plain http one", async () => {

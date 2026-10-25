@@ -17,6 +17,13 @@ import { buildCheck } from "./crews/buildcheck.js";
 import { crewLedger, crewOperators, crewProfiles, crewSeason } from "./crews/live.js";
 import { crewRoutes } from "./crews/routes.js";
 import { proof } from "./proof.js";
+import { crewHighlights, liveWatchtower } from "./crews/live.js";
+import { watchtowerRoutes } from "./watchtower/index.js";
+import { Recruiter } from "./recruiter/recruiter.js";
+import { blueskyChannel, telegramChannel } from "./recruiter/adapters.js";
+import { recruiterRoutes } from "./recruiter/routes.js";
+import { chats } from "./community.js";
+import { isAdmin as adminReq } from "./admin.js";
 import { KEEPER_LOW, KEEPER_RESERVE, burnStatus, keeperAccount, keeperBurnRate, keeperState } from "./keeper.js";
 import { type CompanyClaim, rewardsOf } from "./rewards.js";
 import { frogPng } from "./frogpng.js";
@@ -65,7 +72,7 @@ import { launchpadRoutes } from "./launchpad.js";
 import { omniRoutes } from "./omni.js";
 import { usdc } from "@nightshift/core";
 import { erc20Abi, getAddress, parseAbi } from "viem";
-import { serviceRoutes, useServices } from "./services/routes.js";
+import { liveServices, serviceRoutes, useServices } from "./services/routes.js";
 import { sniperRoutes } from "./sniper-routes.js";
 import { mindRoutes } from "./mind-routes.js";
 import { HOUSE_ID, liveHouseServices } from "./services/house.js";
@@ -372,6 +379,27 @@ async function stakedNow(): Promise<number | null> {
 }
 let overviewCache: { at: number; v: unknown } | null = null;
 let proofCache: { at: number; v: unknown } | null = null;
+
+let recruiter: Recruiter | null = null;
+/**
+ * The recruiter, built once with the channels this server has credentials for (none means drafts only).
+ * It starts paused the first time: the owner runs a dry run from the dashboard, then unpauses it.
+ */
+function liveRecruiter(engine: Engine): Recruiter {
+  if (recruiter) return recruiter;
+  const community = chats()[0];
+  return (recruiter = new Recruiter({
+    file: join(config.dataDir, "recruiter.json"),
+    channels: {
+      ...(config.telegramToken && community ? { telegram: telegramChannel(config.telegramToken, community) } : {}),
+      ...(config.blueskyHandle && config.blueskyAppPassword ? { bluesky: blueskyChannel(config.blueskyHandle, config.blueskyAppPassword) } : {}),
+    },
+    notifyOwner: (text) => engine.alert(text, `recruiter-${Date.now()}`),
+    highlights: () => crewHighlights(),
+    attribution: (refs) => { const t = liveUsage(config.dataDir).tagCounts(); return Object.fromEntries(refs.map((r) => [r, { visits: t[r] ?? 0 }])); },
+    settings: { paused: true, postsPerPlatformPerDay: 1 },
+  }));
+}
 /** Everything the token page shows, in one read: market, supply, burns, frogs. */
 async function tokenOverview(): Promise<unknown> {
   if (overviewCache && Date.now() - overviewCache.at < 60_000) return overviewCache.v;
@@ -408,6 +436,10 @@ function liveProducts(engine: Engine) {
 export function serve(engine: Engine) {
   // the house services (Token Verdict, Hook Inspector, IMD Data Feed), sold by the NIGHTSHIFT Services house company
   useServices(() => liveHouseServices(engine));
+  // built now, not on the first request: Watchtower's watches and the recruiter keep their schedules after a restart
+  liveServices();
+  setInterval(() => void liveWatchtower()?.tick().catch((e) => console.error("watchtower", (e as Error).message)), 60_000).unref();
+  setInterval(() => void liveRecruiter(engine).tick().catch((e) => console.error("recruiter", (e as Error).message)), 60_000).unref();
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", config.publicUrl);
     const p = url.pathname;
@@ -527,6 +559,8 @@ export function serve(engine: Engine) {
         }
         if (p === "/api/admin/live" && req.method === "GET") return json(res, 200, liveStats());
         if (p === "/api/admin/usage" && req.method === "GET") return json(res, 200, liveUsage(config.dataDir).report(Math.min(90, Math.max(1, Number(url.searchParams.get("days") ?? 30) || 30))));
+        // the recruiter's owner dashboard: queue, prospects, sends, conversions, pause and stop
+        if (p.startsWith("/api/admin/recruiter") && await recruiterRoutes(req, res, p, { json, body, isAdmin: adminReq, recruiter: liveRecruiter(engine) })) return;
         if (p === "/api/admin/keeper" && req.method === "GET") {
           const a = keeperAccount(engine.vault).address;
           const wei = await eth.getBalance({ address: a }).catch(() => null);
@@ -592,7 +626,7 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/omni/") && await omniRoutes(req, res, p, { json, limited, url })) return;
       if (p.startsWith("/api/forge") && await forgeRoutes(req, res, p, { json, limited, url, owner })) return;
       if (p.startsWith("/api/ship") && await shipRoutes(req, res, p, { json, limited, url, companies: () => [...engine.store.companies.values()] })) return;
-      if ((p.startsWith("/api/watch") || p.startsWith("/nightwatch/")) && await watchRoutes(req, res, p, { json, body, limited, url })) return;
+      if (((p.startsWith("/api/watch") && !p.startsWith("/api/watchtower")) || p.startsWith("/nightwatch/")) && await watchRoutes(req, res, p, { json, body, limited, url })) return;
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
       if ((p.startsWith("/api/league") || p === "/league/agents.md") && await leagueRoutes(req, res, p, { json, body, limited, url, vault: engine.vault })) return;
@@ -601,6 +635,12 @@ export function serve(engine: Engine) {
         json, body, limited, ip: clientIp(req), ledger: crewLedger(), operators: crewOperators(), profiles: crewProfiles, season: crewSeason, buildCheck,
         agentFromKey: async (h) => { const a = liveArena(() => gameLobby(engine.vault)).authenticate(String(h ?? "").replace(/^Bearer\s+/i, "").trim()); return a ? { id: a.id, owner: a.owner, name: a.name } : null; },
       })) return;
+      // ---- Watchtower's free door: the sample, and the owner's watches
+      if (p.startsWith("/api/watchtower/")) {
+        const wt = liveWatchtower();
+        if (!wt) return json(res, 503, { error: "Watchtower is starting." });
+        if (await watchtowerRoutes(req, res, p, { json, body, limited, owner, ip: clientIp(req), wt })) return;
+      }
       // ---- the proof page: what actually happened, from the books
       if (p === "/api/proof" && req.method === "GET") {
         if (limited(req, "proof", 60, 60_000)) return json(res, 429, { error: "slow down" });

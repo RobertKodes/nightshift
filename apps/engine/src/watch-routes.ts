@@ -28,7 +28,7 @@ export async function watchRoutes(req: IncomingMessage, res: ServerResponse, p: 
     res.end(readFileSync(file));
     return true;
   }
-  if (!p.startsWith("/api/watch")) return false;
+  if (!p.startsWith("/api/watch") || p.startsWith("/api/watchtower")) return false;
   const { json } = ctx;
   if (ctx.limited(req, "watch", 240, 60_000)) { json(res, 429, { error: "slow down" }); return true; }
   try {

@@ -54,6 +54,16 @@ export function registerServiceTools(server: McpServer, s: Services, io: { ip: s
   const feedQ = (a: FeedA) => ({ chain: a.chain, kind: a.kind, status: a.status, since: a.since, limit: a.limit ? String(a.limit) : undefined, before: a.before });
   server.registerTool("imd_feed_sample", { title: "IMD Data Feed sample (free)", description: "Free: a 3-item sample of any IMD Data Feed endpoint (launches, one launch, tokens, swarm health, a seat's work).", inputSchema: feedArgs },
     (a: FeedA) => call(feedPath(a), { ...feedQ(a), sample: "1" }));
+  server.registerTool("watchtower_check", {
+    title: `Watchtower: what changed ($${usdOf(offer("watchtower-check"))}, half for holders)`,
+    description: `${offer("watchtower-check").description} Free first: watchtower_sample. Pass the x402 payment as \`payment\`.`,
+    inputSchema: { address: addr("ERC-20 token or Uniswap v4 hook address on Ethereum"), holderWallet, payment },
+  }, (a: { address: string; holderWallet?: string; payment?: string }) => call(`/api/v1/watchtower/check/ethereum/${a.address}`, { holder: a.holderWallet }, a.payment));
+  server.registerTool("watchtower_watch", {
+    title: `Watchtower: 7-day watch ($${usdOf(offer("watchtower-watch"))}, half for holders)`,
+    description: `${offer("watchtower-watch").description} The paying wallet owns the watch. Pass the x402 payment as \`payment\`.`,
+    inputSchema: { address: addr("ERC-20 token or Uniswap v4 hook address on Ethereum"), holderWallet, payment },
+  }, (a: { address: string; holderWallet?: string; payment?: string }) => call(`/api/v1/watchtower/watch/ethereum/${a.address}`, { days: "7", holder: a.holderWallet }, a.payment));
   server.registerTool("research_report", {
     title: `Research Desk: evidence report ($${usdOf(offer("research-report"))}, half for holders)`,
     description: `${offer("research-report").description} Free first: swarm_mind_ask. Pass the x402 payment as \`payment\`.`,

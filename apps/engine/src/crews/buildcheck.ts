@@ -257,7 +257,8 @@ export async function buildCheck(target: string, deps: BuildCheckDeps = {}, mode
   }
   const repC = REP.x402;
   if (!paid.ok) add("x402", lost(paid), `${paid.reason}.`, repC, t0);
-  else if (paid.hit.status !== 402) add("x402", "fail", `HTTP ${paid.hit.status}, not 402: no x402 payment terms at this URL.`, repC, t0);
+  // a free endpoint (an MCP server, an API page) is not a paid route: that is only a failure when a paid route was named
+  else if (paid.hit.status !== 402) add("x402", deps.paidRoute ? "fail" : "warn", deps.paidRoute ? `HTTP ${paid.hit.status}, not 402: no x402 payment terms at the paid route.` : `HTTP ${paid.hit.status}, not 402: this URL is not an x402 paid route. To check payment terms and Bazaar metadata, check a paid route instead.`, repC, t0);
   else {
     let terms: Record<string, unknown> | null = null, where = "";
     const body = json(paid.hit.text);
