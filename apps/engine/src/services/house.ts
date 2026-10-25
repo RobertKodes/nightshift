@@ -2,7 +2,7 @@ import { type Company, DEFAULT_POLICY, type Product } from "@nightshift/core";
 import { type PaymentPayload, USDC, decodeHeader, requirement, verifyPayment } from "@nightshift/x402";
 import { erc20Abi } from "viem";
 import { eth, sales } from "../chain.js";
-import { PendingError } from "../checkout.js";
+import { NoGasError, PendingError } from "../checkout.js";
 import { config } from "../config.js";
 import type { Engine } from "../engine.js";
 import { readHoldings } from "../swap.js";
@@ -100,7 +100,8 @@ export function enginePayer(engine: Engine): Payer {
       if (await engine.checkout.fresh(auth.from, auth.nonce)) {
         const bal = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [v.payer] }).catch(() => 0n);
         if (bal < BigInt(auth.value)) return { ok: false, status: 402, reason: "insufficient USDC balance", challenge: true };
-        if ((await sales.getBalance({ address: c.wallet }).catch(() => 0n)) < 20_000_000_000_000n) {
+        // only settling itself costs the house gas: the CDP facilitator pays its own, so with it the wallet needs no ETH
+        if (config.x402Facilitator === "self" && (await sales.getBalance({ address: c.wallet }).catch(() => 0n)) < 20_000_000_000_000n) {
           void engine.alert("NIGHTSHIFT Services cannot take payments: its wallet has no ETH on Base for the settlement gas.", "nogas-house");
           return { ok: false, status: 503, reason: "The service cannot take payments right now. Nothing was charged; try again later." };
         }
@@ -110,7 +111,11 @@ export function enginePayer(engine: Engine): Payer {
     settle(o: Offer, payment: PaymentPayload, terms?: SettleTerms) {
       const c = house();
       // with the terms, the CDP facilitator settles it (and lists the service in the Bazaar); without, the house settles itself
-      return engine.settleInTurn(c.id, () => engine.checkout.settle(c.id, c.wallet, o.id, payment, undefined, terms));
+      return engine.settleInTurn(c.id, () => engine.checkout.settle(c.id, c.wallet, o.id, payment, undefined, terms)).catch((e) => {
+        // the facilitator was down and the house has no gas to settle itself: nothing moved
+        if (e instanceof NoGasError) void engine.alert("NIGHTSHIFT Services could not take a payment: the CDP facilitator was down and its wallet has no ETH on Base to settle itself.", "nogas-house");
+        throw e;
+      });
     },
     async sim(o: Offer) { await engine.recordSale(house(), o.id, o.priceUsdc, "0xdemo000000000000000000000000000000buyer", null, true); },
     isPending: (e) => e instanceof PendingError,
