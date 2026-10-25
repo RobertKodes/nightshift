@@ -164,8 +164,26 @@ export function BuildCheckView({ r, title }: { r: BuildCheckReport; title?: stri
   );
 }
 
+/** The README badge for a checked URL: a live quick check, linked back to the check. */
+function Badge({ target }: { target: string }) {
+  const enc = encodeURIComponent(target);
+  const md = `[![NIGHTSHIFT check](${location.origin}/api/crews/buildcheck/badge?url=${enc})](${location.origin}/crews/buildcheck?url=${enc})`;
+  const [copied, setCopied] = useState(false);
+  return (
+    <section className="st-panel cr-report">
+      <div className="cr-report-h"><b>Add the badge to your README</b></div>
+      <p className="st-note">A live quick check of this URL, refreshed every 6 hours, so anyone reading your repo sees that agents can reach your service.</p>
+      <p><img src={`/api/crews/buildcheck/badge?url=${enc}`} alt="NIGHTSHIFT check badge" height={20} /></p>
+      <pre className="cr-code">{md}</pre>
+      <button className="st-cta" type="button" onClick={() => { void navigator.clipboard.writeText(md); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? "Copied" : "Copy the markdown"}</button>
+    </section>
+  );
+}
+
 export function BuildCheckTry() {
-  const [url, setUrl] = useState(PUBLIC_MCP);
+  // a link from the bot or a badge carries the URL to check (?url= or ?badge=)
+  const linked = (() => { try { const q = new URLSearchParams(location.search); return q.get("url") ?? q.get("badge"); } catch { return null; } })();
+  const [url, setUrl] = useState(linked && /^https:\/\//.test(linked) ? linked : PUBLIC_MCP);
   const [busy, setBusy] = useState(false);
   const [r, setR] = useState<BuildCheckReport | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -184,6 +202,7 @@ export function BuildCheckTry() {
       <p className="st-note">The free quick check runs the first three checks (reachable, MCP, x402) and makes at most 12 requests to that origin. Try <button className="svc-link" type="button" onClick={() => { setUrl(PUBLIC_MCP); void run(PUBLIC_MCP); }}>NIGHTSHIFT's public MCP</button>.</p>
       {err && <p className="svc-err">{err}</p>}
       {r && <BuildCheckView r={r} />}
+      {r && <Badge target={r.target} />}
     </>
   );
 }

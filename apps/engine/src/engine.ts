@@ -50,6 +50,7 @@ import { offerFor } from "./agentmarket.js";
 import { tokenRules } from "./shift-facts.js";
 import { linkWatchAlerts } from "./crews/live.js";
 import { liveOwnerStats } from "./owner-stats.js";
+import { telegramBuildcheck, telegramCrews, telegramWatchtower } from "./crews/growth.js";
 import { MarketDesk } from "./b2b.js";
 import { companyBrain } from "./ceo-brain.js";
 import { liveMind, liveWeather } from "./mind-live.js";
@@ -283,7 +284,9 @@ export class Engine {
     if (config.telegramToken) {
       telegramCommands(config.telegramToken, config.telegramAdmins, {
         admin: (cmd, args, ctx) => this.#command(cmd, args, ctx),
-        open: (cmd, args) => (cmd === "ask" || cmd === "mind" ? this.#askSwarm(args) : cmd === "weather" ? this.#weatherReply() : cmd === "brief" ? this.#briefReply(args) : publicCommand(cmd, args)),
+        // the crews in the chat: Watchtower and Build & Check run free right here, /crews lists who does the work
+        open: async (cmd, args) => (cmd === "ask" || cmd === "mind" ? this.#askSwarm(args) : cmd === "weather" ? this.#weatherReply() : cmd === "brief" ? this.#briefReply(args)
+          : cmd === "watchtower" ? telegramWatchtower(args) : cmd === "buildcheck" ? telegramBuildcheck(args) : cmd === "crews" ? telegramCrews() : publicCommand(cmd, args)),
         guard: async (m) => { const removed = await this.#guard(m); if (!removed) void this.#ask(m).catch(() => {}); return removed; },
         ask: (m) => this.#ask(m),
         // Raids are off: a shared X post is not reposted to the community.

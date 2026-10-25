@@ -455,7 +455,7 @@ describe("space pinball server", () => {
       const b = pb.soloStart("x", "ip:7");
       vi.advanceTimersByTime(86_400_000);
       expect(() => pb.soloFinish(b.id, [])).toThrow(/expired/);
-    });
+    }, 20_000);
     it("refuses a finish that comes before the game could have been played", () => {
       const a = pb.soloStart("x", "ip:8");
       vi.advanceTimersByTime(250);

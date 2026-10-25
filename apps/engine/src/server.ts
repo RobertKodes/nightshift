@@ -25,6 +25,8 @@ import { recruiterRoutes } from "./recruiter/routes.js";
 import { chats } from "./community.js";
 import { isAdmin as adminReq } from "./admin.js";
 import { OwnerStats, liveOwnerStats, setOwnerStats } from "./owner-stats.js";
+import { PublicWatch, buildcheckBadge, publicWatchFile } from "./crews/growth.js";
+import { imdMarket } from "./imdmarket.js";
 import { onCrewEvent } from "./crews/live.js";
 import { payerClass } from "./proof.js";
 import { telegram } from "./social.js";
@@ -469,6 +471,13 @@ export function serve(engine: Engine) {
     },
   });
   setOwnerStats(stats);
+  // Watchtower on the IMD market's tokens, in public: real high-severity changes, posted with evidence (3 a day at most)
+  const pub = new PublicWatch({
+    file: publicWatchFile(),
+    tokens: async () => ((await imdMarket())?.tokens ?? []).filter((t) => /^0x[0-9a-fA-F]{40}$/.test(t.address)).map((t) => ({ address: t.address, symbol: t.symbol, launch: t.launch })),
+    post: (text, buttons) => toCommunity(text, buttons, "alert"),
+  });
+  setInterval(() => void pub.tick().catch((e) => console.error("public watch", (e as Error).message)), 10 * 60_000).unref();
   onCrewEvent((e) => stats.onCrewEvent(e));
   setInterval(() => void stats.tick().catch((e) => console.error("owner stats", (e as Error).message)), 60_000).unref();
   const server = createServer(async (req, res) => {
@@ -663,6 +672,14 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
       if ((p.startsWith("/api/league") || p === "/league/agents.md") && await leagueRoutes(req, res, p, { json, body, limited, url, vault: engine.vault })) return;
+      // ---- the Build & Check README badge: a live quick check, cached 6 hours
+      if (p === "/api/crews/buildcheck/badge" && req.method === "GET") {
+        if (limited(req, "badge", 120, 60_000)) return json(res, 429, { error: "slow down" });
+        const b = await buildcheckBadge(url.searchParams.get("url") ?? "");
+        res.writeHead(b.status, { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'", "Access-Control-Allow-Origin": "*" });
+        res.end(b.svg);
+        return;
+      }
       // ---- the crews: house crews and outside operators, their jobs, the season
       if ((p.startsWith("/api/crews") || p === "/api/season" || p.startsWith("/api/agents/operators")) && await crewRoutes(req, res, p, {
         json, body, limited, ip: clientIp(req), ledger: crewLedger(), operators: crewOperators(), profiles: crewProfiles, season: crewSeason, buildCheck,

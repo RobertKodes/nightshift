@@ -169,3 +169,6 @@
 /* inline code wraps between words on these pages (addresses and URLs still break when they must) */
 .cr-room code { word-break: normal; overflow-wrap: anywhere; }
 .cr-room .cr-ba code { word-break: break-all; }
+
+/* the README badge snippet: one long line that must wrap on a phone */
+.cr-code { white-space: pre-wrap; word-break: break-all; font: 12px/1.5 var(--mono, ui-monospace, monospace); background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08); padding: 10px 12px; margin: 8px 0; }
