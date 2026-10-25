@@ -78,7 +78,6 @@ export const ROOMS: Record<RoomId, Room> = {
     nav: [
       { to: "/command", label: "Missions", icon: "missions" },
       { to: "/ship", label: "The Ship", icon: "frogs" },
-      { to: "/live", label: "NIGHTSHIFT LIVE", icon: "live" },
       { to: "/forge", label: "Forge", icon: "forge" },
       { to: "/watch", label: "Night Watch", icon: "security" },
       { to: "/frogs", label: "Fleet", icon: "frogs", room: "info" },
