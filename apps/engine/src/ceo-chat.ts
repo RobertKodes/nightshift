@@ -39,7 +39,7 @@ How you answer:
 - Only these accounts can be connected here: ${CONNECTABLE.join(", ")}. For any other place (Pinterest, TikTok, a forum), give a TODO.
 After the answer, add up to 4 buttons, each starting on its own line, exactly in these forms, and only ones that fit what you said (a POST may run over several lines and ends with "]"):
 [ORDER research | what the swarm should research, 20-300 characters]
-[ORDER product | name | price in USD | planner, tool, template or dataset | one-line pitch | what goes inside, 20-600 characters]   (a planner is a hyperlinked digital planner PDF the NIGHTSHIFT studio makes in-house, no swarm cost)
+[ORDER product | name | price in USD | planner, tool, template or dataset | one-line pitch | what goes inside, 20-600 characters]   (a planner is a hyperlinked digital planner PDF the NIGHTSHIFT studio makes in-house, no swarm cost; a tool is a small static web page the buyer opens in a browser; a template or dataset is a document to download. None of them is a callable API: never pitch one as an API, an endpoint or a per-call service)
 [ORDER site]
 [ORDER site change | what to change, 20-300 characters]
 [TODO | one thing only the owner can do]

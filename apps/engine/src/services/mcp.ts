@@ -29,7 +29,7 @@ export function registerServiceTools(server: McpServer, s: Services, io: { ip: s
     () => call("/api/v1/services", {}));
   server.registerTool("verdict_preview", { title: "Token Verdict preview (free)", description: "Free and fast, no verdict: is this Ethereum token an IMD launch, its market and liquidity (DexScreener), other IMD launches with the same symbol, and its Uniswap v4 hook's permission bits.", inputSchema: { token: addr("ERC-20 token address on Ethereum") } },
     (a: { token: string }) => call(`/api/v1/verdict/ethereum/${a.token}/preview`, {}));
-  server.registerTool("verdict_demo", { title: "Token Verdict demo (free, once a day)", description: "One full quick Token Verdict per IP per day, free: safe / caution / avoid for an Ethereum token with every reason and its evidence. After that, use token_verdict.", inputSchema: { token: addr("ERC-20 token address on Ethereum") } },
+  server.registerTool("verdict_demo", { title: "Token Verdict demo (free, once a day)", description: "One full quick Token Verdict per IP per day, free: no issues found / caution / avoid for an Ethereum token with every reason and its evidence. After that, use token_verdict.", inputSchema: { token: addr("ERC-20 token address on Ethereum") } },
     (a: { token: string }) => call(`/api/v1/verdict/ethereum/${a.token}`, { depth: "quick", demo: "1" }));
   server.registerTool("token_verdict", {
     title: "Token Verdict ($0.02 quick, $0.25 deep)",

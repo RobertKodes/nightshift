@@ -43,7 +43,7 @@ type Tab = "calls" | "dex" | "nfts" | "launchers" | "alerts";
 
 /** Problems first, then what passed, then plain notes. */
 const ORDER: Impact[] = ["avoid", "caution", "good", "note"];
-const LABEL: Record<Verdict, string> = { safe: "Safe", caution: "Caution", avoid: "Avoid", unchecked: "Unchecked" };
+const LABEL: Record<Verdict, string> = { safe: "No flags", caution: "Caution", avoid: "Avoid", unchecked: "Unchecked" };
 const money = (n: number | null) => n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : `$${Math.round(n)}`;
 const times = (m: number | null) => m == null ? "—" : `${m >= 10 ? Math.round(m) : m.toFixed(2)}×`;
 const ago = (t: number) => { const m = Math.max(0, Math.round((Date.now() - t) / 60_000)); return m < 1 ? "now" : m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
@@ -293,7 +293,7 @@ function CallsTab({ feed, open, nfts }: { feed: Feed | null; open: (c: Call) => 
           <div><b>{st.best ? times(st.best.peak) : "—"}</b><span>Best</span></div>
         </div>
       )}
-      {!nfts && <Segmented label="Filter by verdict" value={filter} onChange={setFilter} options={[{ id: "all", label: "All" }, { id: "safe", label: "Safe" }, { id: "caution", label: "Caution" }, { id: "avoid", label: "Avoid" }]} />}
+      {!nfts && <Segmented label="Filter by verdict" value={filter} onChange={setFilter} options={[{ id: "all", label: "All" }, { id: "safe", label: "No flags" }, { id: "caution", label: "Caution" }, { id: "avoid", label: "Avoid" }]} />}
       {feed && feed.hidden > 0 && <button type="button" className="ios-banner" onClick={() => go("/sniper?tab=alerts")}><Glyph name="bell" /><span><b>{feed.hidden} newer call{feed.hidden > 1 ? "s" : ""}</b> holders can already see.</span><Glyph name="chevron" /></button>}
       <Group foot={nfts ? "IMD launches whose contract is an ERC-721 or ERC-1155 collection, with replies as they mint out." : "Every new IMD token launch on Ethereum, checked when it goes live. Tap a call for its reasons, hook and launcher."}>
         {!feed && <div className="ios-cell"><span className="ios-cell-mid"><span className="ios-cell-s">Loading…</span></span></div>}
@@ -317,7 +317,7 @@ function DexTab({ open }: { open: (r: DexRow) => void }) {
   return (
     <>
       <label className="ios-search"><Glyph name="search" /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="$SYMBOL, #launch or 0x…" aria-label="Search IMD tokens" autoCapitalize="none" autoCorrect="off" spellCheck={false} /></label>
-      <Segmented label="Sort the dex" value={sort} onChange={setSort} options={[{ id: "mcap", label: "Top" }, { id: "new", label: "New" }, { id: "move", label: "Movers" }, { id: "safe", label: "Safe" }]} />
+      <Segmented label="Sort the dex" value={sort} onChange={setSort} options={[{ id: "mcap", label: "Top" }, { id: "new", label: "New" }, { id: "move", label: "Movers" }, { id: "safe", label: "No flags" }]} />
       <Group foot={dex ? `${dex.count} IMD token${dex.count === 1 ? "" : "s"} on Ethereum, priced from each one's own Uniswap v4 pool on chain${dex.verdicts < dex.count ? `; ${dex.verdicts} checked so far, the rest a few each minute` : ""}.` : undefined}>
         {!dex && <div className="ios-cell"><span className="ios-cell-mid"><span className="ios-cell-s">Loading…</span></span></div>}
         {dex && !dex.tokens.length && <div className="ios-cell"><span className="ios-cell-mid"><span className="ios-cell-s">{q ? "No IMD token matches." : "The dex is filling: every IMD token is added a few at a time."}</span></span></div>}

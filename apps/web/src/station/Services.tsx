@@ -106,7 +106,7 @@ export function ServicesPage() {
       <div className="st-body">
         <h2>The services</h2>
         <Tiles items={[
-          { to: "/services/verdict", title: "Token Verdict", note: "Before you buy an Ethereum token: safe, caution or avoid, with every reason and its evidence. Made for IMD launches and v4 hook tokens.", icon: "shield", tag: "FREE DEMO" },
+          { to: "/services/verdict", title: "Token Verdict", note: "Before you buy an Ethereum token: no issues found, caution or avoid, with every reason and its evidence. Made for IMD launches and v4 hook tokens.", icon: "shield", tag: "FREE DEMO" },
           { to: "/services/hook", title: "Hook Inspector", note: "What a Uniswap v4 hook can do: permission bits, callbacks, fees, owner powers, upgrades, known templates.", icon: "code" },
           { to: "/services/imd-feed", title: "IMD Data Feed", note: "IMD launches, tokens, swarm health and seat work history as JSON, with since= polling.", icon: "chart" },
         ]} />
@@ -123,7 +123,7 @@ export function ServicesPage() {
 
 type Reason = { id: string; impact: "avoid" | "caution" | "note" | "good"; text: string; evidence: string[] };
 type Verdict = {
-  verdict: "safe" | "caution" | "avoid"; summary: string; token: string; depth: string;
+  verdict: "no_issues_found" | "safe" | "caution" | "avoid"; summary: string; token: string; depth: string;
   confidence: { level: string; score: number; unknowns: string[] }; reasons: Reason[];
   asset: { name: string | null; symbol: string | null };
   imd: { isLaunch: boolean; launchNumber?: number; kind?: string };
@@ -143,7 +143,7 @@ function VerdictCard({ v }: { v: Verdict }) {
   return (
     <section className={`svc-verdict ${v.verdict}`}>
       <div className="svc-vhead">
-        <span className={`svc-pill ${v.verdict}`}>{v.verdict.toUpperCase()}</span>
+        <span className={`svc-pill ${v.verdict === "no_issues_found" ? "safe" : v.verdict}`}>{v.verdict === "no_issues_found" || v.verdict === "safe" ? "NO ISSUES FOUND" : v.verdict.toUpperCase()}</span>
         <div><b>{sym}{v.imd.isLaunch ? <small> · IMD launch #{v.imd.launchNumber} ({v.imd.kind})</small> : <small> · not an IMD launch</small>}</b><span className="mono">{v.token}</span></div>
         <span className="svc-conf" title={v.confidence.unknowns.join("; ") || "every check ran"}>{v.confidence.level} confidence · {Math.round(v.confidence.score * 100)}%</span>
       </div>
@@ -192,7 +192,7 @@ export function VerdictPage() {
   useEffect(() => { if (isAddr(asked)) void run("preview", asked); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="st-room">
-      <Hero title="Token Verdict" deck="BEFORE YOU BUY" line="Safe, caution or avoid for an Ethereum token, with every reason tied to its evidence. Made for IMD launches and Uniswap v4 hook tokens, where nobody else looks.">
+      <Hero title="Token Verdict" deck="BEFORE YOU BUY" line="No issues found, caution or avoid for an Ethereum token, with every reason tied to its evidence. Made for IMD launches and Uniswap v4 hook tokens, where nobody else looks.">
         <div className="st-stats"><Stat label="Quick" value="$0.02" note="the verdict" /><Stat label="Deep" value="$0.25" note="+ hook inspection, IMD checks, memo" /><Stat label="Free" value="1 a day" note="per IP, below" /></div>
       </Hero>
       <div className="st-body">

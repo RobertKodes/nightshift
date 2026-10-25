@@ -254,7 +254,7 @@ export function recapText(calls: Call[], now: number): string | null {
   if (!day.length) return null;
   const tokens = day.filter((c) => c.type !== "nft"), nfts = day.filter((c) => c.type === "nft");
   const count = (v: Verdict) => tokens.filter((c) => c.verdict === v).length;
-  const split = (["safe", "caution", "avoid"] as const).filter((v) => count(v)).map((v) => `${count(v)} ${ICON[v]} ${v}`).join(", ");
+  const split = (["safe", "caution", "avoid"] as const).filter((v) => count(v)).map((v) => `${count(v)} ${ICON[v]} ${v === "safe" ? "no flags" : v}`).join(", ");
   const best = tokens.filter((c) => c.entry && c.peak && c.peak / c.entry >= 1.1).sort((a, b) => b.peak! / b.entry! - a.peak! / a.entry!).slice(0, 5);
   const avoid = tokens.filter((c) => c.verdict === "avoid");
   const lines = [`🎯 <b>NIGHT SNIPER, the last 24 hours</b>`, ""];

@@ -39,7 +39,7 @@ import { shipRoutes } from "./ship-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
 import { leagueRoutes } from "./league-routes.js";
 import { stationRoutes, withPageHead } from "./station-routes.js";
-import { card, catalog, detail, offerFor, productIdOf, search } from "./agentmarket.js";
+import { card, catalog, deliveryOf, detail, honestPitch, offerFor, productIdOf, search } from "./agentmarket.js";
 import { spectateRoutes } from "./spectate.js";
 import { PrizeError, livePrizes, prizesRoutes } from "./prizes.js";
 import { poolRoutes } from "./pool-routes.js";
@@ -216,7 +216,7 @@ function publicView(engine: Engine, c: Company) {
   return {
     slug: c.slug, name: c.name, mission: c.mission, audience: c.audience, createdAt: c.createdAt, wallet: c.wallet, status: c.status, cycle: c.cycle,
     site: c.site?.url ?? null,
-    products: c.products.filter((p) => p.status === "live").map((p) => ({ id: p.id, name: p.name, kind: p.kind, pitch: p.pitch, priceUsd: fromUsdc(p.priceUsdc), sales: p.sales, b2bSales: p.b2bSales ?? 0, buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, ...studioView(c, p) })),
+    products: c.products.filter((p) => p.status === "live").map((p) => ({ id: p.id, name: p.name, kind: p.kind, pitch: honestPitch(p), delivery: deliveryOf(p.kind), priceUsd: fromUsdc(p.priceUsdc), sales: p.sales, b2bSales: p.b2bSales ?? 0, buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, ...studioView(c, p) })),
     // sales to people and outside agents; sales to and purchases from other NIGHTSHIFT companies apart
     pnl: { revenueUsd: revenue, spentUsd: fromImd(spent) * config.imdUsd, sales: m.sales.length },
     b2b: {

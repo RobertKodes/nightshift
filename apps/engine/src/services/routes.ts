@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { type PaymentPayload, type Requirement, challenge as challenge402, encodeHeader, requirement } from "@nightshift/x402";
+import { type Offer as X402Offer, type PaymentPayload, type Requirement, challenge as challenge402, encodeHeader, requirement } from "@nightshift/x402";
 import type { Address } from "viem";
 import { DailyQuota, Gate, TtlCache } from "./cache.js";
 import { HOLDER_RULE, OFFERS, type Offer, type OfferId, bazaarOf, holderPriceOf, offer, openapi, usdOf } from "./catalog.js";
@@ -23,14 +23,21 @@ export interface Payer {
   payTo(): Address | null;
   /** The signed payment checked against this offer: signature, amount, the payer's USDC and the house's gas. */
   check(o: Offer, header: string, ip: string): Promise<{ ok: true; payment: PaymentPayload; payer: string } | { ok: false; status: number; reason: string; challenge?: boolean }>;
-  /** Settles on Base and books the sale; throws PendingError while the settlement is on its way. */
-  settle(o: Offer, payment: PaymentPayload): Promise<`0x${string}`>;
+  /**
+   * Settles on Base and books the sale; throws PendingError while the settlement is on its way.
+   * `terms` is exactly what this call's 402 advertised (requirement, resource, bazaar extension): the
+   * CDP facilitator settles against it, which is also what lists the service in the Bazaar.
+   */
+  settle(o: Offer, payment: PaymentPayload, terms?: SettleTerms): Promise<`0x${string}`>;
   /** A demo sale (sim mode only): booked as simulated, no money moves. */
   sim(o: Offer): Promise<void>;
   isPending(e: unknown): boolean;
   /** Does this wallet get the holder price (HOLDER_RULE)? Without it, nobody does. */
   holder?(wallet: string): Promise<boolean>;
 }
+
+/** What a paid call's 402 advertised, handed to the facilitator with the payment. */
+export type SettleTerms = X402Offer;
 
 export type Io = { method: string; path: string; query: URLSearchParams; header(name: string): string | undefined; ip: string; base: string; limited(key: string, n: number, ms: number): boolean };
 export type Out = { status: number; body: unknown; headers?: Record<string, string> };
@@ -101,7 +108,8 @@ export function services(ctx: Ctx, payer: Payer) {
   function challengeOf(o: Offer, io: Io, error?: string, holder = false) {
     const req = terms(o, holder ? holderPriceOf(o) : o.priceUsdc);
     if (!req) return null;
-    return { ...challenge402(req, { url: `${io.base}${io.path}${io.query.toString() ? `?${io.query}` : ""}`, description: o.description, mimeType: "application/json" }, error), extensions: bazaarOf(o, io.path), runBy: RUN_BY,
+    const resource = { url: `${io.base}${io.path}${io.query.toString() ? `?${io.query}` : ""}`, description: o.description, mimeType: "application/json", serviceName: "NIGHTSHIFT Services", tags: ["nightshift", o.kind, ...o.id.split("-").slice(0, 2)], ...(io.base.startsWith("https://") ? { iconUrl: `${io.base}/app/icon-512.png` } : {}) };
+    return { ...challenge402(req, resource, error), extensions: bazaarOf(o, io.path), runBy: RUN_BY,
       priceUsd: holder ? Number(holderPriceOf(o)) / 1e6 : usdOf(o), holderPrice: holder, holderPriceUsd: Number(holderPriceOf(o)) / 1e6, holders: HOLDER_RULE };
   }
   const p402 = (o: Offer, io: Io, error: string, holder = false): Out => {
@@ -123,8 +131,12 @@ export function services(ctx: Ctx, payer: Payer) {
     if (!c.ok) return c.challenge ? p402(o, io, c.reason, await holderAsked(io)) : { status: c.status, body: { error: c.reason } };
     if (payer.mode === "sim") return { status: 400, body: { error: "sim mode does not settle real payments; add sim=1 for a demo answer" } };
     const v = await run();
+    // the terms this payment was made against: the holder price or the full one, as the payer signed
+    const paidHalf = BigInt(c.payment.payload.authorization.value) < o.priceUsdc;
+    const ch = challengeOf(o, io, undefined, paidHalf);
+    const terms: SettleTerms | undefined = ch ? { requirement: ch.accepts[0]!, resource: ch.resource, extensions: ch.extensions as Record<string, unknown> } : undefined;
     let tx: `0x${string}`;
-    try { tx = await payer.settle(o, c.payment); } catch (e) {
+    try { tx = await payer.settle(o, c.payment, terms); } catch (e) {
       if (payer.isPending(e)) return { status: 202, body: { ok: false, pending: true, error: (e as Error).message } };
       throw e;
     }

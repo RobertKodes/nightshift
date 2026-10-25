@@ -48,7 +48,7 @@ describe("token verdict on recorded mainnet data", () => {
   it("$SHIFT (IMD #2124, NightshiftHook): safe, with the hook's 5% sell fee measured and every reason cited", async () => {
     const { ctx } = ctxOn("shift");
     const r = await V.tokenVerdict(ctx, "ethereum", SHIFT, "quick");
-    expect(r.verdict).toBe("safe");
+    expect(r.verdict).toBe("no_issues_found");
     expect(r.confidence.level).toBe("high");
     expect(r.imd).toMatchObject({ isLaunch: true, launchNumber: 2124, kind: "univ4_hook", role: "token" });
     expect(r.source.verified).toBe(true);
@@ -76,11 +76,11 @@ describe("token verdict on recorded mainnet data", () => {
   it("deep adds IMD's admission checks, the full hook inspection and a written explanation", async () => {
     const { ctx } = ctxOn("shift");
     const r = await V.tokenVerdict(ctx, "ethereum", SHIFT, "deep");
-    expect(r.verdict).toBe("safe");
+    expect(r.verdict).toBe("no_issues_found");
     expect(r.reasons.find((x) => x.id === "imd-admission")?.impact).toBe("good");
     expect(r.hook?.inspection?.fees.hookFee).toMatch(/takes its own fee/);
     expect(r.hook?.inspection?.powers.some((p) => /capped by MAX_FEE_BPS = 250/.test(p.text))).toBe(true);
-    expect(r.explanation).toMatch(/SAFE, with high confidence/);
+    expect(r.explanation).toMatch(/no issues found in the checks that ran, with high confidence/);
     expect(evidenceOk(r)).toBe(true);
   });
 
@@ -91,7 +91,7 @@ describe("token verdict on recorded mainnet data", () => {
     expect(r.copycat.signal).toBe("likely");
     expect(r.copycat.text).toMatch(/#2124 has more liquidity/);
     expect(r.reasons.find((x) => x.id === "copycat")?.impact).toBe("caution");
-    expect(r.verdict).not.toBe("safe");
+    expect(r.verdict).not.toBe("no_issues_found");
   });
 
   it("an unverified token is read from its bytecode, marked caution and lower confidence", async () => {
@@ -101,7 +101,7 @@ describe("token verdict on recorded mainnet data", () => {
     expect(r.reasons.find((x) => x.id === "unverified")?.impact).toBe("caution");
     expect(r.confidence.level).not.toBe("high");
     expect(r.confidence.unknowns.join(" ")).toMatch(/verified source/);
-    expect(r.verdict).not.toBe("safe");
+    expect(r.verdict).not.toBe("no_issues_found");
   });
 
   it("refuses other chains and things that are not tokens", async () => {
@@ -233,7 +233,7 @@ describe("x402 on the services", () => {
     expect((short.body as X402.Challenge).error).toBe("insufficient_amount");
     const ok = (await s.handle(io(`/api/v1/verdict/ethereum/${SHIFT}`, {}, { "payment-signature": await pay(20_000n) })))!;
     expect(ok.status).toBe(200);
-    expect((ok.body as { verdict: string; payment: { tx: string } }).verdict).toBe("safe");
+    expect((ok.body as { verdict: string; payment: { tx: string } }).verdict).toBe("no_issues_found");
     expect((ok.body as { payment: { tx: string } }).payment.tx).toMatch(/^0x0+aa$/);
     expect(P.decodeHeader<{ success: boolean }>(ok.headers!["PAYMENT-RESPONSE"]!).success).toBe(true);
     expect(settled).toEqual(["token-verdict-quick"]);
@@ -266,7 +266,7 @@ describe("caching and rate limits", () => {
     const again = await s.verdict("ethereum", SHIFT, "quick") as { cached: boolean; verdict: string };
     expect(first.cached).toBe(false);
     expect(again.cached).toBe(true);
-    expect(again.verdict).toBe("safe");
+    expect(again.verdict).toBe("no_issues_found");
     expect(calls.n).toBe(reads);
   });
 
@@ -332,7 +332,7 @@ describe("MCP and discovery", () => {
     const items = K.catalogItems("https://getnightshift.tech", 8453, "0x1111111111111111111111111111111111111111");
     expect(items).toHaveLength(K.OFFERS.length);
     expect(items[0]).toMatchObject({ type: "http", x402Version: 2, accepts: [{ amount: "20000", network: "eip155:8453" }] });
-    expect((items[0]!.metadata.bazaar as { info: { output: { example: unknown } } }).info.output.example).toMatchObject({ verdict: "safe" });
+    expect((items[0]!.metadata.bazaar as { info: { output: { example: unknown } } }).info.output.example).toMatchObject({ verdict: "no_issues_found" });
     // every service's block passes x402's own validation, the check the CDP facilitator runs before listing
     for (const o of K.OFFERS) expect(validateDiscoveryExtension(K.bazaarOf(o).bazaar as never), o.id).toEqual({ valid: true });
     const api = K.openapi("https://getnightshift.tech", 8453, null) as { openapi: string; paths: Record<string, unknown> };

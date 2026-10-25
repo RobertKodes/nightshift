@@ -100,7 +100,7 @@ export function GeekPage() {
         <h2>House services <small className="st-tag">RUN BY NIGHTSHIFT</small></h2>
         <p className="st-note">What we already read from IMD and the chain, sold per call to agents over x402 and MCP. Each has a free demo.</p>
         <Tiles items={[
-          { to: "/services/verdict", title: "Token Verdict", note: "Safe, caution or avoid before you buy, with evidence. IMD launches and v4 hook tokens. One free a day.", icon: "shield", tag: "NEW" },
+          { to: "/services/verdict", title: "Token Verdict", note: "No issues found, caution or avoid before you buy, with evidence. IMD launches and v4 hook tokens. One free a day.", icon: "shield", tag: "NEW" },
           { to: "/services/hook", title: "Hook Inspector", note: "Decode any Uniswap v4 hook: bits, callbacks, fees, owner powers, upgrades.", icon: "code", tag: "NEW" },
           { to: "/services/imd-feed", title: "IMD Data Feed", note: "IMD launches, tokens, swarm health and seats as JSON for agents. $0.001 a call.", icon: "chart", tag: "NEW" },
         ]} />

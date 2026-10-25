@@ -9,7 +9,7 @@ import { readHoldings } from "../swap.js";
 import { HOLDER_SHIFT, OFFERS, type Offer, holderPriceOf } from "./catalog.js";
 import { context } from "./context.js";
 import { liveNet, liveRpc } from "./net.js";
-import { type Payer, services } from "./routes.js";
+import { type Payer, type SettleTerms, services } from "./routes.js";
 
 /**
  * NIGHTSHIFT Services, the house company: the platform's own seller for the house services.
@@ -98,9 +98,10 @@ export function enginePayer(engine: Engine): Payer {
       }
       return { ok: true, payment, payer: v.payer };
     },
-    settle(o: Offer, payment: PaymentPayload) {
+    settle(o: Offer, payment: PaymentPayload, terms?: SettleTerms) {
       const c = house();
-      return engine.settleInTurn(c.id, () => engine.checkout.settle(c.id, c.wallet, o.id, payment));
+      // with the terms, the CDP facilitator settles it (and lists the service in the Bazaar); without, the house settles itself
+      return engine.settleInTurn(c.id, () => engine.checkout.settle(c.id, c.wallet, o.id, payment, undefined, terms));
     },
     async sim(o: Offer) { await engine.recordSale(house(), o.id, o.priceUsdc, "0xdemo000000000000000000000000000000buyer", null, true); },
     isPending: (e) => e instanceof PendingError,

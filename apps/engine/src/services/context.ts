@@ -51,5 +51,5 @@ export function confidence(checks: { name: string; weight: number; done: boolean
 }
 
 export const RUN_BY = "NIGHTSHIFT";
-export const DISCLAIMER = "Automated on-chain and public-data checks run by NIGHTSHIFT, not financial advice and not an audit. A safe verdict means none of these checks found a problem; it cannot rule out risks they do not cover.";
+export const DISCLAIMER = "Automated on-chain and public-data checks run by NIGHTSHIFT, not financial advice and not an audit. 'No issues found' means none of the checks that ran found a problem; checks that could not run are listed, and no check covers every risk. Check coverage is not a probability that a token is safe or profitable.";
 export const pct = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;

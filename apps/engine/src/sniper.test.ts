@@ -22,7 +22,7 @@ function launch(n: number, at: number, extra: Partial<LaunchRow> = {}): LaunchRo
   };
 }
 
-function verdict(v: "safe" | "caution" | "avoid"): VerdictReport {
+function verdict(v: "no_issues_found" | "caution" | "avoid"): VerdictReport {
   return {
     verdict: v, summary: v === "avoid" ? "The owner can mint without limit." : "No problem found.",
     reasons: [
@@ -41,7 +41,7 @@ const hookReport = (powers: { text: string; level: "high" | "medium" | "low" | "
   address: HOOK, summary: "Takes a 1% fee on swaps.", risk: powers.some((p) => p.level === "high") ? "high" : "low", template: { name: "LaunchHook" }, powers, fees: { swapFee: "1.25%", hookFee: "none" },
 }) as unknown as HookReport;
 
-function rig(o: { verdict?: "safe" | "caution" | "avoid"; delayMs?: number; poolBps?: number; hook?: HookReport | null; nft?: NftRead | null } = {}) {
+function rig(o: { verdict?: "no_issues_found" | "caution" | "avoid"; delayMs?: number; poolBps?: number; hook?: HookReport | null; nft?: NftRead | null } = {}) {
   let now = Date.parse("2026-10-23T12:00:00Z");
   let rows: LaunchRow[] = [launch(100, now - 3_600_000)];
   let price = 1e-9;
@@ -53,7 +53,7 @@ function rig(o: { verdict?: "safe" | "caution" | "avoid"; delayMs?: number; pool
     now: () => now,
     launches: async () => rows,
     detail: async (id: string) => ({ id, requester: LAUNCHER, kind: "custom_token", economics: { poolBps: o.poolBps ?? 8800 } }) as unknown as LaunchDetail,
-    verdict: async () => verdict(o.verdict ?? "safe"),
+    verdict: async () => verdict(o.verdict ?? "no_issues_found"),
     hook: async () => o.hook ?? null,
     nft: async () => (nft ? { ...nft } : null),
     // the token is currency1 against ETH: the pool counts tokens per ETH

@@ -26,7 +26,7 @@ const HOOK = "0x42ebcf86e3ab0445ba0362f911a7e8fad6ace0cc";
 const verdictOut = {
   required: ["verdict", "summary", "confidence", "reasons", "evidence"],
   properties: {
-    verdict: { type: "string", enum: ["safe", "caution", "avoid"] },
+    verdict: { type: "string", enum: ["no_issues_found", "caution", "avoid"] },
     summary: { type: "string" },
     confidence: { type: "object", properties: { level: { type: "string", enum: ["high", "medium", "low"] }, score: { type: "number" }, unknowns: { type: "array", items: { type: "string" } } } },
     reasons: { type: "array", items: { type: "object", properties: { id: { type: "string" }, impact: { type: "string", enum: ["avoid", "caution", "note", "good"] }, text: { type: "string" }, evidence: { type: "array", items: { type: "string" } } } } },
@@ -39,8 +39,8 @@ const verdictOut = {
 };
 // trimmed from a real quick verdict of $SHIFT, 2026-10-20 (docs/services/EXAMPLES.md has the whole answer)
 const verdictExample = {
-  service: "token-verdict", runBy: "NIGHTSHIFT", chain: "ethereum", token: SHIFT, depth: "quick", verdict: "safe",
-  summary: "$SHIFT (IMD #2124): SAFE. IMD launch #2124 (univ4_hook), deployed by IMD's launch wallet from source built and checked by the IMD swarm. Source verified on Sourcify (LaunchToken).",
+  service: "token-verdict", runBy: "NIGHTSHIFT", chain: "ethereum", token: SHIFT, depth: "quick", verdict: "no_issues_found",
+  summary: "$SHIFT (IMD #2124): no issues found in the checks that ran. IMD launch #2124 (univ4_hook), deployed by IMD's launch wallet from source built and checked by the IMD swarm. Source verified on Sourcify (LaunchToken).",
   confidence: { level: "high", score: 1, unknowns: [] },
   reasons: [
     { id: "liquidity", impact: "note", text: "$13.1k can be taken out by sellers (the pool's ETH side; $48.0k in all): thin, so large sells move the price.", evidence: ["e8"] },
@@ -84,9 +84,9 @@ const feedExample = {
 const tokenPath = { chain: { type: "string", description: "ethereum (or 1)", pattern: "^(ethereum|eth|mainnet|1)$" }, token: { type: "string", description: "ERC-20 token address", pattern: "^0x[0-9a-fA-F]{40}$" } };
 export const OFFERS: Offer[] = [
   {
-    id: "token-verdict-quick", name: "Token Verdict (quick)", kind: "tool", pitch: "Before you buy: safe, caution or avoid, with reasons and evidence.", priceUsdc: 20_000n, method: "GET",
+    id: "token-verdict-quick", name: "Token Verdict (quick)", kind: "tool", pitch: "Before you buy: no issues found, caution or avoid, with reasons and evidence.", priceUsdc: 20_000n, method: "GET",
     route: "/api/v1/verdict/{chain}/{token}?depth=quick", example: `/api/v1/verdict/ethereum/${SHIFT}?depth=quick`, page: "/services/verdict",
-    description: "Use when an agent needs a pre-buy verdict on an Ethereum token, made for IMD launches and Uniswap v4 hook tokens: safe/caution/avoid with cited reasons. Checks IMD launch match, verified source, owner powers (mint, pause, blacklist, fees, proxy), liquidity and v4 pool, holders, a buy-then-sell simulation and copycat symbols. Run by NIGHTSHIFT.",
+    description: "Use when an agent needs a pre-buy verdict on an Ethereum token, made for IMD launches and Uniswap v4 hook tokens: no_issues_found / caution / avoid with cited reasons and the checks that could not run. Checks IMD launch match, verified source, owner powers (mint, pause, blacklist, fees, proxy), liquidity and v4 pool, holders, a buy-then-sell simulation and copycat symbols. Run by NIGHTSHIFT.",
     query: { depth: { type: "string", enum: ["quick", "deep"], description: "quick ($0.02) or deep ($0.25: adds the hook inspection, IMD admission checks and a written explanation)" } }, path: tokenPath,
     output: verdictOut, outputExample: verdictExample,
   },
@@ -95,7 +95,7 @@ export const OFFERS: Offer[] = [
     route: "/api/v1/verdict/{chain}/{token}?depth=deep", example: `/api/v1/verdict/ethereum/${SHIFT}?depth=deep`, page: "/services/verdict",
     description: "Use when an agent needs the full pre-buy check on an Ethereum token before a larger trade: everything in the quick Token Verdict plus a full Uniswap v4 hook inspection, IMD admission checks and assurances, a longer holder scan and a written explanation, each claim tied to evidence. Run by NIGHTSHIFT.",
     query: { depth: { type: "string", enum: ["deep"], description: "deep" } }, path: tokenPath,
-    output: verdictOut, outputExample: { ...verdictExample, depth: "deep", explanation: "$SHIFT (0xe5e5…c3ac) on Ethereum: SAFE, with high confidence (100% of the checks ran). …", payment: { tx: "0x5f2c…e1a9", network: "eip155:8453", priceUsd: 0.25 } },
+    output: verdictOut, outputExample: { ...verdictExample, depth: "deep", explanation: "$SHIFT (0xe5e5…c3ac) on Ethereum: no issues found in the checks that ran, with high confidence (100% of the checks ran). …", payment: { tx: "0x5f2c…e1a9", network: "eip155:8453", priceUsd: 0.25 } },
   },
   {
     id: "hook-inspector", name: "Hook Inspector", kind: "tool", pitch: "What a Uniswap v4 hook can do: permissions, fees, owner powers, upgrades.", priceUsdc: 50_000n, method: "GET",
@@ -169,7 +169,7 @@ export function catalogItems(base: string, chainId: number, payTo: Address | nul
 
 export const SERVICE_PAGES = [
   { path: "/services", title: "NIGHTSHIFT Services", about: "House services run by NIGHTSHIFT, sold per call over x402 and MCP: Token Verdict, Hook Inspector and the IMD Data Feed." },
-  { path: "/services/verdict", title: "Token Verdict", about: "Before you buy an Ethereum token: safe, caution or avoid, with reasons and evidence. Made for IMD launches and Uniswap v4 hook tokens. $0.02 quick, $0.25 deep, one free demo a day." },
+  { path: "/services/verdict", title: "Token Verdict", about: "Before you buy an Ethereum token: no issues found, caution or avoid, with reasons and evidence. Made for IMD launches and Uniswap v4 hook tokens. $0.02 quick, $0.25 deep, one free demo a day." },
   { path: "/services/hook", title: "Hook Inspector", about: "What a Uniswap v4 hook can do: permission bits, callbacks, fees, owner powers, upgrades and known templates. $0.05, or $0.50 explained." },
   { path: "/services/imd-feed", title: "IMD Data Feed", about: "IMD launches, tokens, swarm health and seat work history as JSON for agents and bots. $0.001 per call, free samples." },
 ];
@@ -189,7 +189,7 @@ export function llmsLines(base: string): string[] {
 /** Skills for the agent card. */
 export function agentSkills(base: string) {
   return [
-    { id: "token-verdict", name: "Token Verdict", description: "Pre-buy verdict (safe/caution/avoid) for Ethereum tokens, specialised on IMD launches and Uniswap v4 hook tokens, with cited evidence. x402: $0.02 quick, $0.25 deep.", tags: ["x402", "token-safety", "imd", "uniswap-v4"], examples: [`${base}/api/v1/verdict/ethereum/${SHIFT}?depth=quick`] },
+    { id: "token-verdict", name: "Token Verdict", description: "Pre-buy verdict (no issues found / caution / avoid) for Ethereum tokens, specialised on IMD launches and Uniswap v4 hook tokens, with cited evidence. x402: $0.02 quick, $0.25 deep.", tags: ["x402", "token-safety", "imd", "uniswap-v4"], examples: [`${base}/api/v1/verdict/ethereum/${SHIFT}?depth=quick`] },
     { id: "hook-inspector", name: "Hook Inspector", description: "Decodes a Uniswap v4 hook: permission bits, callbacks, fees, owner powers, upgradeability, known templates. x402: $0.05, $0.50 explained.", tags: ["x402", "uniswap-v4", "hooks", "security"], examples: [`${base}/api/v1/hook/${HOOK}`] },
     { id: "imd-feed", name: "IMD Data Feed", description: "IMD launches, tokens, swarm health and seat work history as JSON, with since= polling. x402: $0.001 per call, free samples.", tags: ["x402", "imd", "data"], examples: [`${base}/api/v1/imd/launches?sample=1`] },
   ];
@@ -214,7 +214,7 @@ export function openapi(base: string, chainId: number, payTo: Address | null) {
     servers: [{ url: base }],
     paths: {
       "/api/v1/services": { get: { summary: "Every service with its price and payment terms (free)", tags: ["Services"], responses: { 200: { description: "Offers" } } } },
-      "/api/v1/verdict/{chain}/{token}": { get: { summary: "Token Verdict: safe / caution / avoid with evidence ($0.02 quick, $0.25 deep)", tags: ["Token Verdict"], parameters: [p("chain", "path", v.path.chain!), p("token", "path", v.path.token!), p("depth", "query", v.query.depth!), p("demo", "query", { type: "string", description: "1: the free demo, one quick verdict per IP per day" })], ...pay(v) } },
+      "/api/v1/verdict/{chain}/{token}": { get: { summary: "Token Verdict: no issues found / caution / avoid with evidence ($0.02 quick, $0.25 deep)", tags: ["Token Verdict"], parameters: [p("chain", "path", v.path.chain!), p("token", "path", v.path.token!), p("depth", "query", v.query.depth!), p("demo", "query", { type: "string", description: "1: the free demo, one quick verdict per IP per day" })], ...pay(v) } },
       "/api/v1/verdict/{chain}/{token}/preview": { get: { summary: "Free preview: IMD launch match, market, copycat signal and hook bits, no verdict", tags: ["Token Verdict"], parameters: [p("chain", "path", v.path.chain!), p("token", "path", v.path.token!)], responses: { 200: { description: "Preview" } } } },
       "/api/v1/hook/{address}": { get: { summary: "Hook Inspector ($0.05; explain=1 $0.50)", tags: ["Hook Inspector"], parameters: [p("address", "path", h.path.address!), p("explain", "query", h.query.explain!)], ...pay(h) } },
       "/api/v1/hook/{address}/flags": { get: { summary: "Free: the hook's permission bits from its address and a known-template match", tags: ["Hook Inspector"], parameters: [p("address", "path", h.path.address!)], responses: { 200: { description: "Flags" } } } },

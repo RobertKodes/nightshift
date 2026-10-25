@@ -11,7 +11,7 @@ import { MAX_LOG_RANGE } from "./net.js";
 import { NATIVE, type Slot0, keyFromInitialize, poolIdOf, poolsOfToken, positionAmounts, quote, quoteRoundTrip, routerRoundTrip, slot0 } from "./v4pool.js";
 
 /**
- * TOKEN VERDICT, run by NIGHTSHIFT: before you buy a token on Ethereum, is it safe, worth caution,
+ * TOKEN VERDICT, run by NIGHTSHIFT: before you buy a token on Ethereum, did the checks find no issues, issues worth caution,
  * or one to avoid? Built for IMD launches and Uniswap v4 hook tokens, where nobody else looks.
  * Every reason cites the evidence it rests on; what could not be checked lowers the confidence
  * and is listed, never guessed.
@@ -22,7 +22,7 @@ export type Depth = "quick" | "deep";
 
 export type VerdictReport = {
   service: "token-verdict"; runBy: string; chain: "ethereum"; chainId: 1; token: Address; depth: Depth;
-  verdict: "safe" | "caution" | "avoid"; summary: string; confidence: Confidence; reasons: Reason[];
+  verdict: "no_issues_found" | "caution" | "avoid"; summary: string; confidence: Confidence; reasons: Reason[];
   asset: { name: string | null; symbol: string | null; decimals: number | null; totalSupply: string | null };
   imd: { isLaunch: false } | { isLaunch: true; launchNumber: number; id: string; kind: string; status: string; createdAt: string; repo: string | null; url: string; role: string; admission?: { name: string; status: string; detail: string }[]; assurances?: number; jobs?: { id: string; state: string }[] };
   source: { verified: boolean; via?: string; contract?: string; url?: string; note?: string };
@@ -331,13 +331,17 @@ export async function tokenVerdict(ctx: Ctx, chain: string, tokenIn: string, dep
     { name: "sell simulation", weight: 0.2, done: simulation.simulated, why: simulation.simulated ? undefined : simulation.why },
     { name: "IMD match and copycat", weight: 0.1, done: true },
   ]);
-  let verdict: VerdictReport["verdict"] = reasons.some((r) => r.impact === "avoid") ? "avoid" : reasons.some((r) => r.impact === "caution") ? "caution" : "safe";
-  if (verdict === "safe" && conf.level === "low") { verdict = "caution"; say("low-confidence", "caution", "Too little could be checked to call it safe.", []); }
+  let verdict: VerdictReport["verdict"] = reasons.some((r) => r.impact === "avoid") ? "avoid" : reasons.some((r) => r.impact === "caution") ? "caution" : "no_issues_found";
+  if (verdict === "no_issues_found" && conf.level === "low") { verdict = "caution"; say("low-confidence", "caution", "Too few checks could run to report that no issues were found.", []); }
   const order: Impact[] = ["avoid", "caution", "note", "good"];
   reasons.sort((a, b) => order.indexOf(a.impact) - order.indexOf(b.impact));
-  const head2 = reasons.filter((r) => r.impact === verdict || (verdict === "safe" && r.impact === "good")).slice(0, 2).map((r) => r.text.replace(/\.$/, ""));
+  const head2 = reasons.filter((r) => r.impact === verdict || (verdict === "no_issues_found" && r.impact === "good")).slice(0, 2).map((r) => r.text.replace(/\.$/, ""));
   const name = basics.symbol ? `$${basics.symbol}${launch && isToken ? ` (IMD #${launch.launchNumber})` : ""}` : short(token);
-  const summary = `${name}: ${verdict.toUpperCase()}. ${head2.join(". ")}.`;
+  // what ran and what did not, never a blanket claim: coverage is not a probability that a token is safe
+  const ran = conf.unknowns.length ? `; could not check: ${conf.unknowns.slice(0, 3).map((u) => u.split(":")[0]).join(", ")}${conf.unknowns.length > 3 ? " and more" : ""}` : "";
+  const summary = verdict === "no_issues_found"
+    ? `${name}: no issues found in the checks that ran${ran}. ${head2.join(". ")}.`
+    : `${name}: ${verdict.toUpperCase()}. ${head2.join(". ")}.`;
 
   const report: VerdictReport = {
     service: "token-verdict", runBy: RUN_BY, chain: "ethereum", chainId: 1, token, depth, verdict, summary, confidence: conf, reasons,
@@ -365,7 +369,7 @@ export function explainVerdict(r: VerdictReport): string {
   const sym = r.asset.symbol ? `$${r.asset.symbol}` : r.token;
   const by = (i: Impact) => r.reasons.filter((x) => x.impact === i).map((x) => x.text);
   const out: string[] = [];
-  out.push(`${sym} (${r.token}) on Ethereum: ${r.verdict.toUpperCase()}, with ${r.confidence.level} confidence (${Math.round(r.confidence.score * 100)}% of the checks ran).`);
+  out.push(`${sym} (${r.token}) on Ethereum: ${r.verdict === "no_issues_found" ? "no issues found in the checks that ran" : r.verdict.toUpperCase()}, with ${r.confidence.level} confidence (${Math.round(r.confidence.score * 100)}% of the checks ran).`);
   if (r.imd.isLaunch) out.push(`It is IMD launch #${r.imd.launchNumber}, a ${r.imd.kind} launch${r.imd.repo ? ` whose source is public at ${r.imd.repo}` : ""}. IMD's launch wallet deployed it from the code its swarm built and checked.`);
   else out.push("It is not an IMD launch: no IMD launch on Ethereum lists this address.");
   const bad = [...by("avoid"), ...by("caution")];

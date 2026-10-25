@@ -37,10 +37,27 @@ export const buyUrl = (c: Company, p: Product) => `${config.publicUrl}/buy/${c.s
 /** The product id in a buy path, with or without that prefix. */
 export const productIdOf = (seg: string) => (seg.startsWith("p-") && BARE_ID.test(seg.slice(2)) ? seg.slice(2) : seg);
 
+/**
+ * What the buyer actually gets. Nothing a company sells is a callable API: a tool is a small web page on
+ * IPFS (the buyer gets a Markdown file with its address, to open in a browser); every other kind is a
+ * Markdown document to download.
+ */
+export function deliveryOf(kind: string): { type: "browser-tool" | "document"; callable: false; what: string } {
+  return kind === "tool"
+    ? { type: "browser-tool", callable: false, what: "a small web tool hosted on IPFS: after payment you get a Markdown file with its address, to open in a browser" }
+    : { type: "document", callable: false, what: `a Markdown ${kind} you download after payment` };
+}
+const CLAIMS_API = /\b(callable|apis?|endpoints?|per[- ]call|one x402 call returns|returns? json)\b/i;
+/** The company's pitch as written, with a correction when it promises a callable API it does not deliver. */
+export function honestPitch(p: { kind: string; pitch: string }): string {
+  return CLAIMS_API.test(p.pitch) ? `${p.pitch} [Correction: this is ${p.kind === "tool" ? "a browser tool you open yourself" : "a document"}, not a callable API.]` : p.pitch;
+}
+
 /** The CDP facilitator refuses a description over 500 characters. */
 const MAX_DESC = 480;
 export function describe(c: Company, p: Product, pv: Preview | null): string {
-  const d = `${p.name}: ${p.pitch}${pv ? ` A ${pv.words.toLocaleString("en-US")}-word ${p.kind} (markdown, ${pv.sections} sections)` : ""} by ${c.name}, an AI company on NIGHTSHIFT. Free preview: ${config.publicUrl}/api/market/${c.slug}/${p.id}`;
+  const what = p.kind === "tool" ? "A browser tool (you get its address in a Markdown file)" : pv ? `A ${pv.words.toLocaleString("en-US")}-word Markdown ${p.kind} (${pv.sections} sections)` : `A Markdown ${p.kind}`;
+  const d = `${p.name}: ${honestPitch(p)} ${what} by ${c.name}, an AI company on NIGHTSHIFT. Free preview: ${config.publicUrl}/api/market/${c.slug}/${p.id}`;
   return d.length > MAX_DESC ? `${d.slice(0, MAX_DESC - 1)}…` : d;
 }
 
@@ -103,7 +120,7 @@ export function search(all: Live[], f: Filters) {
 export function card({ c, p, text }: Live) {
   const pv = text ? previewOf(text) : null;
   return {
-    id: p.id, name: p.name, kind: p.kind, pitch: p.pitch, priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, b2bSales: p.b2bSales ?? 0, createdAt: p.createdAt,
+    id: p.id, name: p.name, kind: p.kind, pitch: honestPitch(p), delivery: deliveryOf(p.kind), priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, b2bSales: p.b2bSales ?? 0, createdAt: p.createdAt,
     company: { name: c.name, slug: c.slug, page: `${config.publicUrl}/c/${c.slug}` },
     words: pv?.words ?? null, sections: pv?.sections ?? null,
     preview: `${config.publicUrl}/api/market/${c.slug}/${p.id}`,
