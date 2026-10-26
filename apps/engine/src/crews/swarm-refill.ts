@@ -16,6 +16,8 @@ export type SwarmRefillOrder = { id: string; at: number; kind: RefillKind; amoun
 type State = { version: 1; fills: SwarmRefillOrder[]; active: string | null; nextAt: number; lastFunds?: { imd: string; eth: string; baseEth: string }; error?: string };
 export type SwarmRefillDeps = {
   file: string | null; now?: () => number; enabled(): boolean; float(): bigint; reserved(): bigint; credits(): SwarmCredit[]; house(): string;
+  /** The smallest refill worth a cross-chain route, in USDC units; none when absent. */
+  minRefill?(): bigint;
   funds(): Promise<{ imd: bigint; eth: bigint; usdc: bigint; baseEth: bigint }>;
   quote(kind: RefillKind, amount: bigint): Promise<Quote>;
   cost(txs: EvmTx[]): Promise<bigint>; sign(tx: EvmTx): Promise<SignedTx>; checkSigned?(tx: SignedTx): Promise<void>;
@@ -92,6 +94,9 @@ export class SwarmRefill {
       const funding = this.#funding(), physical = funds.usdc > funding.refunds ? funds.usdc - funding.refunds : 0n;
       const budget = funding.unspent < physical ? funding.unspent : physical;
       if (budget <= 0n) { this.#change(() => { this.#s.error = "No unspent Swarm Desk revenue after the Agent Reserve share and refund holds."; this.#s.nextAt = this.#now() + HOUR; }); await this.#warn(undefined, this.#s.error!); return; }
+      // a cross-chain route costs a fixed fee: on a few dollars it is far over 3%, so wait quietly for enough revenue
+      const min = this.d.minRefill?.() ?? 0n;
+      if (budget < min) { this.#change(() => { this.#s.error = `Waiting for $${Number(min) / 1e6} of unspent desk revenue before a ${kind} refill, so route fees stay under 3%.`; this.#s.nextAt = this.#now() + HOUR; }); return; }
       const target = kind === "gas" ? 2_000_000_000_000_000n : float - available;
       let amount = budget, q = await this.d.quote(kind, amount); checkRefillRoute(q, kind, amount, this.d.house());
       const quoted = BigInt(q.toAmountMin);

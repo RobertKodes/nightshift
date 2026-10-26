@@ -40,6 +40,8 @@ export const config = {
   get swarmDesk() { return (readSettings().SWARM_DESK ?? process.env.SWARM_DESK) === "1"; },
   get swarmDeskDailyImd() { const v = num(readSettings().SWARM_DESK_DAILY_IMD ?? process.env.SWARM_DESK_DAILY_IMD, 100); return Number.isFinite(v) ? Math.min(100_000, Math.max(0, v)) : 0; },
   get swarmDeskInFlight() { const v = num(readSettings().SWARM_DESK_IN_FLIGHT ?? process.env.SWARM_DESK_IN_FLIGHT, 25); return Number.isFinite(v) ? Math.min(1000, Math.max(0, Math.floor(v))) : 0; },
+  /** A refill route has a fixed fee: below this much desk revenue (USD) it waits instead of paying over 3%. */
+  get swarmRefillMinUsd() { const v = num(readSettings().SWARM_REFILL_MIN_USD ?? process.env.SWARM_REFILL_MIN_USD, 25); return Number.isFinite(v) ? Math.min(10_000, Math.max(0, v)) : 25; },
   get swarmImdFloat() { const v = num(readSettings().SWARM_IMD_FLOAT ?? process.env.SWARM_IMD_FLOAT, 5); return Number.isFinite(v) ? Math.min(100_000, Math.max(0, v)) : 0; },
   ethRpc: env.ETH_RPC ?? "https://ethereum-rpc.publicnode.com",
   /** Where products are sold: Base (8453) or Base Sepolia (84532). */

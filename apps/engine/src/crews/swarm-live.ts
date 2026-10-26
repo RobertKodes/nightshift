@@ -69,7 +69,7 @@ export function attachSwarmRefill(engine: Engine, desk: SwarmDesk, ctx: Ctx): vo
   };
   const refill = new SwarmRefill({
     file: join(config.dataDir, "swarm-refill.json"), enabled: () => config.swarmDesk && config.mode === "live" && config.salesChainId === 8453,
-    float: () => parseUnits(String(config.swarmImdFloat), 18), reserved: () => desk.reservations(), credits: () => desk.revenue(), house: () => account().address,
+    float: () => parseUnits(String(config.swarmImdFloat), 18), minRefill: () => parseUnits(String(config.swarmRefillMinUsd), 6), reserved: () => desk.reservations(), credits: () => desk.revenue(), house: () => account().address,
     funds: async () => {
       const [imd, gas, usdc, baseEth] = await Promise.all([eth.readContract({ address: REFILL_IMD, abi: erc20Abi, functionName: "balanceOf", args: [account().address] }), eth.getBalance({ address: account().address }), sales.readContract({ address: REFILL_USDC, abi: erc20Abi, functionName: "balanceOf", args: [account().address] }), sales.getBalance({ address: account().address, blockTag: "pending" })]);
       const reserve = liveAgentReserve()?.heldUsdc() ?? 0n;
