@@ -30,8 +30,9 @@
 .pk-frog-mini { width:22px; height:22px; border-radius:50%; object-fit:cover; background:#0d0722; }
 
 /* ---- the bar */
-.pk-top { position:relative; z-index:6; height:64px; padding:0 clamp(12px,3vw,44px); display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:12px; border-bottom:1px solid var(--edge); background:rgba(3,2,10,.82); backdrop-filter:blur(14px); }
-.pk-back { display:inline-flex; align-items:center; gap:8px; justify-self:start; color:var(--dim); font:500 10px var(--mono); letter-spacing:.14em; }
+/* below the iPhone status bar and notch when the page runs full screen (viewport-fit=cover): taps up there never reach the page */
+.pk-top { position:relative; z-index:6; height:calc(64px + env(safe-area-inset-top, 0px)); padding:env(safe-area-inset-top, 0px) max(clamp(12px,3vw,44px), env(safe-area-inset-right, 0px)) 0 max(clamp(12px,3vw,44px), env(safe-area-inset-left, 0px)); display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:12px; border-bottom:1px solid var(--edge); background:rgba(3,2,10,.82); backdrop-filter:blur(14px); }
+.pk-back { display:inline-flex; align-items:center; gap:8px; justify-self:start; color:var(--dim); font:500 10px var(--mono); letter-spacing:.14em; min-height:44px; min-width:44px; padding:0 8px; margin-left:-8px; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
 .pk-back .icon { transform:rotate(180deg); }
 .pk-brand { display:flex; justify-content:center; }
 .pk-wordmark { display:inline-flex; align-items:center; gap:11px; }
@@ -303,7 +304,7 @@ li.open .pk-h-row .icon { transform:rotate(90deg); }
 /* phones held upright: a tall table, your cards over the rail, the actions in reach of a thumb */
 @media (max-width:560px) {
   .pk-table { --bc:clamp(34px,min(15.5cqw,10cqh),64px); --mc:clamp(52px,min(20cqw,14cqh),88px); --oc:clamp(24px,min(8cqw,6cqh),36px); --sc:clamp(30px,min(11cqw,8cqh),46px); --av:clamp(32px,min(10.5cqw,7.5cqh),46px); }
-  .pk-top { height:52px; grid-template-columns:auto 1fr auto; padding:0 10px; }
+  .pk-top { height:calc(52px + env(safe-area-inset-top, 0px)); grid-template-columns:auto 1fr auto; padding:env(safe-area-inset-top, 0px) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px)); }
   .pk-back span, .pk-wallet span { display:none; }
   .pk-wordmark b { font-size:22px; } .pk-wordmark small { display:none; } .pk-wordmark>.icon { width:24px; height:24px; }
   .pk-panel { padding:16px; }
