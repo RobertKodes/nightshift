@@ -52,6 +52,7 @@ import { linkWatchAlerts } from "./crews/live.js";
 import { liveOwnerStats, notificationLevel, ownerText } from "./owner-stats.js";
 import { liveAgentEconomy } from "./agent-economy.js";
 import { swarmCommand } from "./crews/swarm-control.js";
+import { acpCommand } from "./crews/acp-control.js";
 import { liveSwarmDesk } from "./crews/swarm.js";
 import { swarmImdQueue } from "./crews/swarm-live.js";
 import { liveAgentReserve } from "./agent-reserve.js";
@@ -549,6 +550,7 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
     if (cmd === "notify") return { text: liveOwnerStats()?.notify(args) ?? "The notifications are starting: try again in a minute." };
     if (cmd === "announce") return { text: liveAgentEconomy()?.command(args) ?? "The announcements are starting: try again in a minute." };
     if (cmd === "swarm") return { text: await swarmCommand(args) };
+    if (cmd === "acp") return { text: await acpCommand(args) };
     if (cmd === "reserve") return { text: liveAgentReserve()?.command(args) ?? "The reserve is starting: try again in a minute." };
     // sent by an operator inside the private holders' group: that group becomes the Watch Room
     if (cmd === "watchroom") {

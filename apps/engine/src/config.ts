@@ -38,6 +38,7 @@ export const config = {
   imdUsdAt: 0,
   /** Swarm Desk's kill switch and cap apply as soon as settings are saved. */
   get swarmDesk() { return (readSettings().SWARM_DESK ?? process.env.SWARM_DESK) === "1"; },
+  get acpBridge() { return (readSettings().ACP_BRIDGE ?? process.env.ACP_BRIDGE) === "1"; },
   get swarmDeskDailyImd() { const v = num(readSettings().SWARM_DESK_DAILY_IMD ?? process.env.SWARM_DESK_DAILY_IMD, 100); return Number.isFinite(v) ? Math.min(100_000, Math.max(0, v)) : 0; },
   get swarmDeskInFlight() { const v = num(readSettings().SWARM_DESK_IN_FLIGHT ?? process.env.SWARM_DESK_IN_FLIGHT, 25); return Number.isFinite(v) ? Math.min(1000, Math.max(0, Math.floor(v))) : 0; },
   /** A refill route has a fixed fee: below this much desk revenue (USD) it waits instead of paying over 3%. */

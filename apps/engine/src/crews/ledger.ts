@@ -240,7 +240,7 @@ export class JobLedger {
       paidJobs++;
       if (j.payment.class !== "customer") continue;
       customerPaidJobs++;
-      if (j.status === "failed") continue;
+      if (j.status === "failed" || (j.payment.network === "virtuals-acp" && j.status !== "done")) continue;
       revenue += j.payment.usd;
       wallets.set(j.payment.payer, (wallets.get(j.payment.payer) ?? 0) + 1);
     }

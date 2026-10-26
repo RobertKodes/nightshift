@@ -191,6 +191,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "announce", description: "Public sales announcements: on or off" },
     { command: "reserve", description: "Agent Reserve status: on, off or dry" },
     { command: "swarm", description: "Swarm Desk: status, cap, inflight, on or off" },
+    { command: "acp", description: "Virtuals ACP: status, on or off" },
     { command: "unmute", description: "Unmute someone: reply to them, or /unmute @user" },
     { command: "mute", description: "Mute someone: reply, or /mute @user [minutes]" },
     { command: "help", description: "All commands" },

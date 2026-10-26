@@ -18,6 +18,7 @@ import { liveNet, liveRpc } from "./net.js";
 import { type Payer, type SettleTerms, services } from "./routes.js";
 import { IMD_MAINNET } from "@nightshift/imd";
 import { SwarmDesk, setSwarmDesk } from "../crews/swarm.js";
+import { AcpBridge, acpCli, setAcpBridge } from "../crews/acp-bridge.js";
 import { attachSwarmRefill, swarmJson, swarmVerified, swarmImportRepo } from "../crews/swarm-live.js";
 import { saleKey } from "../checkout.js";
 import { payerClass } from "../proof.js";
@@ -180,6 +181,11 @@ export function liveHouseServices(engine: Engine) {
   attachSwarmRefill(engine, swarm, ctx);
   setSwarmDesk(swarm);
   swarm.start();
+  const acp = new AcpBridge({ file: join(config.dataDir, "acp-bridge.json"), eventsFile: join(config.dataDir, "acp-events.jsonl"),
+    enabled: () => config.acpBridge && config.mode === "live", runner: acpCli(config.dataDir), desk: swarm,
+    alert: (text, topic) => engine.alert(text, topic) });
+  setAcpBridge(acp);
+  acp.start();
   return services(ctx, enginePayer(engine), {
     swarm,
     watchtower: wt,

@@ -15,9 +15,12 @@ const PRICE_MS = 30 * 60_000;
 const REFUND = "NIGHTSHIFT owes you a refund; it is recorded";
 type Quote = { quoteId: string; kind: SwarmKind; priceUsd: number; imdUsd: number; expiresAt: string; body: Record<string, unknown> };
 type Payment = { payer: string; nonce: string; usd: number; network: string; validBefore: number };
+export type InternalInput = SwarmInput & { brief?: string; repo?: string };
+export type InternalOrder = { kind: SwarmKind; input: InternalInput; source: "acp"; ref: string; payer: string; funded?: boolean };
 type DeskOrder = {
   orderId: string; quote: Quote; key: string; payment: Payment; at: number; day: string;
-  status: "settling" | "ordering" | "running" | "done" | "failed" | "unpaid";
+  status: "reserved" | "settling" | "ordering" | "running" | "done" | "failed" | "unpaid";
+  acp?: { ref: string; funded: boolean; outcome?: "completed" | "rejected"; reason?: string };
   tx?: `0x${string}`; imdOrderId?: string; imdActive?: boolean; imdPaid?: boolean; imd?: Order; job?: JobStatus; result?: JobResult;
   reserveUnits?: string;
   tokenHash: string; token?: string; refundOwed?: boolean; error?: string; alerted?: boolean; recorded?: boolean;
@@ -141,6 +144,53 @@ export class SwarmDesk {
     this.#on();
   }
 
+  /** Reserve a checked job before ACP proposes its budget; open only after escrow funding. */
+  internalOrder(input: InternalOrder) {
+    return this.#serial(async () => {
+      const key = `acp:${input.ref}`;
+      let o = [...this.#orders.values()].find((x) => x.key === key);
+      if (!o) {
+        if (input.funded) throw new SwarmError(409, "ACP job has no checked reservation; reject the escrow delivery.");
+        if (!/^0x[\da-f]{40}$/i.test(input.payer)) throw new SwarmError(400, "ACP client must be an EVM address.");
+        const q = await this.quote(input.kind, input.input.brief ?? null, input.input.repo ?? null, "", input.input);
+        await this.#ready();
+        o = { orderId: `sd_${randomUUID()}`, quote: { ...this.#quote(q.quoteId), priceUsd: 4 }, key,
+          payment: { payer: input.payer, nonce: key, usd: 4, network: "virtuals-acp", validBefore: 0 },
+          at: this.#now(), day: this.#day(), status: "reserved", acp: { ref: input.ref, funded: false }, reserveUnits: "0", tokenHash: hash(randomBytes(32).toString("hex")) };
+        this.#orders.set(o.orderId, o);
+        this.#save();
+      }
+      if (!o.acp || o.payment.payer.toLowerCase() !== input.payer.toLowerCase() || o.quote.kind !== input.kind) throw new SwarmError(409, "ACP reference belongs to another order.");
+      if (!input.funded && o.status === "reserved") await this.#ready(o);
+      if (input.funded && o.status === "reserved") {
+        o.acp.funded = true;
+        o.status = "settling";
+        this.#save();
+        await this.#open(o);
+      }
+      return this.#view(o);
+    });
+  }
+
+  /** Follow the saved ACP order without a public download token. */
+  async internalJob(ref: string) {
+    await this.follow();
+    const o = [...this.#orders.values()].find((x) => x.acp?.ref === ref);
+    return o ? this.#view(o) : null;
+  }
+
+  /** Release unfunded reservations and book the client's escrow decision. */
+  internalOutcome(ref: string, outcome: "completed" | "rejected", reason?: string): Promise<void> {
+    return this.#serial(async () => {
+      const o = [...this.#orders.values()].find((x) => x.acp?.ref === ref);
+      if (!o?.acp) return;
+      Object.assign(o.acp, { outcome, reason });
+      if (o.status === "reserved") o.status = "unpaid";
+      this.#save();
+      this.#record(o);
+    });
+  }
+
   /** One authorization buys at most one job, including concurrent retries and restarts. */
   order(id: string, payment: Payment, settle: () => Promise<`0x${string}`>, isPending: (e: unknown) => boolean): Promise<Out> {
     return this.#serial(async () => {
@@ -170,7 +220,7 @@ export class SwarmDesk {
   }
 
   async #open(o: DeskOrder): Promise<void> {
-    if (o.status !== "settling" || !o.tx) return;
+    if (o.status !== "settling" || (!o.tx && !o.acp?.funded)) return;
     // A crash after this write follows the saved IMD id, or records a refund. It never opens again.
     o.status = "ordering";
     o.day = this.#day();
@@ -197,12 +247,29 @@ export class SwarmDesk {
   }
 
   #record(o: DeskOrder): void {
+    if (o.acp) {
+      if (!o.acp.funded || o.recorded) return;
+      const failed = Boolean(o.refundOwed || o.acp.outcome === "rejected");
+      this.d.record(this.quotedOffer(o.quote.quoteId), { payer: o.payment.payer, nonce: o.key, usd: 4, tx: null, network: "virtuals-acp", kind: `swarm.${o.quote.kind}`, pending: !failed && o.acp.outcome !== "completed", ok: !failed, summary: `Swarm Desk: ${o.quote.kind} delivered via ACP`, ...(failed ? { error: o.acp.reason ?? o.error ?? "ACP escrow returned to client" } : {}), costUsd: o.imdPaid ? 0.5 * o.quote.imdUsd : 0 });
+      if (failed || o.acp.outcome === "completed") { o.recorded = true; this.#save(); }
+      return;
+    }
     if (!o.tx || o.recorded) return;
     this.d.record(this.quotedOffer(o.quote.quoteId), { payer: o.payment.payer, nonce: o.payment.nonce, usd: o.payment.usd, tx: o.tx, network: o.payment.network, kind: `swarm.${o.quote.kind}`, pending: o.status !== "done" && !o.refundOwed, ok: !o.refundOwed, summary: `Swarm Desk: ${o.quote.kind} delivered`, ...(o.refundOwed ? { error: `refund owed: ${REFUND}` } : {}), costUsd: o.imdPaid ? 0.5 * o.quote.imdUsd : 0 });
     if (o.status === "done" || o.refundOwed) { o.recorded = true; this.#save(); }
   }
 
   async #refund(o: DeskOrder): Promise<void> {
+    if (o.acp) {
+      Object.assign(o, { status: "failed", refundOwed: true, error: "IMD could not deliver. Reject the ACP submission to recover escrow; no payment is earned for this work." });
+      this.#save();
+      this.#record(o);
+      if (!o.alerted) {
+        try { o.alerted = await this.d.alert(`ACP job ${o.acp.ref}: ${o.error}`, `acp-failure-${o.acp.ref}`) !== false; this.#save(); }
+        catch { /* retry the owner alert on the next follow */ }
+      }
+      return;
+    }
     Object.assign(o, { status: "failed", refundOwed: true, error: `refund owed: ${REFUND}` });
     this.#save();
     this.#record(o);
@@ -238,8 +305,8 @@ export class SwarmDesk {
     if (last !== undefined && this.#now() - last < 15_000) return;
     this.#polled.set(o.orderId, this.#now());
     try {
-      if (o.status === "unpaid") return;
-      if (!o.tx) {
+      if (o.status === "unpaid" || o.status === "reserved") return;
+      if (!o.tx && !o.acp) {
         const tx = this.d.settled(o.payment.payer, o.payment.nonce);
         if (!tx) {
           if (!this.d.pending(o.payment.payer, o.payment.nonce) && this.#now() > (o.payment.validBefore + 7200) * 1000) { o.status = "unpaid"; this.#save(); }
@@ -275,7 +342,7 @@ export class SwarmDesk {
     this.#following = this.#serial(async () => {
       for (const o of this.#orders.values()) {
         if (o.status === "done") { this.#record(o); continue; }
-        if (o.status === "unpaid" || (o.refundOwed && o.alerted && !o.imdActive)) continue;
+        if (o.status === "reserved" || o.status === "unpaid" || (o.refundOwed && o.alerted && !o.imdActive)) continue;
         await this.#followOne(o);
       }
     }).finally(() => { this.#following = undefined; });
@@ -308,7 +375,7 @@ export class SwarmDesk {
     let priceUsd: number | null = null; try { priceUsd = swarmPrice(this.#price()); } catch { /* Quotes require a fresh price. */ }
     const rows = [...this.#orders.values()];
     return { swarm: { available: health !== null, source: "https://api.imd.fun/swarm", agentsOnline: (health?.health ?? health)?.agentsOnline ?? null, seatsEnrolled: (health?.health ?? health)?.seatsEnrolled ?? null, jobsDoneLastDay: (health?.health ?? health)?.jobsDoneLastDay ?? null, totalJobs: total ?? null, completedJobs: completed ?? null, completionRate: typeof total === "number" && total > 0 && typeof completed === "number" ? completed / total : null },
-      desk: { enabled: this.d.enabled(), orders: rows.filter((o) => o.tx).length, delivered: rows.filter((o) => o.status === "done").length, running: rows.filter(inFlight).length, refundsOwed: rows.filter((o) => o.refundOwed).length, todayJobs: rows.filter((o) => o.day === this.#day() && o.tx).length, dailyImd: this.d.dailyImd(), maxInFlight: this.d.inFlight?.() ?? 25, reservedImd: (Number(this.reservations()) / 1e18), kinds: SWARM_KINDS.map((kind) => ({ kind, skill: SWARM_SKILLS[kind], priceUsd, whatYouGet: SWARM_OUTPUTS[kind] })), refill: this.#refill?.status() ?? null },
+      desk: { enabled: this.d.enabled(), orders: rows.filter((o) => o.tx || o.acp?.funded).length, delivered: rows.filter((o) => o.status === "done").length, running: rows.filter(inFlight).length, refundsOwed: rows.filter((o) => o.refundOwed).length, todayJobs: rows.filter((o) => o.day === this.#day() && (o.tx || o.acp?.funded)).length, dailyImd: this.d.dailyImd(), maxInFlight: this.d.inFlight?.() ?? 25, reservedImd: (Number(this.reservations()) / 1e18), kinds: SWARM_KINDS.map((kind) => ({ kind, skill: SWARM_SKILLS[kind], priceUsd, whatYouGet: SWARM_OUTPUTS[kind] })), refill: this.#refill?.status() ?? null },
       coverage: health ? [] : ["IMD live counters unavailable"], at: new Date(this.#now()).toISOString() };
   }
 
@@ -317,7 +384,7 @@ export class SwarmDesk {
 
 export const swarmPrice = (imdUsd: number) => Math.max(3, Math.ceil((0.5 * imdUsd * 1.25 + 0.60) * 100) / 100);
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
-const inFlight = (o: DeskOrder) => ["settling", "ordering", "running"].includes(o.status) || Boolean(o.imdActive);
+const inFlight = (o: DeskOrder) => ["reserved", "settling", "ordering", "running"].includes(o.status) || Boolean(o.imdActive);
 let current: SwarmDesk | null = null;
 export const liveSwarmDesk = () => current;
 export const setSwarmDesk = (desk: SwarmDesk | null) => { current?.stop(); current = desk; };
