@@ -252,7 +252,9 @@ describe("new paid routes, discovery and MCP", () => {
   });
   it("validates before payment, rejects HEAD and applies IP/payer limits", async () => {
     const f = fixture(), p = payer(), service = R.services(f.ctx, p, { fast: f.deps });
-    expect((await service.handle(io("/api/v1/payment-verify?chain=base&tx=bad")))!.status).toBe(400); expect(p.check).not.toHaveBeenCalled();
+    // unpaid: the price first, with the input problem as the reason; paid: refused before anything settles
+    expect((await service.handle(io("/api/v1/payment-verify?chain=base&tx=bad")))!.status).toBe(402);
+    expect((await service.handle({ ...io("/api/v1/payment-verify?chain=base&tx=bad"), header: (n: string) => n === "payment-signature" ? "sig" : undefined }))!.status).toBe(400); expect(p.check).not.toHaveBeenCalled();
     expect((await service.handle({ ...io(K.offer("gas-now").example), method: "HEAD" }))!.status).toBe(405);
     expect((await service.handle(io(K.offer("gas-now").example, () => true)))!.status).toBe(429);
     const limited = io(K.offer("gas-now").example, (key?: string) => !!key?.startsWith("svc-fast-payer")); limited.header = () => "signed"; expect((await service.handle(limited))!.status).toBe(429); expect(p.settle).not.toHaveBeenCalled();

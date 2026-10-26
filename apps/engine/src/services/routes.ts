@@ -183,7 +183,10 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
   /** One request. Null: not a services path. */
   async function handle(io: Io): Promise<Out | null> {
     const seg = io.path.split("/").filter(Boolean); // api v1 …
-    if (io.path === "/openapi.json" || io.path === "/api/v1/openapi.json") return { status: 200, body: openapi(io.base, payer.chainId, payer.payTo()) };
+    if (io.path === "/openapi.json" || io.path === "/api/v1/openapi.json") return { status: 200, body: markFree(openapi(io.base, payer.chainId, payer.payTo())) };
+    // an unpaid call to a paid route gets the price first, whatever its input, so scanners and agents can read the terms;
+    // a paid call with bad input is refused before anything settles
+    const bad = (o: Offer, error: string): Out => (io.header("payment-signature") ?? io.header("x-payment")) ? { status: 400, body: { error: `${error} Nothing was charged.` } } : p402(o, io, error);
     if (seg[0] !== "api" || seg[1] !== "v1") return null;
     if (io.method !== "GET" && io.method !== "HEAD") return { status: 405, body: { error: "GET only" } };
     try {
@@ -200,7 +203,9 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
       if (seg[2] && isFastId(seg[2]) && !seg[3]) {
         if (io.method !== "GET") return { status: 405, body: { error: "GET only" } };
         if (io.limited("svc-fast", 300, 60_000)) return { status: 429, body: { error: "slow down: 300 fast tool calls a minute per IP" } };
-        const id = seg[2], input = fastInput(id, io.query);
+        const id = seg[2];
+        let input: ReturnType<typeof fastInput>;
+        try { input = fastInput(id, io.query); } catch (e) { return bad(offer(id), (e as Error).message); }
         return await paid(io, offer(id), () => fast.run(id, input));
       }
       if (seg[2] === "swarm") {
@@ -239,12 +244,13 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
       if (seg[2] === "watchtower" && (seg[3] === "check" || seg[3] === "watch") && seg[4] && seg[5] && !seg[6]) {
         const wt = crews.watchtower;
         if (!wt) return { status: 404, body: { error: "Watchtower is not on in this engine." } };
-        if (chainIdOf(seg[4]) !== 1) return { status: 400, body: { error: "Only Ethereum is supported: /api/v1/watchtower/" + seg[3] + "/ethereum/<address>." } };
-        if (!/^0x[0-9a-fA-F]{40}$/.test(seg[5])) return { status: 400, body: { error: "The address must be a 0x address (40 hex characters)." } };
+        const wo = offer(seg[3] === "check" ? "watchtower-check" : "watchtower-watch");
+        if (chainIdOf(seg[4]) !== 1) return bad(wo, "Only Ethereum is supported: /api/v1/watchtower/" + seg[3] + "/ethereum/<address>.");
+        if (!/^0x[0-9a-fA-F]{40}$/.test(seg[5])) return bad(wo, "The address must be a 0x address (40 hex characters).");
         if (io.limited("svc-watch", 30, 60_000)) return { status: 429, body: { error: "slow down: 30 a minute per IP" } };
         const address = seg[5];
         if (seg[3] === "check") return await paid(io, offer("watchtower-check"), () => wt.check(address));
-        if (io.query.get("days") && io.query.get("days") !== "7") return { status: 400, body: { error: "days: 7. One prepaid term of 7 days, no renewal." } };
+        if (io.query.get("days") && io.query.get("days") !== "7") return bad(wo, "days: 7. One prepaid term of 7 days, no renewal.");
         const out = await paid(io, offer("watchtower-watch"), async (pay) => {
           const r = await wt.startWatch({ address, owner: pay.payer, days: 7, payment: { usd: pay.usd, payer: pay.payer, tx: null } });
           return { ...r.report, watch: r.watch, manageToken: r.manageToken, telegram: crews.telegramLink?.(r.telegramCode) ?? null, stop: `POST ${io.base}/api/watchtower/watches/${r.watch.id}/stop with the header X-Watch-Token: <manageToken>` };
@@ -257,14 +263,16 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
       if (seg[2] === "research" && !seg[3]) {
         if (!crews.research) return { status: 404, body: { error: "The Research Desk is not on in this engine." } };
         if (io.limited("svc-research", 20, 60_000)) return { status: 429, body: { error: "slow down: 20 reports a minute per IP" } };
-        const q = researchQuestion(io.query.get("q"));
+        let q: ReturnType<typeof researchQuestion>;
+        try { q = researchQuestion(io.query.get("q")); } catch (e) { return bad(offer("research-report"), (e as Error).message); }
         return await paid(io, offer("research-report"), () => crews.research!(q));
       }
       // ---- Build & Check: does a public agent service work for other agents?
       if (seg[2] === "buildcheck" && !seg[3]) {
         if (!crews.buildCheck) return { status: 404, body: { error: "Build & Check is not on in this engine." } };
         if (io.limited("svc-buildcheck", 10, 60_000)) return { status: 429, body: { error: "slow down: 10 checks a minute per IP" } };
-        const url = parseTarget(io.query.get("url")).toString();
+        let url: string;
+        try { url = parseTarget(io.query.get("url")).toString(); } catch (e) { return bad(offer("buildcheck-report"), (e as Error).message); }
         return await paid(io, offer("buildcheck-report"), () => crews.buildCheck!(url));
       }
       // ---- Token Verdict
@@ -276,10 +284,10 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
         if (seg[5]) return { status: 404, body: { error: "not found" } };
         if (io.limited("svc-verdict", 60, 60_000)) return { status: 429, body: { error: "slow down: 60 verdicts a minute per IP" } };
         const depth = io.query.get("depth") === "deep" ? "deep" : "quick";
-        if (io.query.get("depth") && !["quick", "deep"].includes(io.query.get("depth")!)) return { status: 400, body: { error: "depth is quick or deep" } };
-        if (chainIdOf(seg[3]) !== 1) return { status: 400, body: { error: "Only Ethereum is supported for now: /api/v1/verdict/ethereum/<token>." } };
-        if (!/^0x[0-9a-fA-F]{40}$/.test(seg[4])) return { status: 400, body: { error: "The token must be a 0x address (40 hex characters)." } };
         const o = offer(depth === "deep" ? "token-verdict-deep" : "token-verdict-quick");
+        if (io.query.get("depth") && !["quick", "deep"].includes(io.query.get("depth")!)) return bad(o, "depth is quick or deep");
+        if (chainIdOf(seg[3]) !== 1) return bad(o, "Only Ethereum is supported for now: /api/v1/verdict/ethereum/<token>.");
+        if (!/^0x[0-9a-fA-F]{40}$/.test(seg[4])) return bad(o, "The token must be a 0x address (40 hex characters).");
         if (io.query.get("demo") === "1") {
           if (depth !== "quick") return { status: 400, body: { error: "The free demo is a quick verdict: drop depth=deep." } };
           if (!demo.take(io.ip)) {
@@ -298,8 +306,8 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
         }
         if (seg[4]) return { status: 404, body: { error: "not found" } };
         if (io.limited("svc-hook", 60, 60_000)) return { status: 429, body: { error: "slow down: 60 inspections a minute per IP" } };
-        if (!/^0x[0-9a-fA-F]{40}$/.test(seg[3])) return { status: 400, body: { error: "The hook must be a 0x address (40 hex characters)." } };
         const explain = io.query.get("explain") === "1";
+        if (!/^0x[0-9a-fA-F]{40}$/.test(seg[3])) return bad(offer(explain ? "hook-inspector-explained" : "hook-inspector"), "The hook must be a 0x address (40 hex characters).");
         return await paid(io, offer(explain ? "hook-inspector-explained" : "hook-inspector"), () => hook(seg[3]!, explain));
       }
       // ---- IMD Data Feed
@@ -364,3 +372,10 @@ export async function serviceRoutes(req: IncomingMessage, res: ServerResponse, p
 }
 
 export type { OfferId };
+
+/** OpenAPI operations without an x402 price are free: "security": [] tells scanners such as x402scan not to probe them for a payment. */
+function markFree<T>(doc: T): T {
+  const paths = (doc as { paths?: Record<string, Record<string, Record<string, unknown>>> }).paths ?? {};
+  for (const ops of Object.values(paths)) for (const op of Object.values(ops)) if (op && typeof op === "object" && !("x-payment-info" in op)) op.security = [];
+  return doc;
+}
