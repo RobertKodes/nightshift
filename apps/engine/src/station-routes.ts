@@ -25,7 +25,7 @@ import { buildCheck } from "./crews/buildcheck.js";
 import { crewLedger, crewProfiles, crewSeason, liveWatchtower } from "./crews/live.js";
 import { anonKeyOf, registerWatchtowerTools } from "./watchtower/index.js";
 import { liveUsage } from "./usage.js";
-import { houseAgentCard, x402Manifest } from "./services/discovery.js";
+import { houseAgentCard, x402JsonManifest, x402Manifest } from "./services/discovery.js";
 import { SWARM_PITCH, SWARM_KINDS } from "./crews/swarm-kinds.js";
 import { liveSwarmDesk } from "./crews/swarm.js";
 import { annotateTools, registerServiceTools } from "./services/mcp.js";
@@ -135,6 +135,7 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   if (p === "/changelog.md") return text(res, "text/markdown", changelog().md);
   if (p === "/.well-known/agent-card.json" || p === "/.well-known/agent.json") return text(res, "application/json", JSON.stringify(houseAgentCard(config.publicUrl), null, 2));
   if (p === "/.well-known/x402") return text(res, "application/json", JSON.stringify(x402Manifest(config.publicUrl), null, 2));
+  if (p === "/.well-known/x402.json") return text(res, "application/json", JSON.stringify(x402JsonManifest(config.publicUrl), null, 2));
   // the Play Store app (a Trusted Web Activity) is this site only when its signing key is listed here
   if (p === "/.well-known/assetlinks.json" && config.androidCertSha256.length) return text(res, "application/json", JSON.stringify(assetLinks(config.androidCertSha256), null, 2));
   if (p === "/.well-known/mcp.json" || p === "/.well-known/mcp/server-card.json") return text(res, "application/json", JSON.stringify(mcpCard(), null, 2));

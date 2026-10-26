@@ -22,13 +22,15 @@ type DeskOrder = {
   reserveUnits?: string;
   tokenHash: string; token?: string; refundOwed?: boolean; error?: string; alerted?: boolean; recorded?: boolean;
 };
+/** IMD's GET /swarm puts the live numbers under `health`. */
+type SwarmHealth = { agentsOnline?: number; seatsEnrolled?: number; jobsDoneLastDay?: number };
 export type SwarmDeps = {
   file: string | null; plane: ImdPlane;
   enabled(): boolean;
   dailyImd(): number;
   inFlight?(): number;
   reservePayer?(payer: string): boolean;
-  health?(): Promise<{ agentsOnline?: number; seatsEnrolled?: number; jobsDoneLastDay?: number; counts?: { jobs?: number; jobStates?: { completed?: number } } }>;
+  health?(): Promise<{ health?: SwarmHealth; agentsOnline?: number; seatsEnrolled?: number; jobsDoneLastDay?: number; counts?: { jobs?: number; jobStates?: { completed?: number } } }>;
   skills?(): Promise<unknown>;
   importRepo?(url: string): Promise<{ repoUrl: string; baseCommit: string }>;
   verifiedContract?(chain: "ethereum" | "base", address: string): Promise<boolean>;
@@ -305,7 +307,7 @@ export class SwarmDesk {
     const total = health?.counts?.jobs, completed = health?.counts?.jobStates?.completed;
     let priceUsd: number | null = null; try { priceUsd = swarmPrice(this.#price()); } catch { /* Quotes require a fresh price. */ }
     const rows = [...this.#orders.values()];
-    return { swarm: { available: health !== null, source: "https://api.imd.fun/swarm", agentsOnline: health?.agentsOnline ?? null, seatsEnrolled: health?.seatsEnrolled ?? null, jobsDoneLastDay: health?.jobsDoneLastDay ?? null, totalJobs: total ?? null, completedJobs: completed ?? null, completionRate: typeof total === "number" && total > 0 && typeof completed === "number" ? completed / total : null },
+    return { swarm: { available: health !== null, source: "https://api.imd.fun/swarm", agentsOnline: (health?.health ?? health)?.agentsOnline ?? null, seatsEnrolled: (health?.health ?? health)?.seatsEnrolled ?? null, jobsDoneLastDay: (health?.health ?? health)?.jobsDoneLastDay ?? null, totalJobs: total ?? null, completedJobs: completed ?? null, completionRate: typeof total === "number" && total > 0 && typeof completed === "number" ? completed / total : null },
       desk: { enabled: this.d.enabled(), orders: rows.filter((o) => o.tx).length, delivered: rows.filter((o) => o.status === "done").length, running: rows.filter(inFlight).length, refundsOwed: rows.filter((o) => o.refundOwed).length, todayJobs: rows.filter((o) => o.day === this.#day() && o.tx).length, dailyImd: this.d.dailyImd(), maxInFlight: this.d.inFlight?.() ?? 25, reservedImd: (Number(this.reservations()) / 1e18), kinds: SWARM_KINDS.map((kind) => ({ kind, skill: SWARM_SKILLS[kind], priceUsd, whatYouGet: SWARM_OUTPUTS[kind] })), refill: this.#refill?.status() ?? null },
       coverage: health ? [] : ["IMD live counters unavailable"], at: new Date(this.#now()).toISOString() };
   }

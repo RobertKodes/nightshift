@@ -34,6 +34,13 @@ export function houseAgentCard(base: string) {
   };
 }
 
+/** The other common shape, /.well-known/x402.json: every paid endpoint with its method, price and purpose. */
+export function x402JsonManifest(base: string) {
+  const m = x402Manifest(base);
+  const endpoints = [...OFFERS].sort((a, b) => Number(Boolean(b.quoted)) - Number(Boolean(a.quoted))).map((o) => ({ path: o.quoted ? "/api/v1/swarm/order" : o.route, method: o.method, price: usdOf(o).toString(), ...(o.quoted ? { priceIsMinimum: true, quote: "/api/v1/swarm/quote" } : {}), description: o.description }));
+  return { version: "1.0", currency: "USDC", network: "base-mainnet", chainId: 8453, resources: m.resources, endpoints, mcp: `${base}/mcp/public`, agentCard: `${base}/.well-known/agent.json`, instructions: m.instructions };
+}
+
 /** x402scan's documented compatibility fan-out manifest. */
 export function x402Manifest(base: string) {
   return { version: 1, resources: [...OFFERS].sort((a, b) => Number(Boolean(b.quoted)) - Number(Boolean(a.quoted))).map((o) => `${base}${o.quoted ? "/api/v1/swarm/order" : o.example}`), instructions: `Start with ${base}/api/v1/swarm/quote. ${SWARM_PITCH}` };
