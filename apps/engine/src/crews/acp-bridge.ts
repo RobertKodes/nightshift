@@ -84,7 +84,10 @@ export function acpCli(dataDir: string): AcpRunner {
         execFile(process.execPath, [script, ...args, ...(args.includes("--json") ? [] : ["--json"])], { env, timeout: 60_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true }, (error, stdout) => {
           let result: unknown;
           try { result = JSON.parse(stdout); } catch { /* Never expose CLI stacks or credentials. */ }
-          if (error || !result || obj(result).error || obj(result).success === false || (["provider", "message"].includes(args[0]!) && obj(result).success !== true)) reject(new Error("ACP command failed; check server authentication, signer and CLI configuration."));
+          // the CLI's own one-line reason, scrubbed of credentials, so the owner can tell what to fix (never stacks or raw output)
+          const why = (v: unknown) => acpRedact(String(v ?? "").split(/\r?\n/)[0]!, result).slice(0, 200);
+          const reason = result && typeof obj(result).error === "string" ? why(obj(result).error) : error ? why((error as Error & { stderr?: string }).stderr?.match(/(?:Error|error)[^\r\n]*/)?.[0] ?? error.message) : "";
+          if (error || !result || obj(result).error || obj(result).success === false || (["provider", "message"].includes(args[0]!) && obj(result).success !== true)) reject(new Error(`ACP command failed${reason ? `: ${reason}` : ""}`));
           else resolve(result);
         });
       });

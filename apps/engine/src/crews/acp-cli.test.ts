@@ -40,7 +40,8 @@ describe("ACP CLI installation", () => {
     expect(processes.execFile.mock.calls[0]![2].shell).toBeUndefined();
     await runner.run(["agent", "whoami"]); expect(processes.execFile.mock.calls[1]![1]).toEqual([script, "agent", "whoami", "--json"]);
     processes.execFile.mockImplementation((_node: string, _args: string[], _opts: unknown, callback: (error: Error, stdout: string, stderr: string) => void) => { callback(new Error("token=error-sensitive"), '{"error":"secret=json-sensitive"}', "privateKey=stderr-sensitive"); return {}; });
-    await expect(runner.run(["configure", "complete", "--request-id", request])).rejects.toThrow(/^ACP command failed; check server authentication, signer and CLI configuration\.$/);
+    // the CLI's one-line reason is shown, with its credentials scrubbed
+    await expect(runner.run(["configure", "complete", "--request-id", request])).rejects.toThrow(/^ACP command failed: [^\r\n]*\[redacted\]/);
     writeFileSync(pkg, JSON.stringify({ version: "1.0.41" })); processes.execFile.mockClear();
     expect(() => runner.run(["agent", "whoami"])).toThrow("requires installed CLI 1.0.40"); expect(processes.execFile).not.toHaveBeenCalled();
   });

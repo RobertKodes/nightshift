@@ -103,5 +103,5 @@ export async function acpCommand(args: string[], ctx?: CommandContext, d: AcpCon
     }
     const hidden = rows?.filter((o) => o.isHidden === true).length ?? 0;
     return `<b>Virtuals ACP bridge: ${s?.enabled ? "on" : "off"}</b>\nCLI: ${cli?.found ? `found; version ${cli.version ?? "unknown"}` : cli ? "not found" : "unknown"}\nAuthenticated: ${auth === null ? "unknown" : auth ? "yes" : "no"}; agent selected: ${selected ? "NIGHTSHIFT Swarm Desk" : "no"}; signer present: ${signer ? "yes" : "no"}\nOfferings: ${rows ? `${hidden} hidden, ${rows.filter((o) => o.isHidden === false).length} visible (${rows.length}/9)` : "unknown"}\nJobs today: ${s?.jobsToday ?? 0}; running: ${s?.running ?? 0}\nDelivered: ${s?.delivered ?? 0}; rejected: ${s?.rejected ?? 0}\n${help}`;
-  } catch { return "ACP command failed. Use /acp status; retry /acp setup or /acp signer if approval expired. No credentials are shown."; }
+  } catch (e) { return `ACP command failed. ${String((e as Error).message ?? "").startsWith("ACP command failed: ") ? `Reason: ${(e as Error).message.slice(20, 220)}. ` : ""}Use /acp status; retry /acp setup or /acp signer if approval expired. No credentials are shown.`; }
 }
