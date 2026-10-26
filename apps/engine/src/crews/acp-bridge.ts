@@ -62,7 +62,9 @@ export function acpCli(dataDir: string): AcpRunner {
   const script = acpCliScript(dataDir);
   const env = { ...process.env, ACP_CONFIG_DIR: process.env.ACP_CONFIG_DIR ?? join(dataDir, "acp"),
     XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME ?? join(dataDir, "acp-xdg"),
-    KEYRING_PROPERTY_FILE_PATH: process.env.KEYRING_PROPERTY_FILE_PATH ?? join(dataDir, "acp", "keyring.json") };
+    KEYRING_PROPERTY_FILE_PATH: process.env.KEYRING_PROPERTY_FILE_PATH ?? join(dataDir, "acp", "keyring.json"),
+    // the container has no usable Linux secret service: its "PermissionDenied" is not one of the CLI's fallback errors, so pick the file store outright
+    TS_KEYRING_BACKEND: process.env.TS_KEYRING_BACKEND ?? "file" };
   const info = () => {
     const found = existsSync(script);
     try {
