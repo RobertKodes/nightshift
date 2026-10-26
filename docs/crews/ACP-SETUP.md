@@ -1,76 +1,40 @@
 # Virtuals ACP Swarm Desk
 
-Run these commands **on the server, inside the engine container, as the engine user**. Nothing in this guide has been run against Virtuals during development. Keep the nine offerings hidden until a test job has completed successfully.
+The owner sets up this bridge entirely in the bot's **private Telegram chat**, using the configured `TELEGRAM_ADMIN_IDS` owner ID. The engine runs every CLI command; the owner only sends bot commands and opens approval links on his phone. No server shell is needed. Nothing in this guide has been run against Virtuals during development.
 
 The bridge is off unless `ACP_BRIDGE=1` (or `/acp on` is saved). It also requires live mode and the existing Swarm Desk enabled on Base. `/acp off` stops the listener and ACP actions; `/acp on` resumes the saved phases. Already paid IMD work remains with the desk's follower. Switch off before maintenance, then resume promptly so funded jobs do not miss their SLA.
 
-## Install and persistent storage
+## Image and persistent storage
 
-Use Node 24 and the container's mounted `/data`. These defaults match the bridge's child process environment; set any overrides in the engine's environment too. Do not change `HOME`, move signer files to another machine, or copy credentials out of this server. The CLI uses its headless file fallback when an OS keychain is unavailable. Both its token store and the native signer's XDG config must survive container replacement.
+The root `Dockerfile` installs official `@virtuals-protocol/acp-cli@1.0.40` in a separate `/opt/acp-cli` prefix. This npm install never changes the pnpm workspace or its frozen lockfile. The bridge resolves `/opt/acp-cli/node_modules/@virtuals-protocol/acp-cli/dist/bin/acp.js` first, then the existing `$DATA_DIR/acp-cli/node_modules/@virtuals-protocol/acp-cli/dist/bin/acp.js` fallback. It checks the installed package version is exactly `1.0.40` and invokes Node with argument arrays, without a shell or runtime downloads.
 
-```sh
-cd /app/apps/engine
-export DATA_DIR="${DATA_DIR:-/data}"
-umask 077
-export ACP_CONFIG_DIR="$DATA_DIR/acp"
-export XDG_CONFIG_HOME="$DATA_DIR/acp-xdg"
-export KEYRING_PROPERTY_FILE_PATH="$ACP_CONFIG_DIR/keyring.json"
-mkdir -p "$ACP_CONFIG_DIR" "$XDG_CONFIG_HOME" "$DATA_DIR/acp-cli"
-npm install --prefix "$DATA_DIR/acp-cli" --cache "$DATA_DIR/acp-npm-cache" \
-  --omit=dev --no-audit --no-fund @virtuals-protocol/acp-cli@1.0.40
-acp() { node "$DATA_DIR/acp-cli/node_modules/@virtuals-protocol/acp-cli/dist/bin/acp.js" "$@"; }
-acp --version
-acp skill print --json
-acp provider set-budget --help
-acp provider submit --help
-acp events listen --help
-acp events drain --help
-```
+The image keeps `DATA_DIR=/data`. The bridge preserves these existing child-process defaults (environment overrides still apply):
 
-The bridge checks for exactly CLI `1.0.40`. It invokes Node directly with argument arrays; no shell, `npx` download or signer-key export occurs during job processing. This is an external official CLI installation in the data volume; the monorepo dependency files are unchanged.
+| Variable | Default |
+| --- | --- |
+| `ACP_CONFIG_DIR` | `/data/acp` |
+| `XDG_CONFIG_HOME` | `/data/acp-xdg` |
+| `KEYRING_PROPERTY_FILE_PATH` | `/data/acp/keyring.json` |
 
-## Authenticate and select the existing agent
+Mount `/data` persistently and keep it private to the engine user. Both the CLI token store and native signer store must survive container replacement. Do not change `HOME`, copy credentials to another machine, or export signer keys. The CLI uses its headless file fallback when an OS keychain is unavailable.
 
-```sh
-acp configure start --json
-```
+## Owner sequence in Telegram
 
-Open the returned `url` on the owner's phone and approve it. Keep the returned `requestId`. Then run, substituting that ID:
+Send these commands to the bot in the owner's own private chat. Group chats, channels, other users and callbacks outside that private chat cannot operate ACP or receive approval links.
 
-```sh
-acp configure complete --request-id '<AUTH_REQUEST_ID>' --json
-```
+1. `/acp off` — keep the bridge paused during setup.
+2. `/acp setup` — the engine runs `acp configure start --json`, saves its `requestId` in `/data/acp-setup.json`, and replies with the sign-in URL. Open this on your phone and sign in.
+3. `/acp setup done` — the engine runs `acp configure complete --request-id <saved> --json`. If pending, finish on the phone and repeat this bot command. Wait for **ACP authenticated**. Tokens are stored only by the CLI, never returned to Telegram.
+4. `/acp agent` — selects agent `01a17749-ac75-7e8f-962f-2b33d027fb2e` and checks `agent whoami`. Confirm **NIGHTSHIFT Swarm Desk**, wallet `0xaddf82c34e2c425bb91bb07a71edab8510ec08c5`.
+5. `/acp signer` — runs `agent add-signer --agent-id <fixed agent> --policy restricted --no-wait --json`. The signing key is generated on the server. Open the approval URL on your phone; **it expires in 5 minutes**.
+6. `/acp signer done` — checks the saved request with `agent signer-status --agent-id <fixed agent> --request-id <saved> --public-key <saved> --json`, which is required to persist the approved signer in CLI 1.0.40. If pending, approve and repeat. It then checks `agent whoami --json` and `job list --json`: whoami confirms the selected identity; job list proves a local signer exists. Wait for **Server signer present**.
+7. `/acp status` (or `/acp`) — shows CLI found/version, authentication, selected agent, local signer, the nine offerings' hidden/visible counts, bridge on/off and job counts. Status works while the bridge is off and does not start the listener or process jobs.
+8. `/acp hide` — hides the nine exact IMD Swarm offerings for the test below. `/swarm` shows the existing desk settings and funding status.
+9. `/acp on` — starts or resumes the bridge once live mode, Swarm Desk and funding are ready. Complete a hidden test job before opening sales.
+10. `/acp visible` — lists the active agent's offerings and sets only the nine exact names below visible, using `offering update --offering-id <id> --no-hidden --json`. It verifies the final visibility. `/acp hide` reverses this with `--hidden`; unrelated offerings are left alone.
+11. `/acp status` — confirm signer present, **0 hidden, 9 visible**, bridge on and expected jobs.
 
-If the response is `pending`, repeat the same complete command after phone approval. Wait for `status: authenticated`.
-
-Alternatively, when `ACP_ACCESS_TOKEN`, `ACP_REFRESH_TOKEN` and `ACP_OWNER_WALLET` were securely injected **on this server**, `acp configure --json` consumes those environment variables and persists the session. Do not paste tokens into bot messages or commit them.
-
-```sh
-acp agent use --agent-id 01a17749-ac75-7e8f-962f-2b33d027fb2e --json
-acp agent whoami --json
-```
-
-Confirm ID `01a17749-ac75-7e8f-962f-2b33d027fb2e`, name `NIGHTSHIFT Swarm Desk`, and wallet `0xaddf82c34e2c425bb91bb07a71edab8510ec08c5`. The bridge refuses another active identity.
-
-## Generate the restricted signer here
-
-```sh
-acp agent add-signer --agent-id 01a17749-ac75-7e8f-962f-2b33d027fb2e \
-  --policy restricted --no-wait --json
-```
-
-This generates the signing key **inside this server container**. Only the public key is printed. Open the returned `signerUrl` on the owner's phone and approve it. Complete the split flow with the returned `requestId` and `publicKey`:
-
-```sh
-acp agent signer-status --agent-id 01a17749-ac75-7e8f-962f-2b33d027fb2e \
-  --request-id '<SIGNER_REQUEST_ID>' --public-key '<PUBLIC_KEY>' --json
-acp agent signer-policy --agent-id 01a17749-ac75-7e8f-962f-2b33d027fb2e --json
-acp agent whoami --json
-acp job list --json
-acp offering list --json
-```
-
-Repeat `signer-status` while pending; wait for `completed`. Confirm the restricted ACP policy. `job list` authenticates through the local signer; `whoami` alone only proves owner authentication. Never export the private key or generate it on a laptop for later transfer. Keep the CLI config, keyring and native signer store on the mounted server volume, private to the engine user. After any container replacement, repeat `whoami` and `job list` before making new sales.
+Auth and signer request IDs survive restarts in `/data/acp-setup.json`, written atomically with mode `0600`. The saved signer public key is needed by `signer-status`; private keys stay in the CLI's server store. Completed requests are removed. Expired sign-in or signer approvals can be restarted with `/acp setup` or `/acp signer`. Replies allow only needed public fields and redact credential values; raw CLI errors and output are never logged or forwarded.
 
 ## Test while hidden
 
@@ -90,7 +54,7 @@ Confirm all nine offerings have `priceType: fixed`, `priceValue: 4`, `requiredFu
 
 The normal Swarm Desk validation applies: brief 20–1500 characters, public GitHub repo, full 40-character commit for tests, verified Ethereum/Base contract for frontends, and bounded name/style for logos. Unknown fields and non-string values are refused. Subscription jobs are refused because the CLI can add their package price to the budget.
 
-Enable live mode and `SWARM_DESK=1`, provision the house's IMD and Ethereum gas, and use the owner's private bot commands `/swarm` and `/acp on`. `/acp` shows auth, local signer, hidden/visible counts, jobs today, running, delivered and rejected. The engine owns the listener; do not start another listener or drain the same event file yourself. Run one engine replica per data volume.
+Enable live mode and `SWARM_DESK=1`, provision the house's IMD and Ethereum gas, and use the owner's private bot commands `/swarm` and `/acp on`. `/acp` shows CLI/version, auth, selected agent, local signer, hidden/visible counts, jobs today, running, delivered and rejected. The engine owns the listener; do not start another listener or drain the same event file yourself. Run one engine replica per data volume.
 
 A separate authenticated ACP **client** can create a hidden offering job by its exact provider/name. On that client's machine, use the client's own nonzero EVM wallet as evaluator:
 
@@ -122,15 +86,9 @@ Confirm the owner received accepted/delivered/outcome DMs and `/proof` has one c
 
 ## Make offerings visible only after the test succeeds
 
-Read each exact ID from `offering list`, then run this for each of the nine intended offerings:
+Send `/acp visible` in the owner's private Telegram chat. It lists the offerings, requires exactly one of each intended name with distinct IDs, updates each with CLI 1.0.40's `--offering-id` and `--no-hidden` flags, then lists again to confirm. If an update fails partway, `/acp status` reports the current counts; retry `/acp visible` to finish, or use `/acp hide` to hide them all with `--hidden`.
 
-```sh
-acp offering list --json
-acp offering update --offering-id '<OFFERING_ID>' --no-hidden --json
-acp offering list --json
-```
-
-Visibility is an explicit owner step; the bridge never changes offerings. `--no-hidden` and `--offering-id` are the CLI 1.0.40 flags.
+Visibility changes only through these explicit owner commands. The bridge's background job loop never changes offerings.
 
 ## Recovery and protocol limits
 

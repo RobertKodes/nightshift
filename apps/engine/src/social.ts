@@ -130,7 +130,7 @@ export type TgFrom = { id: number; first_name?: string; last_name?: string; user
 /** Who typed a game command, and where. */
 export type GameContext = { chat: string; private: boolean; group: boolean; admin: boolean; from: TgFrom | null; callback: boolean };
 /** Where an operator command was typed, and whose message it answered (for /mute and /unmute). */
-export type CommandContext = { chat: string; group: boolean; replyTo?: { id: string; name: string } };
+export type CommandContext = { chat: string; group: boolean; private?: boolean; from?: string; replyTo?: { id: string; name: string } };
 export type GroupMessage = { chat: string; chatUsername?: string; messageId: number; user: string; name: string; text: string; replyToBot?: boolean; private?: boolean };
 
 /** One update from Telegram, as far as the bot reads it. */
@@ -191,7 +191,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "announce", description: "Public sales announcements: on or off" },
     { command: "reserve", description: "Agent Reserve status: on, off or dry" },
     { command: "swarm", description: "Swarm Desk: status, cap, inflight, on or off" },
-    { command: "acp", description: "Virtuals ACP: status, on or off" },
+    { command: "acp", description: "Virtuals ACP: setup, signer, visibility and status" },
     { command: "unmute", description: "Unmute someone: reply to them, or /unmute @user" },
     { command: "mute", description: "Mute someone: reply, or /mute @user [minutes]" },
     { command: "help", description: "All commands" },
@@ -256,6 +256,13 @@ export async function handleUpdate(token: string, admins: string[], h: BotHandle
   // a button press has no m: its chat type comes from the message the button sits on, so a group stays a group
   const chatType = m?.chat.type ?? q?.message?.chat.type;
   const group = chatType === "group" || chatType === "supergroup" || chatType === "channel";
+  // ACP credentials and approval links are only ever answered in the owner's own private chat.
+  if (cmd === "acp") {
+    if (!isAdmin || chatType !== "private" || chat !== from || Number(from) <= 0) return;
+    const reply = await h.admin(cmd, args, { chat, group: false, private: true, from }).catch(() => ({ text: "ACP command failed. Try /acp status." }));
+    await telegram(token, chat, reply.text);
+    return;
+  }
   const game = h.games ? await h.games(cmd, args, { chat, private: chatType === "private", group, admin: isAdmin, from: q?.from ?? m?.from ?? null, callback: !!q }).catch(() => null) : null;
   const pub = game ?? await h.open(cmd, args).catch(() => null);
   const rt = m?.reply_to_message?.from;

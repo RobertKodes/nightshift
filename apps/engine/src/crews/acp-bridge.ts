@@ -20,7 +20,7 @@ type Offering = { id: string; name: string; priceType: string; priceValue: numbe
 type Phase = "seen" | "budgeting" | "budgeted" | "opening" | "running" | "submitting" | "submitted" | "completed" | "rejected" | "refused";
 type BridgeJob = { id: string; chainId: number; at: number; phase: Phase; client?: string; evaluator?: string; subscription?: boolean; offering?: string; kind?: SwarmKind; input?: InternalInput;
   requirement?: string; requirementFrom?: string; status?: string; orderId?: string; imdOrderId?: string; delivery?: string; failure?: string; notified?: string[]; refusalSent?: boolean; expiredAt?: string };
-export type AcpRunner = { run(args: string[]): Promise<unknown>; listen(file: string, failed: () => void): { stop(): void } };
+export type AcpRunner = { run(args: string[]): Promise<unknown>; listen(file: string, failed: () => void): { stop(): void }; info?(): { found: boolean; version: string | null } };
 type Deps = { file: string | null; eventsFile: string; enabled(): boolean; runner: AcpRunner; desk: Pick<SwarmDesk, "internalOrder" | "internalJob" | "internalOutcome">;
   alert(text: string, topic: string): Promise<unknown>; now?: () => number };
 const terminal = (j: BridgeJob) => ["completed", "rejected"].includes(j.phase);
@@ -31,24 +31,58 @@ const reason = (e: unknown) => {
   return [x.message ?? "Swarm Desk checks are unavailable.", ...(x.blockers ?? []).map((b) => b.message)].join(" ").slice(0, 1200);
 };
 
+export function acpCliScript(dataDir: string, exists: (file: string) => boolean = existsSync): string {
+  const tail = ["node_modules", "@virtuals-protocol", "acp-cli", "dist", "bin", "acp.js"];
+  const baked = join("/opt/acp-cli", ...tail);
+  return exists(baked) ? baked : join(dataDir, "acp-cli", ...tail);
+}
+
+/** Never forward CLI output wholesale; also scrub credentials embedded in otherwise public text. */
+export function acpRedact(text: string, source?: unknown): string {
+  const secrets = new Set<string>();
+  const collect = (v: unknown) => {
+    if (!v || typeof v !== "object") return;
+    for (const [key, value] of Object.entries(v)) {
+      if (/token|secret|password|private.?key|api.?key|authorization/i.test(key) && typeof value === "string" && value) secrets.add(value);
+      else collect(value);
+    }
+  };
+  collect(source);
+  for (const [key, value] of Object.entries(process.env)) if (/token|secret|password|private.?key|api.?key/i.test(key) && value) secrets.add(value);
+  for (const secret of [...secrets].sort((a, b) => b.length - a.length)) text = text.split(secret).join("[redacted]");
+  return text.replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, "[redacted]")
+    .replace(/\bBearer\s+[^\s&<>"']+/gi, "Bearer [redacted]")
+    .replace(/((?:access[_-]?token|refresh[_-]?token|token|secret|password|private[_-]?key|api[_-]?key)["']?\s*[:=]\s*["']?)[^\s&,<>"']+/gi, "$1[redacted]")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[redacted]")
+    .replace(/\b(?:0x)?[a-fA-F0-9]{64}\b/g, "[redacted]");
+}
+
 /** CLI 1.0.40 runs without a shell; credentials and signer keys stay in the server's CLI store. */
 export function acpCli(dataDir: string): AcpRunner {
-  const script = join(dataDir, "acp-cli", "node_modules", "@virtuals-protocol", "acp-cli", "dist", "bin", "acp.js");
+  const script = acpCliScript(dataDir);
   const env = { ...process.env, ACP_CONFIG_DIR: process.env.ACP_CONFIG_DIR ?? join(dataDir, "acp"),
     XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME ?? join(dataDir, "acp-xdg"),
     KEYRING_PROPERTY_FILE_PATH: process.env.KEYRING_PROPERTY_FILE_PATH ?? join(dataDir, "acp", "keyring.json") };
+  const info = () => {
+    const found = existsSync(script);
+    try {
+      const pkg = JSON.parse(readFileSync(join(dirname(script), "..", "..", "package.json"), "utf8")) as { version: unknown };
+      return { found, version: typeof pkg.version === "string" && /^\d+\.\d+\.\d+$/.test(pkg.version) ? pkg.version : null };
+    } catch { return { found, version: null }; }
+  };
   const check = () => {
-    const pkg = JSON.parse(readFileSync(join(dirname(script), "..", "..", "package.json"), "utf8")) as { version: string };
-    if (pkg.version !== "1.0.40") throw new Error("ACP bridge requires CLI 1.0.40.");
+    const cli = info();
+    if (!cli.found || cli.version !== "1.0.40") throw new Error("ACP bridge requires installed CLI 1.0.40.");
   };
   return {
+    info,
     run: (args) => {
       check();
       return new Promise((resolve, reject) => {
-        execFile(process.execPath, [script, ...args, "--json"], { env, timeout: 60_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true }, (error, stdout) => {
+        execFile(process.execPath, [script, ...args, ...(args.includes("--json") ? [] : ["--json"])], { env, timeout: 60_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true }, (error, stdout) => {
           let result: unknown;
           try { result = JSON.parse(stdout); } catch { /* Never expose CLI stacks or credentials. */ }
-          if (error || !result || obj(result).error || obj(result).success === false || (["provider", "message"].includes(args[0]!) && obj(result).success !== true)) reject(new Error(`ACP ${args.slice(0, 2).join(" ")} failed; check server authentication, signer and CLI configuration.`));
+          if (error || !result || obj(result).error || obj(result).success === false || (["provider", "message"].includes(args[0]!) && obj(result).success !== true)) reject(new Error("ACP command failed; check server authentication, signer and CLI configuration."));
           else resolve(result);
         });
       });
@@ -106,7 +140,7 @@ export class AcpBridge {
   async #notify(j: BridgeJob, event: string, message: string): Promise<void> {
     if (j.notified?.includes(event)) return;
     try {
-      if (await this.d.alert(`ACP job ${ref(j)} ${event}: ${message}`, `acp-${event}-${ref(j)}`) === false) return;
+      if (await this.d.alert(acpRedact(`ACP job ${ref(j)} ${event}: ${message}`), `acp-${event}-${ref(j)}`) === false) return;
       (j.notified ??= []).push(event); this.#save();
     } catch { /* Retry owner DMs on the next tick. */ }
   }

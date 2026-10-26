@@ -550,7 +550,7 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
     if (cmd === "notify") return { text: liveOwnerStats()?.notify(args) ?? "The notifications are starting: try again in a minute." };
     if (cmd === "announce") return { text: liveAgentEconomy()?.command(args) ?? "The announcements are starting: try again in a minute." };
     if (cmd === "swarm") return { text: await swarmCommand(args) };
-    if (cmd === "acp") return { text: await acpCommand(args) };
+    if (cmd === "acp") return { text: await acpCommand(args, ctx) };
     if (cmd === "reserve") return { text: liveAgentReserve()?.command(args) ?? "The reserve is starting: try again in a minute." };
     // sent by an operator inside the private holders' group: that group becomes the Watch Room
     if (cmd === "watchroom") {

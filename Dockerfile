@@ -7,6 +7,8 @@ RUN pnpm install --frozen-lockfile && pnpm --filter @nightshift/web build
 
 FROM node:22-bookworm-slim
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+# Official ACP CLI stays separate from the pnpm workspace and frozen lockfile.
+RUN npm install --prefix /opt/acp-cli --omit=dev --no-audit --no-fund @virtuals-protocol/acp-cli@1.0.40
 WORKDIR /app
 COPY --from=build /app /app
 ENV NODE_ENV=production NIGHTSHIFT_SUPERVISED=1 PORT=8787 DATA_DIR=/data WEB_DIST=/app/apps/web/dist
