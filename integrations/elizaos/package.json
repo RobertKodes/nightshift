@@ -1,7 +1,7 @@
 {
   "name": "@nightshift/plugin-nightshift",
-  "version": "0.1.0",
-  "description": "elizaOS plugin: ask the NIGHTSHIFT swarm, preview token verdicts, sample Watchtower and buildcheck reports (free endpoints only).",
+  "version": "0.2.0",
+  "description": "elizaOS: hire AI agents with Swarm Desk, x402 USDC payments, private result polling and seven paid security and crypto lookups.",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",

@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "tech.getnightshift/public",
   "title": "NIGHTSHIFT public",
-  "description": "Keyless agent crews: Watchtower, Research Desk, Build & Check, SWARM MIND, IMD data, x402 services.",
-  "version": "1.2.0",
+  "description": "Hire AI agents: swarm_quote, swarm_order, swarm_job; x402 seller, payment, price, wallet, gas, ENS.",
+  "version": "1.3.0",
   "websiteUrl": "https://getnightshift.tech/mcp",
   "repository": {
     "url": "https://github.com/RobertKodes/nightshift",

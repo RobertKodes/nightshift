@@ -59,6 +59,7 @@ export function fromLifi(j: LifiQuote | { message?: string; code?: number }, r: 
   const fees: Fee[] = (e.feeCosts ?? []).filter((f) => !/integrator/i.test(f.name)).map((f) => ({ name: f.name, usd: usd(f.amountUSD), included: f.included !== false }));
   const svm = txs[0]?.kind === "svm" ? readSvmTransaction(txs[0].base64) : null;
   const q: Quote = {
+    sender: a.fromAddress, recipient: a.toAddress,
     provider: "lifi", providerName: "LI.FI", tool: j.toolDetails?.name ?? j.tool, id: j.id,
     fromChain, toChain, fromToken, toToken,
     fromAmount: e.fromAmount, toAmount: e.toAmount, toAmountMin: e.toAmountMin,

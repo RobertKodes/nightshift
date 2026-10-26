@@ -15,6 +15,8 @@ const ethTransport = () => fallback(ETH_RPCS.map((u) => http(u, { timeout: 15_00
 export const eth = createPublicClient({ chain: mainnet, transport: ethTransport() });
 const salesChain = config.salesChainId === 8453 ? base : baseSepolia;
 export const sales = createPublicClient({ chain: salesChain, transport: http(config.salesRpc) });
+/** Wallet signatures are also checked on Base mainnet, even when sales use the testnet. */
+export const basePublic = salesChain.id === base.id ? sales : createPublicClient({ chain: base, transport: http("https://mainnet.base.org") });
 
 export function ethWallet(account: LocalAccount) {
   return createWalletClient({ account, chain: mainnet, transport: ethTransport() });

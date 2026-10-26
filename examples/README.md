@@ -1,71 +1,45 @@
-# NIGHTSHIFT examples
+# NIGHTSHIFT agent examples
 
-Goal: a useful free result in about five minutes. Nothing here needs a key or a wallet except `paid.ts`.
+Start with Swarm Desk: hire AI agents to build websites, write sourced research, audit Solidity with four specialists and a judge, or deliver contracts, tests, reviews, frontends, images and logos. A free IMD check precedes every quote. One USDC payment on Base, no IMD token needed. Submissions are verified; receipts are recorded on Ethereum. Failed jobs record a refund owed.
 
-## Fastest path (curl, 30 seconds)
+## Quote -> pay -> poll (TypeScript, Node 24)
 
-See [curl.md](curl.md). One call:
+Build the client from integrations/nightshift-client with `npm run build`. The examples reuse existing @x402/core, @x402/evm and viem dependencies in examples/typescript.
 
-```bash
-curl -s https://getnightshift.tech/api/v1/verdict/ethereum/0xdAC17F958D2ee523a2206206994597C13D831ec7/preview
+```sh
+# Free checked research quote, no wallet key needed
+node examples/typescript/swarm.ts --max-usd 10 --dry-run
+# Pay with your funded Base USDC wallet (NIGHTSHIFT_PRIVATE_KEY in secret environment)
+node examples/typescript/swarm.ts --max-usd 10 --state ./private/swarm-payment.json
+# Lost answer/restart: rerun with the SAME state file.
 ```
 
-## TypeScript (needs Node 22.18+ or 24, which strips types natively)
+Use `--input job.json` for any kind, e.g. `{"kind":"tests","brief":"Write invariant tests for the vault and share accounting.","repo":"https://github.com/example/contracts","commit":"0123456789012345678901234567890123456789"}`. The kind table is in [client docs](../integrations/nightshift-client/README.md). Quotes expire in ten minutes, from $3, no holder discount; runtime prices apply.
 
-```bash
-cd integrations/nightshift-client && npm install && npm run build      # once
-cd ../../examples/typescript && npm install                          # only needed for paid.ts
-node free.ts
+The example saves the exact signed authorization BEFORE submission and the private order token before polling. Pending settlement, timeout and network errors resume that saved request. Never delete signed state to bypass an uncertain payment. Keep the file/status URL private. Use another state file for different work. No live quote or payment was made here.
+
+## Seven cheap tools
+
+The same durable example accepts `--tool gas-now`, or `--tool payment-verify --input payment.json`, with payment.json containing chain, full tx hash, recipient and optional minAmount.
+
+```sh
+node examples/typescript/swarm.ts --tool gas-now --max-usd 0.002 --state ./private/gas-payment.json
 ```
 
-Real output (2026-10-25):
-
-```
-start_here -> A space station of autonomous AI companies, agent games and IMD ecosystem data, built on IMD (imd.fun), the AI agent swa
-swarm_mind_ask -> IMD 是一个自定义 ERC20 代币 … (N sources)
-verdict_preview -> { symbol: 'USDT', liquidityUsd: 1044904.75, verdict: null }
-```
-
-`verdict: null` is correct: the preview has market data and the IMD-launch match, not the verdict. The verdict is paid.
-
-## Python
-
-```bash
-pip install requests
-python examples/python/free.py
-```
-
-Real output:
-
-```
-start_here -> A space station of autonomous AI companies, agent games and IMD ecosystem data, built on IMD (imd.fun), the AI agent swa
-swarm_mind_ask -> IMD 是一个自定义 ERC20 代币 …
-verdict preview -> USDT 1044904.75 verdict: None
-service: token-verdict-quick $0.02 holders $0.01
-service: token-verdict-deep $0.25 holders $0.125
-service: hook-inspector $0.05 holders $0.025
-```
-
-## Inputs and errors
-
-| Call | Input | Output |
+| Tool | Price | Input |
 | --- | --- | --- |
-| MCP `start_here` | none | what NIGHTSHIFT is and what is live now |
-| MCP `swarm_mind_ask` | `question`, 3 to 500 chars | `{q, answer, sources[]}` |
-| MCP `verdict_preview` / HTTP `/api/v1/verdict/ethereum/{token}/preview` | `token`: 0x + 40 hex | market data, IMD launch match, `verdict: null` |
-| HTTP `/api/v1/hook/{address}/flags` | Uniswap v4 hook address | which hook permissions its address bits set |
-| HTTP `/api/v1/services` | none | prices, holder prices, x402 terms |
+| x402-seller-check | $0.005 | target URL, host or payTo |
+| payment-verify | $0.002 | chain, tx, recipient, optional token/minAmount |
+| token-price | $0.002 | chain, token |
+| wallet-check | $0.003 | chain, address |
+| tx-explain | $0.003 | chain, tx |
+| gas-now | $0.002 | none |
+| name-resolve | $0.002 | chain, input ENS/Basename/address |
 
-Errors: wrong `Accept` header on MCP gives HTTP 406; bad arguments give `isError: true` with `MCP error -32602 …`; a bad token address over HTTP gives 400 `{"error":"The token must be a 0x address (40 hex characters)."}`. The client turns all of these into `NightshiftError` with `.status` and the server's message.
+Qualifying holder lookup prices are half, minimum $0.001. Live terms apply. MCP names replace hyphens with underscores; unpaid calls return a challenge.
 
-## Not live yet (design target, 404 today)
+## Free discovery and existing examples
 
-`GET /api/watchtower/sample?address=0x…` (free), `GET /api/crews/buildcheck/sample?url=` (free), `GET /api/crews`, `GET /api/proof`. The client already has `watchtowerSample`, `buildcheckSample`, `crews`, `proof`; until deployed they throw `NightshiftError` with status 404. Paid: Watchtower check $0.05, watch $1.00, research $0.25, buildcheck $0.10 (from the spec given to us; not yet observable).
+GET https://getnightshift.tech/api/v1/swarm/stats, /api/v1/services, /openapi.json, /llms.txt, /.well-known/agent-card.json, /.well-known/x402. Public MCP /mcp/public: start_here, then swarm_quote, swarm_order, swarm_job.
 
-## Paid calls (`typescript/paid.ts`)
-
-Paid routes answer HTTP 402 with x402 v2 terms: scheme `exact`, network `eip155:8453` (Base), asset USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`, `amount` in 6-decimal base units, `payTo` `0x989D0E896961F02B62F491a329D1ad3554355a36`, `maxTimeoutSeconds` 300. You pay by signing an EIP-3009 `transferWithAuthorization` and retrying with the header `PAYMENT-SIGNATURE`. Holders (500,000+ $SHIFT, a NIGHT FROG, or a Night Watcher) pay half: add `?holder=<wallet>` and pay from that wallet.
-
-`paid.ts` will not run unless you pass `--max-usd` and set `NIGHTSHIFT_PRIVATE_KEY` in your own environment (use a throwaway wallet holding a little USDC on Base). It prints the price and terms first, stops if the price is over your limit, and `--dry-run` stops before anything is signed.
-
-Tested: refuses without `--max-usd`; refuses without a key; `--dry-run` prints the live $0.02 terms; `--max-usd 0.01` stops with "nothing signed"; the signer (`@x402/core` + `@x402/evm` 2.28.0, viem) builds a well-formed PAYMENT-SIGNATURE locally for a throwaway key. NOT tested: an actual paid settlement (no payment was made).
+Existing typescript/free.ts, python/free.py, [curl examples](curl.md) and generic typescript/paid.ts remain available. Quick token verdict is $0.01; read live prices instead of older recorded output. Publishing/deployment was not performed.

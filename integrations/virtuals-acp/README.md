@@ -1,33 +1,29 @@
-# NIGHTSHIFT provider for Virtuals ACP
+# NIGHTSHIFT Virtuals ACP provider 0.2
 
-One offering: **Token Verdict Preview**. A buyer agent sends `{"token":"0x…"}`, we quote a USDC budget, the buyer funds the job, and we deliver the free NIGHTSHIFT preview JSON (`/api/v1/verdict/ethereum/{token}/preview`).
+Default offering: **Swarm Desk**. Buyer requests work; provider gets IMD's free checked quote, sets an exact ACP USDC budget, uses x402 USDC on Base to hire AI agents and polls delivered work. Websites, sourced research, audits, contracts, tests, review, frontends, images and logos are supported. Failed jobs record a refund owed; the provider reports it and must reconcile the refund and ACP escrow. It never submits failed work as success.
 
-## What was checked
+Buyer requirement:
 
-- SDK: `@virtuals-protocol/acp-node-v2` 0.1.15 on npm. The v1 package `@virtuals-protocol/acp-node` is marked deprecated in its own README, so v2 is used. Sources: https://github.com/Virtual-Protocol/acp-node-v2 , https://github.com/Virtual-Protocol/acp-node (README).
-- Flow (from the v2 README and the installed type definitions): provider calls `AcpAgent.create({provider: PrivyAlchemyEvmProviderAdapter.create(...)})`, `agent.on("entry", handler)`, `agent.start()`. Buyer creates the job from the offering and sends the requirement; provider `session.setBudget(AssetToken.usdc(...))`; buyer `session.fund`; on `job.funded` provider `session.submit(deliverable)`; evaluator completes or rejects.
-- Onboarding (https://whitepaper.virtuals.io/acp/acp-dev-onboarding-guide.md): choose the Provider role and accept terms; whitelist the developer wallet under My Agents and set its default currency; complete 10 successful sandbox jobs and request graduation (manual review); each offering needs a description, input schema, USDC price (docs suggest testing at 0.01), delivery expectations and samples; up to 40 offerings; job prices and fees are in USDC on Base.
-
-## Layout
-
-- `src/handler.ts`: the job logic (no wallet). `src/config.ts`: every external value, read from env. `src/provider.ts`: the only file that needs credentials.
-- `test/handler.test.ts`: offline, with a fake session and fake `fetch`.
-
-## Test (offline)
-
-```bash
-npm install
-npm test        # node --test test/*.test.ts  (Node 22.18+ / 24)
+```json
+{"service":"swarm","kind":"research","brief":"Compare Ethereum rollup proof systems with primary citations.","maxUsd":10}
 ```
 
-Result: 5 of 5 pass (requirement parsing, budget quote, bad requirement, delivery of the preview, upstream error). NOT tested: any live ACP job, the Privy wallet adapter, or the SSE connection; those need the external steps below.
+Seven house tools use the same funding flow, e.g. `{"service":"gas-now","input":{},"maxUsd":0.002}`. Inputs/prices are in [nightshift-client](../nightshift-client/README.md). Tests/review/audit need public GitHub repo and documented commit fields; frontend needs a verified Ethereum/Base contract. Free checks and current capacity determine admission.
 
-## The one remaining external step (a human does this)
+`src/paid-entry.ts` persists quote, budget, signed request, order receipt and delivery in `NIGHTSHIFT_ACP_STATE` (default data/nightshift-acp.json). Authorization is saved before submission. Duplicate funded events coalesce. Resume the same funded job after restart to reuse that signature. An expired *unsigned* quote may refresh within the funded budget. Tokens stay in the private ledger. Polling runs every 60 seconds; resume the same job after timeout or pending settlement. Only completed work is submitted to ACP.
 
-Register the agent on the ACP Service Registry (https://app.virtuals.io/acp/new), which also produces the credentials this code reads. Concretely, before `npm start`:
+External setup, not performed here:
 
-1. Register a Provider agent and add an offering named exactly `Token Verdict Preview` (or set `NIGHTSHIFT_ACP_OFFERING`), with requirement schema `{"token": "0x… Ethereum token address"}` and a price (our `NIGHTSHIFT_ACP_PRICE_USD`, default 0.01, should match).
-2. In the agent's Signers tab: add a signer and copy the wallet address, wallet id and signer key into `ACP_WALLET_ADDRESS`, `ACP_WALLET_ID`, `ACP_SIGNER_PRIVATE_KEY` (optional `ACP_BUILDER_CODE`).
-3. Whitelist the developer wallet, run the 10 sandbox jobs, and request graduation; new offerings on graduated agents may need Virtuals approval.
+1. Register a Provider and `Swarm Desk` offering in ACP Service Registry. `NIGHTSHIFT_ACP_OFFERING` can change its exact name. Configure JSON requirements, variable checked budget and delivery expectations.
+2. Configure `ACP_WALLET_ADDRESS`, `ACP_WALLET_ID`, `ACP_SIGNER_PRIVATE_KEY` (optional ACP_BUILDER_CODE) from ACP Signers.
+3. Supply `NIGHTSHIFT_X402_PRIVATE_KEY` through the secret environment. **This separate wallet needs USDC on Base before work.** ACP escrow does not fund outgoing x402 automatically. NIGHTSHIFT_ACP_MAX_USD defaults to 20 per job.
+4. Complete Virtuals whitelisting, sandbox jobs, graduation and any required offering approval.
 
-Open questions the docs did not answer: whether a zero or very small budget is accepted, and the exact platform fee. Selling a service that is free on our own site is a business decision for the owner; the paid verdict could be offered the same way later.
+The old free-preview adapter remains only when offering name is exactly `Token Verdict Preview`; NIGHTSHIFT_ACP_PRICE_USD controls its fixed preview price.
+
+```sh
+npm test
+npm start
+```
+
+Run from this directory on Node 24 with dependencies installed. `npm start` is the owner's later activation step; it was not run. This private provider package is ready for ACP registration/configuration, rather than npm publication. Existing SDK 0.1.15 and viem are reused; no dependency added. Tests mock ACP, signing and HTTP. Live escrow, bridge routes and IMD work require external credentials/funding and runtime checks.

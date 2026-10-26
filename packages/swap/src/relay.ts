@@ -86,6 +86,7 @@ export function fromRelay(j: RelayQuote | { message?: string; errorCode?: string
   const erc20 = CHAINS[fromChain].kind === "evm" && !isNative(fromChain, fromToken.address);
   const fromUsd = usd(d.currencyIn.amountUsd);
   const q: Quote = {
+    sender: d.sender, recipient: d.recipient,
     provider: "relay", providerName: "Relay", tool: "relay", id: j.requestId ?? j.steps[0]?.requestId ?? "",
     fromChain, toChain, fromToken, toToken,
     fromAmount: d.currencyIn.amount, toAmount: d.currencyOut.amount, toAmountMin: d.currencyOut.minimumAmount ?? d.currencyOut.amount,

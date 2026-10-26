@@ -26,6 +26,14 @@ const reg = (ops: Operators, agentId: string, over: Record<string, unknown> = {}
   ops.register({ agentId, wallet: W, name: `Crew ${agentId.slice(0, 4)}`, capabilities: ["research"], endpoint: EP, ...over });
 
 describe("operators", () => {
+  it("notifies only after a successful new registration", async () => {
+    const names: string[] = [];
+    const ops = new Operators({ file: null, publicUrl: resolve, onRegistered: (op) => { names.push(op.name); } });
+    await reg(ops, "aaaaaaaaaaaa");
+    await expect(reg(ops, "aaaaaaaaaaaa")).rejects.toMatchObject({ status: 409 });
+    expect(names).toEqual(["Crew aaaa"]);
+  });
+
   it("activates an operator only after its onboarding job passed", async () => {
     const { ops, ledger } = setup();
     const op = await reg(ops, "aaaaaaaaaaaa", { capabilities: ["research", "Data", "research"] });

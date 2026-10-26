@@ -25,6 +25,8 @@ export type Contract = { chain: ChainKey; address: string; role: string; label: 
 
 /** One route, the same shape whichever provider found it. */
 export type Quote = {
+  sender?: string;
+  recipient?: string;
   provider: Provider;
   providerName: string;
   /** The bridge or exchange the provider picked (across, mayan, relay…). */

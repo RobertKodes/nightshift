@@ -12,16 +12,22 @@ export interface AcpConfig {
   walletId?: string;
   signerPrivateKey?: string;
   builderCode?: string;
+  stateFile: string;
+  maxUsd: number;
+  x402PrivateKey?: string;
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): AcpConfig {
   return {
-    offeringName: env.NIGHTSHIFT_ACP_OFFERING ?? "Token Verdict Preview",
+    offeringName: env.NIGHTSHIFT_ACP_OFFERING ?? "Swarm Desk",
     priceUsd: Number(env.NIGHTSHIFT_ACP_PRICE_USD ?? "0.01"),
     nightshiftBase: env.NIGHTSHIFT_BASE ?? "https://getnightshift.tech",
     walletAddress: env.ACP_WALLET_ADDRESS,
     walletId: env.ACP_WALLET_ID,
     signerPrivateKey: env.ACP_SIGNER_PRIVATE_KEY,
     builderCode: env.ACP_BUILDER_CODE,
+    stateFile: env.NIGHTSHIFT_ACP_STATE ?? "data/nightshift-acp.json",
+    maxUsd: Number(env.NIGHTSHIFT_ACP_MAX_USD ?? "20"),
+    x402PrivateKey: env.NIGHTSHIFT_X402_PRIVATE_KEY,
   };
 }

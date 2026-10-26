@@ -30,6 +30,7 @@ export const ROOMS: Record<RoomId, Room> = {
     tagline: "Agents, companies and the tech under the hood", emblem: "/art/station/room-geek-door-768.webp", art: "/art/station/room-geek-1600x900.webp",
     nav: [
       { to: "/geek", label: "Terminal", icon: "build" },
+      { to: "/services#swarm-desk", label: "Hire the swarm", icon: "crew" },
       { to: "/crews", label: "Crews", icon: "crew" },
       { to: "/sniper", label: "NIGHT SNIPER", icon: "sniper" },
       { to: "/mind", label: "SWARM MIND", icon: "agent" },

@@ -1,5 +1,9 @@
+import { SwarmPay } from "../SwarmPay";
 import { useEffect, useState } from "react";
 import { Link } from "../router";
+import { type Verdict, VerdictCard } from "./VerdictCard";
+import { PaidOffers } from "../TryPaid";
+import type { ServiceIndex as Index } from "../paidServices";
 import { Stat, Tiles } from "./Station";
 import "./station.css";
 import "./services.css";
@@ -17,8 +21,6 @@ const isAddr = (a: string) => /^0x[0-9a-fA-F]{40}$/.test(a.trim());
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const money = (n: number | null | undefined) => n == null ? "—" : n === 0 ? "$0" : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(n < 1 ? 4 : 0)}`;
 
-type Offer = { id: string; name: string; pitch: string; priceUsd: number; route: string; example: string; description: string };
-type Index = { offers: Offer[]; network: string; payTo: string | null; mode: string; mcp: string; openapi: string };
 function useIndex(): Index | null {
   const [d, setD] = useState<Index | null>(null);
   useEffect(() => { fetch("/api/v1/services").then((r) => (r.ok ? r.json() : null)).then(setD).catch(() => {}); }, []);
@@ -58,7 +60,7 @@ function Prices({ ids, index }: { ids: string[]; index: Index | null }) {
     <div className="st-table-wrap">
       <table className="st-table svc-prices">
         <thead><tr><th>Call</th><th>Price</th><th>What you get</th></tr></thead>
-        <tbody>{rows.length ? rows.map((o) => <tr key={o.id}><td><b>{o.name}</b></td><td className="mono">${o.priceUsd < 0.01 ? o.priceUsd.toFixed(3) : o.priceUsd.toFixed(2)}</td><td className="svc-wrap">{o.pitch}</td></tr>) : <tr><td colSpan={3} className="dim">Reading the prices…</td></tr>}</tbody>
+        <tbody>{rows.length ? rows.map((o) => <tr key={o.id}><td><b>{o.name}</b></td><td className="mono">{o.priceIsMinimum ? "From " : ""}${o.priceUsd < 0.01 ? o.priceUsd.toFixed(3) : o.priceUsd.toFixed(2)}</td><td className="svc-wrap">{o.pitch}</td></tr>) : <tr><td colSpan={3} className="dim">Reading the prices…</td></tr>}</tbody>
       </table>
       <p className="st-note svc-pad">Paid in USDC on Base ({index?.network ?? "eip155:8453"}) with x402: no account, no API key. Each payment settles to NIGHTSHIFT Services, the platform's house company{index?.payTo ? <> (<span className="mono">{short(index.payTo)}</span>)</> : null}.{index?.mode === "sim" ? " This server runs in simulation: add sim=1 for a demo answer, no money moves." : ""}</p>
     </div>
@@ -96,7 +98,7 @@ export function ServicesPage() {
   const index = useIndex();
   return (
     <div className="st-room">
-      <Hero title="House services" deck="RUN BY NIGHTSHIFT" line="Three services NIGHTSHIFT runs itself, sold per call to AI agents, bots and traders over x402 and MCP: the answers we already read from IMD and the chain, packaged and cited.">
+      <Hero title="House services" deck="RUN BY NIGHTSHIFT" line="House services for AI agents, bots and traders over x402 and MCP: seller and payment checks, token prices, wallets, transactions, gas, names and IMD data, from $0.002 per lookup.">
         <div className="st-stats">
           <Stat label="Token Verdict" value="$0.01" note="deep $0.25 · 1 free a day" />
           <Stat label="Hook Inspector" value="$0.05" note="explained $0.50" />
@@ -104,14 +106,17 @@ export function ServicesPage() {
         </div>
       </Hero>
       <div className="st-body">
+        <SwarmPay />
         <h2>The services</h2>
         <Tiles items={[
           { to: "/services/verdict", title: "Token Verdict", note: "Before you buy an Ethereum token: no issues found, caution or avoid, with every reason and its evidence. Made for IMD launches and v4 hook tokens.", icon: "shield", tag: "FREE DEMO" },
           { to: "/services/hook", title: "Hook Inspector", note: "What a Uniswap v4 hook can do: permission bits, callbacks, fees, owner powers, upgrades, known templates.", icon: "code" },
           { to: "/services/imd-feed", title: "IMD Data Feed", note: "IMD launches, tokens, swarm health and seat work history as JSON, with since= polling.", icon: "chart" },
         ]} />
+        <h2>Try it with your wallet</h2>
+        <PaidOffers index={index} />
         <h2>Prices</h2>
-        <Prices ids={["token-verdict-quick", "token-verdict-deep", "hook-inspector", "hook-inspector-explained", "imd-feed"]} index={index} />
+        <Prices ids={index?.offers.map((o) => o.id) ?? []} index={index} />
         <p className="st-note">Why these: the most-bought paid endpoint for agents today is a token verdict before a buy, and nobody serves IMD data or inspects v4 hooks. These are automated checks from public data, not financial advice and not an audit; every answer says what it could not check.</p>
         <HowTo example={`/api/v1/verdict/ethereum/${SHIFT}?depth=quick`} tools="verdict_preview, verdict_demo, token_verdict, hook_flags, hook_inspect, imd_feed_sample, imd_feed, services_pricing" />
       </div>
@@ -121,53 +126,7 @@ export function ServicesPage() {
 
 // ------------------------------------------------------------------ Token Verdict
 
-type Reason = { id: string; impact: "avoid" | "caution" | "note" | "good"; text: string; evidence: string[] };
-type Verdict = {
-  verdict: "no_issues_found" | "safe" | "caution" | "avoid"; summary: string; token: string; depth: string;
-  confidence: { level: string; score: number; unknowns: string[] }; reasons: Reason[];
-  asset: { name: string | null; symbol: string | null };
-  imd: { isLaunch: boolean; launchNumber?: number; kind?: string };
-  market: { liquidityUsd: number | null; exitLiquidityUsd: number | null; volume24hUsd: number | null; pair: { url: string } | null };
-  hook: { address: string; flags: string; template: string | null } | null;
-  holders: { count?: number; largestWallet?: { pct: number; label: string | null } | null; error?: string };
-  simulation: { simulated: boolean; why?: string; buy?: { taxPct?: number | null }; sell?: { taxPct?: number | null; ok?: boolean }; router?: { ok: boolean } };
-  copycat: { signal: string; text: string };
-  evidence: { id: string; what: string; source: string; url?: string }[];
-  demo?: { left: number; nextFreeAt: string }; cached?: boolean; dataAgeSeconds?: number;
-};
 type Preview = { imd: { isLaunch: boolean; launchNumber?: number; kind?: string; status?: string }; market: { symbol: string | null; liquidityUsd: number | null; volume24hUsd: number | null; dex: string } | null; sameSymbolLaunches: number[]; hook: { address: string; flags: string; template: string | null } | null; note: string };
-
-function VerdictCard({ v }: { v: Verdict }) {
-  const sym = v.asset.symbol ? `$${v.asset.symbol}` : short(v.token);
-  const groups: Reason["impact"][] = ["avoid", "caution", "note", "good"];
-  return (
-    <section className={`svc-verdict ${v.verdict}`}>
-      <div className="svc-vhead">
-        <span className={`svc-pill ${v.verdict === "no_issues_found" ? "safe" : v.verdict}`}>{v.verdict === "no_issues_found" || v.verdict === "safe" ? "NO ISSUES FOUND" : v.verdict.toUpperCase()}</span>
-        <div><b>{sym}{v.imd.isLaunch ? <small> · IMD launch #{v.imd.launchNumber} ({v.imd.kind})</small> : <small> · not an IMD launch</small>}</b><span className="mono">{v.token}</span></div>
-        <span className="svc-conf" title={v.confidence.unknowns.join("; ") || "every check ran"}>{v.confidence.level} confidence · {Math.round(v.confidence.score * 100)}%</span>
-      </div>
-      <p className="svc-summary">{v.summary}</p>
-      <div className="st-stats wide">
-        <Stat label="Exit liquidity" value={money(v.market.exitLiquidityUsd)} note={v.market.liquidityUsd != null ? `${money(v.market.liquidityUsd)} in the pool` : undefined} />
-        <Stat label="Sell cost" value={v.simulation.simulated && v.simulation.sell?.taxPct != null ? `${v.simulation.sell.taxPct}%` : "—"} note={v.simulation.simulated ? "beyond the pool fee, simulated" : v.simulation.why} />
-        <Stat label="Holders" value={v.holders.count != null ? v.holders.count.toLocaleString("en-US") : "—"} note={v.holders.largestWallet ? `largest ${v.holders.largestWallet.pct.toFixed(2)}%` : v.holders.error} />
-        <Stat label="Copycat" value={v.copycat.signal} note={v.hook ? `hook ${v.hook.template ?? short(v.hook.address)} · ${v.hook.flags}` : "no v4 hook"} />
-      </div>
-      <ul className="svc-reasons">
-        {groups.flatMap((g) => v.reasons.filter((r) => r.impact === g).map((r) => (
-          <li key={r.id + r.text} className={r.impact}><i>{r.impact}</i><span>{r.text}</span><small>{r.evidence.join(" ")}</small></li>
-        )))}
-      </ul>
-      {v.confidence.unknowns.length > 0 && <p className="st-note">Not checked: {v.confidence.unknowns.join("; ")}.</p>}
-      <details className="svc-evidence">
-        <summary>Evidence ({v.evidence.length})</summary>
-        <ol>{v.evidence.map((e) => <li key={e.id}><b>{e.id}</b> <span>{e.what}</span> <small>{e.url ? <a href={e.url} target="_blank" rel="noreferrer">{e.source} ↗</a> : e.source}</small></li>)}</ol>
-      </details>
-      <p className="st-note svc-small">{v.cached ? `From the cache, ${v.dataAgeSeconds}s old. ` : ""}Automated checks run by NIGHTSHIFT, not financial advice and not an audit.</p>
-    </section>
-  );
-}
 
 export function VerdictPage() {
   const index = useIndex();
@@ -217,6 +176,8 @@ export function VerdictPage() {
             <p className="st-note">{pv.note}</p>
           </section>
         )}
+        <h2>Pay for a verdict</h2>
+        <PaidOffers index={index} ids={["token-verdict-quick", "token-verdict-deep"]} />
         <h2>What it checks</h2>
         <div className="svc-checks">
           {[

@@ -21,10 +21,19 @@ function fakeFetch(log) {
 }
 const byName = (actions, n) => actions.find((a) => a.name === n);
 
-test("plugin exposes four actions", () => {
+test("plugin exposes free tools and Swarm Desk payment actions", () => {
   assert.deepEqual(nightshiftPlugin.actions.map((a) => a.name).sort(), [
-    "NIGHTSHIFT_ASK_SWARM", "NIGHTSHIFT_BUILDCHECK_SAMPLE", "NIGHTSHIFT_VERDICT_PREVIEW", "NIGHTSHIFT_WATCHTOWER_SAMPLE",
+    "NIGHTSHIFT_ASK_SWARM", "NIGHTSHIFT_BUILDCHECK_SAMPLE", "NIGHTSHIFT_HOUSE_TOOL", "NIGHTSHIFT_SWARM_JOB", "NIGHTSHIFT_SWARM_ORDER", "NIGHTSHIFT_SWARM_QUOTE", "NIGHTSHIFT_VERDICT_PREVIEW", "NIGHTSHIFT_WATCHTOWER_SAMPLE",
   ]);
+});
+
+test("paid actions require host policy and persist signatures before sending", async () => {
+  const m = msg('{"tool":"gas-now","input":{}}');
+  assert.equal(await byName(makeActions(), "NIGHTSHIFT_HOUSE_TOOL").validate(runtime, m), false);
+  let saved, signs = 0;
+  const f = async (_url, init) => init.headers["PAYMENT-SIGNATURE"] ? (assert.equal(saved.payment, "sig"), json({ gas: [], payment: { tx: "0xtx" } })) : json({ x402Version: 2, accepts: [{ scheme: "exact", network: "eip155:8453", asset: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", amount: "2000", payTo: "0x1111111111111111111111111111111111111111" }] }, 402);
+  const action = byName(makeActions(f, { maxUsd: 0.002, sign: () => { signs++; return "sig"; }, save: r => { saved = r; } }), "NIGHTSHIFT_HOUSE_TOOL");
+  assert.equal(await action.validate(runtime, m), true); assert.equal((await action.handler(runtime, m)).success, true); assert.equal(signs, 1);
 });
 
 test("ask-swarm calls the MCP tool and replies through the callback", async () => {

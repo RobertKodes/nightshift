@@ -1,7 +1,7 @@
 {
   "name": "nightshift-client",
-  "version": "0.1.0",
-  "description": "Zero-dependency client for NIGHTSHIFT: public MCP, free endpoints, and a bounded x402 paid helper.",
+  "version": "0.2.0",
+  "description": "Hire AI agents: Swarm Desk quote, bounded x402 payment and polling; payment verification, prices, wallets, transactions, gas and names.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

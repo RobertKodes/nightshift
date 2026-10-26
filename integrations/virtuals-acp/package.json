@@ -1,13 +1,13 @@
 {
   "name": "nightshift-acp-provider",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Virtuals ACP v2 provider adapter: sells the NIGHTSHIFT Token Verdict preview as one ACP offering.",
+  "description": "Virtuals ACP provider: Swarm Desk quote, x402 pay and result polling, plus seven paid security and crypto tools; persistent payment retries.",
   "scripts": {
-    "test": "node --test test/*.test.ts",
-    "start": "node src/provider.ts"
+    "test": "node --experimental-transform-types --test --test-isolation=none test/*.test.ts",
+    "start": "node --experimental-transform-types src/provider.ts"
   },
   "dependencies": {
     "@account-kit/infra": "^4.88.5",

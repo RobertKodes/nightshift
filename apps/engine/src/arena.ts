@@ -30,7 +30,7 @@ const MAX_SEAT = 2000;
 /** An agent with no call for this long stops counting as connected (the game's 45 s abandonment rule then runs). */
 export const PRESENCE_MS = 60_000;
 const CHALLENGE_MS = 10 * 60_000;
-const MAX_AGENTS_PER_OWNER = 25;
+export const MAX_AGENTS_PER_OWNER = 25;
 const MAX_TABLES_PER_AGENT = 3;
 /** Arena-only reserved names, on top of the shared rule (names.ts: the project, IMD, staff, however spelled). */
 const RESERVED = /^(nightowl|owl|system|anthropic|claude|openai)$/i;
@@ -67,7 +67,8 @@ type Seat = { player: string; off: (() => void) | null; seenAt: number };
 type Table = { id: string; where: Where; games: ChessGames; seats: Map<string, Seat>; createdAt: number; recorded: boolean; endedAt: number | null; waiters: Set<() => void> };
 export type Challenge = { id: string; game: "chess"; tc: TimeControl; from: string; to: string | null; createdAt: number; state: "open" | "accepted" | "cancelled"; gameId: string | null };
 type Stake = { matchId: string; agent: string; wallet: string; at: number };
-type State = { agents: Agent[]; games: GameRecord[]; stakes: Stake[]; salt?: string };
+type JoinState = { used: { owner: string; issued: number }[]; attempts: { hash: string; at: number }[] };
+type State = { agents: Agent[]; games: GameRecord[]; stakes: Stake[]; salt?: string; joins?: JoinState };
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const lc = (s: unknown) => String(s ?? "").toLowerCase();
@@ -100,6 +101,7 @@ export class Arena {
   private challenges = new Map<string, Challenge>();
   private dirty = false;
   private refreshing = false;
+  private joinUnavailable = false;
   private readonly now: () => number;
 
   constructor(private o: {
@@ -117,9 +119,9 @@ export class Arena {
     try {
       if (o.file && existsSync(o.file)) {
         const d = JSON.parse(readFileSync(o.file, "utf8")) as Partial<State>;
-        this.db = { agents: Array.isArray(d.agents) ? d.agents : [], games: Array.isArray(d.games) ? d.games : [], stakes: Array.isArray(d.stakes) ? d.stakes : [], ...(typeof d.salt === "string" ? { salt: d.salt } : {}) };
+        this.db = { agents: Array.isArray(d.agents) ? d.agents : [], games: Array.isArray(d.games) ? d.games : [], stakes: Array.isArray(d.stakes) ? d.stakes : [], ...(typeof d.salt === "string" ? { salt: d.salt } : {}), ...(d.joins ? { joins: d.joins } : {}) };
       }
-    } catch (e) { console.error("arena state", (e as Error).message); }
+    } catch (e) { this.joinUnavailable = true; console.error("arena state", (e as Error).message); }
     for (const a of this.db.agents) if (a.keyHash) this.byKey.set(a.keyHash, a);
   }
   /** The registering IP, salted with this arena's own secret (kept in its state file) and hashed. */
@@ -129,10 +131,10 @@ export class Arena {
     return sha(`${this.db.salt}:${ip}`);
   }
 
-  private save(): void {
+  private save(strict = false): void {
     this.dirty = false;
     if (!this.o.file) return;
-    try { mkdirSync(dirname(this.o.file), { recursive: true }); writeAtomic(this.o.file, JSON.stringify(this.db)); } catch (e) { console.error("arena save", (e as Error).message); }
+    try { mkdirSync(dirname(this.o.file), { recursive: true }); writeAtomic(this.o.file, JSON.stringify(this.db)); } catch (e) { if (strict) throw e; console.error("arena save", (e as Error).message); }
   }
 
   // ---- agents and keys
@@ -162,18 +164,90 @@ export class Arena {
     return key;
   }
 
-  /** A new agent for a wallet that has proved itself (signature or session). The key is returned once. `ip` is the caller's, kept only as a salted hash. */
-  async register(owner: string, input: Record<string, unknown>, ip?: string): Promise<{ agent: ReturnType<Arena["view"]>; key: string }> {
-    const me = lc(owner);
-    if (!/^0x[0-9a-f]{40}$/.test(me)) throw new ArenaError(401, "Sign with your wallet to register an agent.", "unauthorized");
-    const kind = String(input.kind ?? "open");
-    if (kind !== "imd" && kind !== "open") throw new ArenaError(400, "kind is \"imd\" (an IMD seat you own) or \"open\".", "bad_kind");
+  private labels(input: Record<string, unknown>) {
     const model = String(input.model ?? "").trim(), runtime = String(input.runtime ?? "").trim(), homepage = String(input.homepage ?? "").trim();
     if (!LABEL.test(model) || !LABEL.test(runtime)) throw new ArenaError(400, "model and runtime: up to 40 plain characters.", "bad_input");
     if (homepage) {
       let u: URL | null = null; try { u = new URL(homepage); } catch { /* checked below */ }
       if (!u || u.protocol !== "https:" || homepage.length > 200) throw new ArenaError(400, "homepage must be an https:// link (up to 200 characters).", "bad_input");
     }
+    return { model, runtime, homepage };
+  }
+
+  /** Shared by HTTP and public MCP; only salted hashes survive the call, including failed attempts. */
+  joinAttempt(ip: string): void {
+    if (this.joinUnavailable) throw new ArenaError(503, "Arena state could not be read. Joining is unavailable.", "unavailable");
+    const now = this.now(), hash = this.ipHash(ip || "unknown")!;
+    const joins = this.db.joins ??= { used: [], attempts: [] };
+    joins.used = joins.used.filter((x) => x.issued >= now - 10 * 60_000);
+    joins.attempts = joins.attempts.filter((x) => x.at > now - 3_600_000);
+    if (joins.attempts.filter((x) => x.hash === hash).length >= 10) throw new ArenaError(429, "Ten joins per hour from one address. Try again later.", "slow_down");
+    joins.attempts.push({ hash, at: now });
+    this.save(true);
+  }
+
+  /** Prepare without side effects; commit synchronously after signature and endpoint validation. */
+  prepareJoin(owner: string, input: Record<string, unknown>, issued: number, ip?: string) {
+    const me = lc(owner), wanted = String(input.name ?? "").replace(/\s+/g, " ").trim();
+    if (!/^0x[0-9a-f]{40}$/.test(me)) throw new ArenaError(400, "address: a 0x wallet address.", "bad_address");
+    const labels = this.labels(input);
+    const prior = this.db.agents.find((a) => a.owner === me && a.name.toLowerCase() === wanted.toLowerCase());
+    const name = this.checkName(wanted, prior);
+    const joins = this.db.joins ??= { used: [], attempts: [] };
+    const check = () => {
+      if (this.joinUnavailable) throw new ArenaError(503, "Joining is unavailable.", "unavailable");
+      if (!Number.isFinite(issued) || issued < this.now() - 10 * 60_000 || issued > this.now() + 60_000) throw new ArenaError(400, "issued must be within the last ten minutes (60 seconds clock skew allowed).", "bad_issued");
+      if (joins.used.some((x) => x.owner === me && x.issued === issued)) throw new ArenaError(409, "This wallet and issued timestamp were already used. Sign a fresh message.", "replay");
+      if (prior && prior.owner !== me) throw new ArenaError(403, "This agent belongs to another wallet.", "not_owner");
+      this.checkName(name, prior);
+      if (!prior && this.db.agents.filter((a) => a.owner === me).length >= MAX_AGENTS_PER_OWNER) throw new ArenaError(429, `One wallet can register ${MAX_AGENTS_PER_OWNER} agents.`, "too_many");
+    };
+    check();
+    const draft: Agent = prior ?? { id: randomBytes(6).toString("hex"), kind: "open", name, owner: me, ...labels,
+      seat: null, imd: null, keyHash: "", keyId: "", createdAt: this.now(), lastSeenAt: null, revokedAt: null,
+      elo: 1200, games: 0, wins: 0, losses: 0, draws: 0, ipHash: this.ipHash(ip) };
+    return {
+      agentId: draft.id,
+      commit: <T,>(effect?: () => { value: T; rollback(): void; notify(): void }) => {
+        check();
+        const before = { ...draft }, used = [...joins.used];
+        let side: ReturnType<NonNullable<typeof effect>> | undefined, persisted = false;
+        try {
+          if (!prior) this.db.agents.push(draft);
+          const key = this.issue(draft);
+          joins.used.push({ owner: me, issued });
+          // Arena first: after an interrupted commit, a fresh signed join can reuse this id.
+          // Saving an operator before its arena agent could leave an unrecoverable orphan.
+          this.save(true);
+          persisted = true;
+          side = effect?.();
+          side?.notify();
+          return { agent: this.view(draft), key, operator: side?.value };
+        } catch (e) {
+          this.byKey.delete(draft.keyHash);
+          if (prior) Object.assign(prior, before); else this.db.agents = this.db.agents.filter((a) => a !== draft);
+          if (prior?.keyHash) this.byKey.set(prior.keyHash, prior);
+          joins.used = used;
+          try {
+            side?.rollback();
+            if (persisted) this.save(true);
+          } catch {
+            this.joinUnavailable = true;
+            throw new ArenaError(503, "The join could not be rolled back on disk. Joining is unavailable.", "unavailable");
+          }
+          throw e;
+        }
+      },
+    };
+  }
+
+  /** A new agent for a wallet that has proved itself (signature or session). The key is returned once. `ip` is the caller's, kept only as a salted hash. */
+  async register(owner: string, input: Record<string, unknown>, ip?: string): Promise<{ agent: ReturnType<Arena["view"]>; key: string }> {
+    const me = lc(owner);
+    if (!/^0x[0-9a-f]{40}$/.test(me)) throw new ArenaError(401, "Sign with your wallet to register an agent.", "unauthorized");
+    const kind = String(input.kind ?? "open");
+    if (kind !== "imd" && kind !== "open") throw new ArenaError(400, "kind is \"imd\" (an IMD seat you own) or \"open\".", "bad_kind");
+    const { model, runtime, homepage } = this.labels(input);
     if (this.db.agents.filter((a) => a.owner === me).length >= MAX_AGENTS_PER_OWNER) throw new ArenaError(429, `One wallet can register ${MAX_AGENTS_PER_OWNER} agents.`, "too_many");
     let seat: Agent["seat"] = null, imd: Imd | null = null;
     let prior: Agent | undefined;

@@ -11,7 +11,7 @@ export interface Metrics {
   visits: number[];
   /** Visits that came from the company's own posts (a ?via= tag on its links), by channel. */
   via?: { at: number; ch: string }[];
-  sales: { at: number; productId: string; usdc: string; payer: string; tx: string | null; sim: boolean }[];
+  sales: { at: number; productId: string; usdc: string; payer: string; tx: string | null; sim: boolean; nonce?: string; network?: string }[];
 }
 
 interface Snapshot {

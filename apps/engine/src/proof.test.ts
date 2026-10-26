@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Company } from "@nightshift/core";
-import { payerClass, proof } from "./proof.js";
+import { payerClass, proof, proofPayments, paymentSummary } from "./proof.js";
 import type { Metrics } from "./store.js";
 
 const co = (id: string, owner: string, wallet: string, products: { id: string; name: string }[] = []) =>
@@ -15,6 +15,20 @@ const DEV = "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5";
 const usage = { days: [{ day: "2026-10-25", mcpSessions: 5, mcpCalls: 2, mcpCallers: 3, views: 10, visitors: 4 }], mcp: { sessions: 5, calls: 2, callerDays: 3, clients: [{ name: "rokmcp-collector", count: 3 }, { name: "claude-code", count: 2 }], tools: [] }, web: { views: 10, visitorDays: 4, pages: [], from: [] } };
 
 describe("proof", () => {
+  it("shares exact customer totals and payment keys, excluding Base Sepolia", () => {
+    const a = co("house", OWNER, "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", [{ id: "p1", name: "Service" }]);
+    const metrics: Metrics = { visits: [], sales: [
+      { ...sale(CUST, 0.995, 1), nonce: "0xnonce1", network: "eip155:8453" },
+      { ...sale(CUST, 0.005, 2), nonce: "0xnonce2", network: "eip155:8453" },
+      { ...sale(CUST2, 50, 3), nonce: "0xnonce3", network: "eip155:84532" },
+    ] };
+    const i = { companies: [a], metrics: () => metrics, houseId: "house" }, pays = proofPayments(i);
+    expect(pays[0]!.key).toBe(`${CUST}:0xnonce1`); expect(pays[2]!.cls).toBe("test");
+    expect(paymentSummary(pays)).toEqual({ payments: 2, wallets: 1, repeatWallets: 1, revenueUsd: 1 });
+    const agentReserve = { balanceUsd: 25, totalInUsd: 50, totalBoughtShift: "99", buys: [{ at: "2026-10-26T10:00:00Z", usd: 25, shift: "99", baseTx: "https://basescan.org/tx/0xab", ethereumTx: "https://etherscan.io/tx/0xcd", recipient: "0x6C4c…19b5" }] };
+    const r = proof({ ...i, agentReserve, ledger: [], usage, burns: { shift: 0, imd: 0 }, imdUsd: null, splitter: null });
+    expect(r.payments.customer).toMatchObject(paymentSummary(pays)); expect(r.agentReserve).toEqual(agentReserve);
+  });
   it("counts only outside wallets as customers and keeps owners, NIGHTSHIFT wallets, other companies and simulations out", () => {
     const a = co("alpha", OWNER, "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", [{ id: "p1", name: "Guide" }]);
     const b = co("beta", OTHER_OWNER, "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", [{ id: "p1", name: "Tool" }]);

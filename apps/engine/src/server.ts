@@ -27,6 +27,8 @@ import { recruiterRoutes } from "./recruiter/routes.js";
 import { chats } from "./community.js";
 import { isAdmin as adminReq } from "./admin.js";
 import { OwnerStats, liveOwnerStats, setOwnerStats } from "./owner-stats.js";
+import { startAgentEconomy } from "./economy-live.js";
+import { liveAgentReserve } from "./agent-reserve.js";
 import { PublicWatch, buildcheckBadge, publicWatchFile } from "./crews/growth.js";
 import { imdMarket } from "./imdmarket.js";
 import { onCrewEvent } from "./crews/live.js";
@@ -57,6 +59,7 @@ import { FORGE_LIVE } from "./forge-news.js";
 import { watchRoutes } from "./watch-routes.js";
 import { shipRoutes } from "./ship-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
+import { joinRoutes } from "./agent-join-routes.js";
 import { leagueRoutes } from "./league-routes.js";
 import { stationRoutes, withPageHead } from "./station-routes.js";
 import { card, catalog, deliveryOf, detail, honestPitch, offerFor, productIdOf, search } from "./agentmarket.js";
@@ -455,6 +458,10 @@ export function serve(engine: Engine) {
     file: join(config.dataDir, "owner-stats.json"),
     sources: {
       usage: liveUsage(config.dataDir), live: liveStats,
+      payerClass: (payer, sim) => {
+        const all = [...engine.store.companies.values()], house = all.find((c) => c.house)!;
+        return payerClass(payer, house, all, sim);
+      },
       jobs: (since) => crewLedger().list({ since, limit: 5000 }).map((j) => ({ crew: j.crew, status: j.status, free: j.free, kind: j.kind, paid: j.payment ? { usd: j.payment.usd, class: j.payment.class } : null })),
       operators: () => crewOperators().all(),
       sales: (since) => {
@@ -468,13 +475,14 @@ export function serve(engine: Engine) {
         return { state: d.state, prospects: d.prospects.length, waiting: d.queue.filter((q) => q.status === "awaiting_approval").length, sentToday: d.sent.filter((x) => x.sent?.utc?.startsWith(today)).length };
       },
     },
-    // the owner's own chat with the bot; the alert chat only if no private chat took it
+    // Private admin chats only, including errors and payment notifications.
     send: async (text) => {
       const dms = config.telegramToken ? await Promise.all(config.telegramAdmins.filter((x) => Number(x) > 0).map((id) => telegram(config.telegramToken, id, text).catch(() => false))) : [];
-      return dms.some(Boolean) || engine.alert(text.replace(/<[^>]+>/g, ""), `owner-stats-${Date.now()}`);
+      return dms.length > 0 && dms.every(Boolean);
     },
   });
   setOwnerStats(stats);
+  startAgentEconomy(engine);
   // Watchtower on the IMD market's tokens, in public: real high-severity changes, posted with evidence (3 a day at most)
   const pub = new PublicWatch({
     file: publicWatchFile(),
@@ -686,6 +694,7 @@ export function serve(engine: Engine) {
         res.end(b.svg);
         return;
       }
+      if (await joinRoutes(req, res, p, { json, body, vault: engine.vault })) return;
       // ---- the crews: house crews and outside operators, their jobs, the season
       if ((p.startsWith("/api/crews") || p === "/api/season" || p.startsWith("/api/agents/operators")) && await crewRoutes(req, res, p, {
         json, body, limited, ip: clientIp(req), ledger: crewLedger(), operators: crewOperators(), profiles: crewProfiles, season: crewSeason, buildCheck,
@@ -706,6 +715,7 @@ export function serve(engine: Engine) {
             companies: [...engine.store.companies.values()], metrics: (id) => engine.store.metricsOf(id), ledger: await engine.ledger.store.list(),
             usage: liveUsage(config.dataDir).report(90), crews: crewProfiles().map((c) => ({ id: c.id, name: c.name, house: c.operator.kind === "house", metrics: c.metrics })),
             operators: { registered: ops.length, active: ops.filter((o) => o.status === "active").length },
+            agentReserve: liveAgentReserve()?.proof(),
             burns: burnTotals(), imdUsd: config.imdUsd || null, splitter: (launchState()?.contracts?.splitter as string | undefined) ?? null, houseId: HOUSE_ID,
           }) };
         }
@@ -920,7 +930,7 @@ export function serve(engine: Engine) {
         const key = (req.headers.authorization ?? "").slice(-16) || "anon";
         if (limited(req, "mcp", 120, 60_000) || limited(req, `mcp-key:${key}`, 240, 60_000)) return json(res, 429, { error: "slow down" });
         const b = req.method === "POST" ? await body(req) : undefined;
-        if (b) liveUsage(config.dataDir).mcp(clientIp(req), b, "nightshift");
+        if (b) liveUsage(config.dataDir).mcp(clientIp(req), b, "nightshift", req.headers["user-agent"]);
         return await handleMcp(engine, req, res, b);
       }
 

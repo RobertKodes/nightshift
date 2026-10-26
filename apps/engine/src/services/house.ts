@@ -17,8 +17,11 @@ import { context } from "./context.js";
 import { liveNet, liveRpc } from "./net.js";
 import { type Payer, type SettleTerms, services } from "./routes.js";
 import { IMD_MAINNET } from "@nightshift/imd";
-import { SwarmDesk } from "../crews/swarm.js";
+import { SwarmDesk, setSwarmDesk } from "../crews/swarm.js";
+import { attachSwarmRefill, swarmJson, swarmVerified, swarmImportRepo } from "../crews/swarm-live.js";
 import { saleKey } from "../checkout.js";
+import { payerClass } from "../proof.js";
+import { notePaymentAttempt } from "../owner-stats.js";
 
 /**
  * NIGHTSHIFT Services, the house company: the platform's own seller for the house services.
@@ -91,19 +94,35 @@ export function enginePayer(engine: Engine): Payer {
       // a retry of a payment already settled is checked as of its first try, at the price paid then
       const prior = auth?.from && auth.nonce ? engine.checkout.recordOf(auth.from, auth.nonce) : undefined;
       const v = await verifyPayment(payment, prior ? requirement(config.salesChainId, c.wallet, prior.value) : req, prior ? Math.floor(prior.at / 1000) : undefined);
-      if (!v.ok) return { ok: false, status: 402, reason: v.reason === "insufficient_amount" && !half && auth?.value && BigInt(auth.value) >= holderPriceOf(o) ? `the holder price is for a paying wallet with ${HOLDER_SHIFT.toLocaleString("en-US")}+ $SHIFT (wallet plus staked), a NIGHT FROG or a Night Watcher` : v.reason, challenge: true };
-      if (prior && prior.productId !== o.id) return { ok: false, status: 409, reason: "This payment was made for another service." };
+      const refused = (reason: string) => notePaymentAttempt({ service: o.name, payer: auth.from, nonce: auth.nonce, reason });
+      if (!v.ok) {
+        const reason = v.reason === "insufficient_amount" && !half && auth?.value && BigInt(auth.value) >= holderPriceOf(o) ? `the holder price is for a paying wallet with ${HOLDER_SHIFT.toLocaleString("en-US")}+ $SHIFT (wallet plus staked), a NIGHT FROG or a Night Watcher` : v.reason;
+        // The amount check precedes signature verification: verify it before notifying the owner.
+        if (v.reason === "insufficient_amount" && (await verifyPayment(payment, { ...req, amount: "0" }).catch(() => ({ ok: false }))).ok) refused(reason);
+        return { ok: false, status: 402, reason, challenge: true };
+      }
+      if (prior && prior.productId !== o.id) {
+        const reason = "This payment was made for another service.";
+        refused(reason); return { ok: false, status: 409, reason };
+      }
       if (config.mode === "sim") return { ok: true, payment, payer: v.payer };
       // settling costs the house gas on Base: per caller and per payer (the feed is cheap and polled, so it gets more room)
       const feed = o.id === "imd-feed";
-      if (limited(`ip:${ip}`, feed ? 120 : 20, 60_000) || limited(`payer:${v.payer.toLowerCase()}`, feed ? 60 : 10, 60_000)) return { ok: false, status: 429, reason: "Too many payments at once; try again in a minute." };
+      if (limited(`ip:${ip}`, config.x402Facilitator === "cdp" ? 240 : feed ? 120 : 20, 60_000) || limited(`payer:${v.payer.toLowerCase()}`, config.x402Facilitator === "cdp" ? 120 : feed ? 60 : 10, 60_000)) {
+        const reason = "Too many payments at once; try again in a minute.";
+        refused(reason); return { ok: false, status: 429, reason };
+      }
       if (await engine.checkout.fresh(auth.from, auth.nonce)) {
         const bal = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [v.payer] }).catch(() => 0n);
-        if (bal < BigInt(auth.value)) return { ok: false, status: 402, reason: "insufficient USDC balance", challenge: true };
+        if (bal < BigInt(auth.value)) {
+          const reason = "insufficient USDC balance";
+          refused(reason); return { ok: false, status: 402, reason, challenge: true };
+        }
         // only settling itself costs the house gas: the CDP facilitator pays its own, so with it the wallet needs no ETH
         if (config.x402Facilitator === "self" && (await sales.getBalance({ address: c.wallet }).catch(() => 0n)) < 20_000_000_000_000n) {
           void engine.alert("NIGHTSHIFT Services cannot take payments: its wallet has no ETH on Base for the settlement gas.", "nogas-house");
-          return { ok: false, status: 503, reason: "The service cannot take payments right now. Nothing was charged; try again later." };
+          const reason = "The service cannot take payments right now. Nothing was charged; try again later.";
+          refused(reason); return { ok: false, status: 503, reason };
         }
       }
       return { ok: true, payment, payer: v.payer };
@@ -140,6 +159,12 @@ export function liveHouseServices(engine: Engine) {
     plane: { ...plane, open: async (a, body, hooks) => { await engine.store.flush(); return plane.open(a, body, hooks); } },
     enabled: () => config.swarmDesk && config.mode === "live" && config.salesChainId === 8453,
     dailyImd: () => config.swarmDeskDailyImd,
+    inFlight: () => config.swarmDeskInFlight,
+    reservePayer: (payer) => payerClass(payer, house, [...engine.store.companies.values()], false) === "customer",
+    health: () => swarmJson("/swarm"),
+    skills: () => swarmJson("/skills"),
+    importRepo: swarmImportRepo,
+    verifiedContract: (chain, address) => swarmVerified(ctx, chain, address),
     price: () => ({ usd: config.imdUsd, at: config.imdUsdAt, pinned: config.imdUsdPinned }),
     funds: async () => {
       const [imd, gas, fee] = await Promise.all([
@@ -152,6 +177,8 @@ export function liveHouseServices(engine: Engine) {
     pending: (payer, nonce) => engine.store.settlements.has(saleKey(payer, nonce)),
     record: recordPaid, alert: (text, topic) => engine.alert(text, topic),
   });
+  attachSwarmRefill(engine, swarm, ctx);
+  setSwarmDesk(swarm);
   swarm.start();
   return services(ctx, enginePayer(engine), {
     swarm,

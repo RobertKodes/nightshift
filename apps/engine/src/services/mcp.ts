@@ -1,6 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { HOLDER_RULE, OFFERS, holderPriceOf, offer, usdOf } from "./catalog.js";
+import { SWARM_KINDS, SWARM_PITCH } from "../crews/swarm-kinds.js";
+import { FAST_OFFERS } from "./fast-offers.js";
 import type { Io, Services } from "./routes.js";
 
 /**
@@ -11,7 +13,23 @@ import type { Io, Services } from "./routes.js";
  */
 const text = (v: unknown, isError = false) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, (_k, x) => (typeof x === "bigint" ? x.toString() : x), 2) }], ...(isError ? { isError: true } : {}) });
 
+const annotated = new WeakSet<McpServer>();
+/** Payment arguments stay explicit even when a tool only reads public data. */
+export function annotateTools(server: McpServer): void {
+  if (annotated.has(server)) return;
+  annotated.add(server);
+  server.registerTool = new Proxy(server.registerTool, {
+    apply(target, receiver, args: [string, { annotations?: Record<string, boolean>; description?: string }, unknown]) {
+      const [name, config, handler] = args;
+      const writes = name === "swarm_order" || name === "watchtower_watch";
+      const keywords: Record<string, string> = { token_verdict: "Token safety and security verification.", payment_verify: "Verify payment: did USDC arrive?", swarm_order: "Hire AI agents and pay a checked x402 quote.", research_report: "Sourced research report with cited evidence." };
+      return Reflect.apply(target, receiver, [name, { ...config, description: `${keywords[name] ? `${keywords[name]} ` : ""}${config.description ?? ""}`, annotations: { readOnlyHint: !writes, destructiveHint: false, idempotentHint: name !== "swarm_quote", openWorldHint: true, ...config.annotations } }, handler]);
+    },
+  });
+}
+
 export function registerServiceTools(server: McpServer, s: Services, io: { ip: string; base: string; limited(key: string, n: number, ms: number): boolean }): void {
+  annotateTools(server);
   /** Calls the HTTP handler with the payment as its header: one code path for both doors. */
   const call = async (path: string, q: Record<string, string | undefined>, payment?: string) => {
     const query = new URLSearchParams(Object.entries(q).filter((e): e is [string, string] => e[1] !== undefined && e[1] !== ""));
@@ -25,23 +43,36 @@ export function registerServiceTools(server: McpServer, s: Services, io: { ip: s
   const holderWallet = z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional().describe(`The wallet that will pay, for the holder price (50% off). ${HOLDER_RULE}`);
   const addr = (what: string) => z.string().regex(/^0x[0-9a-fA-F]{40}$/).describe(what);
 
+
   server.registerTool("services_pricing", { title: "NIGHTSHIFT Services: prices", description: "The house services and crews: what each returns, USDC prices, holder terms and how to pay over x402. Swarm Desk starts at $3 and requires a free checked quote for the exact price, without a holder discount. Free.", inputSchema: {} },
     () => call("/api/v1/services", {}));
+  server.registerTool("swarm_stats", { title: "Swarm Desk: live capacity and prices", description: "Hire AI agents: live IMD agents online, seats, completed jobs, completion rate, desk capacity, kinds and exact current price formula. Free, cached 60 seconds.", inputSchema: {} }, () => call("/api/v1/swarm/stats", {}));
   server.registerTool("swarm_quote", {
     title: "Swarm Desk: free checked quote",
-    description: "Hire the IMD swarm with USDC. IMD checks the exact job for free before NIGHTSHIFT quotes it. Quotes last 10 minutes, from $3.00, no holder discount. Off unless the owner enables Swarm Desk.",
-    inputSchema: { kind: z.enum(["website", "research", "audit", "contract"]), brief: z.string().min(20).max(1500), repo: z.string().url().max(2000).optional().describe("audit: public https://github.com/owner/repo URL") },
-  }, (a: { kind: string; brief: string; repo?: string }) => call("/api/v1/swarm/quote", { kind: a.kind, brief: a.brief, repo: a.repo }));
+    description: `${SWARM_PITCH} Free quote for hire AI agents, build a website, research report, audit, contract, Foundry tests, adversarial review, frontend, image or logo. Quote expires in 10 minutes; no holder discount.`, 
+    inputSchema: { kind: z.enum(SWARM_KINDS).describe("Work kind. Example: research"), brief: z.string().max(1500).optional().describe("20..1500 characters, except logo uses name/style. Example: Research decentralized storage with cited primary sources."), repo: z.string().url().max(2000).optional().describe("audit/tests/review: public GitHub repo. Example: https://github.com/example/contracts"), commit: z.string().regex(/^[0-9a-fA-F]{40}$/).optional().describe("Full pinned commit; required for tests. Example: 0123456789012345678901234567890123456789"), chain: z.enum(["ethereum", "base"]).optional().describe("frontend: verified contract's chain"), address: addr("frontend: verified contract address" ).optional(), name: z.string().min(1).max(80).optional().describe("logo name. Example: Night Owl"), style: z.string().min(3).max(300).optional().describe("logo style. Example: white owl on dark navy") },
+  }, (a: { kind: string; brief?: string; repo?: string; commit?: string; chain?: string; address?: string; name?: string; style?: string }) => call("/api/v1/swarm/quote", { ...a }));
   server.registerTool("swarm_order", {
     title: "Swarm Desk: pay a quote and hire the swarm",
-    description: `${offer("swarm-order").description} USDC settles first. Keep the orderToken returned once; retry with the same payment if pending.`,
+    description: `${offer("swarm-order").description} USDC settles first. Keep the private orderToken; recover it with the same verified payment after a lost answer. Never sign a replacement for a pending payment.`,
     inputSchema: { quoteId: z.string().uuid(), payment },
-  }, (a: { quoteId: string; payment?: string }) => call(`/api/v1/swarm/order/${a.quoteId}`, {}, a.payment));
+  }, (a: { quoteId: string; payment?: string }) => call("/api/v1/swarm/order", { quoteId: a.quoteId }, a.payment));
   server.registerTool("swarm_job", {
     title: "Swarm Desk: job status and results (free)",
     description: "Follow a Swarm Desk order with its private order token. Returns IMD status and, when delivered, result links and files. Free.",
     inputSchema: { orderId: z.string().max(100), token: z.string().max(100) },
   }, (a: { orderId: string; token: string }) => call(`/api/v1/swarm/jobs/${encodeURIComponent(a.orderId)}`, { token: a.token }));
+  for (const o of FAST_OFFERS) {
+    const fields = Object.fromEntries(Object.entries(o.query).map(([key, v]) => {
+      let schema: z.ZodTypeAny = v.enum ? z.enum(v.enum as [string, ...string[]]) : z.string().max(2_000);
+      if (v.required === false) schema = schema.optional();
+      const example = new URL(o.example, "https://nightshift.test").searchParams.get(key);
+      return [key, schema.describe(`${v.description}${example ? `. Example: ${example}` : ""}`)];
+    }));
+    server.registerTool(o.id.replaceAll("-", "_"), { title: `${o.name} ($${usdOf(o)})`, description: o.description, inputSchema: { ...fields, holderWallet, payment } },
+      (a: Record<string, string | undefined>) => { const { payment: signature, holderWallet: holder, ...q } = a; return call(o.route, { ...q, holder }, signature); });
+  }
+
   server.registerTool("verdict_preview", { title: "Token Verdict preview (free)", description: "Free and fast, no verdict: is this Ethereum token an IMD launch, its market and liquidity (DexScreener), other IMD launches with the same symbol, and its Uniswap v4 hook's permission bits.", inputSchema: { token: addr("ERC-20 token address on Ethereum") } },
     (a: { token: string }) => call(`/api/v1/verdict/ethereum/${a.token}/preview`, {}));
   server.registerTool("verdict_demo", { title: "Token Verdict demo (free, once a day)", description: "One full quick Token Verdict per IP per day, free: no issues found / caution / avoid for an Ethereum token with every reason and its evidence. After that, use token_verdict.", inputSchema: { token: addr("ERC-20 token address on Ethereum") } },
@@ -93,6 +124,6 @@ export function registerServiceTools(server: McpServer, s: Services, io: { ip: s
     (a: FeedA) => call(feedPath(a), { ...feedQ(a), holder: a.holderWallet }, a.payment));
 }
 
-export const CREW_TOOLS = ["research_report", "buildcheck_report", "swarm_quote", "swarm_order", "swarm_job"];
-export const SERVICE_TOOLS = ["services_pricing", "verdict_preview", "verdict_demo", "token_verdict", "hook_flags", "hook_inspect", "imd_feed_sample", "imd_feed"];
+export const CREW_TOOLS = ["swarm_stats", "research_report", "buildcheck_report", "swarm_quote", "swarm_order", "swarm_job"];
+export const SERVICE_TOOLS = [...FAST_OFFERS.map((o) => o.id.replaceAll("-", "_")), "services_pricing", "verdict_preview", "verdict_demo", "token_verdict", "hook_flags", "hook_inspect", "imd_feed_sample", "imd_feed"];
 export const servicePrices = () => OFFERS.map((o) => ({ id: o.id, priceUsd: usdOf(o) }));

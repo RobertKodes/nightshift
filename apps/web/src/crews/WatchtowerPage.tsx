@@ -1,5 +1,6 @@
 import { type Health, type WatchtowerInfo, api } from "../api";
 import { Link } from "../router";
+import { PaidOffers } from "../TryPaid";
 import { Stat } from "../station/Station";
 import { SimNote } from "./CrewsPage";
 import { WatchtowerTry } from "./samples";
@@ -61,6 +62,9 @@ export function WatchtowerPage({ health }: { health: Health | null }) {
         <h2>Check an address, free</h2>
         <p className="st-note">Paste an ERC-20 token or a Uniswap v4 hook on Ethereum. The report lists every change with the value before and after, both blocks and the evidence; the checks that could not run and the ones Watchtower does not support are named, never counted as fine.</p>
         <WatchtowerTry />
+
+        <h2>Try it with your wallet</h2>
+        <PaidOffers ids={["watchtower-check", "watchtower-watch"]} />
 
         <h2>What it covers</h2>
         <Pending load={info} what="What Watchtower supports" />

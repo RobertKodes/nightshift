@@ -30,7 +30,7 @@ test("watchtowerSample 404 surfaces as NightshiftError 404", async () => {
   await assert.rejects(() => c.watchtowerSample("0xabc"), (e) => e.status === 404);
 });
 
-const terms = { x402Version: 2, accepts: [{ scheme: "exact", network: "eip155:8453", asset: "0xusdc", amount: "20000", payTo: "0xpay" }] };
+const terms = { x402Version: 2, accepts: [{ scheme: "exact", network: "eip155:8453", asset: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", amount: "20000", payTo: "0x1111111111111111111111111111111111111111" }] };
 const b64 = Buffer.from(JSON.stringify(terms)).toString("base64");
 
 test("paidGet refuses when price exceeds maxUsd and never signs", async () => {

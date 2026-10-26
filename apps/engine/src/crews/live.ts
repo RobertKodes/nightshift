@@ -11,6 +11,7 @@ import { season } from "./season.js";
 import type { Highlight } from "../recruiter/recruiter.js";
 import type { JobEvent as WatchJob, Watch, WatchReport, Watchtower } from "../watchtower/index.js";
 import type { PaidRecord } from "../services/routes.js";
+import { noteOperatorRegistered, notePaymentSettled } from "../owner-stats.js";
 
 /**
  * The crews as the running engine sees them: one job ledger and one operator registry on disk, the
@@ -25,7 +26,7 @@ export function crewLedger(): JobLedger {
   return (ledger ??= new JobLedger({ file: join(config.dataDir, "crews.json"), onEvent: (e) => { for (const l of listeners) try { l(e); } catch { /* a listener never breaks a job */ } } }));
 }
 export function crewOperators(): Operators {
-  return (operators ??= new Operators({ file: join(config.dataDir, "operators.json") }));
+  return (operators ??= new Operators({ file: join(config.dataDir, "operators.json"), onRegistered: noteOperatorRegistered }));
 }
 /** Every crew event as it happens (the live feeds subscribe here). */
 export function onCrewEvent(l: (e: CrewEvent) => void): () => void { listeners.add(l); return () => listeners.delete(l); }
@@ -97,6 +98,7 @@ export const crewSeason = () => season(crewLedger(), { startAt: seasonStart(), o
  * when their delivery or refund owed is recorded.
  */
 export function recordPaid(o: Offer, r: PaidRecord): void {
+  if (r.tx) notePaymentSettled({ service: o.name, payer: r.payer, nonce: r.nonce, usd: r.usd, tx: r.tx, holderPrice: !o.quoted && r.usd < usdOf(o), sim: r.sim || r.network !== "eip155:8453" });
   const l = crewLedger();
   const job = l.start({
     key: `${r.payer.toLowerCase()}:${r.nonce.toLowerCase()}`, crew: o.crew, operator: "house", kind: r.kind ?? o.id, free: false,

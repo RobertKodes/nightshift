@@ -39,12 +39,14 @@ export class Operators {
   readonly #file: string | null;
   readonly #now: () => number;
   readonly #resolve: Resolve;
+  readonly #onRegistered?: (op: Operator) => void;
 
   /** `publicUrl` is net.ts's check by default (tests pass their own: no network). */
-  constructor(o: { file: string | null; now?: () => number; publicUrl?: Resolve }) {
+  constructor(o: { file: string | null; now?: () => number; publicUrl?: Resolve; onRegistered?: (op: Operator) => void }) {
     this.#file = o.file;
     this.#now = o.now ?? Date.now;
     this.#resolve = o.publicUrl ?? netPublicUrl;
+    this.#onRegistered = o.onRegistered;
     if (o.file && existsSync(o.file)) {
       try {
         const s = JSON.parse(readFileSync(o.file, "utf8")) as { operators?: Operator[] };
@@ -58,45 +60,57 @@ export class Operators {
     }
   }
 
-  #save(): void {
+  #save(strict = false): void {
     if (!this.#file) return;
-    try { writeAtomic(this.#file, JSON.stringify({ operators: this.#list })); } catch (e) { console.error("crews operators: save failed", (e as Error).message); }
+    try { writeAtomic(this.#file, JSON.stringify({ operators: this.#list })); } catch (e) { if (strict) throw e; console.error("crews operators: save failed", (e as Error).message); }
   }
 
   /** Registers an operator (status "pending"). The agent and its wallet come from the caller's nsa_ key, never from the body. */
   async register(input: { agentId: string; wallet: string; name: unknown; capabilities: unknown; endpoint: unknown }): Promise<Operator> {
-    const agentId = String(input.agentId ?? "");
-    const wallet = String(input.wallet ?? "").toLowerCase();
+    const prepared = await this.prepareRegistration(input);
+    const result = prepared();
+    result.notify();
+    return result.value;
+  }
+
+  /** Validate before a join creates an arena agent. The returned commit has no await points. */
+  async prepareRegistration(input: { agentId: string; wallet: string; name: unknown; capabilities: unknown; endpoint: unknown }, reuse = false) {
+    const { agentId } = input, wallet = String(input.wallet ?? "").toLowerCase();
     if (!/^[a-f0-9]{12}$/.test(agentId)) throw new OperatorError(400, "agentId: an AGENT ARENA agent id.", "bad_agent");
     if (!/^0x[0-9a-f]{40}$/.test(wallet)) throw new OperatorError(400, "wallet: a 0x address.", "bad_wallet");
-    if (this.#list.some((o) => o.agentId === agentId)) throw new OperatorError(409, "This agent already registered an operator.", "already_registered");
-    if (this.#list.filter((o) => o.wallet === wallet).length >= MAX_PER_WALLET) throw new OperatorError(429, `One wallet can register ${MAX_PER_WALLET} operators.`, "too_many");
-
     const name = String(input.name ?? "").replace(/\s+/g, " ").trim();
+    const available = () => {
+      const prior = this.#list.find((o) => o.agentId === agentId);
+      if (prior && (!reuse || prior.wallet !== wallet)) throw new OperatorError(409, "This agent already registered an operator.", "already_registered");
+      if (!prior && this.#list.filter((o) => o.wallet === wallet).length >= MAX_PER_WALLET) throw new OperatorError(429, `One wallet can register ${MAX_PER_WALLET} operators.`, "too_many");
+      if (this.#list.some((o) => o !== prior && o.name.toLowerCase() === name.toLowerCase())) throw new OperatorError(409, "Another operator has that name.", "name_taken");
+      return prior;
+    };
+    available();
     if (name.length < 3 || name.length > 40 || !NAME.test(name)) throw new OperatorError(400, "name: 3 to 40 plain characters (letters, digits, spaces and . ' & _ -).", "bad_name");
     if (RESERVED.test(name)) throw new OperatorError(400, "That name is reserved for the house crews.", "reserved_name");
-    if (this.#list.some((o) => o.name.toLowerCase() === name.toLowerCase())) throw new OperatorError(409, "Another operator has that name.", "name_taken");
-
     const raw = Array.isArray(input.capabilities) ? input.capabilities : typeof input.capabilities === "string" ? input.capabilities.split(",") : [];
     const caps = [...new Set(raw.map((c) => String(c).trim().toLowerCase()).filter(Boolean))];
     if (!caps.length || caps.length > CAPABILITIES.length) throw new OperatorError(400, `capabilities: one or more of ${CAPABILITIES.join(", ")}.`, "bad_capabilities");
     const unknown = caps.filter((c) => !(CAPABILITIES as readonly string[]).includes(c));
     if (unknown.length) throw new OperatorError(400, `Unknown capabilit${unknown.length === 1 ? "y" : "ies"}: ${unknown.map((u) => u.slice(0, 30)).join(", ")}. Use ${CAPABILITIES.join(", ")}.`, "bad_capabilities");
-
     const endpoint = await this.#endpoint(input.endpoint);
-    // checked again after the lookup: two registrations racing for one agent
-    if (this.#list.some((o) => o.agentId === agentId)) throw new OperatorError(409, "This agent already registered an operator.", "already_registered");
-    if (this.#list.filter((o) => o.wallet === wallet).length >= MAX_PER_WALLET) throw new OperatorError(429, `One wallet can register ${MAX_PER_WALLET} operators.`, "too_many");
-    if (this.#list.some((o) => o.name.toLowerCase() === name.toLowerCase())) throw new OperatorError(409, "Another operator has that name.", "name_taken");
-
-    const op: Operator = {
-      id: randomBytes(6).toString("hex"), agentId, wallet, name, capabilities: caps, endpoint,
-      status: "pending", createdAt: this.#now(), activatedAt: null,
-      onboarding: { jobId: null, passed: null, reasons: [], at: null },
+    return () => {
+      const prior = available();
+      if (prior) return { value: copy(prior), rollback: () => {}, notify: () => {} };
+      const op: Operator = {
+        id: randomBytes(6).toString("hex"), agentId, wallet, name, capabilities: caps, endpoint,
+        status: "pending", createdAt: this.#now(), activatedAt: null,
+        onboarding: { jobId: null, passed: null, reasons: [], at: null },
+      };
+      this.#list.push(op);
+      try { this.#save(true); } catch (e) { this.#list = this.#list.filter((o) => o !== op); throw e; }
+      return {
+        value: copy(op),
+        rollback: () => { this.#list = this.#list.filter((o) => o !== op); this.#save(true); },
+        notify: () => { try { this.#onRegistered?.(copy(op)); } catch { /* notifications never break registration */ } },
+      };
     };
-    this.#list.push(op);
-    this.#save();
-    return copy(op);
   }
 
   /** The endpoint: https, standard port, no credentials, a public address (net.ts). */

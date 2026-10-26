@@ -115,7 +115,7 @@ function swapRunning(): Record<string, string> {
 /** Settings that move money or trust: every change is announced, so a leaked admin token cannot act quietly. */
 export const ANNOUNCED = ["NIGHTSHIFT_MODE", "PLATFORM_TREASURY", "PLATFORM_DEV", "PLATFORM_FEE_BPS", "ETH_RPC", "SALES_RPC", "SALES_CHAIN_ID", "TOKEN_ADDRESS", "NFT_ADDRESS", "REQUIRE_AUTH",
   "X402_FACILITATOR", "CDP_API_KEY_ID", "CDP_API_KEY_SECRET", "BETPOOL_ADDRESS", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TELEGRAM_ADMIN_IDS", "LAUNCH_NOTIFY", "PUBLIC_URL", "GUMROAD_CLIENT_ID", "GUMROAD_CLIENT_SECRET",
-  "SWAP_FEE_BPS", "SWAP_FEE_WALLET", "LIFI_INTEGRATOR", "SWARM_DESK", "SWARM_DESK_DAILY_IMD"];
+  "SWAP_FEE_BPS", "SWAP_FEE_WALLET", "LIFI_INTEGRATOR", "SWARM_DESK", "SWARM_DESK_DAILY_IMD", "AGENT_RESERVE", "AGENT_RESERVE_DRY", "RESERVE_WALLET"];
 
 /** Saved settings that differ from what runs now, by name: what a restart would apply. */
 export function pendingChanges(): string[] {
@@ -131,12 +131,16 @@ export function pendingChanges(): string[] {
     // read live by the swap routes: a saved change applies at once
     ...swapRunning(),
   };
-  return EDITABLE.filter((k) => saved[k] !== undefined && (SECRET_KEYS.has(k) || running[k] === undefined || saved[k] !== running[k]));
+  // Reserve settings are read for every buy, including Telegram changes.
+  return EDITABLE.filter((k) => !["AGENT_RESERVE", "AGENT_RESERVE_DRY", "RESERVE_WALLET"].includes(k) && saved[k] !== undefined && (SECRET_KEYS.has(k) || running[k] === undefined || saved[k] !== running[k]));
 }
 
 /** Checks a /setup change without saving it: an error for the operator, or null. */
 export function checkSetup(patch: Record<string, unknown>): string | null {
   const v = (k: string) => (k in patch ? String(patch[k] ?? "").trim() : undefined);
+  for (const k of ["AGENT_RESERVE", "AGENT_RESERVE_DRY"]) { const x = v(k); if (x && x !== "0" && x !== "1") return `${k} is 1 (on) or 0 (off)`; }
+  const reserveWallet = v("RESERVE_WALLET");
+  if (reserveWallet && !isAddress(reserveWallet)) return "RESERVE_WALLET must be an address";
   const swarm = v("SWARM_DESK"), cap = v("SWARM_DESK_DAILY_IMD");
   if (swarm && swarm !== "0" && swarm !== "1") return "SWARM_DESK is 1 (on) or 0 (off)";
   if (cap && (!Number.isFinite(Number(cap)) || Number(cap) < 0)) return "SWARM_DESK_DAILY_IMD must be a nonnegative finite number";

@@ -331,8 +331,8 @@ describe("MCP and discovery", () => {
     for (const o of K.OFFERS) expect(o.description.length, o.id).toBeLessThan(500);
     const items = K.catalogItems("https://getnightshift.tech", 8453, "0x1111111111111111111111111111111111111111");
     expect(items).toHaveLength(K.OFFERS.length);
-    expect(items[0]).toMatchObject({ type: "http", x402Version: 2, accepts: [{ amount: "10000", network: "eip155:8453" }] });
-    expect((items[0]!.metadata.bazaar as { info: { output: { example: unknown } } }).info.output.example).toMatchObject({ verdict: "no_issues_found" });
+    expect(items[0]).toMatchObject({ resource: "https://getnightshift.tech/api/v1/swarm/order", type: "http", x402Version: 2, accepts: [{ amount: "3000000", network: "eip155:8453" }] });
+    expect((items.find((o) => o.resource.includes("/verdict/"))!.metadata.bazaar as { info: { output: { example: unknown } } }).info.output.example).toMatchObject({ verdict: "no_issues_found" });
     // every service's block passes x402's own validation, the check the CDP facilitator runs before listing
     for (const o of K.OFFERS) expect(validateDiscoveryExtension(K.bazaarOf(o).bazaar as never), o.id).toEqual({ valid: true });
     const api = K.openapi("https://getnightshift.tech", 8453, null) as { openapi: string; paths: Record<string, unknown> };

@@ -49,7 +49,14 @@ import { Checkout, NoGasError, PendingError, type SettledBy, type Settlement, sa
 import { offerFor } from "./agentmarket.js";
 import { tokenRules } from "./shift-facts.js";
 import { linkWatchAlerts } from "./crews/live.js";
-import { liveOwnerStats } from "./owner-stats.js";
+import { liveOwnerStats, notificationLevel, ownerText } from "./owner-stats.js";
+import { liveAgentEconomy } from "./agent-economy.js";
+import { swarmCommand } from "./crews/swarm-control.js";
+import { liveSwarmDesk } from "./crews/swarm.js";
+import { swarmImdQueue } from "./crews/swarm-live.js";
+import { liveAgentReserve } from "./agent-reserve.js";
+import { noteBookedPayment } from "./economy-live.js";
+import { payerClass } from "./proof.js";
 import { telegramBuildcheck, telegramCrews, telegramWatchtower } from "./crews/growth.js";
 import { liveTelegram } from "./live/bus.js";
 import { MarketDesk } from "./b2b.js";
@@ -539,6 +546,10 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
     if (cmd === "unmute" || cmd === "mute") return this.#muteCommand(cmd, args, ctx);
     // the owner's private stats: agents, the website, the crews, sales and the recruiter, last 24 hours
     if (cmd === "stats") return { text: liveOwnerStats()?.report() ?? "The stats are starting: try again in a minute." };
+    if (cmd === "notify") return { text: liveOwnerStats()?.notify(args) ?? "The notifications are starting: try again in a minute." };
+    if (cmd === "announce") return { text: liveAgentEconomy()?.command(args) ?? "The announcements are starting: try again in a minute." };
+    if (cmd === "swarm") return { text: await swarmCommand(args) };
+    if (cmd === "reserve") return { text: liveAgentReserve()?.command(args) ?? "The reserve is starting: try again in a minute." };
     // sent by an operator inside the private holders' group: that group becomes the Watch Room
     if (cmd === "watchroom") {
       if (!ctx?.group) return { text: "Send /watchroom inside the private Night Watchers group, after adding me there as an admin." };
@@ -989,7 +1000,7 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
     if (!p) {
       const account = this.vault.account(c.id);
       let token = this.store.requestTokens.get(c.id);
-      const http = new HttpImdPlane({ account, requestToken: token });
+      const http = new HttpImdPlane({ account, requestToken: token, fetch: swarmImdQueue.fetch });
       if (!token) { token = http.requestToken; this.store.requestTokens.set(c.id, token); this.store.markDirty(); }
       let permitted = false;
       p = {
@@ -1537,13 +1548,28 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
   }
 
   /** A sale, real (settled on chain) or simulated. Revenue lands in the company's own wallet. `via`: who settled it (in the ledger). */
-  async recordSale(c: Company, productId: string, amount: bigint, payer: string, tx: string | null, sim: boolean, via?: SettledBy): Promise<void> {
+  async recordSale(c: Company, productId: string, amount: bigint, payer: string, tx: string | null, sim: boolean, via?: SettledBy, nonce?: string): Promise<void> {
     const meta = via ? { settledBy: via } : undefined;
-    // once per settlement: a retry or the background follow-up of the same payment books nothing new
-    if (tx && (await this.ledger.store.get(`sale:${tx}`))) return;
-    const p = c.products.find((x) => x.id === productId);
+    const p = c.products.find((x) => x.id === productId), m = this.store.metricsOf(c.id);
+    const recordMetric = () => {
+      const existing = tx ? m.sales.find((s) => s.tx === tx) : undefined;
+      if (existing) {
+        if (nonce && !existing.nonce) { existing.nonce = nonce; existing.network ??= `eip155:${config.salesChainId}`; return true; }
+        return false;
+      }
+      m.sales.push({ at: Date.now(), productId, usdc: amount.toString(), payer, tx, sim, nonce, network: `eip155:${config.salesChainId}` });
+      if (m.sales.length > 5000) m.sales.splice(0, m.sales.length - 5000);
+      if (p) { p.sales++; p.revenueUsdc += amount; }
+      return true;
+    };
+    // A crash may have saved the money ledger before the matching metrics file.
+    if (tx && (await this.ledger.store.get(`sale:${tx}`))) {
+      if (recordMetric() && !sim) await this.store.save();
+      return;
+    }
     // money that arrived is booked even for a product removed since
     if (!p) {
+      recordMetric();
       await this.ledger.post({ id: `sale:${tx ?? randomUUID()}`, at: new Date(), kind: sim ? "sale_sim" : "sale", memo: productId, ref: tx ? { chainTx: tx } : undefined, meta, postings: [
         { account: `co:${c.id}:usdc`, asset: "USDC", amount },
         { account: sim ? "ext:buyers-sim" : "ext:buyers", asset: "USDC", amount: -amount },
@@ -1551,19 +1577,11 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
       if (!sim) await this.store.save();
       return;
     }
-    const pub = !sim && payer.toLowerCase() !== c.owner && fromUsdc(amount) >= Math.max(1, config.buyMinUsd);
-    if (pub) void toCommunity(`💰 <b>A NIGHTSHIFT company just made a sale</b>
-
-${esc(c.name)} sold <b>${esc(p.name)}</b> for $${fromUsdc(amount).toFixed(2)}.
-Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See the market", url: `${config.publicUrl}/market` }]], "sale");
-    if (pub) housePost(`💰 ${c.name} just made a sale: ${p.name}, $${fromUsdc(amount).toFixed(2)}. Built by the IMD swarm, sold while its owner slept. ${config.publicUrl}/market`, `sale-${tx ?? Date.now()}`);
+    const pub = !sim && payerClass(payer, c, [...this.store.companies.values()], config.salesChainId !== 8453) === "customer" && fromUsdc(amount) >= Math.max(1, config.buyMinUsd);
+    if (pub && !liveAgentEconomy()) housePost(`💰 ${c.name} just made a sale: ${p.name}, $${fromUsdc(amount).toFixed(2)}. Built by the IMD swarm, sold while its owner slept. ${config.publicUrl}/market`, `sale-${tx ?? Date.now()}`);
     // the house services sell cents at a time: only a dollar or more is worth an operator alert
-    if (!sim && !(c.house && fromUsdc(amount) < 1)) void this.alert(`💰 ${c.name} sold ${p.name} for $${fromUsdc(amount).toFixed(2)}${tx ? ` · tx ${tx}` : ""}`, `sale-${tx ?? Date.now()}`);
-    p.sales += 1;
-    p.revenueUsdc += amount;
-    const m = this.store.metricsOf(c.id);
-    m.sales.push({ at: Date.now(), productId, usdc: amount.toString(), payer, tx, sim });
-    if (m.sales.length > 5000) m.sales.splice(0, m.sales.length - 5000);
+    if (!sim && !(c.house && (fromUsdc(amount) < 1 || liveOwnerStats()))) void this.alert(`💰 ${c.name} sold ${p.name} for $${fromUsdc(amount).toFixed(2)}${tx ? ` · tx ${tx}` : ""}`, `sale-${tx ?? Date.now()}`);
+    recordMetric();
     await this.ledger.post({ id: `sale:${tx ?? randomUUID()}`, at: new Date(), kind: sim ? "sale_sim" : "sale", memo: p.name, ref: tx ? { chainTx: tx } : undefined, meta, postings: [
       { account: `co:${c.id}:usdc`, asset: "USDC", amount },
       { account: sim ? "ext:buyers-sim" : "ext:buyers", asset: "USDC", amount: -amount },
@@ -1581,6 +1599,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
    */
   async closeOut(c: Company, to: `0x${string}`): Promise<{ txs: string[]; returned: string[] }> {
     if (config.mode !== "live") throw new Error("Only in live mode: a simulated company holds no real funds.");
+    if (c.house && (liveAgentReserve()?.heldUsdc() ?? 0n) > 0n) throw new Error("The house wallet holds the Agent Reserve; it cannot be swept.");
     if (this.#busy.has(c.id) || c.tasks.some((t) => t.status === "ordering" || t.status === "checking")) throw new Error("A payment is in progress. Try again in a minute.");
     this.setStatus(c, "paused");
     const txs: string[] = [];
@@ -1626,9 +1645,11 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
     return { txs, returned };
   }
 
-  /** Revenue the owner can take out now: what the company earned, minus what was already withdrawn. */
+  /** Revenue that can leave the wallet, after house reserve allocations. */
   async withdrawable(c: Company): Promise<bigint> {
-    return this.ledger.balance(`co:${c.id}:usdc`, "USDC");
+    const balance = await this.ledger.balance(`co:${c.id}:usdc`, "USDC");
+    const held = c.house ? (liveAgentReserve()?.heldUsdc() ?? 0n) + (liveSwarmDesk()?.heldUsdc() ?? 0n) : 0n;
+    return balance > held ? balance - held : 0n;
   }
 
   /**
@@ -1653,7 +1674,7 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
   async withdraw(c: Company, to: `0x${string}`, amount?: bigint): Promise<{ sent: bigint; fee: bigint; txs: string[] }> {
     if (this.#withdrawing.has(c.id)) throw new Error("A withdrawal for this company is already running.");
     this.#withdrawing.add(c.id);
-    try { return await this.#withdraw(c, to, amount); } finally { this.#withdrawing.delete(c.id); }
+    try { return await (c.house ? this.settleInTurn(c.id, () => this.#withdraw(c, to, amount)) : this.#withdraw(c, to, amount)); } finally { this.#withdrawing.delete(c.id); }
   }
   async #withdraw(c: Company, to: `0x${string}`, amount?: bigint): Promise<{ sent: bigint; fee: bigint; txs: string[] }> {
     if (c.sim && config.mode === "live") throw new Error("A simulated company has no real revenue to withdraw.");
@@ -1693,7 +1714,8 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
       await this.store.save();
       return;
     }
-    await this.recordSale(c, s.productId, s.value, s.payer, s.hash, false, via);
+    await this.recordSale(c, s.productId, s.value, s.payer, s.hash, false, via, s.key.slice(s.key.indexOf(":") + 1));
+    noteBookedPayment(s.key);
   }
 
   readonly #settling = new Map<string, Promise<unknown>>();
@@ -1708,12 +1730,16 @@ Built by the IMD swarm, sold while its owner slept 🌙`, [[{ text: "🛒 See th
   readonly #lastAlert = new Map<string, number>();
   /** Tells the operator on Telegram, at most once a minute per topic. */
   async alert(text: string, topic = "engine"): Promise<boolean> {
-    if (!config.telegramToken || !config.telegramChat) return false;
+    const owner = liveOwnerStats();
+    if (!owner && !config.telegramToken) return false;
     const last = this.#lastAlert.get(topic) ?? 0;
     if (Date.now() - last < 60_000) return false;
     this.#lastAlert.set(topic, Date.now());
     const kind = topic.startsWith("sale") ? "sale" : topic.startsWith("launch") ? "launch" : "alert";
-    const sent = await Promise.all(config.telegramChat.split(",").map((id) => id.trim()).filter(Boolean).map((id) => sendCard(id, kind, `🌙 <b>NIGHTSHIFT</b>\n${esc(text)}`)));
+    if (owner) return owner.alert(text, kind);
+    const level = notificationLevel(join(config.dataDir, "owner-stats.json"));
+    if (level === "off" || (level === "money" && kind === "launch")) return false;
+    const sent = await Promise.all(config.telegramAdmins.filter((id) => Number(id) > 0).map((id) => telegram(config.telegramToken, id, `🌙 <b>NIGHTSHIFT</b>\n${ownerText(text)}`)));
     return sent.some(Boolean);
   }
 

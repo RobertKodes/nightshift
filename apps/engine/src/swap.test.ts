@@ -39,6 +39,12 @@ function fake(o: { lifi?: (u: URL) => [number, unknown]; relay?: (body: Record<s
 }
 
 describe("the fee waiver, decided by the server per wallet", () => {
+  it("requests internal reserve routes without an integrator fee", async () => {
+    const f = fake({ settings: { feeBps: 0 } });
+    await f.svc.quote(ethToImd, null);
+    expect(f.lifiCalls()[0]?.get("fee")).toBe("0");
+    expect(f.relayCalls()[0]?.appFees).toBeUndefined();
+  });
   it("asks every provider with NIGHTSHIFT's fee for a wallet without a NIGHT FROG", async () => {
     const f = fake();
     const r = await f.svc.quote(ethToImd, ME);

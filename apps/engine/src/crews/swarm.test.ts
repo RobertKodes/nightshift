@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 function harness(file: string | null = null) {
-  const h = { now: NOW, enabled: true, cap: 3, imd: 10n * 10n ** 18n, eth: 10n ** 18n, gasRequired: 10n ** 15n, usd: 6.87, priceAt: NOW, pinned: false, blocked: false, failed: false, complete: false, priceImd: SWARM_IMD, settlement: null as `0x${string}` | null, pending: false, events: [] as string[] };
+  const h = { now: NOW, enabled: true, cap: 100, inflight: 25, imd: 10n * 10n ** 18n, eth: 10n ** 18n, gasRequired: 10n ** 15n, usd: 6.87, priceAt: NOW, pinned: false, blocked: false, failed: false, complete: false, priceImd: SWARM_IMD, settlement: null as `0x${string}` | null, pending: false, events: [] as string[] };
   const plane: ImdPlane = {
     mode: "live",
     capabilities: vi.fn<ImdPlane["capabilities"]>(async () => ({ price: h.priceImd, asset: "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7", payTo: A, network: "eip155:1", quoteTtlSeconds: 600 })),
@@ -43,9 +43,9 @@ function harness(file: string | null = null) {
     result: vi.fn<ImdPlane["result"]>(async (jobId) => ({ jobId, siteUrl: "https://example.ipfs.site", repoUrl: "https://github.com/example/result", files: { report: "https://api.imd.fun/jobs/imd-job-1/report.md" }, summary: null })),
   };
   const record = vi.fn(), alert = vi.fn(async () => true);
-  const deps = { file, plane, enabled: () => h.enabled, dailyImd: () => h.cap, price: () => ({ usd: h.usd, at: h.priceAt, pinned: h.pinned }), funds: vi.fn(async () => ({ imd: h.imd, eth: h.eth, gasRequired: h.gasRequired })), settled: () => h.settlement, pending: () => h.pending, record, alert, now: () => h.now };
+  const deps = { file, plane, enabled: () => h.enabled, dailyImd: () => h.cap, inFlight: () => h.inflight, price: () => ({ usd: h.usd, at: h.priceAt, pinned: h.pinned }), funds: vi.fn(async () => ({ imd: h.imd, eth: h.eth, gasRequired: h.gasRequired })), settled: () => h.settlement, pending: () => h.pending, record, alert, verifiedContract: async () => true, now: () => h.now };
   const desk = new SwarmDesk(deps);
-  const quote = (kind = "research", brief = BRIEF, repo: string | null = null) => desk.quote(kind, brief, repo, BASE);
+  const quote = (kind = "research", brief = BRIEF, repo: string | null = null) => desk.quote(kind, brief, repo, BASE, kind === "tests" ? { commit: "a".repeat(40) } : kind === "frontend" ? { chain: "base", address: A } : kind === "logo" ? { name: "Night Owl", style: "minimal owl" } : {});
   const payment = (price: number, nonce = "0x01") => ({ payer: A, nonce, usd: price, network: "eip155:8453", validBefore: Math.floor(h.now / 1000) + 3600 });
   const settle = vi.fn(async () => { h.events.push("settle"); h.settlement = TX; return TX; });
   return { h, deps, desk, quote, payment, settle, plane, record, alert };
@@ -69,7 +69,7 @@ describe("Swarm Desk", () => {
     expect(swarmPrice(10)).toBe(6.85);
     expect(swarmPrice(6.881)).toBe(4.91);
     const x = harness(), q = await x.quote();
-    expect(q).toMatchObject({ kind: "research", priceUsd: 4.9, imd: 0.5, pay: `${BASE}/api/v1/swarm/order/${q.quoteId}`, expiresAt: new Date(NOW + 600_000).toISOString() });
+    expect(q).toMatchObject({ kind: "research", priceUsd: 4.9, imd: 0.5, pay: `${BASE}/api/v1/swarm/order?quoteId=${q.quoteId}`, expiresAt: new Date(NOW + 600_000).toISOString() });
     expect(holderPriceOf(x.desk.quotedOffer(q.quoteId))).toBe(4_900_000n);
   });
 
@@ -87,8 +87,8 @@ describe("Swarm Desk", () => {
     await expect(x.quote()).rejects.toMatchObject({ status: 503 });
   });
 
-  it.each(["website", "research", "audit", "contract"])("orders the same checked %s body, only after USDC settles", async (kind) => {
-    const x = harness(), q = await x.quote(kind, BRIEF, kind === "audit" ? "https://github.com/example/contracts" : null);
+  it.each(["website", "research", "audit", "contract", "tests", "review", "frontend", "image", "logo"])("orders the same checked %s body, only after USDC settles", async (kind) => {
+    const x = harness(), q = await x.quote(kind, BRIEF, ["audit", "tests", "review"].includes(kind) ? "https://github.com/example/contracts" : null);
     const checked = vi.mocked(x.plane.check).mock.calls[0]![1];
     const out = await x.desk.order(q.quoteId, x.payment(q.priceUsd), x.settle, () => false);
     expect(out.status).toBe(200);
@@ -134,7 +134,7 @@ describe("Swarm Desk", () => {
     const [a, b] = await Promise.all([x.desk.order(q.quoteId, p, x.settle, () => false), x.desk.order(q.quoteId, p, x.settle, () => false)]);
     expect(body(a).orderId).toBe(body(b).orderId);
     expect(body(a).orderToken).toBeTruthy();
-    expect(body(b).orderToken).toBeUndefined();
+    expect(body(b).orderToken).toBe(body(a).orderToken);
     expect(x.settle).toHaveBeenCalledOnce();
     expect(x.plane.open).toHaveBeenCalledOnce();
     await expect(x.desk.order(q.quoteId, x.payment(q.priceUsd, "0x02"), x.settle, () => false)).rejects.toMatchObject({ status: 409 });
@@ -157,7 +157,7 @@ describe("Swarm Desk", () => {
   });
 
   it("keeps at most three jobs in flight and expires unused quotes", async () => {
-    const x = harness();
+    const x = harness(); x.h.inflight = 3;
     for (let i = 0; i < 3; i++) { const q = await x.quote(); await x.desk.order(q.quoteId, x.payment(q.priceUsd, `0x0${i}`), x.settle, () => false); }
     const q = await x.quote();
     await expect(x.desk.order(q.quoteId, x.payment(q.priceUsd, "0x04"), x.settle, () => false)).rejects.toMatchObject({ status: 503, message: expect.stringContaining("3 jobs") });
@@ -177,7 +177,7 @@ describe("Swarm Desk", () => {
     await reloaded.follow();
     expect(await reloaded.job(first.orderId, first.orderToken!)).toMatchObject({ status: "done", result: { siteUrl: "https://example.ipfs.site" }, refundOwed: false });
     const retry = await reloaded.order(q.quoteId, x.payment(q.priceUsd), x.settle, () => false);
-    expect(body(retry).orderToken).toBeUndefined();
+    expect(body(retry).orderToken).toBe(first.orderToken);
     expect(x.plane.open).toHaveBeenCalledOnce();
     expect(x.settle).toHaveBeenCalledOnce();
   });
@@ -190,7 +190,7 @@ describe("Swarm Desk", () => {
     const reloaded = new SwarmDesk(x.deps);
     await reloaded.follow();
     expect(x.plane.open).not.toHaveBeenCalled();
-    x.h.settlement = TX;
+    x.h.settlement = TX; x.h.now += 15_000;
     await reloaded.follow();
     expect(x.plane.open).toHaveBeenCalledOnce();
     const answer = body(await reloaded.order(q.quoteId, x.payment(q.priceUsd), x.settle, () => false));
@@ -221,6 +221,58 @@ describe("Swarm Desk", () => {
   });
 });
 
+describe("Swarm Desk public capacity", () => {
+  it("coalesces slow followers and returns known status while the background read is pending", async () => {
+    const x = harness(), q = await x.quote(), receipt = body(await x.desk.order(q.quoteId, x.payment(q.priceUsd), x.settle, () => false));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; }), original = x.plane.order;
+    x.plane.order = async (id) => { await gate; return original(id); };
+    const a = x.desk.follow(), b = x.desk.follow(); expect(a).toBe(b);
+    expect(await x.desk.job(receipt.orderId, receipt.orderToken!)).toMatchObject({ status: "running" }); release(); await a;
+  });
+  it("persists the actual reserve eligibility for each order's refill revenue", async () => {
+    const x = harness(), q = await x.quote(); await x.desk.order(q.quoteId, x.payment(q.priceUsd), x.settle, () => false);
+    expect(x.desk.revenue()[0]).toMatchObject({ units: "4900000", reserveUnits: "2450000" });
+    const file = tempFile(), y = harness(file), d = new SwarmDesk({ ...y.deps, reservePayer: () => false });
+    const ownerQuote = await d.quote("research", BRIEF, null, BASE); await d.order(ownerQuote.quoteId, y.payment(ownerQuote.priceUsd), y.settle, () => false);
+    expect(new SwarmDesk(y.deps).revenue()[0]).toMatchObject({ units: "4900000", reserveUnits: "0" });
+  });
+  it("gets live counters at runtime, caches them for 60 seconds and reports unavailable honestly", async () => {
+    const x = harness(), health = vi.fn(async () => ({ agentsOnline: 7, seatsEnrolled: 11, jobsDoneLastDay: 3, counts: { jobs: 20, jobStates: { completed: 15 } } }));
+    const d = new SwarmDesk({ ...x.deps, health });
+    expect((await d.stats()).swarm).toMatchObject({ agentsOnline: 7, seatsEnrolled: 11, totalJobs: 20, completedJobs: 15, completionRate: 0.75 });
+    expect((await d.stats()).desk).toMatchObject({ enabled: true, dailyImd: 100, maxInFlight: 25, kinds: expect.arrayContaining([expect.objectContaining({ kind: "tests", priceUsd: 4.9 })]) });
+    expect(health).toHaveBeenCalledOnce(); x.h.now += 60_001; await d.stats(); expect(health).toHaveBeenCalledTimes(2);
+    const missing = new SwarmDesk({ ...x.deps, health: async () => { throw new Error("offline"); } });
+    expect(await missing.stats()).toMatchObject({ swarm: { available: false, seatsEnrolled: null, completionRate: null }, coverage: ["IMD live counters unavailable"] });
+  });
+  it("requires verified frontend source and a runtime-confirmed skill before the free check", async () => {
+    const x = harness(), verifiedContract = vi.fn(async () => true), skills = vi.fn(async () => [{ name: "frontend-for-contract" }]);
+    const d = new SwarmDesk({ ...x.deps, verifiedContract, skills });
+    await d.quote("frontend", BRIEF, null, BASE, { chain: "base", address: A });
+    expect(verifiedContract).toHaveBeenCalledWith("base", A);
+    expect(x.plane.check).toHaveBeenCalledWith("job.open", expect.objectContaining({ skill: "frontend-for-contract", chainId: 8453, contractAddress: A }));
+    vi.mocked(verifiedContract).mockResolvedValue(false);
+    await expect(d.quote("frontend", BRIEF, null, BASE, { chain: "base", address: A })).rejects.toMatchObject({ status: 400 });
+    await expect(d.quote("image", BRIEF, null, BASE)).rejects.toMatchObject({ status: 503 });
+    expect(x.plane.check).toHaveBeenCalledOnce();
+  });
+  it("returns one stable discoverable 402 for old paths, query quotes and unbound probes", async () => {
+    const x = harness(), q = await x.quote();
+    const payer = { mode: "live", chainId: 8453, payTo: () => A, holder: async () => false } as unknown as Payer;
+    const s = services({ d: { now: () => NOW } } as Ctx, payer, { swarm: x.desk });
+    for (const [path, query] of [[`/api/v1/swarm/order/${q.quoteId}`, ""], ["/api/v1/swarm/order", `quoteId=${q.quoteId}`], ["/api/v1/swarm/order", ""]]) {
+      const out = (await s.handle({ method: "GET", path: path!, query: new URLSearchParams(query), header: () => undefined, ip: A, base: BASE, limited: () => false }))!;
+      expect(out.status).toBe(402); const ch = out.body as Challenge;
+      expect(ch.resource.url).toBe(`${BASE}/api/v1/swarm/order`);
+      expect(decodeHeader(out.headers!["PAYMENT-REQUIRED"]!)).toEqual(ch);
+    }
+    x.h.imd = 0n;
+    await expect(x.desk.order(q.quoteId, x.payment(q.priceUsd), x.settle, () => false)).rejects.toMatchObject({ status: 503, retryAfter: 60, message: expect.stringContaining("nothing was charged") });
+    expect(x.settle).not.toHaveBeenCalled();
+  });
+});
+
 describe("Swarm Desk HTTP and x402", () => {
   it("checks payment, uses the quoted exact terms without holder discounts, and exposes free status", async () => {
     const x = harness(), buyer = privateKeyToAccount(generatePrivateKey()), payTo = privateKeyToAccount(generatePrivateKey()).address;
@@ -242,7 +294,7 @@ describe("Swarm Desk HTTP and x402", () => {
     expect(ch.status).toBe(402);
     expect(ch.body).toMatchObject({ priceUsd: 4.9, holderPrice: false, holderPriceUsd: 4.9 });
     expect((ch.body as Challenge).accepts[0]?.amount).toBe("4900000");
-    expect((ch.body as Challenge).extensions).toEqual(bazaarOf(offer("swarm-order"), path));
+    expect((ch.body as Challenge).extensions).toEqual(bazaarOf(offer("swarm-order"), "/api/v1/swarm/order"));
     const short = encodeHeader(await signPayment(buyer, requirement(8453, payTo, 2_450_000n)));
     expect((await call(path, {}, short)).status).toBe(402);
     expect(x.settle).not.toHaveBeenCalled();

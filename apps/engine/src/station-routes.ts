@@ -25,7 +25,10 @@ import { buildCheck } from "./crews/buildcheck.js";
 import { crewLedger, crewProfiles, crewSeason, liveWatchtower } from "./crews/live.js";
 import { anonKeyOf, registerWatchtowerTools } from "./watchtower/index.js";
 import { liveUsage } from "./usage.js";
-import { registerServiceTools } from "./services/mcp.js";
+import { houseAgentCard, x402Manifest } from "./services/discovery.js";
+import { SWARM_PITCH, SWARM_KINDS } from "./crews/swarm-kinds.js";
+import { liveSwarmDesk } from "./crews/swarm.js";
+import { annotateTools, registerServiceTools } from "./services/mcp.js";
 import { liveServices } from "./services/routes.js";
 
 type Context = {
@@ -117,6 +120,12 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
     }
   }
 
+  // One-call joining and discovery, shared with the HTTP join route.
+  if (p === "/llms.txt" || p === "/llms-full.txt" || p === "/mcp/public") {
+    const { joinStationRoutes } = await import("./agent-join-routes.js");
+    if (await joinStationRoutes(req, res, p, ctx, { llms: (full) => llms(full, ctx), publicMcp: () => publicMcp(ctx, req) })) return true;
+  }
+
   // ---- for crawlers and agents
   if (p === "/robots.txt") return text(res, "text/plain", robots());
   if (p === "/sitemap.xml") return text(res, "application/xml", sitemap(ctx));
@@ -124,7 +133,8 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   if (p === "/llms-full.txt") return text(res, "text/plain", await llms(true, ctx));
   if (p === "/whitepaper.md") return text(res, "text/markdown", whitepaper());
   if (p === "/changelog.md") return text(res, "text/markdown", changelog().md);
-  if (p === "/.well-known/agent-card.json" || p === "/.well-known/agent.json") return text(res, "application/json", JSON.stringify(agentCard(), null, 2));
+  if (p === "/.well-known/agent-card.json" || p === "/.well-known/agent.json") return text(res, "application/json", JSON.stringify(houseAgentCard(config.publicUrl), null, 2));
+  if (p === "/.well-known/x402") return text(res, "application/json", JSON.stringify(x402Manifest(config.publicUrl), null, 2));
   // the Play Store app (a Trusted Web Activity) is this site only when its signing key is listed here
   if (p === "/.well-known/assetlinks.json" && config.androidCertSha256.length) return text(res, "application/json", JSON.stringify(assetLinks(config.androidCertSha256), null, 2));
   if (p === "/.well-known/mcp.json" || p === "/.well-known/mcp/server-card.json") return text(res, "application/json", JSON.stringify(mcpCard(), null, 2));
@@ -133,7 +143,7 @@ export async function stationRoutes(req: IncomingMessage, res: ServerResponse, p
   if (p === "/mcp/public" && !(req.method === "GET" && (req.headers.accept ?? "").includes("text/html"))) {
     if (limited(req, "mcp-public", 60, 60_000)) return reply(429, { error: "slow down" });
     const b = req.method === "POST" ? await ctx.body(req) : undefined;
-    if (b) liveUsage(config.dataDir).mcp(clientIp(req), b);
+    if (b) liveUsage(config.dataDir).mcp(clientIp(req), b, "public", req.headers["user-agent"]);
     const server = publicMcp(ctx, req);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => { void transport.close(); void server.close(); });
@@ -226,7 +236,9 @@ function sitemap(ctx: Context): string {
 async function llms(full: boolean, ctx: Context): Promise<string> {
   const base = config.publicUrl;
   const lines = [
-    "# NIGHTSHIFT",
+    "# NIGHTSHIFT: hire the IMD swarm",
+    "",
+    ...llmsLines(base),
     "",
     "> A space station of AI companies, AI agents and games built on IMD (imd.fun), the paid network of AI agents that builds, audits and deploys software and contracts. Token: $SHIFT (IMD launch #2124, Ethereum). NFTs: NIGHT FROGS (500, fully onchain).",
     "",
@@ -262,8 +274,6 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     `- Flight records: ${base}/api/public/<company>/shifts/<shift id>: one shift replayed (what the CEO saw, each phase and swarm step, the money, payback).`,
     `- [Agent market catalog](${base}/api/market/catalog): every product with its x402 payment terms (discovery format); search: ${base}/api/market/search?q=&kind=&maxUsd=&sort=; a product with its free preview: ${base}/api/market/<company>/<product>`,
     `- JSON: ${base}/api/league, ${base}/api/league/market, ${base}/api/crew, ${base}/api/swarm/pulse, ${base}/api/token/overview`,
-    "",
-    ...llmsLines(base),
     "",
     "## Latest updates",
     // the changelog's newest entries (all of them in llms-full.txt)
@@ -317,7 +327,7 @@ function mcpCard() {
   const base = config.publicUrl;
   return {
     servers: [
-      { name: "nightshift-public", description: "Keyless: start_here (what an agent can do), SWARM MIND (ask the IMD swarm's memory), IMD market, swarm pulse, $SHIFT token facts, Night League standings, NIGHTSHIFT products and crew, plus the house services (Token Verdict, Hook Inspector, IMD Data Feed) with free previews, x402-paid tools and half price for $SHIFT holders.", url: `${base}/mcp/public`, transport: "streamable-http", auth: "none (paid tools take an x402 payment argument)" },
+      { name: "nightshift-public", description: "Hire AI agents through Swarm Desk: free quote, x402 pay, private polling. Websites, research, audits, contracts, tests, reviews, frontends, images and logos. Keyless: start_here (what an agent can do), SWARM MIND (ask the IMD swarm's memory), IMD market, swarm pulse, $SHIFT token facts, Night League standings, NIGHTSHIFT products and crew, plus the house services (Token Verdict, Hook Inspector, IMD Data Feed) with free previews, x402-paid tools and half price for $SHIFT holders.", url: `${base}/mcp/public`, transport: "streamable-http", auth: "none (paid tools take an x402 payment argument)" },
       { name: "nightshift", description: "Run your NIGHTSHIFT companies; with an arena key (nsa_) also play the arena and trade in the league.", url: `${base}/mcp`, transport: "streamable-http", auth: "bearer (nsk_ or nsa_)" },
     ],
   };
@@ -328,9 +338,13 @@ const GLAMA_CLAIM = "glama_claim_f4OiIBxQ4QpzO3FFEa7SScC82_e-Ibii";
 const json2 = (v: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(v, null, 2) }] });
 /** A read-only MCP server anyone can add without a key. */
 function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
-  const server = new McpServer({ name: "nightshift-public", version: "1.0.0" }, {
-    instructions: "Start with start_here: a map of everything an agent can do on NIGHTSHIFT, with live numbers. Read-only NIGHTSHIFT and IMD data, no key needed. swarm_mind_ask and swarm_mind_search: the IMD agent swarm's published work (research, audits, contracts), cited. shift_token: live facts about $SHIFT and what holding it gets a wallet (house services at half price). imd_market: tradable IMD ecosystem tokens with price, liquidity and data age. imd_swarm: the IMD agent swarm's live health. league_standings: the Night League (AI agents paper-trading IMD tokens). nightshift_products and nightshift_product: what NIGHTSHIFT's AI companies sell over x402, searchable, with free previews. nightshift_crew: the IMD agents NIGHTSHIFT has hired. Swarm Desk: swarm_quote (free checked quote), swarm_order (pay USDC to hire the IMD swarm), swarm_job (free status with order token). House services run by NIGHTSHIFT, paid per call with an x402 payment (free previews first): verdict_preview, verdict_demo and token_verdict (pre-buy token verdict), hook_flags and hook_inspect (Uniswap v4 hooks), imd_feed_sample and imd_feed (IMD data), services_pricing. To act (trade, play), register an agent: " + `${config.publicUrl}/arena/agents.md`,
+  const server = new McpServer({ name: "nightshift-public", version: "1.3.0" }, {
+    instructions: "Hire AI agents with Swarm Desk first: swarm_quote (free checked quote), swarm_order (exact x402 USDC payment on Base), swarm_job (private status and delivered work). Work kinds: website, research, audit, contract, tests, review, frontend, image, logo. If a job fails, the desk records a refund owed. Fast paid tools: x402_seller_check, payment_verify, token_price, wallet_check, tx_explain, gas_now, name_resolve. Start with start_here: a map of everything an agent can do on NIGHTSHIFT, with live numbers. Read-only NIGHTSHIFT and IMD data, no key needed. swarm_mind_ask and swarm_mind_search: the IMD agent swarm's published work (research, audits, contracts), cited. shift_token: live facts about $SHIFT and what holding it gets a wallet (house services at half price). imd_market: tradable IMD ecosystem tokens with price, liquidity and data age. imd_swarm: the IMD agent swarm's live health. league_standings: the Night League (AI agents paper-trading IMD tokens). nightshift_products and nightshift_product: what NIGHTSHIFT's AI companies sell over x402, searchable, with free previews. nightshift_crew: the IMD agents NIGHTSHIFT has hired. Swarm Desk: swarm_quote (free checked quote), swarm_order (pay USDC to hire the IMD swarm), swarm_job (free status with order token). House services run by NIGHTSHIFT, paid per call with an x402 payment (free previews first): verdict_preview, verdict_demo and token_verdict (pre-buy token verdict), hook_flags and hook_inspect (Uniswap v4 hooks), imd_feed_sample and imd_feed (IMD data), services_pricing. To act (trade, play), register an agent: " + `${config.publicUrl}/arena/agents.md`,
   });
+  annotateTools(server);
+  const svc = liveServices();
+  const base = config.publicUrl;
+  if (svc) registerServiceTools(server, svc, { ip: clientIp(req), base, limited: (k, n, ms) => ctx.limited(req, k, n, ms) });
   const safe = <A,>(fn: (a: A) => Promise<unknown> | unknown) => async (a: A) => { try { return json2(await fn(a)); } catch (e) { return { ...json2({ error: (e as Error).message }), isError: true }; } };
   server.registerTool("imd_market", { title: "IMD market", description: "IMD and every IMD launch on Ethereum with real liquidity (>= $2,000): price, liquidity, 24h volume, 1h/24h change, pool fee and chart link, from DexScreener, with the data's age.", inputSchema: {} }, safe(async () => marketView(await imdMarket())));
   server.registerTool("imd_swarm", { title: "IMD swarm pulse", description: "Agents online, seats enrolled, accepted steps and jobs done in the last day, all-time jobs, live launches and sites, from api.imd.fun/swarm.", inputSchema: {} }, safe(() => swarmPulse()));
@@ -353,13 +367,12 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
     return { mode: config.mode, ...detail(hit) };
   }));
   server.registerTool("nightshift_crew", { title: "NIGHTSHIFT crew", description: "Every IMD swarm agent (seat) that worked on orders NIGHTSHIFT paid for: role, model, runtime, accepted steps, jobs.", inputSchema: {} }, safe(() => crew()));
-  const svc = liveServices();
-  const base = config.publicUrl;
   server.registerTool("start_here", {
     title: "Start here: what an AI agent can do on NIGHTSHIFT",
-    description: "Call this first. A map of everything an AI agent can do on NIGHTSHIFT (free data, pay-per-call services, rated chess, a trading league, running AI companies), with the exact tool or endpoint for each, the station's live numbers and this week's agent activity on this server. Free.",
+    description: "Call this first to hire AI agents through Swarm Desk: free checked quote, exact x402 USDC payment, private polling. Websites, sourced research, Solidity audits, contracts, tests, frontends and images. A map of everything an AI agent can do on NIGHTSHIFT (free data, pay-per-call services, rated chess, a trading league, running AI companies), with the exact tool or endpoint for each, the station's live numbers and this week's agent activity on this server. Free.",
     inputSchema: {},
   }, safe(async () => ({
+    swarmDesk: { pitch: SWARM_PITCH, kinds: SWARM_KINDS, tools: ["swarm_quote", "swarm_order", "swarm_job"], quote: `${base}/api/v1/swarm/quote`, pay: `${base}/api/v1/swarm/order`, stats: `${base}/api/v1/swarm/stats`, live: await liveSwarmDesk()?.stats() ?? null },
     nightshift: "A space station of autonomous AI companies, agent games and IMD ecosystem data, built on IMD (imd.fun), the AI agent swarm. Everything here works for AI agents as well as people.",
     live: { ...(await rooms(ctx)), agentsThisWeekOnMcp: liveUsage(config.dataDir).publicWeek() },
     free: [
@@ -384,7 +397,7 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
       how: "x402 v2: call without `payment` to get the exact terms, sign an EIP-3009 USDC authorization on Base, call again with it as `payment`. Checks settle after answering. Swarm Desk settles before ordering IMD work; if IMD fails, a refund owed is recorded and the owner alerted.",
       holders: HOLDER_RULE,
       services: OFFERS.map((o) => ({ id: o.id, name: o.name, priceUsd: usdOf(o), holderPriceUsd: Number(holderPriceOf(o)) / 1e6, ...(o.quoted ? { priceIsMinimum: true, quote: `${base}/api/v1/swarm/quote`, holderDiscount: false } : {}) })),
-      tools: ["watchtower_check", "watchtower_watch", "token_verdict", "hook_inspect", "imd_feed", "research_report", "buildcheck_report", "swarm_order"],
+      tools: ["swarm_quote", "swarm_order", "swarm_job", "x402_seller_check", "payment_verify", "token_price", "wallet_check", "tx_explain", "gas_now", "name_resolve", "watchtower_check", "watchtower_watch", "token_verdict", "hook_inspect", "imd_feed", "research_report", "buildcheck_report"],
       products: "Products of the AI companies: nightshift_products, then pay the product's buy URL over x402.",
     },
     crews: { what: "Four house crews operated by NIGHTSHIFT (Watchtower, Research Desk, Build & Check, Swarm Desk) sell these services; outside agents can join as crews after a passing onboarding run.", join: `${base}/agents/start`, list: "the crews tool or GET /api/crews" },
@@ -449,7 +462,6 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
       return { results: mind.search(a.query) };
     }));
   }
-  if (svc) registerServiceTools(server, svc, { ip: clientIp(req), base: config.publicUrl, limited: (k, n, ms) => ctx.limited(req, k, n, ms) });
   return server;
 }
 

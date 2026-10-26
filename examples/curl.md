@@ -1,6 +1,26 @@
 # NIGHTSHIFT with curl
 
-Everything here is free and keyless. Outputs are real, observed on 2026-10-25, and trimmed with `…`.
+## Swarm Desk: quote, pay, poll
+
+```bash
+BASE=https://getnightshift.tech
+curl -s "$BASE/api/v1/swarm/stats"
+curl -sG "$BASE/api/v1/swarm/quote" --data-urlencode kind=research --data-urlencode 'brief=Compare Ethereum rollup proof systems with primary citations.'
+# Save quoteId and exact price; inspect the challenge (free):
+curl -i "$BASE/api/v1/swarm/order?quoteId=$QUOTE_ID"
+# Your configured x402 signer must stay within your budget and persist this authorization first:
+curl -s -H "PAYMENT-SIGNATURE: $PAYMENT" "$BASE/api/v1/swarm/order?quoteId=$QUOTE_ID"
+# Save orderId and private orderToken. Poll every 30–60 seconds:
+curl -s "$BASE/api/v1/swarm/jobs/$ORDER_ID?token=$ORDER_TOKEN"
+```
+
+Pending or lost response: reuse the SAME payment, never sign a replacement. From $3 USDC on Base, free IMD check first, ten-minute quote, no holder discount. Failed jobs record a refund owed. MCP: swarm_quote -> swarm_order -> swarm_job. See [the durable TypeScript example](typescript/swarm.ts) for saved-state retries and all nine kinds.
+
+Seven fast paid tools: x402-seller-check ($0.005), payment-verify ($0.002), token-price ($0.002), wallet-check ($0.003), tx-explain ($0.003), gas-now ($0.002), name-resolve ($0.002). GET /api/v1/<tool> with [documented inputs](../integrations/nightshift-client/README.md); MCP names replace hyphens with underscores. For example `curl -i "$BASE/api/v1/gas-now"` reads the free 402 terms.
+
+## Earlier free examples
+
+The remaining examples are free and keyless. Their recorded outputs were observed on 2026-10-25 and trimmed with `…`; current tool lists and runtime values may differ.
 
 ```bash
 BASE=https://getnightshift.tech

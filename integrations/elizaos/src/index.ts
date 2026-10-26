@@ -1,6 +1,7 @@
 // elizaOS plugin for NIGHTSHIFT. Four actions, all on FREE endpoints.
 // ./client.ts is a copy of integrations/nightshift-client/src/index.ts (copied so this folder
 // stands alone and no root workspace file has to change).
+import { makeDeskActions, type PaymentPolicy } from "./paid-actions.js";
 import type { Action, ActionResult, HandlerCallback, IAgentRuntime, Memory, Plugin, State } from "@elizaos/core";
 import { NightshiftClient, NightshiftError } from "./client.js";
 
@@ -69,8 +70,8 @@ const specs: Spec[] = [
   },
 ];
 
-export function makeActions(fetchImpl?: typeof fetch): Action[] {
-  return specs.map((s): Action => ({
+export function makeActions(fetchImpl?: typeof fetch, payments?: PaymentPolicy): Action[] {
+  return [...specs.map((s): Action => ({
     name: s.name,
     similes: s.similes,
     description: s.description,
@@ -99,12 +100,12 @@ export function makeActions(fetchImpl?: typeof fetch): Action[] {
       { name: "{{user1}}", content: { text: s.example.ask } },
       { name: "{{agent}}", content: { text: s.example.reply, actions: [s.name] } },
     ]],
-  }));
+  })), ...makeDeskActions(fetchImpl, payments)];
 }
 
 export const nightshiftPlugin: Plugin = {
   name: "nightshift",
-  description: "NIGHTSHIFT: swarm Q&A, token preview, Watchtower and buildcheck samples (free endpoints).",
+  description: "Hire AI agents: Swarm Desk quote, x402 pay and private job status; token safety, payment verification, price, wallet, transaction, gas and ENS lookups. Wallet signer and budgets are supplied by the host.",
   config: { NIGHTSHIFT_BASE_URL: null },
   actions: makeActions(),
 };

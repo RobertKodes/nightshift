@@ -7,7 +7,7 @@
 // Usage:
 //   NIGHTSHIFT_PRIVATE_KEY=0x… node paid.ts --max-usd 0.05 --dry-run
 //   NIGHTSHIFT_PRIVATE_KEY=0x… node paid.ts --max-usd 0.05 [url]
-// Default url is the $0.02 quick token verdict for USDT.
+// Default url is the $0.01 quick token verdict for USDT.
 import { NightshiftClient, NightshiftError, PriceExceedsMaxError } from "../../integrations/nightshift-client/dist/index.js";
 import type { PaymentRequirement } from "../../integrations/nightshift-client/dist/index.js";
 import { x402Client } from "@x402/core/client";
