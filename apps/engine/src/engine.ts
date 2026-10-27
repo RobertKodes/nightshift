@@ -1321,8 +1321,9 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
   async chatView(c: Company) {
     const f = await this.#chatFacts(c);
     return {
-      lines: (c.chat ?? []).slice(-60),
-      brain: { strong: f.brainLeftUsd !== null, model: this.#brain ? config.ceoModel : null, leftUsd: f.brainLeftUsd, dailyUsd: c.policy.aiDailyUsd ?? DEFAULT_POLICY.aiDailyUsd ?? 0, spentTodayUsd: fromUsdc(aiSpentToday(c)), spentTotalUsd: fromUsdc(c.aiSpentUsdc ?? 0n), usdcUsd: f.usdcUsd },
+      // lines saved before models went unnamed still carry one: it is never sent
+      lines: (c.chat ?? []).slice(-60).map((l) => ({ ...l, model: undefined })),
+      brain: { strong: f.brainLeftUsd !== null, paid: Boolean(this.#brain), leftUsd: f.brainLeftUsd, dailyUsd: c.policy.aiDailyUsd ?? DEFAULT_POLICY.aiDailyUsd ?? 0, spentTodayUsd: fromUsdc(aiSpentToday(c)), spentTotalUsd: fromUsdc(c.aiSpentUsdc ?? 0n), usdcUsd: f.usdcUsd },
     };
   }
 

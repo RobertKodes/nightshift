@@ -116,10 +116,10 @@ export function CeoChat({ c, swarmUsd, onTab, onSaved, onReplay, say }: { c: Des
           <button type="button" className={`cc-brain ${b.strong ? "on" : ""}`} onClick={() => onTab("limits")} title="Change the AI limit">
             <NxIcon name="agent" size={14} />
             {b.strong
-              ? <>Brain: strong model ({(b.model ?? "").split("/").pop()}), paid by {c.name} · {usd(b.leftUsd ?? 0)} left today</>
-              : b.model
-                ? <>Brain: free model · the strong one starts once {c.name} holds USDC{b.dailyUsd <= 0 ? " and its AI limit is above $0" : ""}</>
-                : <>Brain: free model</>}
+              ? <>AI CEO · {usd(b.leftUsd ?? 0)} of today's AI budget left, paid by {c.name}</>
+              : b.paid
+                ? <>AI CEO · its AI budget starts once {c.name} holds USDC{b.dailyUsd <= 0 ? " and its AI limit is above $0" : ""}</>
+                : <>AI CEO · on duty</>}
           </button>
         )}
       </header>

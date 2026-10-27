@@ -51,7 +51,7 @@ export async function mindRoutes(req: IncomingMessage, res: ServerResponse, p: s
     if (x.limited(req, "mind-ask", 10, 10 * 60_000)) { x.json(res, 429, { error: "Ten questions per 10 minutes: ask again in a moment." }); return true; }
     const q = String((await x.body(req, 4_000)).q ?? "").replace(/\s+/g, " ").trim().slice(0, 500);
     if (q.length < 3) { x.json(res, 400, { error: "Ask a question." }); return true; }
-    try { x.json(res, 200, { q, ...(await x.mind.ask(q, x.llm, x.model)) }); } catch { x.json(res, 503, { error: "SWARM MIND could not answer right now: the free models are busy. Try again in a minute." }); }
+    try { x.json(res, 200, { q, ...(await x.mind.ask(q, x.llm, x.model)) }); } catch { x.json(res, 503, { error: "SWARM MIND is busy right now. Try again in a minute." }); }
     return true;
   }
   return false;

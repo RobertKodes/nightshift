@@ -21,7 +21,7 @@ describe("research desk", () => {
           work(2, "Audit of imd/hooks", "https://explorer.imd.fun/jobs/bbb", day("2026-10-10"), ["audits"]),
           work(3, "Somewhere else", "https://evil.example/jobs/ccc"),
         ],
-        model: "free-model",
+        ai: true,
       },
       [
         { title: "Audit of imd/hooks", kinds: ["audits"], at: day("2026-10-10"), url: "https://explorer.imd.fun/jobs/bbb" }, // already listed
@@ -43,7 +43,7 @@ describe("research desk", () => {
     expect(r.gaps.join(" ")).toContain("[3], [9]");
     expect(r.gaps.join(" ")).toContain("2 results without an explorer.imd.fun link were left out");
     expect(r.coverage).toBe("3 published works from SWARM MIND (research 2, audits 1), dated 2026-09-01 to 2026-10-10; 2 cited in the answer.");
-    expect(r.model).toBe("free-model");
+    expect(r).not.toHaveProperty("model");
     // every link in the report is one of the listed sources
     const links = [...r.markdown.matchAll(/\]\((https?:[^)]+)\)/g)].map((x) => x[1]);
     expect(links).toEqual(r.sources.map((s) => s.url));
@@ -51,7 +51,7 @@ describe("research desk", () => {
   });
 
   it("gives no answer and no sources when SWARM MIND returned none, whatever the answer text says", async () => {
-    const r = await researchReport(mind({ answer: "It was audited and is safe [1].", sources: [], model: "m" }, []), "Is token X safe?", () => NOW);
+    const r = await researchReport(mind({ answer: "It was audited and is safe [1].", sources: [], ai: true }, []), "Is token X safe?", () => NOW);
     expect(r.sources).toEqual([]);
     expect(r.answer).not.toContain("safe [1]");
     expect(r.answer).toContain("no sourced answer");
@@ -60,11 +60,11 @@ describe("research desk", () => {
     expect(r.markdown).not.toMatch(/https?:\/\//);
   });
 
-  it("lists the works without a written answer when there was no model, and flags old coverage", async () => {
-    const r = await researchReport(mind({ answer: "Here is what the swarm published on it:", sources: [work(1, "Old report", "https://explorer.imd.fun/jobs/old", day("2026-01-05"))], model: null }), "old topic", () => NOW);
+  it("lists the works without a written answer when SWARM MIND wrote none, and flags old coverage", async () => {
+    const r = await researchReport(mind({ answer: "Here is what the swarm published on it:", sources: [work(1, "Old report", "https://explorer.imd.fun/jobs/old", day("2026-01-05"))], ai: false }), "old topic", () => NOW);
     expect(r.answer).toContain("no written answer");
     expect(r.sources).toHaveLength(1);
-    expect(r.gaps.join(" ")).toContain("no model was available");
+    expect(r.gaps.join(" ")).toContain("could not write one");
     expect(r.gaps.join(" ")).toContain("2026-01-05");
   });
 

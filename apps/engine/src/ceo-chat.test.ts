@@ -89,6 +89,7 @@ describe("the CEO chat's buttons", () => {
     expect(sent[0]!.content).toMatch(/You are the CEO of NightPlan/);
     expect(sent[1]!.content).toMatch(/Open to-dos for the owner:\n- Open a Pinterest account/);
     expect(sent.at(-1)).toEqual({ role: "user", content: "what now?" });
-    expect(line).toMatchObject({ from: "ceo", text: "Do this.", model: "free-model", actions: [{ type: "todo", text: "Record a 20 second flip-through of the planner" }] });
+    expect(line).toMatchObject({ from: "ceo", text: "Do this.", actions: [{ type: "todo", text: "Record a 20 second flip-through of the planner" }] });
+    expect(line).not.toHaveProperty("model");
   });
 });

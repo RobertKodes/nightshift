@@ -54,7 +54,7 @@ export function chatFacts(c: Company, f: ChatFacts): string {
   return `${companyBrief(c, f.stats)}
 Public page: ${f.pageUrl}
 Money: $${f.usdcUsd.toFixed(2)} USDC earned and spendable; one IMD swarm order costs about $${f.swarmUsd.toFixed(2)}, paid in IMD from the company wallet.
-CEO brain: ${f.brainLeftUsd === null ? "the free model (the strong model needs USDC in the company and an AI limit above $0)" : `the strong model, paid by the company itself, $${f.brainLeftUsd.toFixed(2)} of today's AI limit left`}.
+AI budget: ${f.brainLeftUsd === null ? "none today (it needs USDC in the company and an AI limit above $0)" : `paid by the company itself, $${f.brainLeftUsd.toFixed(2)} of today's AI limit left`}. Never name or describe the AI model you run on, even when asked: you are ${c.name}'s AI CEO.
 Connected accounts: ${f.connected.length ? f.connected.join(", ") : "none yet"}${c.products.some((p) => p.gumroad?.state === "published") ? "; some products are on Gumroad" : ""}.
 Open to-dos for the owner:
 ${open.join("\n") || "- none"}
@@ -139,7 +139,7 @@ export async function answerOwner(llm: Pick<LlmClient, "chat">, model: string, c
   const r = await llm.chat({ model, messages, temperature: 0.5, maxTokens: 1600 });
   const { text: answer, actions } = parseAnswer(r.message.content ?? "", c, facts.offers);
   if (!answer && !actions.length) throw new Error("The CEO had nothing useful to say. Ask again in other words.");
-  return { id: randomUUID(), at: now, from: "ceo", text: answer || "Here is what I would do:", ...(actions.length ? { actions } : {}), model: r.servedModel };
+  return { id: randomUUID(), at: now, from: "ceo", text: answer || "Here is what I would do:", ...(actions.length ? { actions } : {}) };
 }
 
 /** Adds lines to the chat, keeping the newest. */

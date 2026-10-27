@@ -49,7 +49,7 @@ describe("SWARM MIND", () => {
     const answers = [];
     for (let i = 0; i < 61; i++) answers.push(await m.ask(`night workers sleep curtains${"x".repeat(i + 1)}`, counted as never, "free"));
     expect(calls).toBe(59);
-    expect(answers.at(-1)).toMatchObject({ model: null, sources: [{ n: 1 }] });
+    expect(answers.at(-1)).toMatchObject({ ai: false, sources: [{ n: 1 }] });
   });
 });
 

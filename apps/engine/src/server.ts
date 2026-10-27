@@ -90,6 +90,7 @@ import { mindRoutes } from "./mind-routes.js";
 import { HOUSE_ID, liveHouseServices } from "./services/house.js";
 import { catalogItems } from "./services/catalog.js";
 import { backupUrl, productSite } from "./site-backup.js";
+import { unnamedModel } from "./ceo-brain.js";
 
 /** Open live-event streams, per IP and in all. */
 const streams = new Map<string, number>();
@@ -225,7 +226,7 @@ async function books(engine: Engine, c: Company): Promise<string> {
     const whole = abs / 10n ** BigInt(dec);
     const frac = (abs % 10n ** BigInt(dec)).toString().padStart(dec, "0").replace(/0+$/, "");
     const kind = isB2b(x) ? `${x.kind.replace("b2b", y.amount < 0n ? "b2b_purchase" : "b2b_sale")}` : x.kind;
-    rows.push([new Date(x.at).toISOString(), kind, x.memo ?? "", y.account.slice(mine.length), y.asset, `${neg ? "-" : ""}${whole}${frac ? `.${frac}` : ""}`, String((x.ref as { chainTx?: string } | undefined)?.chainTx ?? "")]);
+    rows.push([new Date(x.at).toISOString(), kind, unnamedModel(x.memo ?? ""), y.account.slice(mine.length), y.asset, `${neg ? "-" : ""}${whole}${frac ? `.${frac}` : ""}`, String((x.ref as { chainTx?: string } | undefined)?.chainTx ?? "")]);
   }
   // quoted, and never read as a formula by a spreadsheet
   const cell = (v: string) => `"${(/^[=+\-@\t\r]/.test(v) && !/^-?\d/.test(v) ? `'${v}` : v).replace(/"/g, '""')}"`;

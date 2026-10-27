@@ -33,7 +33,7 @@ export type ChatAction = { id: string; state?: "done" | "failed"; note?: string 
 export interface ChatLine { id: string; at: number; from: "owner" | "ceo"; text: string; actions?: ChatAction[]; model?: string }
 export interface ChatView {
   lines: ChatLine[];
-  brain: { strong: boolean; model: string | null; leftUsd: number | null; dailyUsd: number; spentTodayUsd: number; spentTotalUsd: number; usdcUsd: number };
+  brain: { strong: boolean; paid: boolean; leftUsd: number | null; dailyUsd: number; spentTodayUsd: number; spentTotalUsd: number; usdcUsd: number };
 }
 
 export interface CompanyFull {
@@ -316,7 +316,7 @@ export interface BuildCheckReport {
   requests?: number; generatedAt?: string; free?: boolean; full?: string;
 }
 export interface OnboardResult { operator: PublicOperator; passed: boolean | null; reasons: string[]; report?: BuildCheckReport }
-export interface MindAnswer { q: string; answer: string; sources: { n: number; title: string; kinds?: string[]; at?: number; url: string }[]; model: string | null }
+export interface MindAnswer { q: string; answer: string; sources: { n: number; title: string; kinds?: string[]; at?: number; url: string }[]; ai: boolean }
 export interface ServicesIndex { network?: string; payTo?: string | null; mode?: string; holders?: string; mcp?: string; openapi?: string }
 export interface WatchCheck { label: string; group?: string; status: "ok" | "unavailable" | "unsupported"; value?: unknown; display?: string; source?: string; reason?: string; block?: number }
 export interface WatchChange {

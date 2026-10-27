@@ -309,8 +309,8 @@ function EditDrawer({ c, first, bot, live, imdUsd, onClose, onSaved, onDeleted, 
               {(pol.marketBuy ?? true) && c.b2b.usdcUsd <= 0 && <p className="dk-hint bad">{c.name} holds no USDC yet, so it cannot buy from the market until it makes a sale.</p>}
             </div>
             <div className="dk-market">
-              <label>CEO brain, per day ($)<span className="dim">the strong model, paid by {c.name} from its own USDC: about 2 cents a shift. 0 = the free model only</span><input className="field mono" type="number" min={0} max={20} step="0.1" value={pol.aiDailyUsd ?? 0.5} onChange={(e) => setPol({ ...pol, aiDailyUsd: Number(e.target.value) })} /></label>
-              <p className="dk-hint">Each shift the CEO buys its thinking over x402 from {c.name}'s wallet, booked as the company's own expense. When the company holds no USDC yet, or today's limit is spent, it thinks with the free model. The CEO chat always runs on the free model.</p>
+              <label>CEO AI budget, per day ($)<span className="dim">paid by {c.name} from its own USDC: about 2 cents a shift. 0 = no paid AI</span><input className="field mono" type="number" min={0} max={20} step="0.1" value={pol.aiDailyUsd ?? 0.5} onChange={(e) => setPol({ ...pol, aiDailyUsd: Number(e.target.value) })} /></label>
+              <p className="dk-hint">Each shift the CEO buys its thinking over x402 from {c.name}'s wallet, booked as the company's own expense. When the company holds no USDC yet, or today's limit is spent, it keeps working on the house AI.</p>
             </div>
             <button className="nx-btn nx-btn-acc" disabled={saving}>{saving ? "Saving…" : "Save limits"}</button>
           </form>

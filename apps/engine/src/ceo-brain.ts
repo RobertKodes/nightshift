@@ -54,6 +54,9 @@ export function pickRequirement(ch: Challenge, chainId: number, asset: string, c
   return null;
 }
 
+/** "CEO thinking" entries booked before the model went unnamed carried its name in brackets: shown without it. */
+export const unnamedModel = (memo: string): string => memo.replace(/^CEO thinking \(.*\)$/, "CEO thinking");
+
 export function companyBrain(d: BrainDeps): (c: Company) => Promise<Brain | null> {
   const now = d.now ?? Date.now;
   const http = d.fetch ?? fetch;
@@ -87,7 +90,7 @@ export function companyBrain(d: BrainDeps): (c: Company) => Promise<Brain | null
       if (tx || res.ok) {
         const value = BigInt(req402.amount);
         await d.ledger.post({
-          id: `ai:${tx ?? randomUUID()}`, at: new Date(now()), kind: "ai", memo: `CEO thinking (${req.model})`,
+          id: `ai:${tx ?? randomUUID()}`, at: new Date(now()), kind: "ai", memo: "CEO thinking",
           ref: tx ? { chainTx: tx } : undefined,
           postings: [
             { account: `co:${c.id}:usdc`, asset: "USDC", amount: -value },

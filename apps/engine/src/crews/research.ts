@@ -16,8 +16,6 @@ export type ResearchSource = { n: number; title: string; url: string; kind: stri
 export type ResearchReport = {
   question: string; answer: string; sources: ResearchSource[]; coverage: string; gaps: string[];
   generatedAt: string; markdown: string;
-  /** The model SWARM MIND used to write the answer, or null (no model: the matching works only). */
-  model: string | null;
 };
 export type MindLike = { ask(q: string): Promise<unknown>; search(q: string): unknown };
 
@@ -45,7 +43,7 @@ const mdText = (s: string) => s.replace(/([\\[\]()*_`#<>|])/g, "\\$1");
 
 export async function researchReport(mind: MindLike, question: string, now: () => number = Date.now): Promise<ResearchReport> {
   const q = researchQuestion(question);
-  let asked: { answer?: unknown; sources?: unknown; model?: unknown } | null;
+  let asked: { answer?: unknown; sources?: unknown; ai?: unknown } | null;
   try { asked = (await mind.ask(q)) as typeof asked; } catch { throw new ResearchError(503, "SWARM MIND could not answer right now. Try again in a minute."); }
   let searched: unknown;
   try { searched = await Promise.resolve(mind.search(q)); } catch { searched = []; }
@@ -76,7 +74,7 @@ export async function researchReport(mind: MindLike, question: string, now: () =
     sources.push({ n: next++, title: plain(r.title, 160) || "Untitled work", url, kind: kindOf(r), date: dateOf(r.at), cited: false });
   }
 
-  const model = typeof asked?.model === "string" && asked.model ? plain(asked.model, 80) : null;
+  const ai = asked?.ai === true;
   let answer: string;
   if (!sources.length) {
     answer = "SWARM MIND found no published IMD swarm work on this question, so there is no sourced answer to give.";
@@ -84,9 +82,9 @@ export async function researchReport(mind: MindLike, question: string, now: () =
   } else if (!answerable) {
     answer = "SWARM MIND wrote no answer from linked sources. The published works that match the question are listed below.";
     gaps.push("No written answer: the works below matched the search but none came with the answer.");
-  } else if (!model) {
-    answer = "SWARM MIND had no model available, so there is no written answer. The published works that match the question are listed below.";
-    gaps.push("No written answer: no model was available, so only the matching works are listed.");
+  } else if (!ai) {
+    answer = "SWARM MIND could not write an answer right now, so there is no written answer. The published works that match the question are listed below.";
+    gaps.push("No written answer: SWARM MIND could not write one right now, so only the matching works are listed.");
   } else {
     const valid = new Set(sources.slice(0, fromAsk).map((s) => s.n));
     const bad = new Set<number>();
@@ -121,5 +119,5 @@ export async function researchReport(mind: MindLike, question: string, now: () =
     "## Gaps", "", ...gaps.map((g) => `- ${mdText(g)}`), "",
     `_Research Desk (NIGHTSHIFT), from SWARM MIND, ${generatedAt}._`,
   ].join("\n");
-  return { question: q, answer, sources, coverage, gaps, generatedAt, markdown, model };
+  return { question: q, answer, sources, coverage, gaps, generatedAt, markdown };
 }

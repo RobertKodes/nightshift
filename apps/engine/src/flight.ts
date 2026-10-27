@@ -5,6 +5,7 @@ import { buildTree, type SpanKind, type SpanRecord, type SpanStatus } from "@nig
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { backupUrl, productSite, siteBackups } from "./site-backup.js";
+import { unnamedModel } from "./ceo-brain.js";
 
 /**
  * The flight recorder: one shift, rebuilt from its record as a trace (what the CEO saw, each phase
@@ -26,7 +27,7 @@ const END = new Set<TaskStatus>(["done", "failed", "rejected"]);
 
 export interface FlightInput {
   imdUsd: number;
-  /** The owner sees the brief, the files, the model and the full error; the public does not. */
+  /** The owner sees the brief, the files and the full error; the public does not. */
   owner: boolean;
   live: boolean;
   ledger: LedgerTx[];
@@ -84,7 +85,6 @@ export function flight(c: Company, t: Task, o: FlightInput) {
       const m = t.mind;
       span(id, root.id, m?.by === "model" ? "llm_call" : "custom", PHASE.planned, start, end, state, {
         by: m?.by ?? null,
-        ...(o.owner && m?.model ? { model: m.model } : {}),
         ...(m?.fallback ? { fallback: m.fallback } : {}),
         // the moves it passed over because they repeat earlier work, each with why
         ...(m?.avoided?.length ? { avoided: m.avoided } : {}),
@@ -138,7 +138,7 @@ export function flight(c: Company, t: Task, o: FlightInput) {
   if (mk?.paid) ids.add(mk.paid.ledgerId);
   const seller = mk?.pick ? { id: mk.pick.sellerId, name: mk.pick.company } : undefined;
   const ledger = o.ledger.filter((x) => ids.has(x.id)).map((x) => ({
-    id: x.id, kind: x.kind, memo: x.memo, at: new Date(x.at).getTime(),
+    id: x.id, kind: x.kind, memo: x.memo && unnamedModel(x.memo), at: new Date(x.at).getTime(),
     legs: x.postings.map((p) => ({ account: ACCOUNT(c, p.account, seller), asset: p.asset, amount: Number(p.amount) / (p.asset === "IMD" ? 1e18 : 1e6) })),
   }));
 

@@ -231,7 +231,7 @@ export function ResearchTry() {
       {err && <p className="svc-err">{err}</p>}
       {a && (
         <section className="st-panel cr-report" aria-live="polite">
-          <div className="cr-report-h"><b>SWARM MIND</b>{a.model ? <span className="cr-tag dim">{a.model}</span> : <span className="cr-tag warn">no model: matching works only</span>}</div>
+          <div className="cr-report-h"><b>SWARM MIND</b>{a.ai ? <span className="cr-tag dim">AI answer</span> : <span className="cr-tag warn">matching works only</span>}</div>
           <p className="cr-answer">{a.answer}</p>
           <h4 className="cr-sec">Sources ({sources.length})</h4>
           {sources.length ? <ol className="cr-sources">{sources.map((s) => <li key={s.url} value={s.n}><a href={s.url} target="_blank" rel="noreferrer">{s.title}</a>{s.kinds?.length ? <span> · {s.kinds.join(", ")}</span> : null}{s.at ? <span> · {day(s.at)}</span> : null}</li>)}</ol>

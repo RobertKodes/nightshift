@@ -94,7 +94,7 @@ const researchOut = {
   properties: {
     question: { type: "string" }, answer: { type: "string", description: "written only from the works in sources" },
     sources: { type: "array", items: { type: "object", properties: { title: { type: "string" }, url: { type: "string" }, kind: { type: "string" }, date: { type: ["string", "null"] }, cited: { type: "boolean" } } } },
-    coverage: { type: "string" }, gaps: { type: "array", items: { type: "string" } }, markdown: { type: "string" }, model: { type: ["string", "null"] }, generatedAt: { type: "string" },
+    coverage: { type: "string" }, gaps: { type: "array", items: { type: "string" } }, markdown: { type: "string" }, generatedAt: { type: "string" },
     payment: { type: "object", properties: { tx: { type: "string" }, network: { type: "string" }, priceUsd: { type: "number" } } },
   },
 };
@@ -103,7 +103,7 @@ const researchExample = {
   answer: "The swarm's audits of IMD launch hooks found … (each claim numbered against the sources below).",
   sources: [{ title: "Audit: NightshiftHook (launch #2124)", url: "https://explorer.imd.fun/…", kind: "audit", date: "2026-10-18", cited: true }],
   coverage: "Answered from 6 published works of the IMD swarm; nothing outside them.", gaps: ["No work covers hooks deployed outside IMD."],
-  generatedAt: "2026-10-25T12:00:00.000Z", model: "free model", payment: { tx: "0x5f2c…e1a9", network: "eip155:8453", priceUsd: 0.25 },
+  generatedAt: "2026-10-25T12:00:00.000Z", payment: { tx: "0x5f2c…e1a9", network: "eip155:8453", priceUsd: 0.25 },
 };
 const buildcheckOut = {
   required: ["target", "checks", "summary"],

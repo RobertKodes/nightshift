@@ -64,7 +64,6 @@ export function EconomyPage() {
               </table>
             </div>
             {rows.length > 12 && <button className="st-more" onClick={() => setAll(!all)}>{all ? "Show fewer" : `Show all ${rows.length}`}</button>}
-            {crew.models.length > 0 && <p className="st-note">Models behind our work, by accepted and attempted steps: {crew.models.map((m) => `${m.model} (${m.steps})`).join(" · ")}.</p>}
             <h2>Work orders</h2>
             <p className="st-note">{crew.orders} orders paid, {crew.paidImd} IMD in all (0.5 IMD each), each linked to its job on IMD's explorer with the seats that worked on it.</p>
             <div className="st-orders">{(allJobs ? jobs : jobs.slice(0, 12)).map((o) => (

@@ -169,7 +169,7 @@ export function createMind(d: MindDeps) {
     return current().search(q, limit).map(({ work }) => ({ id: work.id, title: work.title, kinds: work.kinds, at: work.at, url: work.url, findings: work.findings ?? null, passage: passage(work, q, 280) }));
   }
 
-  type Answer = { answer: string; sources: { n: number; title: string; kinds: Kind[]; at: number; url: string }[]; model: string | null };
+  type Answer = { answer: string; sources: { n: number; title: string; kinds: Kind[]; at: number; url: string }[]; ai: boolean };
   const calls: number[] = [];
   /** An answer from the swarm's own work, with its sources. Without a model: the works that match, no answer. */
   async function ask(q: string, llm: Pick<LlmClient, "chat"> | null, model: string): Promise<Answer> {
@@ -178,16 +178,16 @@ export function createMind(d: MindDeps) {
     if (hit && now() - hit.at < 3_600_000) return hit.r;
     const found = current().search(q, 6);
     const sources = found.map(({ work }, i) => ({ n: i + 1, title: work.title, kinds: work.kinds, at: work.at, url: work.url }));
-    if (!found.length) return { answer: "Nothing the swarm published matches that yet. Try other words, or ask about a token, a contract, an audit or a research topic.", sources: [], model: null };
+    if (!found.length) return { answer: "Nothing the swarm published matches that yet. Try other words, or ask about a token, a contract, an audit or a research topic.", sources: [], ai: false };
     // one budget for every way in (site, MCP, Telegram), so questions cannot use up the model quota the companies run on
     const t = now();
     while (calls.length && t - calls[0]! > 10 * 60_000) calls.shift();
-    if (!llm || calls.length >= ASK_BUDGET) return { answer: "Here is what the swarm published on it:", sources, model: null };
+    if (!llm || calls.length >= ASK_BUDGET) return { answer: "Here is what the swarm published on it:", sources, ai: false };
     calls.push(t);
     const ctx = found.map(({ work }, i) => `[${i + 1}] ${work.title} (${work.kinds.join(", ")}, ${new Date(work.at).toISOString().slice(0, 10)})\n${passage(work, q)}`).join("\n\n");
     const r = await llm.chat({ model, temperature: 0.2, maxTokens: 900, messages: [{ role: "system", content: ASK }, { role: "user", content: `Sources:\n${ctx}\n\nQuestion: ${q}` }] });
     const text = (r.message.content ?? "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-    const out: Answer = { answer: text || "The swarm's work on this is listed below.", sources, model: r.servedModel ?? model };
+    const out: Answer = { answer: text || "The swarm's work on this is listed below.", sources, ai: true };
     answers.set(key, { at: now(), r: out });
     if (answers.size > 500) answers.delete(answers.keys().next().value!);
     return out;
