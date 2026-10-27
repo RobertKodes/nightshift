@@ -382,7 +382,9 @@ function serveStatic(res: ServerResponse, path: string, head = false, gzipOk = f
   }
   // inside Telegram Web /tg is framed: no X-Frame-Options there, and its frame-ancestors name Telegram
   if (tg) res.removeHeader("X-Frame-Options");
-  res.writeHead(200, { "Content-Type": type, "Content-Length": data.length, ...(type.startsWith("text/html") ? { "Content-Security-Policy": tg ? TG_CSP : CSP, "Cache-Control": "no-cache" } : {}) });
+  // said for every file, so a CDN in front never keeps an old app: hashed bundle files never change, art may for an hour, the rest is checked each time
+  const cache = /^\/assets\//.test(path) && !page ? "public, max-age=31536000, immutable" : /\.(webp|png|jpe?g|svg|ico|woff2?|mp4|gif)$/.test(f) ? "public, max-age=3600" : "no-cache";
+  res.writeHead(200, { "Content-Type": type, "Content-Length": data.length, "Cache-Control": cache, ...(type.startsWith("text/html") ? { "Content-Security-Policy": tg ? TG_CSP : CSP } : {}) });
   res.end(head ? undefined : data);
   return true;
 }

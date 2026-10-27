@@ -91,4 +91,16 @@ describe("the caller's IP behind proxies", () => {
     // the default trusts loopback only
     expect(clientIp(at("172.18.0.3", "6.6.6.6"))).toBe("172.18.0.3");
   });
+
+  it("names the visitor Cloudflare reports, only when the hop the proxy saw is Cloudflare's edge", () => {
+    const cf = (peer: string, xff: string | undefined, visitor: string) => {
+      const req = at(peer, xff); (req.headers as Record<string, string>)["cf-connecting-ip"] = visitor; return req;
+    };
+    expect(clientIp(cf("172.31.88.2", "6.6.6.6, 162.158.1.20", "203.0.113.9"), nets)).toBe("203.0.113.9");
+    expect(clientIp(cf("172.31.88.2", "2606:4700::6810:84e5", "2001:db8::7"), nets)).toBe("2001:db8::7");
+    // a caller who is not Cloudflare cannot name themselves anyone
+    expect(clientIp(cf("172.31.88.2", "198.51.100.4", "203.0.113.9"), nets)).toBe("198.51.100.4");
+    expect(clientIp(cf("198.51.100.4", undefined, "203.0.113.9"), nets)).toBe("198.51.100.4");
+    expect(clientIp(cf("172.31.88.2", "162.158.1.20", "not an ip"), nets)).toBe("162.158.1.20");
+  });
 });
