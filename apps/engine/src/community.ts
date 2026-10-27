@@ -34,7 +34,7 @@ async function walletUsd(who: `0x${string}`, m: Market): Promise<number> {
   const [ethBal, shift, imd, ...st] = await Promise.all([eth.getBalance({ address: who }).catch(() => 0n), read(config.token.address as `0x${string}`), read(IMD_TOKEN as `0x${string}`), ...STABLES.map(([a]) => read(a))]);
   return (Number(ethBal) / 1e18) * m.ethUsd + (Number(shift) / 1e18) * m.priceUsd + (Number(imd) / 1e18) * config.imdUsd + st.reduce((s, v, i) => s + Number(v) / 10 ** STABLES[i]![1], 0);
 }
-type State = { lastBlock?: number; milestone?: number; bskySeen?: string; buys?: number; eventsBlock?: number; burnedShift?: number; burnedImd?: number };
+type State = { lastBlock?: number; milestone?: number; bskySeen?: string; bskyAt?: string; bskyPosted?: string[]; buys?: number; eventsBlock?: number; burnedShift?: number; burnedImd?: number };
 
 const file = () => join(config.dataDir, "community.json");
 const load = (): State => { try { return existsSync(file()) ? JSON.parse(readFileSync(file(), "utf8")) : {}; } catch { return {}; } };
@@ -244,21 +244,36 @@ export async function raid(url: string, note = ""): Promise<boolean> {
   return sent.some(Boolean);
 }
 
+type BskyPost = { post: { uri: string; record: { createdAt?: string } } };
+/**
+ * The account's posts to bring to the chat, oldest first: each one once, only newer than the newest one
+ * already brought, under a day old, two at a time. A feed that answers in another order or without its
+ * newest post can never bring old posts back. The first look only remembers what is there.
+ */
+export function bskyFresh<T extends BskyPost>(st: State, posts: T[], now: number): T[] {
+  const at = (f: BskyPost) => Date.parse(f.post.record.createdAt ?? "") || 0;
+  const done = new Set(st.bskyPosted ?? []), since = Date.parse(st.bskyAt ?? "") || 0;
+  const newest = posts.reduce((m, f) => Math.max(m, at(f)), 0);
+  if (!st.bskyAt) {
+    st.bskyAt = new Date(newest || now).toISOString();
+    st.bskyPosted = [...done, ...posts.map((f) => f.post.uri)].slice(-200);
+    return [];
+  }
+  const fresh = posts.filter((f) => !done.has(f.post.uri) && at(f) > since && now - at(f) < 86_400_000).sort((a, b) => at(a) - at(b)).slice(0, 2);
+  for (const f of fresh) done.add(f.post.uri);
+  st.bskyPosted = [...done].slice(-200);
+  if (fresh.length) st.bskyAt = new Date(Math.max(since, ...fresh.map(at))).toISOString();
+  return fresh;
+}
+
 /** New posts on the project's Bluesky account, from Bluesky's free public API. */
 async function scanBluesky(st: State): Promise<void> {
   if (!config.blueskyHandle) return;
   const r = await fetch(`https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(config.blueskyHandle)}&filter=posts_no_replies&limit=5`, { signal: AbortSignal.timeout(10000) });
   if (!r.ok) return;
-  const d = (await r.json()) as { feed?: { post: { uri: string; author: { handle: string }; record: { text?: string } }; reason?: unknown }[] };
+  const d = (await r.json()) as { feed?: { post: { uri: string; author: { handle: string }; record: { text?: string; createdAt?: string } }; reason?: unknown }[] };
   const posts = (d.feed ?? []).filter((f) => !f.reason && f.post.author.handle === config.blueskyHandle.replace(/^@/, ""));
-  const latest = posts[0];
-  // an empty account: its first post is new, so remember that we have seen nothing yet
-  if (!latest) { st.bskySeen ??= "none"; return; }
-  if (!st.bskySeen) { st.bskySeen = latest.post.uri; return; }
-  const fresh = [];
-  for (const f of posts) { if (f.post.uri === st.bskySeen) break; fresh.push(f); }
-  st.bskySeen = latest.post.uri;
-  for (const f of fresh.reverse()) {
+  for (const f of bskyFresh(st, posts, Date.now())) {
     const url = `https://bsky.app/profile/${f.post.author.handle}/post/${f.post.uri.split("/").pop()}`;
     await toCommunity(`🦋 <b>New on Bluesky</b>\n\n${esc((f.post.record.text ?? "").slice(0, 600))}\n\nLike and repost it 🌙`, [[{ text: "🦋 Open on Bluesky", url }]], "post");
   }
