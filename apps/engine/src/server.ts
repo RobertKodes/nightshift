@@ -363,7 +363,11 @@ function serveStatic(res: ServerResponse, path: string, head = false, gzipOk = f
   const safe = normalize(path).replace(/^([/\\])+/, "").replace(/\.\.[/\\]?/g, "");
   let f = resolve(config.webDist, safe);
   // never a file outside the built app, whatever the path says
-  if (!f.startsWith(resolve(config.webDist) + sep) || !existsSync(f) || statSync(f).isDirectory()) f = join(config.webDist, "index.html");
+  if (!f.startsWith(resolve(config.webDist) + sep) || !existsSync(f) || statSync(f).isDirectory()) {
+    // a bundle file from an older build is gone: a plain 404 lets the open page reload, the app's page here would leave it white
+    if (/^\/assets\//.test(path)) { res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }); res.end(head ? undefined : "Not found"); return true; }
+    f = join(config.webDist, "index.html");
+  }
   if (!existsSync(f)) return false;
   const type = MIME[extname(f)] ?? "application/octet-stream";
   // the app's page carries this route's title, description and a readable summary for crawlers

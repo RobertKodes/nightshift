@@ -21,6 +21,24 @@
   }
   if (!String.prototype.replaceAll) String.prototype.replaceAll = function (a, b) { return a instanceof RegExp ? this.replace(a, b) : this.split(a).join(b); };
 
+  // Never a white screen while the app loads.
+  document.documentElement.style.background = "#03020a";
+
+  // A page restored from an older build asks for bundle files that are gone: reload once for the current build.
+  function reloadOnce() {
+    var last = 0;
+    try { last = Number(sessionStorage.getItem("ns-reloaded-at")) || 0; } catch (e) { /* no storage: still reload once per page */ }
+    if (Date.now() - last < 30000 || window.__nsReloaded) return;
+    window.__nsReloaded = true;
+    try { sessionStorage.setItem("ns-reloaded-at", String(Date.now())); } catch (e) { /* ignore */ }
+    location.reload();
+  }
+  window.addEventListener("error", function (e) {
+    var t = e.target, u = t && (t.src || t.href);
+    if (t && (t.tagName === "SCRIPT" || t.tagName === "LINK") && /\/assets\//.test(String(u || ""))) reloadOnce();
+  }, true);
+  window.addEventListener("vite:preloadError", function (e) { e.preventDefault(); reloadOnce(); });
+
   // If nothing has rendered after a while, say so plainly with what to try.
   function fallback() {
     var root = document.getElementById("root");

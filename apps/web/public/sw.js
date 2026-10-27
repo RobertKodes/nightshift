@@ -1,7 +1,8 @@
 // NIGHTSHIFT app shell. Pages: fresh when online, the last copy when offline. Hashed bundles and art: cached.
 // Never cached: /api (prices, sessions, payments), downloads, anything not GET or from another origin.
 // v2: the station redesign. The gate and its art are kept for the first screen offline.
-const CACHE = "ns-v2";
+// v3: only real files are kept (a page served in place of a missing bundle file left browsers white).
+const CACHE = "ns-v3";
 const SHELL = ["/", "/art/station/gate-station-mobile-1080x1920.webp", "/art/station/gate-station-2400x1350.webp"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k.startsWith("ns-") && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -16,7 +17,7 @@ self.addEventListener("fetch", (e) => {
     return;
   }
   if (u.pathname.startsWith("/assets/") || /\.(webp|png|svg|woff2)$/.test(u.pathname)) {
-    e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request).then((r) => { if (r.ok) { const c = r.clone(); void caches.open(CACHE).then((x) => x.put(e.request, c)); } return r; })));
+    e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request).then((r) => { if (r.ok && !(r.headers.get("content-type") ?? "").startsWith("text/html")) { const c = r.clone(); void caches.open(CACHE).then((x) => x.put(e.request, c)); } return r; })));
   }
 });
 
