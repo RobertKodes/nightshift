@@ -80,6 +80,7 @@ export function enginePayer(engine: Engine): Payer {
     return v;
   };
   return {
+    requests: engine.checkout.requests,
     mode: config.mode,
     chainId: config.salesChainId,
     payTo: () => house().wallet,
@@ -103,7 +104,7 @@ export function enginePayer(engine: Engine): Payer {
         return { ok: false, status: 402, reason, challenge: true };
       }
       if (prior && prior.productId !== o.id) {
-        const reason = "This payment was made for another service.";
+        const reason = "This payment was made for a different request. Nothing was charged.";
         refused(reason); return { ok: false, status: 409, reason };
       }
       if (config.mode === "sim") return { ok: true, payment, payer: v.payer };
@@ -150,6 +151,7 @@ export function liveHouseServices(engine: Engine) {
   // Watchtower reads through the same Ethereum and DexScreener doors as the other house services
   const wt: Watchtower = liveWatchtower() ?? new Watchtower({
     ctx, file: join(config.dataDir, "watchtower.json"),
+    settled: (key) => { const s = engine.store.settlements.get(key); return s?.booked && s.hash ? s.hash : null; },
     notify: async (w, r): Promise<boolean> => (w.telegram.chatId && config.telegramToken ? telegram(config.telegramToken, w.telegram.chatId, watchAlert(w, r, `${config.publicUrl}${wt.unsubscribePath(w)}`)) : false),
     onJob: recordWatchJob,
   });
@@ -175,7 +177,7 @@ export function liveHouseServices(engine: Engine) {
       return { imd, eth: gas, gasRequired: fee * 120_000n * 2n };
     },
     settled: (payer, nonce) => { const s = engine.store.settlements.get(saleKey(payer, nonce)); return s?.booked && s.hash ? s.hash : null; },
-    pending: (payer, nonce) => engine.store.settlements.has(saleKey(payer, nonce)),
+    pending: (payer, nonce) => { const s = engine.store.settlements.get(saleKey(payer, nonce)); return Boolean(s?.hash || s?.handedOff); },
     record: recordPaid, alert: (text, topic) => engine.alert(text, topic),
   });
   attachSwarmRefill(engine, swarm, ctx);

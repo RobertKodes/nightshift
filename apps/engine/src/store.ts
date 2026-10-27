@@ -99,7 +99,7 @@ export class Store {
         settlements: [...this.settlements.values()],
         archived: [...this.archived.values()],
       };
-      writeAtomic(this.#file, JSON.stringify(snap, replacer));
+      writeAtomic(this.#file, JSON.stringify(snap, replacer), { mode: 0o600 });
     } catch (e) {
       this.#dirty = true;
       throw e;

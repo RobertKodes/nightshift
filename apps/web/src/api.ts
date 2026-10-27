@@ -345,7 +345,7 @@ export interface ProofView {
     latest: { at: string; what: string; usd: number; wallet: string; tx: string | null }[];
   };
   crews: { id: string; name: string; house: boolean; done: number; failed: number; paidJobs: number; payingWallets: number; repeatWallets: number; revenueUsd: number; knownCostUsd: number; successRate: number | null }[];
-  refunds: { count: number; note: string };
+  refunds: { count: number; owedCount: number; paidCount: number; owedUsd: number; paidUsd: number; note: string };
   knownCosts: { swarmImd: number; swarmUsdAtTodaysPrice: number | null; aiUsd: number; notIncluded: string };
   fees: { platformUsd: number; platformFees: { at: string; usd: number; tx: string }[]; burned: { shift: number; imd: number }; splitter: { address: string; events: string } | null };
   agents: { mcpSessions: number; toolCalls: number; clients: { name: string; count: number; probe: boolean }[]; probeSessions: number; operators: { registered: number; active: number } };

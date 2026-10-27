@@ -1,3 +1,4 @@
+import { liveSwarmDesk } from "./crews/swarm.js";
 import { join } from "node:path";
 import { decodeEventLog, erc20Abi, keccak256, parseAbiItem, parseTransaction, type Address, type Hex } from "viem";
 import { estimateL1Fee } from "viem/op-stack";
@@ -9,7 +10,7 @@ import { chats, sendCard } from "./community.js";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
 import { liveOwnerStats } from "./owner-stats.js";
-import { proofPayments, type ProofPayment } from "./proof.js";
+import { proofPayments } from "./proof.js";
 import { readSettings, writeSettings } from "./settings.js";
 import { swapService, swapSettings } from "./swap.js";
 
@@ -58,7 +59,7 @@ export async function confirmReserveDelivery(b: ReserveBuy, house: string, d: { 
 
 /** Reuses the site's routes, the house vault signer and Base nonce queue. */
 export function startAgentEconomy(engine: Engine): void {
-  const payments = () => proofPayments({ companies: [...engine.store.companies.values()], metrics: (id) => engine.store.metricsOf(id), houseId: HOUSE });
+  const payments = () => proofPayments({ companies: [...engine.store.companies.values()], metrics: (id) => engine.store.metricsOf(id), houseId: HOUSE, swarm: liveSwarmDesk()?.revenue() });
   const economy = new AgentEconomy({ file: join(config.dataDir, "agent-economy.json"), payments, url: config.publicUrl,
     post: async (text, buttons, kind) => { const chat = chats()[0]; return Boolean(chat && config.telegramToken) && sendCard(chat!, kind, text, buttons); },
   });
@@ -98,6 +99,7 @@ export function startAgentEconomy(engine: Engine): void {
     },
     funds: async () => ({ usdc: await sales.readContract({ address: RESERVE_USDC, abi: erc20Abi, functionName: "balanceOf", args: [account().address] }), eth: await sales.getBalance({ address: account().address, blockTag: "pending" }) }),
     cost,
+    heldUsdc: () => liveSwarmDesk()?.liabilityUsdc() ?? 0n,
     sign: async (tx) => {
       const wallet = salesWallet(account()), request = await wallet.prepareTransactionRequest({ ...baseRequest(tx), gas: tx.gas ? BigInt(tx.gas) : undefined });
       const raw = await wallet.signTransaction(request as never);
@@ -124,16 +126,13 @@ export function startAgentEconomy(engine: Engine): void {
   notePayment = (key) => {
     const p = payments().find((p) => p.key === key);
     if (p) {
-      accept(p);
+      reserve.reconcile(payments()); economy.notePayment(p);
       void engine.settleInTurn(HOUSE, () => reserve.tick()).catch(() => { void engine.alert("Agent Reserve kept its saved buy for reconciliation.", "agent-reserve"); });
     }
   };
-  const accept = (p: ProofPayment) => {
-    reserve.credit(p); economy.notePayment(p);
-  };
   // Reconcile records written just before a crash without reposting already-seen payments.
   const sync = async () => {
-    const all = payments(); reserve.creditMany(all);
+    const all = payments(); reserve.reconcile(all);
     for (const p of all) economy.notePayment(p);
     await economy.tick();
     await engine.settleInTurn(HOUSE, () => reserve.tick());

@@ -65,3 +65,21 @@ describe("proof", () => {
     expect(payerClass(OWNER.toUpperCase().replace("0X", "0x"), a, [a], false)).toBe("owner");
   });
 });
+
+
+describe("Swarm refund proof", () => {
+  it("reports actual owed and paid totals and credits only delivered net revenue", () => {
+    const house = co("house", OWNER, DEV, [{ id: "swarm-order", name: "Swarm" }]);
+    const rows = [
+      { key: `${CUST}:a`, units: "10000000", costUnits: "4000000", status: "done", refundOwed: false },
+      { key: `${CUST}:b`, units: "5000000", costUnits: "1000000", status: "running", refundOwed: false },
+      { key: `${CUST}:c`, units: "3000000", costUnits: "0", status: "failed", refundOwed: true },
+      { key: `${CUST}:d`, units: "4000000", costUnits: "0", status: "failed", refundOwed: true, refundPaid: { tx: `0x${"ab".repeat(32)}`, at: 10 } },
+    ];
+    const input = { companies: [house], metrics: () => ({ visits: [], sales: rows.map((o, n) => ({ ...sale(CUST, Number(o.units) / 1e6, n + 1, false, "swarm-order"), nonce: o.key.split(":")[1] })) }), houseId: "house", swarm: rows };
+    expect(proofPayments(input).map((p) => p.earnedUnits)).toEqual(["6000000", "0", "0", "0"]);
+    const p = proof({ ...input, ledger: [], usage, burns: { shift: 0, imd: 0 }, imdUsd: null, splitter: null });
+    expect(p.refunds).toMatchObject({ count: 2, owedCount: 1, paidCount: 1, owedUsd: 3, paidUsd: 4 });
+    expect(p.refunds.note).toContain("settles before ordering"); expect(p.refunds.note).not.toContain("never charged");
+  });
+});

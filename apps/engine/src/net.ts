@@ -38,10 +38,11 @@ export async function publicUrl(u: string): Promise<{ url: URL; address: string;
   } catch { return null; }
 }
 
+export type SafeFetchOptions = { maxBytes?: number; contentTypes?: string[]; deadlineMs?: number };
 const MAX_BODY = 20 * 1024 * 1024;
 
 /** One request to `address`, with the URL's own Host header and TLS name. */
-export function pinned(url: URL, address: string, family: 4 | 6, init: RequestInit): Promise<Response> {
+export function pinned(url: URL, address: string, family: 4 | 6, init: RequestInit, limits: SafeFetchOptions = {}): Promise<Response> {
   return new Promise((resolve, reject) => {
     const req = (url.protocol === "https:" ? httpsRequest : httpRequest)(url, {
       method: init.method ?? "GET",
@@ -49,10 +50,12 @@ export function pinned(url: URL, address: string, family: 4 | 6, init: RequestIn
       lookup: (_h: string, o: { all?: boolean }, cb: (...a: unknown[]) => void) => (o?.all ? cb(null, [{ address, family }]) : cb(null, address, family)),
       signal: init.signal ?? undefined,
     } as never, (res) => {
+      res.on("error", reject);
+      const type = String(res.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
+      if ((res.statusCode ?? 502) >= 200 && (res.statusCode ?? 502) < 300 && limits.contentTypes && !limits.contentTypes.includes(type)) { res.destroy(new Error("unexpected content type")); reject(new Error("unexpected content type")); return; }
       const chunks: Buffer[] = [];
       let size = 0;
-      res.on("data", (c: Buffer) => { size += c.length; if (size > MAX_BODY) { res.destroy(new Error("response too large")); return; } chunks.push(c); });
-      res.on("error", reject);
+      res.on("data", (c: Buffer) => { size += c.length; if (size > (limits.maxBytes ?? MAX_BODY)) { res.destroy(new Error("response too large")); return; } chunks.push(c); });
       res.on("end", () => {
         const headers = new Headers();
         for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) headers.set(k, Array.isArray(v) ? v.join(", ") : v);
@@ -71,15 +74,28 @@ export function pinned(url: URL, address: string, family: 4 | 6, init: RequestIn
  * fetch() for untrusted URLs: public hosts only, at most 3 redirects, each one checked and pinned.
  * A request that sends something (not GET or HEAD) follows no redirect: it is answered where it went.
  */
-export async function safeFetch(u: string, init: RequestInit = {}): Promise<Response | null> {
-  let next = u;
-  const reads = !init.method || init.method === "GET" || init.method === "HEAD";
-  for (let hop = 0; hop < 4; hop++) {
-    const vetted = await publicUrl(next);
-    if (!vetted) return null;
-    const r = await pinned(vetted.url, vetted.address, vetted.family, init);
-    if (reads && r.status >= 300 && r.status < 400 && r.headers.get("location")) { next = new URL(r.headers.get("location")!, vetted.url).toString(); continue; }
-    return r;
-  }
-  return null;
+export async function safeFetch(u: string, init: RequestInit = {}, limits: SafeFetchOptions = {}): Promise<Response | null> {
+  const deadline = AbortSignal.timeout(limits.deadlineMs ?? 20_000);
+  const signal = init.signal ? AbortSignal.any([init.signal, deadline]) : deadline;
+  init = { ...init, signal };
+  let onAbort: () => void;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  const read = async () => {
+    let next = u;
+    const reads = !init.method || init.method === "GET" || init.method === "HEAD";
+    for (let hop = 0; hop < 4; hop++) {
+      signal.throwIfAborted();
+      const vetted = await publicUrl(next);
+      signal.throwIfAborted();
+      if (!vetted) return null;
+      const r = await pinned(vetted.url, vetted.address, vetted.family, init, limits);
+      if (reads && r.status >= 300 && r.status < 400 && r.headers.get("location")) { next = new URL(r.headers.get("location")!, vetted.url).toString(); continue; }
+      return r;
+    }
+    return null;
+  };
+  try { return await Promise.race([read(), aborted]); } finally { signal.removeEventListener("abort", onAbort!); }
 }

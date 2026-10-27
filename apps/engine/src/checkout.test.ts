@@ -1,3 +1,4 @@
+import { requestDigest, REQUEST_CONFLICT } from "./services/payment-requests.js";
 import { describe, expect, it } from "vitest";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { FacilitatorUnavailable, type Offer, type PaymentPayload, type SettleAnswer, type VerifyAnswer, facilitatorPayload, requirement, signPayment } from "@nightshift/x402";
@@ -250,5 +251,22 @@ describe("x402 checkout through the CDP facilitator", () => {
     const w = setup(facilitator({}).setup);
     await w.co.settle("C", seller.address, "P", await signPayment(buyer, req));
     expect(w.signs()).toBe(1);
+  });
+});
+
+
+describe("checkout request bindings", () => {
+  it("retains the original request binding after a refused settlement", async () => {
+    const t = setup(), p = await signPayment(buyer, req), a = p.payload.authorization;
+    t.chain.broadcast = async () => { throw new Error("nonce too low"); };
+    const r = { key: `${a.from}:${a.nonce}`.toLowerCase(), companyId: "C", productId: "P", payer: a.from, value: BigInt(a.value), at: Date.now() };
+    const digest = requestDigest("GET", "/tool", { token: "one" });
+    await expect(t.co.requests.use(r, digest, async (_request, keep) => {
+      await keep("answer", { result: "one" });
+      await t.co.settle("C", seller.address, "P", p);
+      return { status: 200, body: {} };
+    })).rejects.toThrow("settlement refused");
+    expect(t.records.get(r.key)?.request?.digest).toBe(digest);
+    await expect(t.co.requests.use(r, requestDigest("GET", "/tool", { token: "two" }), async () => ({ status: 200, body: {} }))).rejects.toThrow(REQUEST_CONFLICT);
   });
 });

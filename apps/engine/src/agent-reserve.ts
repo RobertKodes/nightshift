@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { formatUnits } from "viem";
 import { checkQuote, type EvmTx, type Quote } from "@nightshift/swap";
 import { writeAtomic } from "./atomic.js";
+import { OFFERS } from "./services/catalog.js";
 import { customerPayments, type ProofPayment } from "./proof.js";
 import type { SignedTx, TxState } from "./chain.js";
 import { bucharest } from "./agent-economy.js";
@@ -27,6 +28,7 @@ export type ReserveSettings = { enabled: boolean; dry: boolean; wallet: string }
 export type ReserveDeps = {
   file: string | null; now?: () => number; settings(): ReserveSettings; configure?(mode: "on" | "off" | "dry"): void;
   house(): string; quote(amount: bigint, recipient: string): Promise<Quote>;
+  heldUsdc?(): bigint;
   funds(): Promise<{ usdc: bigint; eth: bigint }>;
   cost(txs: EvmTx[]): Promise<bigint>;
   sign(tx: EvmTx): Promise<SignedTx>; broadcast(raw: `0x${string}`): Promise<void>;
@@ -60,7 +62,7 @@ export class AgentReserve {
     if (d.file && !existsSync(d.file) && existsSync(`${d.file}.bak`)) throw new Error("Agent Reserve ledger is missing but its backup exists; refusing to reset it");
     if (d.file && existsSync(d.file)) {
       const s = JSON.parse(readFileSync(d.file, "utf8")) as State;
-      if (s.version !== 1 || !Array.isArray(s.credits) || !Array.isArray(s.buys) || !/^\d+$/.test(s.balanceHalfUnits)) throw new Error("Unreadable Agent Reserve ledger; refusing to reset it");
+      if (s.version !== 1 || !Array.isArray(s.credits) || !Array.isArray(s.buys) || !/^-?\d+$/.test(s.balanceHalfUnits)) throw new Error("Unreadable Agent Reserve ledger; refusing to reset it");
       const expected = s.credits.reduce((n, c) => n + BigInt(c.halfUnits), 0n) - s.buys.filter((b) => b.phase === "done").reduce((n, b) => n + BigInt(b.amount) * 2n, 0n);
       if (expected !== BigInt(s.balanceHalfUnits) || (s.active && !s.buys.some((b) => b.id === s.active && (b.phase === "source" || b.phase === "bridge")))) throw new Error("Agent Reserve ledger does not balance; refusing to spend");
       this.#st = s;
@@ -82,23 +84,30 @@ export class AgentReserve {
   }
   /** Reconciliation writes a recovered batch once, before any buy can start. */
   creditMany(pays: ProofPayment[]): number {
-    const seen = new Set(this.#st.credits.map((c) => c.key));
-    const fresh = customerPayments(pays).filter((p) => {
-      if (seen.has(p.key) || BigInt(p.units) <= 0n) return false;
-      seen.add(p.key); return true;
-    });
-    if (!fresh.length) return 0;
+    const eligible = new Set(customerPayments(pays).filter((p) => p.house && OFFERS.some((o) => o.id === p.service)).map((p) => p.key));
+    let changed = 0;
     this.#change(() => {
-      for (const p of fresh) {
-        this.#st.credits.push({ key: p.key, at: p.at, halfUnits: p.units });
-        this.#st.balanceHalfUnits = (BigInt(this.#st.balanceHalfUnits) + BigInt(p.units)).toString();
+      for (const p of pays) {
+        const units = eligible.has(p.key) ? BigInt(p.earnedUnits ?? (p.service === "swarm-order" ? "0" : p.units)) : 0n;
+        if (units < 0n || units > BigInt(p.units)) throw new Error("Invalid earned reserve revenue");
+        const prior = this.#st.credits.find((c) => c.key === p.key), before = BigInt(prior?.halfUnits ?? "0");
+        if (before === units) continue;
+        if (prior) prior.halfUnits = units.toString();
+        else this.#st.credits.push({ key: p.key, at: p.at, halfUnits: units.toString() });
+        this.#st.balanceHalfUnits = (BigInt(this.#st.balanceHalfUnits) + units - before).toString();
+        changed++;
       }
     });
-    return fresh.length;
+    return changed;
+  }
+  /** Removes legacy credits that no longer have an eligible receipt. */
+  reconcile(pays: ProofPayment[]): void {
+    const keys = new Set(pays.map((p) => p.key));
+    this.creditMany([...pays, ...this.#st.credits.filter((c) => !keys.has(c.key)).map((c) => ({ key: c.key, at: c.at, units: "0", usd: 0, payer: "", cls: "test" as const, house: false, service: "", product: "", tx: null, company: "" }))]);
   }
   /** Allocated USDC, including receipts still waiting to reach the house books. */
   heldUsdc(): bigint {
-    return (BigInt(this.#st.balanceHalfUnits) + 1n) / 2n + this.#st.buys.filter((b) => b.phase === "done" && !b.notified).reduce((n, b) => n + BigInt(b.amount), 0n);
+    return (BigInt(this.#st.balanceHalfUnits) > 0n ? (BigInt(this.#st.balanceHalfUnits) + 1n) / 2n : 0n) + this.#st.buys.filter((b) => b.phase === "done" && !b.notified).reduce((n, b) => n + BigInt(b.amount), 0n);
   }
   command(args: string[]): string {
     const mode = args[0];
@@ -107,7 +116,7 @@ export class AgentReserve {
       this.#change(() => { this.#st.mode = mode; });
     }
     const s = this.#settings(), p = this.proof(), last = this.#st.buys.slice(-3).reverse();
-    return `🤖 <b>Agent Reserve · ${s.enabled ? s.dry ? "dry" : "on" : "off"}</b>\nBalance: $${(Number(this.#st.balanceHalfUnits) / 2e6).toFixed(7)} · ${this.#st.credits.length} credits\n50% of settled customer payments. Trigger: $25.00.\nBought: ${p.totalBoughtShift} $SHIFT · recipient ${ownerText(s.wallet)} (NIGHTSHIFT team wallet).\n${this.#st.active ? "A buy is in flight; no second buy can start." : `Next check: ${this.#st.nextAt > this.#now() ? new Date(this.#st.nextAt).toISOString() : "when the reserve reaches $25.00"}.`}\n${last.map((b) => `$${usd(b.amount).toFixed(2)} · ${b.phase}${b.error ? ` · ${ownerText(b.error)}` : ""}`).join("\n")}\n/reserve on | off | dry`;
+    return `🤖 <b>Agent Reserve · ${s.enabled ? s.dry ? "dry" : "on" : "off"}</b>\nBalance: $${(Number(this.#st.balanceHalfUnits) / 2e6).toFixed(7)} · ${this.#st.credits.length} credits\n50% of net earned house customer revenue. Trigger: $25.00.\nBought: ${p.totalBoughtShift} $SHIFT · recipient ${ownerText(s.wallet)} (NIGHTSHIFT team wallet).\n${this.#st.active ? "A buy is in flight; no second buy can start." : `Next check: ${this.#st.nextAt > this.#now() ? new Date(this.#st.nextAt).toISOString() : "when the reserve reaches $25.00"}.`}\n${last.map((b) => `$${usd(b.amount).toFixed(2)} · ${b.phase}${b.error ? ` · ${ownerText(b.error)}` : ""}`).join("\n")}\n/reserve on | off | dry`;
   }
   proof(): ReserveProof {
     const done = this.#st.buys.filter((b) => b.phase === "done");
@@ -153,7 +162,7 @@ export class AgentReserve {
       checkReserveRoute(route, amount, this.d.house(), s.wallet);
       const approval: EvmTx = { kind: "evm", chainId: 8453, to: RESERVE_USDC, data: `0x095ea7b3${route.approval!.spender.slice(2).toLowerCase().padStart(64, "0")}${amount.toString(16).padStart(64, "0")}`, value: "0" };
       const txs = [approval, ...route.txs as EvmTx[]], funds = await this.d.funds(), cost = await this.d.cost(txs);
-      if (funds.usdc < amount) throw new Error("House USDC does not cover the reserve");
+      if (funds.usdc - (this.d.heldUsdc?.() ?? 0n) < amount) throw new Error("House USDC does not cover the reserve");
       if (funds.eth - cost < RESERVE_GAS) throw new Error("House Base ETH would fall below 0.0005 ETH");
       b = { id: createHash("sha256").update(`${now}:${this.#st.buys.length}:${amount}`).digest("hex").slice(0, 24), at: now, amount: amount.toString(), recipient: s.wallet, route, legs: txs.map((tx) => ({ tx })), phase: s.dry ? "dry" : "source" };
       this.#change(() => { this.#st.buys.push(b!); if (!s.dry) this.#st.active = b!.id; });
@@ -183,7 +192,7 @@ export class AgentReserve {
         checkReserveRoute(b.route, BigInt(b.amount), this.d.house(), b.recipient);
         if (!same(s.wallet, b.recipient)) throw new Error("Reserve recipient changed during a buy");
         const remaining = b.legs.filter((l) => !l.done).map((l) => l.tx), funds = await this.d.funds();
-        if (funds.usdc < BigInt(b.amount)) throw new Error("House USDC does not cover the reserve");
+        if (BigInt(this.#st.balanceHalfUnits) < BigInt(b.amount) * 2n || funds.usdc - (this.d.heldUsdc?.() ?? 0n) < BigInt(b.amount)) throw new Error("House USDC does not cover the reserve");
         if (funds.eth - await this.d.cost(remaining) < RESERVE_GAS) throw new Error("House Base ETH would fall below 0.0005 ETH");
         if (!leg.signed) {
           const signed = await this.d.sign(leg.tx);
@@ -221,7 +230,7 @@ export class AgentReserve {
 }
 
 export function reserveBuyMessage(b: ReserveBuy, p: ReserveProof): string {
-  return `🤖➡️🌙 <b>Agents just bought $SHIFT</b>\n\n$${usd(b.amount).toFixed(6)} USDC in · <b>${formatUnits(BigInt(b.shiftOut!), 18)} $SHIFT</b> out.\n<a href="https://basescan.org/tx/${b.legs.at(-1)!.signed!.hash}">Base transaction</a> · <a href="https://etherscan.io/tx/${b.destinationTx}">Ethereum transaction</a>\nBought by agents so far: <b>${p.totalBoughtShift} $SHIFT</b>.\n\nThe $SHIFT goes to the NIGHTSHIFT team wallet (${ownerText(b.recipient)}). Funded by 50% of settled customer payments.`;
+  return `🤖➡️🌙 <b>Agents just bought $SHIFT</b>\n\n$${usd(b.amount).toFixed(6)} USDC in · <b>${formatUnits(BigInt(b.shiftOut!), 18)} $SHIFT</b> out.\n<a href="https://basescan.org/tx/${b.legs.at(-1)!.signed!.hash}">Base transaction</a> · <a href="https://etherscan.io/tx/${b.destinationTx}">Ethereum transaction</a>\nBought by agents so far: <b>${p.totalBoughtShift} $SHIFT</b>.\n\nThe $SHIFT goes to the NIGHTSHIFT team wallet (${ownerText(b.recipient)}). Funded by 50% of net earned house customer revenue.`;
 }
 let current: AgentReserve | null = null;
 export const liveAgentReserve = () => current;

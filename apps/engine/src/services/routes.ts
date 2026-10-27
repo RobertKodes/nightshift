@@ -1,8 +1,11 @@
+import { PaymentRequests, requestDigest } from "./payment-requests.js";
+import { saleKey } from "../checkout.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { type Offer as X402Offer, type PaymentPayload, type Requirement, challenge as challenge402, encodeHeader, requirement } from "@nightshift/x402";
 import type { Address } from "viem";
 import { a2a } from "./a2a.js";
 import { type FastDeps, fastTools } from "./fast-tools.js";
+import { feedInput } from "./feed-input.js";
 import { fastInput, isFastId } from "./fast-input.js";
 import { DailyQuota, Gate, TtlCache } from "./cache.js";
 import { HOLDER_RULE, OFFERS, type Offer, type OfferId, bazaarOf, holderPriceOf, offer, openapi, usdOf } from "./catalog.js";
@@ -21,11 +24,12 @@ import { SwarmError, type SwarmDesk } from "../crews/swarm.js";
 /**
  * The house services over HTTP: /api/v1/verdict, /api/v1/hook, /api/v1/imd/* and /openapi.json.
  * Paid calls follow x402 v2 like every product on NIGHTSHIFT: no payment → 402 with the terms;
- * a signed payment is checked, the answer is computed (a failure is never charged), then the
+ * a signed payment is checked, the answer is computed and saved, then the
  * payment is settled on Base and the answer returned with the settlement. Swarm Desk settles first,
  * then orders the checked IMD work and records a refund owed if ordering fails.
  */
 export interface Payer {
+  requests?: PaymentRequests;
   mode: "sim" | "live";
   chainId: number;
   /** Where the money goes: the house company's wallet. Null until the house company exists. */
@@ -68,6 +72,7 @@ export type CrewDeps = {
 };
 
 export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
+  const requests = payer.requests ?? new PaymentRequests(new Map(), async () => {}, ctx.d.now);
   const verdicts = new TtlCache<VerdictReport>(10 * 60_000, 2_000, ctx.d.now);
   const hooks = new TtlCache<HookReport>(30 * 60_000, 1_000, ctx.d.now);
   const previews = new TtlCache<unknown>(5 * 60_000, 2_000, ctx.d.now);
@@ -146,12 +151,14 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
   };
 
   /** The paid door: terms, check, compute, settle. */
-  async function paid(io: Io, o: Offer, run: (pay: { payer: string; usd: number }) => Promise<unknown>): Promise<Out> {
+  async function paid(io: Io, o: Offer, run: (pay: { payer: string; usd: number; key?: string }) => Promise<unknown>, inputs: object = {}, path = io.path, activate?: (v: unknown, tx: string) => unknown): Promise<Out> {
     if (payer.mode === "sim" && io.query.get("sim") === "1") {
       const v = await run({ payer: "0xdemo000000000000000000000000000000buyer", usd: usdOf(o) });
       await payer.sim(o);
       return { status: 200, body: { ...(v as object), payment: { sim: true, priceUsd: usdOf(o), note: "Simulation: a demo sale was booked and no money moved." } } };
     }
+    const allowed = o.id.startsWith("token-verdict") ? ["depth", "demo"] : o.id.startsWith("hook-inspector") ? ["explain"] : o.id.startsWith("watchtower") ? ["days"] : o.id === "research-report" ? ["q"] : o.id === "buildcheck-report" ? ["url"] : o.id === "imd-feed" ? ["chain", "kind", "status", "limit", "before", "since", "sample", "indexed"] : null;
+    for (const [k, v] of io.query) if (v.length > 2000 || io.query.getAll(k).length !== 1 || (allowed && ![...allowed, "holder", "sim"].includes(k))) throw new ServiceError(400, "Invalid or duplicate input. Nothing was charged.");
     const sig = io.header("payment-signature") ?? io.header("x-payment");
     if (!sig) return p402(o, io, "payment required", await holderAsked(io));
     const c = await payer.check(o, sig, io.ip);
@@ -159,25 +166,31 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
     if (payer.mode === "sim") return { status: 400, body: { error: "sim mode does not settle real payments; add sim=1 for a demo answer" } };
     if (isFastId(o.id) && io.limited(`svc-fast-payer:${c.payer.toLowerCase()}`, 300, 60_000)) return { status: 429, body: { error: "slow down: 300 fast tool calls a minute per payer" } };
     const auth = c.payment.payload.authorization, network = `eip155:${payer.chainId}`;
-    let v: unknown;
-    try { v = await run({ payer: c.payer, usd: Number(BigInt(auth.value)) / 1e6 }); } catch (e) {
-      // a failed answer is never settled, so never charged: it still counts against the crew's reliability
-      const st = e instanceof ServiceError ? e.status : (e as { status?: number }).status;
-      if (!(typeof st === "number" && st < 500)) crews.record?.(o, { payer: c.payer, nonce: auth.nonce, usd: Number(BigInt(auth.value)) / 1e6, tx: null, network, ok: false, error: "a source did not answer; nothing was charged" });
-      throw e;
-    }
-    // the terms this payment was made against: the holder price or the full one, as the payer signed
-    const paidHalf = BigInt(c.payment.payload.authorization.value) < o.priceUsdc;
-    const ch = challengeOf(o, io, undefined, paidHalf);
-    const terms: SettleTerms | undefined = ch ? { requirement: ch.accepts[0]!, resource: ch.resource, extensions: ch.extensions as Record<string, unknown> } : undefined;
-    let tx: `0x${string}`;
-    try { tx = await payer.settle(o, c.payment, terms); } catch (e) {
-      if (payer.isPending(e)) return { status: 202, body: { ok: false, pending: true, error: (e as Error).message } };
-      throw e;
-    }
-    const paidUsd = Number(BigInt(auth.value)) / 1e6;
-    crews.record?.(o, { payer: c.payer, nonce: auth.nonce, usd: paidUsd, tx, network, ok: true, summary: `${o.name}: answered and settled` });
-    return { status: 200, body: { ...(v as object), payment: { tx, network, priceUsd: paidUsd, holderPrice: paidUsd < usdOf(o), payer: c.payer } }, headers: { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network, payer: c.payer }) } };
+    const key = saleKey(auth.from, auth.nonce);
+    return requests.use({ key, companyId: "nightshift-services", productId: o.id, payer: auth.from, value: BigInt(auth.value), at: ctx.d.now(), payTo: payer.payTo() ?? undefined }, requestDigest(io.method, path.replace(/0x[0-9a-fA-F]{40}/g, (a) => a.toLowerCase()), inputs), async (request, keep) => {
+      let v: unknown = request.answer ? JSON.parse(request.answer) : undefined;
+      try { if (!request.answer) { v = await run({ payer: c.payer, usd: Number(BigInt(auth.value)) / 1e6, key }); await keep("answer", v); } } catch (e) {
+        // a failed answer is never settled, so never charged: it still counts against the crew's reliability
+        const st = e instanceof ServiceError ? e.status : (e as { status?: number }).status;
+        if (!(typeof st === "number" && st < 500)) crews.record?.(o, { payer: c.payer, nonce: auth.nonce, usd: Number(BigInt(auth.value)) / 1e6, tx: null, network, ok: false, error: "a source did not answer; nothing was charged" });
+        throw e;
+      }
+      // the terms this payment was made against: the holder price or the full one, as the payer signed
+      const paidHalf = BigInt(c.payment.payload.authorization.value) < o.priceUsdc;
+      const ch = challengeOf(o, io, undefined, paidHalf);
+      const terms: SettleTerms | undefined = ch ? { requirement: ch.accepts[0]!, resource: ch.resource, extensions: ch.extensions as Record<string, unknown> } : undefined;
+      let tx: `0x${string}`;
+      try { tx = await payer.settle(o, c.payment, terms); } catch (e) {
+        if (payer.isPending(e)) return { status: 202, body: { ok: false, pending: true, error: (e as Error).message } };
+        throw e;
+      }
+      const paidUsd = Number(BigInt(auth.value)) / 1e6;
+      crews.record?.(o, { payer: c.payer, nonce: auth.nonce, usd: paidUsd, tx, network, ok: true, summary: `${o.name}: answered and settled` });
+      if (activate) v = activate(v, tx);
+      const out: Out = { status: 200, body: { ...(v as object), payment: { tx, network, priceUsd: paidUsd, holderPrice: paidUsd < usdOf(o), payer: c.payer } }, headers: { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network, payer: c.payer }) } };
+      await keep("response", out);
+      return out;
+    });
   }
 
   /** One request. Null: not a services path. */
@@ -206,7 +219,7 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
         const id = seg[2];
         let input: ReturnType<typeof fastInput>;
         try { input = fastInput(id, io.query); } catch (e) { return bad(offer(id), (e as Error).message); }
-        return await paid(io, offer(id), () => fast.run(id, input));
+        return await paid(io, offer(id), () => fast.run(id, input), input);
       }
       if (seg[2] === "swarm") {
         const desk = crews.swarm;
@@ -232,11 +245,16 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
           if (payer.mode !== "live" || payer.chainId !== 8453) return { status: 503, body: { error: "Swarm Desk requires live USDC payments on Base." } };
           const auth = c.payment.payload.authorization;
           if (BigInt(auth.value) !== o.priceUsdc) return p402(o, io, "Pay the exact quoted price. Swarm Desk has no holder discount.");
+          for (const [key, value] of io.query) if (key !== "quoteId" || io.query.getAll(key).length !== 1 || value !== id) throw new SwarmError(400, "Invalid or duplicate Swarm order parameter. Nothing was charged.");
           const ch = challengeOf(o, io)!;
-          const out = await desk.order(id, { payer: c.payer, nonce: auth.nonce, usd: Number(BigInt(auth.value)) / 1e6, network: `eip155:${payer.chainId}`, validBefore: Number(auth.validBefore) }, () => payer.settle(o, c.payment, { requirement: ch.accepts[0]!, resource: ch.resource, extensions: ch.extensions }), (e) => payer.isPending(e));
-          const body = out.body as { payment?: { tx?: string } };
-          if (body.payment?.tx) out.headers = { ...out.headers, "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: body.payment.tx, network: `eip155:${payer.chainId}`, payer: c.payer }) };
-          return out;
+          const key = saleKey(auth.from, auth.nonce);
+          return await requests.use({ key, companyId: "nightshift-services", productId: o.id, payer: auth.from, value: BigInt(auth.value), at: ctx.d.now(), payTo: payer.payTo() ?? undefined }, requestDigest(io.method, "/api/v1/swarm/order", { quoteId: id }), async (_request, keep) => {
+            const out = await desk.order(id, { payer: c.payer, nonce: auth.nonce, usd: Number(BigInt(auth.value)) / 1e6, network: `eip155:${payer.chainId}`, validBefore: Number(auth.validBefore) }, () => payer.settle(o, c.payment, { requirement: ch.accepts[0]!, resource: ch.resource, extensions: ch.extensions }), (e) => payer.isPending(e));
+            const body = out.body as { payment?: { tx?: string } };
+            if (body.payment?.tx) out.headers = { ...out.headers, "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: body.payment.tx, network: `eip155:${payer.chainId}`, payer: c.payer }) };
+            if (out.status !== 202) await keep("response", out);
+            return out;
+          });
         }
         return { status: 404, body: { error: "Swarm Desk routes: quote, order/{quoteId}, jobs/{orderId}?token=" } };
       }
@@ -249,14 +267,16 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
         if (!/^0x[0-9a-fA-F]{40}$/.test(seg[5])) return bad(wo, "The address must be a 0x address (40 hex characters).");
         if (io.limited("svc-watch", 30, 60_000)) return { status: 429, body: { error: "slow down: 30 a minute per IP" } };
         const address = seg[5];
-        if (seg[3] === "check") return await paid(io, offer("watchtower-check"), () => wt.check(address));
+        if (seg[3] === "check") return await paid(io, offer("watchtower-check"), () => wt.check(address), { address: address.toLowerCase(), chain: "ethereum" });
         if (io.query.get("days") && io.query.get("days") !== "7") return bad(wo, "days: 7. One prepaid term of 7 days, no renewal.");
         const out = await paid(io, offer("watchtower-watch"), async (pay) => {
-          const r = await wt.startWatch({ address, owner: pay.payer, days: 7, payment: { usd: pay.usd, payer: pay.payer, tx: null } });
+          const r = await wt.startWatch({ address, owner: pay.payer, days: 7, payment: { usd: pay.usd, payer: pay.payer, tx: null }, paymentKey: pay.key });
           return { ...r.report, watch: r.watch, manageToken: r.manageToken, telegram: crews.telegramLink?.(r.telegramCode) ?? null, stop: `POST ${io.base}/api/watchtower/watches/${r.watch.id}/stop with the header X-Watch-Token: <manageToken>` };
+        }, { address: address.toLowerCase(), chain: "ethereum", days: 7 }, io.path, (v, tx) => {
+          const body = v as { watch: { id: string } };
+          wt.confirmPayment(body.watch.id, tx);
+          return { ...body, watch: wt.getWatch(body.watch.id, { token: (v as { manageToken: string }).manageToken }).watch };
         });
-        const b = out.body as { watch?: { id: string }; payment?: { tx?: string } };
-        if (out.status === 200 && b.watch?.id && b.payment?.tx) wt.confirmPayment(b.watch.id, b.payment.tx);
         return out;
       }
       // ---- Research Desk: an evidence report from the IMD swarm's published work
@@ -265,7 +285,7 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
         if (io.limited("svc-research", 20, 60_000)) return { status: 429, body: { error: "slow down: 20 reports a minute per IP" } };
         let q: ReturnType<typeof researchQuestion>;
         try { q = researchQuestion(io.query.get("q")); } catch (e) { return bad(offer("research-report"), (e as Error).message); }
-        return await paid(io, offer("research-report"), () => crews.research!(q));
+        return await paid(io, offer("research-report"), () => crews.research!(q), { q });
       }
       // ---- Build & Check: does a public agent service work for other agents?
       if (seg[2] === "buildcheck" && !seg[3]) {
@@ -273,7 +293,7 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
         if (io.limited("svc-buildcheck", 10, 60_000)) return { status: 429, body: { error: "slow down: 10 checks a minute per IP" } };
         let url: string;
         try { url = parseTarget(io.query.get("url")).toString(); } catch (e) { return bad(offer("buildcheck-report"), (e as Error).message); }
-        return await paid(io, offer("buildcheck-report"), () => crews.buildCheck!(url));
+        return await paid(io, offer("buildcheck-report"), () => crews.buildCheck!(url), { url });
       }
       // ---- Token Verdict
       if (seg[2] === "verdict" && seg[3] && seg[4]) {
@@ -296,7 +316,7 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
           }
           return { status: 200, body: { ...(await verdict(seg[3], seg[4], "quick")), demo: { free: true, left: demo.left(io.ip), nextFreeAt: new Date(demo.resetsAt()).toISOString() } } };
         }
-        return await paid(io, o, () => verdict(seg[3]!, seg[4]!, depth));
+        return await paid(io, o, () => verdict(seg[3]!, seg[4]!, depth), { chain: "ethereum", token: seg[4].toLowerCase(), depth });
       }
       // ---- Hook Inspector
       if (seg[2] === "hook" && seg[3]) {
@@ -308,23 +328,27 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
         if (io.limited("svc-hook", 60, 60_000)) return { status: 429, body: { error: "slow down: 60 inspections a minute per IP" } };
         const explain = io.query.get("explain") === "1";
         if (!/^0x[0-9a-fA-F]{40}$/.test(seg[3])) return bad(offer(explain ? "hook-inspector-explained" : "hook-inspector"), "The hook must be a 0x address (40 hex characters).");
-        return await paid(io, offer(explain ? "hook-inspector-explained" : "hook-inspector"), () => hook(seg[3]!, explain));
+        return await paid(io, offer(explain ? "hook-inspector-explained" : "hook-inspector"), () => hook(seg[3]!, explain), { address: seg[3].toLowerCase(), explain });
       }
       // ---- IMD Data Feed
       if (seg[2] === "imd" && seg[3]) {
         const sample = io.query.get("sample") === "1";
         if (io.limited(sample ? "svc-sample" : "svc-feed", sample ? 60 : 300, 60_000)) return { status: 429, body: { error: "slow down" } };
+        const validPath = (seg[3] === "launches" && !seg[5]) || (["tokens", "swarm"].includes(seg[3]) && !seg[4]) || (seg[3] === "agents" && seg[4] && !seg[5]);
+        if (!validPath) return { status: 404, body: { error: "IMD feed endpoints: launches, launches/<n>, tokens, swarm, agents/<seat>" } };
+        const input = feedInput(seg[3], Boolean(seg[4]), io.query);
+        if (seg[3] === "agents" && !/^\d{1,9}$/.test(seg[4]!)) return bad(offer("imd-feed"), "seat must be a number.");
         const run = (): Promise<unknown> | null =>
-          seg[3] === "launches" && !seg[4] ? imd.launches(io.query, sample)
+          seg[3] === "launches" && !seg[4] ? imd.launches(input, sample)
           : seg[3] === "launches" && seg[4] && !seg[5] ? imd.launch(seg[4], sample)
-          : seg[3] === "tokens" && !seg[4] ? imd.tokens(io.query, sample)
-          : seg[3] === "swarm" && !seg[4] ? imd.swarm(io.query, sample)
-          : seg[3] === "agents" && seg[4] && !seg[5] ? imd.agent(seg[4], io.query, sample)
+          : seg[3] === "tokens" && !seg[4] ? imd.tokens(input, sample)
+          : seg[3] === "swarm" && !seg[4] ? imd.swarm(input, sample)
+          : seg[3] === "agents" && seg[4] && !seg[5] ? imd.agent(seg[4], input, sample)
           : null;
         const known = ["launches", "tokens", "swarm", "agents"].includes(seg[3]) && !(seg[3] === "agents" && !seg[4]);
         if (!known) return { status: 404, body: { error: "IMD feed endpoints: launches, launches/<n>, tokens, swarm, agents/<seat>" } };
         if (sample) { const p = run(); return p ? { status: 200, body: await p } : { status: 404, body: { error: "not found" } }; }
-        return await paid(io, offer("imd-feed"), async () => { const p = run(); if (!p) throw new ServiceError(404, "not found"); return p; });
+        return await paid(io, offer("imd-feed"), async () => { const p = run(); if (!p) throw new ServiceError(404, "not found"); return p; }, Object.fromEntries(input));
       }
       return { status: 404, body: { error: "not found", see: `${io.base}/api/v1/services` } };
     } catch (e) {
@@ -332,7 +356,7 @@ export function services(ctx: Ctx, payer: Payer, crews: CrewDeps = {}) {
       const st = e instanceof ServiceError ? e.status : (e as { status?: number }).status;
       if (typeof st === "number") return { status: st, body: { error: (e as Error).message } };
       console.error("services", e);
-      return { status: 503, body: { error: "A source did not answer (IMD, DexScreener, Sourcify or the Ethereum nodes). Nothing was charged; try again in a minute." } };
+      return { status: 503, body: { error: "A source or payment settlement did not answer. Retry the same payment and request; do not sign a new authorization while its status is unknown." } };
     }
   }
 

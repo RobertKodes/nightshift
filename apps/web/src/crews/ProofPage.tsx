@@ -90,6 +90,10 @@ function Body({ d }: { d: ProofView }) {
       <div className="st-two">
         <section className="st-panel">
           <h3>Refunds <small>{count(d.refunds?.count)}</small></h3>
+          <dl className="cr-kv">
+            <dt>Owed</dt><dd>{count(d.refunds?.owedCount)} refunds · <b>{price(d.refunds?.owedUsd)}</b> USDC</dd>
+            <dt>Paid</dt><dd>{count(d.refunds?.paidCount)} refunds · <b>{price(d.refunds?.paidUsd)}</b> USDC</dd>
+          </dl>
           <p className="st-note">{d.refunds?.note ?? "—"}</p>
         </section>
         <section className="st-panel">

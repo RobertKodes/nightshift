@@ -1,4 +1,5 @@
 import { FacilitatorUnavailable, type Offer, type PaymentPayload, type SettleAnswer, type VerifyAnswer, facilitatorPayload, isTxHash } from "@nightshift/x402";
+import { PaymentRequests, type PaidRequest } from "./services/payment-requests.js";
 import type { SignedTx, TxState } from "./chain.js";
 
 /**
@@ -32,6 +33,8 @@ export interface Settlement {
   handedOff?: boolean;
   /** The company wallet the payment goes to: where a transaction someone else sent is looked for. */
   payTo?: `0x${string}`;
+  /** The original request and its saved answer. */
+  request?: PaidRequest;
   /** Paid by another NIGHTSHIFT company for one of its shifts: booked as B2B, never as a sale to a person. */
   b2b?: { buyerId: string; taskId: string };
 }
@@ -84,6 +87,7 @@ const AUTH_LIFETIME_MS = 2 * 3_600_000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class Checkout {
+  readonly requests: PaymentRequests;
   constructor(
     private readonly records: Map<string, Settlement>,
     private readonly save: () => Promise<void>,
@@ -94,7 +98,7 @@ export class Checkout {
     private readonly now = Date.now,
     /** The CDP facilitator, when it settles; null: the company always settles itself. */
     private readonly cdp: FacilitatorSetup | null = null,
-  ) {}
+  ) { this.requests = new PaymentRequests(records, save, now); }
 
   /** Whether payments go through the facilitator first. */
   get viaFacilitator(): boolean { return this.cdp !== null; }
@@ -102,12 +106,12 @@ export class Checkout {
   /** The settlement on record for this authorization (sent or booked), if any. */
   recordOf(from: string, nonce: string): Settlement | undefined {
     const r = this.records.get(saleKey(from, nonce));
-    return r?.hash ? r : undefined;
+    return r?.hash || r?.request ? r : undefined;
   }
 
   /** Never settled by anyone: only then are the payer's balance and the company's gas worth checking. */
   async fresh(from: `0x${string}`, nonce: `0x${string}`): Promise<boolean> {
-    return !this.recordOf(from, nonce) && !(await this.chain.used(from, nonce));
+    return !this.recordOf(from, nonce)?.hash && !(await this.chain.used(from, nonce));
   }
 
   /**
@@ -161,14 +165,14 @@ export class Checkout {
     try {
       s = await facilitator.settle(sent, offer.requirement);
     } catch (e) {
-      if (!(e instanceof FacilitatorUnavailable)) { this.records.delete(r.key); await this.save(); throw e; }
+      if (!(e instanceof FacilitatorUnavailable)) { this.#forget(r); await this.save(); throw e; }
       // its answer named a transaction: follow that one
       if (e.transaction) { Object.assign(r, { hash: e.transaction, via: "cdp" }); await this.save(); return true; }
       // it may have sent one before failing: watch the chain a few blocks before settling ourselves
       for (let waited = 0; ; waited += 2_000) {
         if (await this.chain.used(a.from, a.nonce)) {
           const hash = await this.chain.find(a.from, a.nonce, wallet, BigInt(a.value));
-          if (!hash) { this.records.delete(r.key); await this.save(); throw new Error("This payment authorization was already used on chain. If USDC left your wallet, contact us with the transaction."); }
+          if (!hash) { this.#forget(r); await this.save(); throw new Error("This payment authorization was already used on chain. If USDC left your wallet, contact us with the transaction."); }
           Object.assign(r, { hash, via: "cdp" });
           await this.save();
           return true;
@@ -187,7 +191,7 @@ export class Checkout {
       await this.save();
       return true;
     }
-    this.records.delete(r.key);
+    this.#forget(r);
     await this.save();
     throw new PaymentRefused(s.errorReason ?? "settle_failed", s.errorMessage);
   }
@@ -195,30 +199,30 @@ export class Checkout {
   /** The company's own settlement: signed and saved, then broadcast. */
   async #settleSelf(r: Settlement, p: PaymentPayload): Promise<void> {
     // a record handed to the facilitator stays: its transaction may still land
-    if (this.chain.gas && !(await this.chain.gas(r.companyId))) { if (!r.handedOff) this.records.delete(r.key); throw new NoGasError(); }
+    if (this.chain.gas && !(await this.chain.gas(r.companyId))) { if (!r.handedOff) this.#forget(r); throw new NoGasError(); }
     const s = await this.chain.sign(r.companyId, p);
     Object.assign(r, s, { via: "self" });
     this.records.set(r.key, r);
     await this.save();
     try { await this.chain.broadcast(s.raw); } catch (e) {
-      if (this.chain.refused(e)) { this.records.delete(r.key); await this.save(); throw new Error(`settlement refused: ${(e as Error).message.split("\n")[0]}`); }
+      if (this.chain.refused(e)) { this.#forget(r); await this.save(); throw new Error(`settlement refused: ${(e as Error).message.split("\n")[0]}`); }
     }
   }
 
   /** Background: settlements whose answer never came are booked when they land, forgotten when they never can. */
   async resolve(): Promise<void> {
     for (const r of [...this.records.values()]) {
-      if (r.booked) { if (this.now() - r.at > 30 * 86_400_000) { this.records.delete(r.key); await this.save(); } continue; }
+      if (r.booked) { if (!r.request && this.now() - r.at > 30 * 86_400_000) { this.#forget(r); await this.save(); } continue; }
       if (r.handedOff && r.payTo && (!r.hash || r.via === "cdp")) {
         // handed to the facilitator, and its answer lost (a restart) or its transaction never seen: the chain decides
         const [from, nonce] = r.key.split(":") as [`0x${string}`, `0x${string}`];
         try {
           if (!r.hash && (await this.chain.used(from, nonce))) {
             const hash = await this.chain.find(from, nonce, r.payTo, r.value);
-            if (hash) { Object.assign(r, { hash, via: "cdp" }); await this.save(); } else { this.records.delete(r.key); await this.save(); continue; }
+            if (hash) { Object.assign(r, { hash, via: "cdp" }); await this.save(); } else { this.#forget(r); await this.save(); continue; }
           } else if (this.now() - r.at > AUTH_LIFETIME_MS && !(await this.chain.used(from, nonce))) {
             // expired unused: nobody can settle it any more
-            this.records.delete(r.key); await this.save(); continue;
+            this.#forget(r); await this.save(); continue;
           }
         } catch { continue; }
       }
@@ -227,12 +231,18 @@ export class Checkout {
     }
   }
 
+  #forget(r: Settlement): void {
+    if (!r.request) { this.records.delete(r.key); return; }
+    delete r.hash; delete r.raw; delete r.nonce; delete r.via; delete r.handedOff; delete r.booked;
+  }
+
   async #follow(r: Settlement, waitMs: number): Promise<`0x${string}`> {
     const hash = r.hash!;
     const st = await this.chain.state(r.companyId, hash, r.nonce, waitMs);
     if (st === "success") {
       await this.book({ ...r, hash });
       r.booked = true;
+      if (r.request && !r.request.response) r.request.at = this.now();
       delete r.raw;
       await this.save();
       return hash;
@@ -249,11 +259,11 @@ export class Checkout {
         await this.save();
         return this.#follow(r, waitMs);
       }
-      this.records.delete(r.key);
+      this.#forget(r);
       await this.save();
       throw new Error(`settlement ${st}: ${hash}`);
     }
-    if (r.raw && waitMs === 0) await this.chain.broadcast(r.raw).catch(async (e) => { if (this.chain.refused(e)) { this.records.delete(r.key); await this.save(); } });
+    if (r.raw && waitMs === 0) await this.chain.broadcast(r.raw).catch(async (e) => { if (this.chain.refused(e)) { this.#forget(r); await this.save(); } });
     throw new PendingError();
   }
 }

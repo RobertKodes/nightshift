@@ -232,7 +232,11 @@ describe("Swarm Desk public capacity", () => {
   });
   it("persists the actual reserve eligibility for each order's refill revenue", async () => {
     const x = harness(), q = await x.quote(); await x.desk.order(q.quoteId, x.payment(q.priceUsd), x.settle, () => false);
-    expect(x.desk.revenue()[0]).toMatchObject({ units: "4900000", reserveUnits: "2450000" });
+    expect(x.desk.revenue()[0]).toMatchObject({ status: "running", units: "4900000", reserveUnits: "0", costUnits: "3435000" });
+    expect(x.desk.liabilityUsdc()).toBe(4_900_000n);
+    x.h.complete = true; await x.desk.follow();
+    expect(x.desk.revenue()[0]).toMatchObject({ status: "done", reserveUnits: "732500" });
+    expect(x.desk.liabilityUsdc()).toBe(0n);
     const file = tempFile(), y = harness(file), d = new SwarmDesk({ ...y.deps, reservePayer: () => false });
     const ownerQuote = await d.quote("research", BRIEF, null, BASE); await d.order(ownerQuote.quoteId, y.payment(ownerQuote.priceUsd), y.settle, () => false);
     expect(new SwarmDesk(y.deps).revenue()[0]).toMatchObject({ units: "4900000", reserveUnits: "0" });
@@ -304,5 +308,21 @@ describe("Swarm Desk HTTP and x402", () => {
     expect(x.h.events.slice(-3)).toEqual(["check", "settle", "open"]);
     expect(decodeHeader(out.headers!["PAYMENT-RESPONSE"]!)).toMatchObject({ transaction: TX, success: true });
     expect((await call(`/api/v1/swarm/jobs/${body(out).orderId}`, { token: body(out).orderToken! })).status).toBe(200);
+  });
+});
+
+
+describe("Swarm refund receipts", () => {
+  it("keeps the full failed-payment liability until a payout receipt is recorded, across restart", async () => {
+    const file = tempFile(), x = harness(file), q = await x.quote(); x.h.failed = true;
+    const out = body(await x.desk.order(q.quoteId, x.payment(q.priceUsd), x.settle, () => false));
+    expect(x.desk.liabilityUsdc()).toBe(4_900_000n);
+    const tx = `0x${"cd".repeat(32)}`;
+    x.desk.confirmRefund(out.orderId, tx); x.desk.confirmRefund(out.orderId, tx);
+    const restarted = new SwarmDesk(x.deps);
+    expect(restarted.liabilityUsdc()).toBe(0n);
+    expect(await restarted.job(out.orderId, out.orderToken!)).toMatchObject({ refundOwed: false, refundPaid: { tx } });
+    expect(restarted.revenue()[0]).toMatchObject({ refundOwed: true, refundPaid: { tx }, reserveUnits: "0" });
+    expect(() => restarted.confirmRefund(out.orderId, TX)).toThrow("different refund");
   });
 });

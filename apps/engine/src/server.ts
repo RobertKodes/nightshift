@@ -1,3 +1,4 @@
+import { liveSwarmDesk } from "./crews/swarm.js";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
 import { gzipSync } from "node:zlib";
@@ -715,7 +716,7 @@ export function serve(engine: Engine) {
             companies: [...engine.store.companies.values()], metrics: (id) => engine.store.metricsOf(id), ledger: await engine.ledger.store.list(),
             usage: liveUsage(config.dataDir).report(90), crews: crewProfiles().map((c) => ({ id: c.id, name: c.name, house: c.operator.kind === "house", metrics: c.metrics })),
             operators: { registered: ops.length, active: ops.filter((o) => o.status === "active").length },
-            agentReserve: liveAgentReserve()?.proof(),
+            agentReserve: liveAgentReserve()?.proof(), swarm: liveSwarmDesk()?.revenue(),
             burns: burnTotals(), imdUsd: config.imdUsd || null, splitter: (launchState()?.contracts?.splitter as string | undefined) ?? null, houseId: HOUSE_ID,
           }) };
         }

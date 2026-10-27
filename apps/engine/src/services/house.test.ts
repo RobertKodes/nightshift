@@ -81,7 +81,7 @@ describe("house payment notification hooks", () => {
   it("reports a verified refusal for another service", async () => {
     vi.mocked(engine.checkout.recordOf).mockReturnValue({ productId: "another", value: o.priceUsdc, at: Date.now() } as never);
     expect(await enginePayer(engine).check(o, encodeHeader(await signed()), "192.0.2.1")).toMatchObject({ status: 409 });
-    await stats.tick(); expect(sent[0]).toContain("This payment was made for another service");
+    await stats.tick(); expect(sent[0]).toContain("This payment was made for a different request");
   });
 
   it("reports settled pending work immediately through recordPaid, before delivery", async () => {

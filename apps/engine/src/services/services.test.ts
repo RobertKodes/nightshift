@@ -340,3 +340,18 @@ describe("MCP and discovery", () => {
     expect(Object.keys(api.paths)).toEqual(expect.arrayContaining(["/api/v1/verdict/{chain}/{token}", "/api/v1/hook/{address}", "/api/v1/imd/launches", "/api/v1/imd/swarm", "/api/v1/imd/agents/{seat}"]));
   });
 });
+
+
+describe("paid verdict response binding on recorded data", () => {
+  it("returns the original paid answer and refuses a changed token without more reads", async () => {
+    const { ctx, calls } = ctxOn("shift"), settled: string[] = [];
+    const { payer, payTo } = fakePayer({ settled }), s = R.services(ctx, payer);
+    const buyer = privateKeyToAccount(generatePrivateKey());
+    const header = P.encodeHeader(await P.signPayment(buyer, P.requirement(8453, payTo, 10_000n)));
+    const request = io(`/api/v1/verdict/ethereum/${SHIFT}`, {}, { "payment-signature": header });
+    const first = await s.handle(request), reads = calls.n;
+    expect(first?.status).toBe(200); expect(await s.handle(request)).toEqual(first);
+    expect(await s.handle(io(`/api/v1/verdict/ethereum/${COPYCAT}`, {}, { "payment-signature": header }))).toMatchObject({ status: 409 });
+    expect(calls.n).toBe(reads); expect(settled).toEqual(["token-verdict-quick"]);
+  });
+});

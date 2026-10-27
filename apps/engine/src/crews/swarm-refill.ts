@@ -10,7 +10,7 @@ export const REFILL_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 export const REFILL_ETH = "0x0000000000000000000000000000000000000000";
 export const BASE_GAS_FLOOR = 500_000_000_000_000n;
 export type RefillKind = "imd" | "gas";
-export type SwarmCredit = { orderId: string; at: number; units: string; reserveUnits: string; refundOwed: boolean };
+export type SwarmCredit = { orderId: string; at: number; units: string; reserveUnits: string; refundOwed: boolean; status?: string; refundPaid?: { tx: string; at: number } };
 type Leg = { tx: EvmTx; signed?: SignedTx; submitted?: boolean; broadcastAt?: number; done?: boolean };
 export type SwarmRefillOrder = { id: string; at: number; kind: RefillKind; amount: string; target: string; route: Quote; legs: Leg[]; phase: "source" | "bridge" | "done" | "refunded" | "failed"; error?: string; destinationTx?: string; delivered?: string; notified?: boolean; booked?: boolean; refundBooked?: boolean; warnedAt?: number };
 type State = { version: 1; fills: SwarmRefillOrder[]; active: string | null; nextAt: number; lastFunds?: { imd: string; eth: string; baseEth: string }; error?: string };
@@ -54,17 +54,18 @@ export class SwarmRefill {
   #save() { if (this.d.file) writeAtomic(this.d.file, JSON.stringify(this.#s), { mode: 0o600, backup: true }); }
   #change(fn: () => void) { const before = structuredClone(this.#s); try { fn(); this.#save(); } catch (e) { this.#s = before; throw e; } }
   #funding() {
-    const seen = new Set<string>(); let revenue = 0n, refunds = 0n;
+    const seen = new Set<string>(); let revenue = 0n, refunds = 0n, pending = 0n;
     for (const c of this.d.credits()) {
       if (seen.has(c.orderId)) continue; seen.add(c.orderId);
       const gross = BigInt(c.units), reserve = BigInt(c.reserveUnits);
       if (gross < 0n || reserve < 0n || reserve > gross) throw new Error("Invalid per-order refill allocation.");
-      if (c.refundOwed) refunds += gross; else revenue += gross - reserve;
+      if (c.refundPaid) continue;
+      if (c.refundOwed) refunds += gross; else if (c.status && c.status !== "done") pending += gross; else revenue += gross - reserve;
     }
     const committed = this.#s.fills.filter((f) => !["failed", "refunded"].includes(f.phase)).reduce((n, f) => n + BigInt(f.amount), 0n);
-    return { revenue, committed, unspent: revenue > committed ? revenue - committed : 0n, refunds };
+    return { revenue, committed, unspent: revenue > committed ? revenue - committed : 0n, refunds, pending };
   }
-  heldUsdc(): bigint { const f = this.#funding(); return f.unspent + f.refunds + this.#s.fills.filter((r) => !r.booked && !["failed", "refunded"].includes(r.phase)).reduce((n, r) => n + BigInt(r.amount), 0n); }
+  heldUsdc(): bigint { const f = this.#funding(); return f.unspent + f.refunds + f.pending + this.#s.fills.filter((r) => !r.booked && !["failed", "refunded"].includes(r.phase)).reduce((n, r) => n + BigInt(r.amount), 0n); }
   status() {
     const f = this.#funding(), last = this.#s.lastFunds;
     return { imd: last ? formatUnits(BigInt(last.imd), 18) : null, eth: last ? formatUnits(BigInt(last.eth), 18) : null, baseEth: last ? formatUnits(BigInt(last.baseEth), 18) : null, floatImd: formatUnits(this.d.float(), 18), reservedImd: formatUnits(this.d.reserved(), 18), revenueUsd: Number(f.revenue) / 1e6, unspentUsd: Number(f.unspent) / 1e6, refundsOwedUsd: Number(f.refunds) / 1e6, active: this.#s.active, nextAt: this.#s.nextAt, error: this.#s.error ?? null, refills: this.#s.fills.slice(-10).map(({ id, kind, amount, phase, delivered, destinationTx }) => ({ id, kind, usd: Number(amount) / 1e6, phase, delivered, destinationTx })) };
@@ -91,7 +92,7 @@ export class SwarmRefill {
       const available = funds.imd > this.d.reserved() ? funds.imd - this.d.reserved() : 0n, float = this.d.float();
       const kind: RefillKind | null = funds.eth < 1_000_000_000_000_000n ? "gas" : available < float ? "imd" : null;
       if (!kind) return;
-      const funding = this.#funding(), physical = funds.usdc > funding.refunds ? funds.usdc - funding.refunds : 0n;
+      const funding = this.#funding(), physical = funds.usdc > funding.refunds + funding.pending ? funds.usdc - funding.refunds - funding.pending : 0n;
       const budget = funding.unspent < physical ? funding.unspent : physical;
       if (budget <= 0n) { this.#change(() => { this.#s.error = "No unspent Swarm Desk revenue after the Agent Reserve share and refund holds."; this.#s.nextAt = this.#now() + HOUR; }); await this.#warn(undefined, this.#s.error!); return; }
       // a cross-chain route costs a fixed fee: on a few dollars it is far over 3%, so wait quietly for enough revenue
@@ -129,7 +130,7 @@ export class SwarmRefill {
         if (!this.d.enabled()) return;
         checkRefillRoute(fill.route, fill.kind, BigInt(fill.amount), this.d.house());
         const funds = await this.d.funds(), remaining = fill.legs.filter((l) => !l.done).map((l) => l.tx), funding = this.#funding();
-        if (funds.usdc < BigInt(fill.amount) + funding.refunds || funds.baseEth - await this.d.cost(remaining) < BASE_GAS_FLOOR) throw new Error("Refill funds or Base settlement gas are no longer available.");
+        if (funds.usdc < BigInt(fill.amount) + funding.refunds + funding.pending || funds.baseEth - await this.d.cost(remaining) < BASE_GAS_FLOOR) throw new Error("Refill funds or Base settlement gas are no longer available.");
         if (!leg.signed) { const signed = await this.d.sign(leg.tx); this.#change(() => { leg.signed = signed; }); }
         await this.d.checkSigned?.(leg.signed!);
         this.#change(() => { leg.submitted = true; leg.broadcastAt = this.#now(); });

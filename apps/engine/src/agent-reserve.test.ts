@@ -142,3 +142,36 @@ describe("Agent Reserve", () => {
     expect(b.credit(pay())).toBe(false); b.credit(pay(2)); await b.tick(); expect(x.d.quote).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe("earned house reserve receipts", () => {
+  it("excludes other companies and unknown house offers", () => {
+    const x = setup();
+    expect(x.reserve.credit({ ...pay(), house: false })).toBe(false);
+    expect(x.reserve.credit({ ...pay(2), service: "other-company-product" })).toBe(false);
+    x.reserve.credit(pay(3)); expect(x.reserve.proof().totalInUsd).toBe(25);
+  });
+  it("credits delivered net revenue and reverses it durably when a refund is owed", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "reserve-earned-")), "reserve.json"), x = setup(file);
+    const pending = { ...pay(), service: "swarm-order", earnedUnits: "0" };
+    x.reserve.reconcile([pending]); await x.reserve.tick(); expect(x.d.sign).not.toHaveBeenCalled();
+    x.reserve.reconcile([{ ...pending, earnedUnits: "40000000" }]);
+    expect(x.reserve.proof().balanceUsd).toBe(20);
+    x.reserve.reconcile([pending]); const restarted = x.make();
+    expect(restarted.proof()).toMatchObject({ balanceUsd: 0, totalInUsd: 0 });
+    await restarted.tick(); expect(x.d.sign).not.toHaveBeenCalled();
+  });
+  it("removes legacy other-company credits and keeps full refund liabilities backed", async () => {
+    const x = setup(); x.reserve.credit(pay());
+    x.reserve.reconcile([{ ...pay(), house: false }]); expect(x.reserve.proof().balanceUsd).toBe(0);
+    x.reserve.credit(pay(2)); x.d.heldUsdc = () => 980_000_000n;
+    await x.reserve.tick(); expect(x.d.sign).not.toHaveBeenCalled();
+  });
+  it("reverses a spent credit as debt and prevents another buy after restart", async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "reserve-reverse-")), "reserve.json"), x = setup(file);
+    x.reserve.credit(pay()); await x.reserve.tick();
+    x.reserve.reconcile([{ ...pay(), earnedUnits: "0" }]);
+    const restarted = x.make(); expect(restarted.proof().balanceUsd).toBe(-25);
+    await restarted.tick(); expect(x.d.sign).toHaveBeenCalledTimes(2);
+  });
+});

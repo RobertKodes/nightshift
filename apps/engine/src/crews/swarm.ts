@@ -23,6 +23,7 @@ type DeskOrder = {
   acp?: { ref: string; funded: boolean; outcome?: "completed" | "rejected"; reason?: string };
   tx?: `0x${string}`; imdOrderId?: string; imdActive?: boolean; imdPaid?: boolean; imd?: Order; job?: JobStatus; result?: JobResult;
   reserveUnits?: string;
+  refundPaid?: { tx: string; at: number };
   tokenHash: string; token?: string; refundOwed?: boolean; error?: string; alerted?: boolean; recorded?: boolean;
 };
 /** IMD's GET /swarm puts the live numbers under `health`. */
@@ -260,6 +261,7 @@ export class SwarmDesk {
   }
 
   async #refund(o: DeskOrder): Promise<void> {
+    if (o.refundPaid) return;
     if (o.acp) {
       Object.assign(o, { status: "failed", refundOwed: true, error: "IMD could not deliver. Reject the ACP submission to recover escrow; no payment is earned for this work." });
       this.#save();
@@ -283,13 +285,13 @@ export class SwarmDesk {
   }
 
   #view(o: DeskOrder) {
-    return { orderId: o.orderId, kind: o.quote.kind, status: o.status, imdOrderId: o.imdOrderId ?? null, imd: o.imd ?? null, job: o.job ?? null, result: o.result ?? null, refundOwed: Boolean(o.refundOwed), ...(o.error ? { error: o.error } : {}), payment: { tx: o.tx ?? null, network: o.payment.network, priceUsd: o.payment.usd, holderPrice: false, payer: o.payment.payer } };
+    return { orderId: o.orderId, kind: o.quote.kind, status: o.status, imdOrderId: o.imdOrderId ?? null, imd: o.imd ?? null, job: o.job ?? null, result: o.result ?? null, refundOwed: Boolean(o.refundOwed && !o.refundPaid), refundPaid: o.refundPaid ?? null, ...(o.error ? { error: o.refundPaid ? "IMD could not deliver. The refund was paid on Base." : o.error } : {}), payment: { tx: o.tx ?? null, network: o.payment.network, priceUsd: o.payment.usd, holderPrice: false, payer: o.payment.payer } };
   }
 
   #answer(o: DeskOrder): Out {
     const token = o.token;
     this.#save();
-    return { status: o.refundOwed ? 502 : 200, body: { ...this.#view(o), ...(token ? { orderToken: token } : {}), ...(o.refundOwed ? { message: REFUND } : {}) } };
+    return { status: o.refundOwed ? 502 : 200, body: { ...this.#view(o), ...(token ? { orderToken: token } : {}), ...(o.refundOwed ? { message: o.refundPaid ? "Your refund was paid on Base." : REFUND } : {}) } };
   }
 
   async job(id: string, token: string | null) {
@@ -360,7 +362,27 @@ export class SwarmDesk {
   attachRefill(refill: { tick(): Promise<void>; heldUsdc(): bigint; status(): unknown }): void { this.#refill = refill; }
 
   reservations(): bigint { return BigInt([...this.#orders.values()].filter((o) => inFlight(o) && !o.imdPaid).length) * SWARM_IMD; }
-  revenue() { return [...this.#orders.values()].filter((o) => o.tx).map((o) => ({ orderId: o.orderId, at: o.at, units: Math.round(o.payment.usd * 1e6).toString(), reserveUnits: o.reserveUnits ?? Math.ceil(o.payment.usd * 1e6 / 2).toString(), refundOwed: Boolean(o.refundOwed) })); }
+  /** A manual payout is acknowledged only after its receipt has been checked by the operator. */
+  confirmRefund(orderId: string, tx: string): void {
+    const o = this.#orders.get(orderId);
+    if (!o?.tx || !o.refundOwed || !/^0x[0-9a-f]{64}$/i.test(tx)) throw new SwarmError(400, "Expected a refund-owed USDC order and a confirmed refund transaction.");
+    if (o.refundPaid && o.refundPaid.tx.toLowerCase() !== tx.toLowerCase()) throw new SwarmError(409, "A different refund receipt is already recorded.");
+    if ([...this.#orders.values()].some((x) => x !== o && x.refundPaid?.tx.toLowerCase() === tx.toLowerCase())) throw new SwarmError(409, "This refund receipt is already recorded for another order.");
+    o.refundPaid ??= { tx, at: this.#now() };
+    this.#save();
+  }
+  liabilityUsdc(): bigint {
+    return this.revenue().filter((o) => !o.refundPaid && (o.refundOwed || o.status !== "done")).reduce((n, o) => n + BigInt(o.units), 0n);
+  }
+  revenue() {
+    return [...this.#orders.values()].filter((o) => o.tx).map((o) => {
+      const units = BigInt(Math.round(o.payment.usd * 1e6));
+      const cost = BigInt(Math.ceil((o.imdPaid ? 0.5 * o.quote.imdUsd : 0) * 1e6));
+      const net = units > cost ? units - cost : 0n;
+      const reserve = o.reserveUnits === "0" || o.status !== "done" || o.refundOwed ? 0n : (net + 1n) / 2n;
+      return { orderId: o.orderId, key: o.key, status: o.status, tx: o.tx!, refundPaid: o.refundPaid, costUnits: cost.toString(), at: o.at, units: units.toString(), reserveUnits: reserve.toString(), refundOwed: Boolean(o.refundOwed) };
+    });
+  }
   heldUsdc(): bigint { return this.#refill?.heldUsdc() ?? 0n; }
 
   async stats() {
@@ -375,7 +397,7 @@ export class SwarmDesk {
     let priceUsd: number | null = null; try { priceUsd = swarmPrice(this.#price()); } catch { /* Quotes require a fresh price. */ }
     const rows = [...this.#orders.values()];
     return { swarm: { available: health !== null, source: "https://api.imd.fun/swarm", agentsOnline: (health?.health ?? health)?.agentsOnline ?? null, seatsEnrolled: (health?.health ?? health)?.seatsEnrolled ?? null, jobsDoneLastDay: (health?.health ?? health)?.jobsDoneLastDay ?? null, totalJobs: total ?? null, completedJobs: completed ?? null, completionRate: typeof total === "number" && total > 0 && typeof completed === "number" ? completed / total : null },
-      desk: { enabled: this.d.enabled(), orders: rows.filter((o) => o.tx || o.acp?.funded).length, delivered: rows.filter((o) => o.status === "done").length, running: rows.filter(inFlight).length, refundsOwed: rows.filter((o) => o.refundOwed).length, todayJobs: rows.filter((o) => o.day === this.#day() && (o.tx || o.acp?.funded)).length, dailyImd: this.d.dailyImd(), maxInFlight: this.d.inFlight?.() ?? 25, reservedImd: (Number(this.reservations()) / 1e18), kinds: SWARM_KINDS.map((kind) => ({ kind, skill: SWARM_SKILLS[kind], priceUsd, whatYouGet: SWARM_OUTPUTS[kind] })), refill: this.#refill?.status() ?? null },
+      desk: { enabled: this.d.enabled(), orders: rows.filter((o) => o.tx || o.acp?.funded).length, delivered: rows.filter((o) => o.status === "done").length, running: rows.filter(inFlight).length, refundsOwed: rows.filter((o) => o.refundOwed && !o.refundPaid).length, todayJobs: rows.filter((o) => o.day === this.#day() && (o.tx || o.acp?.funded)).length, dailyImd: this.d.dailyImd(), maxInFlight: this.d.inFlight?.() ?? 25, reservedImd: (Number(this.reservations()) / 1e18), kinds: SWARM_KINDS.map((kind) => ({ kind, skill: SWARM_SKILLS[kind], priceUsd, whatYouGet: SWARM_OUTPUTS[kind] })), refill: this.#refill?.status() ?? null },
       coverage: health ? [] : ["IMD live counters unavailable"], at: new Date(this.#now()).toISOString() };
   }
 

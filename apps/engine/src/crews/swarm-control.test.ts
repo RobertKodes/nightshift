@@ -15,3 +15,15 @@ it("persists owner caps and on/off controls, exposes defaults and rejects malfor
   for (const args of [["cap", "Infinity"], ["cap", "-1"], ["inflight", "1.5"], ["inflight", "0"]]) expect(await swarmCommand(args)).toContain("Use /swarm");
   expect(config.swarmDeskDailyImd).toBe(750); expect(config.swarmDeskInFlight).toBe(80); await swarmCommand(["off"]); expect(config.swarmDesk).toBe(false);
 }, 20_000);
+
+
+it("acknowledges a confirmed manual refund without sending money", async () => {
+  const { setSwarmDesk } = await import("./swarm.js"), { swarmCommand } = await import("./swarm-control.js");
+  const confirmRefund = vi.fn();
+  setSwarmDesk({ confirmRefund, stop() {} } as unknown as import("./swarm.js").SwarmDesk);
+  try {
+    const tx = `0x${"ab".repeat(32)}`;
+    expect(await swarmCommand(["refund", "sd_order", tx])).toContain("No payment was sent");
+    expect(confirmRefund).toHaveBeenCalledWith("sd_order", tx);
+  } finally { setSwarmDesk(null); }
+});

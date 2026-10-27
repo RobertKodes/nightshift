@@ -319,7 +319,7 @@ describe("watches", () => {
     const w = world();
     const jobs: WatchtowerT.JobEvent[] = [];
     const wt = new W.Watchtower({ ctx: w.ctx, file: o.file ?? null, notify: o.notify, onJob: (e) => jobs.push(e) });
-    const s = await wt.startWatch({ address: TOKEN, owner: WALLET, days: o.days ?? 7, payment: { usd: 1, payer: PAYER, tx: null } });
+    const s = await wt.startWatch({ address: TOKEN, owner: WALLET, days: o.days ?? 7, payment: { usd: 1, payer: PAYER, tx: `0x${"ab".repeat(32)}` } });
     return { ...w, wt, jobs, ...s };
   }
 
@@ -503,7 +503,7 @@ describe("free samples, routes and MCP", () => {
   it("serves info, sample, a watch and unsubscribe over HTTP, keyed by a hash of the IP", async () => {
     const t = world();
     const wt = new W.Watchtower({ ctx: t.ctx, file: null });
-    const s = await wt.startWatch({ address: TOKEN, owner: WALLET, days: 7, payment: { usd: 1, payer: PAYER, tx: null } });
+    const s = await wt.startWatch({ address: TOKEN, owner: WALLET, days: 7, payment: { usd: 1, payer: PAYER, tx: `0x${"ab".repeat(32)}` } });
     let out: { status: number; body: unknown } = { status: 0, body: null };
     const res = { setHeader() {} } as unknown as ServerResponse;
     const call = (method: string, url: string, headers: Record<string, string> = {}, owner: string | null = null) =>
@@ -550,4 +550,48 @@ describe("free samples, routes and MCP", () => {
     expect(JSON.parse((r.content as { text: string }[])[0]!.text)).toMatchObject({ free: true, kind: "token", baseline: null });
     await client.close();
   });
+});
+
+
+describe("watch payment reservations", () => {
+  it("never schedules an unpaid watch and activates it exactly once after restart", async () => {
+    const t = world(), file = join(mkdtempSync(join(tmpdir(), "watch-pending-")), "watches.json");
+    let tx: string | null = null;
+    const make = () => new W.Watchtower({ ctx: t.ctx, file, settled: () => tx });
+    let wt = make();
+    const input = { address: TOKEN, owner: WALLET, days: 7, paymentKey: `${PAYER}:nonce`, payment: { usd: 1, payer: PAYER, tx: null } };
+    const [first, concurrent] = await Promise.all([wt.startWatch(input), wt.startWatch(input)]);
+    expect(concurrent.watch.id).toBe(first.watch.id);
+    expect(first.watch.status).toBe("pending"); expect(first.watch.nextRunAt).toBeNull();
+    t.advance(HOUR * 2); expect(await wt.tick()).toMatchObject({ ran: 0, delivered: 0 });
+    wt = make(); expect(await wt.startWatch(input)).toEqual(first);
+    await expect(wt.startWatch({ ...input, address: SMALL })).rejects.toMatchObject({ status: 409 });
+    expect(await wt.tick()).toMatchObject({ ran: 0 });
+    tx = `0x${"ab".repeat(32)}`; await wt.tick();
+    const activated = wt.getWatch(first.watch.id, { token: first.manageToken }).watch;
+    expect(activated.status).toBe("active"); expect(activated.payment.tx).toBe(tx);
+    t.advance(HOUR); expect(await wt.tick()).toMatchObject({ ran: 1 });
+    expect(wt.confirmPayment(first.watch.id, tx)).toBe(true);
+    expect(wt.getWatch(first.watch.id, { token: first.manageToken }).watch.expiresAt).toBe(activated.expiresAt);
+    expect((await wt.startWatch(input)).watch.id).toBe(first.watch.id);
+  });
+});
+
+
+it("a refused watch settlement leaves no schedule, including after restart", async () => {
+  const { services } = await import("../services/routes.js");
+  const t = world(), file = join(mkdtempSync(join(tmpdir(), "watch-refused-")), "watch.json");
+  const wt = new W.Watchtower({ ctx: t.ctx, file });
+  const payer: import("../services/routes.js").Payer = {
+    mode: "live", chainId: 8453, payTo: () => WALLET,
+    check: async () => ({ ok: true, payer: PAYER, payment: { payload: { authorization: { from: PAYER, nonce: "0xnonce", value: "1000000" } } } as unknown as import("@nightshift/x402").PaymentPayload }),
+    settle: async () => { throw Object.assign(new Error("Payment refused. Nothing was charged."), { status: 402 }); },
+    sim: async () => {}, isPending: () => false,
+  };
+  const svc = services(t.ctx, payer, { watchtower: wt });
+  const out = await svc.handle({ method: "GET", path: `/api/v1/watchtower/watch/ethereum/${TOKEN}`, query: new URLSearchParams(), header: () => "signed", ip: "test", base: "https://house.test", limited: () => false });
+  expect(out?.status).toBe(402); t.advance(HOUR * 2);
+  expect(await wt.tick()).toMatchObject({ ran: 0, delivered: 0 });
+  const restarted = new W.Watchtower({ ctx: t.ctx, file, settled: () => null });
+  expect(await restarted.tick()).toMatchObject({ ran: 0, delivered: 0 });
 });

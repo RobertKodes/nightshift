@@ -44,7 +44,9 @@ export type Watch = {
   owner: string;
   createdAt: number; expiresAt: number; days: number; intervalMinutes: number;
   thresholds: Thresholds; minSeverity: Severity; payment: Payment;
-  status: "active" | "stopped" | "expired"; endedAt: number | null;
+  reservation?: { manageToken: string; telegramCode: string; report: WatchReport };
+  paymentKey?: string;
+  status: "pending" | "active" | "stopped" | "expired"; endedAt: number | null;
   /** sha256 of the manage token and of the Telegram code: neither is stored in clear. */
   tokenHash: string; telegramHash: string;
   /** Goes in alert links; it can only turn alerts off. */
@@ -69,8 +71,11 @@ export type WatchView = {
   payment: { usd: number; tx: string | null };
   reference: { block: number; at: string } | null;
 };
+type WatchInput = { address: string; owner: string; days: number; intervalMinutes?: number; thresholds?: Partial<Thresholds>; minSeverity?: Severity; payment: Payment; kind?: Kind; paymentKey?: string };
+type WatchStart = { watch: WatchView; manageToken: string; telegramCode: string; report: WatchReport };
 export type WatchtowerOptions = {
   ctx: Ctx; file: string | null; now?: () => number;
+  settled?(key: string): string | null;
   /** Sends one alert (Telegram, …). True when delivered; false or a throw is retried with backoff. */
   notify?: (w: Watch, r: WatchReport) => Promise<boolean>;
   /** Every completed or failed run, for the job ledger. Public-safe: counts only. */
@@ -97,6 +102,7 @@ export class Watchtower {
   readonly ctx: Ctx;
   readonly file: string | null;
   readonly now: () => number;
+  readonly #settled: WatchtowerOptions["settled"];
   readonly #notify: WatchtowerOptions["notify"];
   readonly #onJob: WatchtowerOptions["onJob"];
   readonly #quota: DailyQuota;
@@ -104,12 +110,14 @@ export class Watchtower {
   readonly #gate = new Gate(LIMITS.concurrentChecks);
   #s: State;
   #ticking = false;
+  #starting = new Map<string, Promise<WatchStart>>();
 
   constructor(o: WatchtowerOptions) {
     this.ctx = o.ctx;
     this.file = o.file;
     this.now = o.now ?? o.ctx.d.now;
     this.#notify = o.notify;
+    this.#settled = o.settled;
     this.#onJob = o.onJob;
     this.#quota = new DailyQuota(LIMITS.freeSamplesPerDay, this.now);
     this.#s = this.#load();
@@ -165,13 +173,24 @@ export class Watchtower {
 
   // ------------------------------------------------------------ watches
 
-  /**
-   * Starts a watch: ONE prepaid term (1 to 30 days), no renewal and no recurring charge. The
-   * baseline is read first, so an address that cannot be observed throws before anything is
-   * kept (call it inside the paid run, before settlement). The manage token and the Telegram code
-   * are returned once and stored only as hashes.
-   */
-  async startWatch(o: { address: string; owner: string; days: number; intervalMinutes?: number; thresholds?: Partial<Thresholds>; minSeverity?: Severity; payment: Payment; kind?: Kind }): Promise<{ watch: WatchView; manageToken: string; telegramCode: string; report: WatchReport }> {
+  /** Reserves one prepaid term; only a confirmed payment activates its schedule. */
+  async startWatch(o: WatchInput): Promise<WatchStart> {
+    if (!o.paymentKey) return this.#startWatch(o);
+    const prior = this.#starting.get(o.paymentKey);
+    if (prior) { await prior; return this.#startWatch(o); }
+    const run = this.#startWatch(o);
+    this.#starting.set(o.paymentKey, run);
+    try { return await run; } finally { this.#starting.delete(o.paymentKey); }
+  }
+
+  async #startWatch(o: WatchInput): Promise<WatchStart> {
+    if (o.paymentKey) {
+      const prior = Object.values(this.#s.watches).find((w) => w.paymentKey === o.paymentKey);
+      if (prior) {
+        if (prior.address !== o.address.toLowerCase() || prior.owner !== o.owner.toLowerCase() || prior.days !== o.days || !prior.reservation) throw new WatchtowerError(409, "This payment already reserved a different watch.");
+        return { watch: this.#view(prior), ...prior.reservation };
+      }
+    }
     const a = this.#addr(o.address);
     if (typeof o.owner !== "string" || !isAddr(o.owner)) throw new WatchtowerError(400, "owner must be a wallet address (0x + 40 hex).");
     if (!Number.isInteger(o.days) || o.days < LIMITS.minDays || o.days > LIMITS.maxDays) throw new WatchtowerError(400, `days must be a whole number from ${LIMITS.minDays} to ${LIMITS.maxDays}.`);
@@ -197,12 +216,13 @@ export class Watchtower {
       id: newId("w"), address: a, kind: obs.kind, owner: o.owner.toLowerCase(),
       createdAt: now, expiresAt: now + o.days * 86_400_000, days: o.days, intervalMinutes: interval, thresholds, minSeverity,
       payment: { usd: p.usd, payer: p.payer.toLowerCase(), tx: p.tx },
-      status: "active", endedAt: null, tokenHash: sha(manageToken), telegramHash: sha(telegramCode), unsubToken: randomBytes(18).toString("base64url"),
+      paymentKey: o.paymentKey, status: p.tx ? "active" : "pending", endedAt: null, tokenHash: sha(manageToken), telegramHash: sha(telegramCode), unsubToken: randomBytes(18).toString("base64url"),
       telegram: { chatId: null, linkedAt: null }, alerts: true,
       nextRunAt: now + interval * 60_000, lastRunAt: now, lastOkAt: now, runs: 1, failedRuns: 0, consecutiveFailures: 0, lastError: null,
       reference: obs, alerted: {}, deliveries: [],
     };
     const report = buildReport({ obs, baseline: null, changes: [], now });
+    if (o.paymentKey) w.reservation = { manageToken, telegramCode, report };
     this.#s.watches[w.id] = w;
     this.#storeObservation(obs);
     this.#addReport(w.id, report);
@@ -211,11 +231,17 @@ export class Watchtower {
     return { watch: this.#view(w), manageToken, telegramCode, report };
   }
 
-  /** Records the settlement transaction of a watch started before its payment settled. */
+  /** Activates a reserved watch once, after settlement. */
   confirmPayment(id: string, tx: string): boolean {
     const w = this.#s.watches[id];
     if (!w || !/^0x[0-9a-fA-F]{64}$/.test(tx)) return false;
+    if (w.payment.tx && w.payment.tx !== tx) return false;
     w.payment.tx = tx;
+    if (w.status === "pending") {
+      w.status = "active";
+      w.expiresAt = this.now() + w.days * 86_400_000;
+      w.nextRunAt = this.now() + w.intervalMinutes * 60_000;
+    }
     this.#save();
     return true;
   }
@@ -275,6 +301,10 @@ export class Watchtower {
     this.#ticking = true;
     try {
       const now = this.now();
+      for (const w of Object.values(this.#s.watches)) if (w.status === "pending" && w.paymentKey) {
+        const tx = this.#settled?.(w.paymentKey);
+        if (tx) this.confirmPayment(w.id, tx);
+      }
       let expired = 0;
       for (const w of Object.values(this.#s.watches)) {
         if (w.status === "active" && now >= w.expiresAt) { w.status = "expired"; w.endedAt = w.expiresAt; expired++; }
@@ -283,7 +313,7 @@ export class Watchtower {
           delete this.#s.reports[w.id];
         }
       }
-      const due = Object.values(this.#s.watches).filter((w) => w.status === "active" && w.nextRunAt <= now).sort((x, y) => x.nextRunAt - y.nextRunAt).slice(0, LIMITS.runsPerTick);
+      const due = Object.values(this.#s.watches).filter((w) => w.status === "active" && w.payment.tx && w.nextRunAt <= now).sort((x, y) => x.nextRunAt - y.nextRunAt).slice(0, LIMITS.runsPerTick);
       let next = 0, ran = 0, failed = 0;
       const worker = async () => {
         while (next < due.length) {
@@ -345,6 +375,7 @@ export class Watchtower {
   async #deliver(): Promise<{ attempted: number; delivered: number }> {
     let sent = 0, attempted = 0;
     for (const w of Object.values(this.#s.watches)) {
+      if (w.status !== "active" || !w.payment.tx) continue;
       for (const d of w.deliveries) {
         const now = this.now();
         if (d.status !== "pending" || d.nextAttemptAt === null || d.nextAttemptAt > now) continue;
@@ -460,7 +491,10 @@ export class Watchtower {
       if (!existsSync(f)) continue;
       try {
         const s = JSON.parse(readFileSync(f, "utf8")) as State;
-        if (s?.v === 1 && s.observations && s.watches && s.reports) return s;
+        if (s?.v === 1 && s.observations && s.watches && s.reports) {
+          for (const w of Object.values(s.watches)) if (w.status === "active" && !w.payment.tx) w.status = "pending";
+          return s;
+        }
       } catch { /* a damaged file: try the backup */ }
     }
     return empty();
@@ -468,6 +502,6 @@ export class Watchtower {
   #save(): void {
     if (!this.file) return;
     mkdirSync(dirname(this.file), { recursive: true });
-    writeAtomic(this.file, JSON.stringify(this.#s), { backup: true });
+    writeAtomic(this.file, JSON.stringify(this.#s), { backup: true, mode: 0o600 });
   }
 }

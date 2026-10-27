@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { config } from "./config.js";
 import { type Mind, createMind } from "./swarm-mind.js";
 import { type Swarm, createWeather } from "./swarm-weather.js";
+import { safeFetch } from "./net.js";
 
 /** SWARM MIND on the engine: IMD's public API read with timeouts, the works kept under the data folder. */
 const headers = { "user-agent": "NIGHTSHIFT swarm-mind (getnightshift.tech)" };
@@ -10,11 +11,11 @@ const get = async (url: string) => {
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 };
-const text = async (url: string) => {
-  const r = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
-  return r.ok ? (await r.text()).slice(0, 80_000) : null;
+export const deliveredMarkdown = async (url: string) => {
+  const r = await safeFetch(url, { headers }, { maxBytes: 80_000, contentTypes: ["text/markdown", "text/plain"], deadlineMs: 20_000 });
+  return r?.ok ? r.text() : null;
 };
-export const liveMind = () => createMind({ get, text, dir: join(config.dataDir, "swarm-mind") });
+export const liveMind = () => createMind({ get, text: deliveredMarkdown, dir: join(config.dataDir, "swarm-mind") });
 
 /** The swarm's numbers for SWARM WEATHER, from IMD's /swarm. */
 async function swarm(): Promise<Swarm> {

@@ -15,6 +15,8 @@ import type { ReserveProof } from "./agent-reserve.js";
  */
 export type PayerClass = "customer" | "internal" | "owner" | "b2b" | "test";
 
+export type SwarmReceipt = { key: string; units: string; status: string; costUnits: string; refundOwed: boolean; refundPaid?: { tx: string; at: number } };
+
 export type ProofInput = {
   companies: Company[];
   metrics(id: string): Metrics;
@@ -28,6 +30,7 @@ export type ProofInput = {
   houseId: string;
   now?: number;
   agentReserve?: ReserveProof;
+  swarm?: SwarmReceipt[];
 };
 
 const short = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
@@ -44,14 +47,16 @@ export function payerClass(payer: string, seller: Company, all: Company[], sim: 
   return "customer";
 }
 
-export type ProofPayment = { key: string; at: number; units: string; usd: number; payer: string; cls: PayerClass; house: boolean; service: string; product: string; tx: string | null; company: string };
+export type ProofPayment = { earnedUnits?: string; key: string; at: number; units: string; usd: number; payer: string; cls: PayerClass; house: boolean; service: string; product: string; tx: string | null; company: string };
 /** The same settled sales for announcements, the reserve and /proof. */
-export function proofPayments(i: Pick<ProofInput, "companies" | "metrics" | "houseId">): ProofPayment[] {
+export function proofPayments(i: Pick<ProofInput, "companies" | "metrics" | "houseId" | "swarm">): ProofPayment[] {
+  const earned = new Map((i.swarm ?? []).map((o) => [o.key, o.status === "done" && !o.refundOwed && !o.refundPaid ? (BigInt(o.units) > BigInt(o.costUnits) ? BigInt(o.units) - BigInt(o.costUnits) : 0n).toString() : "0"]));
   return i.companies.flatMap((c) => i.metrics(c.id).sales.map((s) => ({
     key: `${s.payer.toLowerCase()}:${(s.nonce ?? s.tx ?? `legacy-${c.id}-${s.at}`).toLowerCase()}`,
     at: s.at, units: s.usdc, usd: usd(s.usdc), payer: s.payer.toLowerCase(),
     cls: payerClass(s.payer, c, i.companies, s.sim || (s.network !== undefined && s.network !== "eip155:8453")),
     house: c.id === i.houseId, service: s.productId,
+    ...(s.productId === "swarm-order" ? { earnedUnits: earned.get(`${s.payer.toLowerCase()}:${(s.nonce ?? "").toLowerCase()}`) ?? "0" } : {}),
     product: c.products.find((p) => p.id === s.productId)?.name ?? "a product since removed", tx: s.tx, company: c.name,
   }))).sort((a, b) => a.at - b.at);
 }
@@ -91,6 +96,8 @@ export function proof(i: ProofInput) {
   const clients = i.usage.mcp.clients.map((c) => ({ ...c, probe: isProbeClient(c.name) }));
   const firstUsage = i.usage.days[0]?.day ?? null;
 
+  const refunds = (i.swarm ?? []).filter((o) => o.refundOwed);
+  const owed = refunds.filter((o) => !o.refundPaid), paid = refunds.filter((o) => o.refundPaid);
   const firstPay = pays[0]?.at ?? null;
   return {
     generatedAt: new Date(now).toISOString(),
@@ -107,7 +114,7 @@ export function proof(i: ProofInput) {
     },
     agentReserve: i.agentReserve ?? { balanceUsd: 0, totalInUsd: 0, totalBoughtShift: "0", buys: [] },
     crews: (i.crews ?? []).map((c) => ({ id: c.id, name: c.name, house: c.house, done: c.metrics.done, failed: c.metrics.failed, paidJobs: c.metrics.customerPaidJobs, payingWallets: c.metrics.payingWallets, repeatWallets: c.metrics.repeatWallets, revenueUsd: round(c.metrics.revenueUsd), knownCostUsd: round(c.metrics.knownCostUsd), successRate: c.metrics.successRate })),
-    refunds: { count: 0, note: "x402 payments settle on chain and NIGHTSHIFT has no automatic refund path; a paid call whose answer fails is not settled, so it is never charged." },
+    refunds: { count: refunds.length, owedCount: owed.length, paidCount: paid.length, owedUsd: usd(owed.reduce((n, o) => n + BigInt(o.units), 0n)), paidUsd: usd(paid.reduce((n, o) => n + BigInt(o.units), 0n)), note: "Swarm Desk settles before ordering work. Failed delivery can leave a full USDC refund owed; paid totals require a recorded confirmed payout receipt. Other paid tools compute before settlement." },
     knownCosts: {
       swarmImd: round(imd, 4),
       swarmUsdAtTodaysPrice: i.imdUsd ? round(imd * i.imdUsd) : null,

@@ -239,7 +239,7 @@ describe("chain tools on offline fixtures", () => {
 });
 
 describe("new paid routes, discovery and MCP", () => {
-  const payer = (): Payer => ({ mode: "live", chainId: 8453, payTo: () => P, check: vi.fn(async () => ({ ok: true as const, payer: A, payment: { payload: { authorization: { value: "2000", nonce: TX } } } as never })), settle: vi.fn(async () => TX), sim: async () => {}, isPending: () => false, holder: async () => true });
+  const payer = (): Payer => ({ mode: "live", chainId: 8453, payTo: () => P, check: vi.fn(async () => ({ ok: true as const, payer: A, payment: { payload: { authorization: { from: A, value: "2000", nonce: TX } } } as never })), settle: vi.fn(async () => TX), sim: async () => {}, isPending: () => false, holder: async () => true });
   const io = (example: string, limited = () => false): Io => { const url = new URL(example, "https://nightshift.test"); return { method: "GET", path: url.pathname, query: url.searchParams, header: () => undefined, ip: "fixture", base: url.origin, limited }; };
   it("publishes seven separate resources with valid Bazaar schemas and equal 402 body/header", async () => {
     const { validateDiscoveryExtension } = await import("@x402/extensions/bazaar"); const f = fixture(), service = R.services(f.ctx, payer(), { fast: f.deps });
@@ -258,6 +258,15 @@ describe("new paid routes, discovery and MCP", () => {
     expect((await service.handle({ ...io(K.offer("gas-now").example), method: "HEAD" }))!.status).toBe(405);
     expect((await service.handle(io(K.offer("gas-now").example, () => true)))!.status).toBe(429);
     const limited = io(K.offer("gas-now").example, (key?: string) => !!key?.startsWith("svc-fast-payer")); limited.header = () => "signed"; expect((await service.handle(limited))!.status).toBe(429); expect(p.settle).not.toHaveBeenCalled();
+  });
+  it("keeps one paid fast answer and rejects a changed token without new upstream reads", async () => {
+    const f = fixture(), p = payer(), service = R.services(f.ctx, p, { fast: f.deps });
+    const request = { ...io(`/api/v1/token-price?chain=base&token=${TOKEN}`), header: () => "signed" };
+    const first = await service.handle(request), reads = f.net.mock.calls.length + f.rpc.mock.calls.length;
+    expect(first?.status).toBe(200); now += 60_000;
+    expect(await service.handle(request)).toEqual(first);
+    expect(await service.handle({ ...request, query: new URLSearchParams({ chain: "base", token: OTHER }) })).toMatchObject({ status: 409 });
+    expect(f.net.mock.calls.length + f.rpc.mock.calls.length).toBe(reads); expect(p.settle).toHaveBeenCalledTimes(1);
   });
   it("routes MCP tools through the same paid handler, including holder terms", async () => {
     const f = fixture(), service = R.services(f.ctx, payer(), { fast: f.deps }), names: string[] = [], handlers = new Map<string, (a: Record<string, string>) => Promise<{ content: { text: string }[] }>>();
