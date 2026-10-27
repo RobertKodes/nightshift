@@ -6,8 +6,9 @@ import type { Company, Product } from "@nightshift/core";
 import { ProductFiles, toolAccess } from "./products.js";
 import { eth } from "./chain.js";
 import { safeFetch } from "./net.js";
+import { encodeFunctionResult, parseAbi } from "viem";
 
-vi.mock("./chain.js", () => ({ eth: { getEnsResolver: vi.fn(), readContract: vi.fn() } }));
+vi.mock("./chain.js", () => ({ eth: { readContract: vi.fn() } }));
 vi.mock("./net.js", () => ({ safeFetch: vi.fn() }));
 
 const CID = "bafybeifmibbcoyqpiq7t6u2su7jr7vwegpakyw4ezcjr723mrmmrcbdfve";
@@ -15,8 +16,7 @@ const SITE = "https://ns-nightwatch-981.identitymd.eth.limo";
 const BACKUP = `https://imd-ipfs.xyz/ipfs/${CID}/`;
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(eth.getEnsResolver).mockResolvedValue("0x1111111111111111111111111111111111111111");
-  vi.mocked(eth.readContract).mockResolvedValue("0xe30101701220ac404227620f443f3f5352a7d31fd6c433c0ac5b84c8931feb6c8b19110465a9");
+  vi.mocked(eth.readContract).mockResolvedValue([encodeFunctionResult({ abi: parseAbi(["function contenthash(bytes32) view returns (bytes)"]), functionName: "contenthash", result: "0xe30101701220ac404227620f443f3f5352a7d31fd6c433c0ac5b84c8931feb6c8b19110465a9" }), "0x1111111111111111111111111111111111111111"]);
   vi.mocked(safeFetch).mockImplementation(async () => new Response("ok"));
 });
 
