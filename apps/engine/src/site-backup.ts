@@ -1,11 +1,14 @@
 import type { Company } from "@nightshift/core";
-import { namehash, parseAbi } from "viem";
+import { decodeFunctionResult, encodeFunctionData, namehash, parseAbi, stringToBytes, toHex, type Hex } from "viem";
+import { mainnet } from "viem/chains";
 import { eth } from "./chain.js";
 import { safeFetch } from "./net.js";
 
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 const TIMEOUT = 1500;
+const ENS_TIMEOUT = 5000;
 const CONTENTHASH = parseAbi(["function contenthash(bytes32 node) view returns (bytes)"]);
+const RESOLVE = parseAbi(["function resolve(bytes name, bytes data) view returns (bytes, address)"]);
 
 function base32(bytes: Uint8Array): string {
   let out = "", bits = 0, value = 0;
@@ -62,14 +65,25 @@ function siteName(url: string): { name: string; label: string } | null {
   } catch { return null; }
 }
 
-async function contenthash(name: string): Promise<string | null> {
-  const resolver = await eth.getEnsResolver({ name });
-  return resolver ? eth.readContract({ address: resolver, abi: CONTENTHASH, functionName: "contenthash", args: [namehash(name)] }) : null;
+/** DNS wire format, as the ENS universal resolver expects. */
+function dnsName(name: string): Hex {
+  const labels = name.split(".").map((l) => stringToBytes(l));
+  const out = new Uint8Array(labels.reduce((n, l) => n + l.length + 1, 1));
+  let at = 0;
+  for (const l of labels) { out[at++] = l.length; out.set(l, at); at += l.length; }
+  return toHex(out);
 }
 
-async function fast<T>(work: Promise<T>, fallback: T): Promise<T> {
+/** IMD names sit behind an off-chain (wildcard) resolver, so the universal resolver does the lookup. */
+async function contenthash(name: string): Promise<string | null> {
+  const data = encodeFunctionData({ abi: CONTENTHASH, functionName: "contenthash", args: [namehash(name)] });
+  const [result] = await eth.readContract({ address: mainnet.contracts.ensUniversalResolver.address, abi: RESOLVE, functionName: "resolve", args: [dnsName(name), data] });
+  return decodeFunctionResult({ abi: CONTENTHASH, functionName: "contenthash", data: result });
+}
+
+async function fast<T>(work: Promise<T>, fallback: T, ms = TIMEOUT): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  try { return await Promise.race([work, new Promise<T>((resolve) => { timer = setTimeout(() => resolve(fallback), TIMEOUT); })]); }
+  try { return await Promise.race([work, new Promise<T>((resolve) => { timer = setTimeout(() => resolve(fallback), ms); })]); }
   catch { return fallback; }
   finally { clearTimeout(timer); }
 }
@@ -80,7 +94,7 @@ export class SiteBackups {
   constructor(private readonly hash = contenthash, private readonly fetch = safeFetch, private readonly bound = 512) {}
 
   async #resolve(name: string, label: string): Promise<string | null> {
-    const cid = contenthashCid(await fast(Promise.resolve().then(() => this.hash(name)), null));
+    const cid = contenthashCid(await fast(Promise.resolve().then(() => this.hash(name)), null, ENS_TIMEOUT));
     if (cid) return cid;
     try {
       const r = await fast(this.fetch("https://api.imd.fun/sites", { signal: AbortSignal.timeout(TIMEOUT) }, { deadlineMs: TIMEOUT, maxBytes: 1_000_000, contentTypes: ["application/json"] }), null);

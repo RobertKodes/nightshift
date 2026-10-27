@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Company, Product } from "@nightshift/core";
-import { namehash } from "viem";
+import { encodeFunctionResult, namehash, parseAbi } from "viem";
+import { mainnet } from "viem/chains";
 import { eth } from "./chain.js";
 import { safeFetch } from "./net.js";
 import { backupUrl, contenthashCid, productSite, SiteBackups } from "./site-backup.js";
 
-vi.mock("./chain.js", () => ({ eth: { getEnsResolver: vi.fn(), readContract: vi.fn() } }));
+vi.mock("./chain.js", () => ({ eth: { readContract: vi.fn() } }));
 vi.mock("./net.js", () => ({ safeFetch: vi.fn() }));
 
 const CID = "bafybeifmibbcoyqpiq7t6u2su7jr7vwegpakyw4ezcjr723mrmmrcbdfve";
@@ -13,11 +14,11 @@ const HASH = "0xe30101701220ac404227620f443f3f5352a7d31fd6c433c0ac5b84c8931feb6c
 const URL = "https://ns-nightwatch-981.identitymd.eth.limo";
 const BACKUP = `https://imd-ipfs.xyz/ipfs/${CID}/`;
 const resolver = "0x1111111111111111111111111111111111111111";
+const RESULT = encodeFunctionResult({ abi: parseAbi(["function contenthash(bytes32) view returns (bytes)"]), functionName: "contenthash", result: HASH });
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(eth.getEnsResolver).mockResolvedValue(resolver);
-  vi.mocked(eth.readContract).mockResolvedValue(HASH);
+  vi.mocked(eth.readContract).mockResolvedValue([RESULT, resolver]);
   vi.mocked(safeFetch).mockResolvedValue(null);
 });
 afterEach(() => vi.useRealTimers());
@@ -34,8 +35,8 @@ describe("IMD site backups", () => {
     const record: { cid?: string } = {}, save = vi.fn();
     expect(await new SiteBackups().get(url, record, save)).toBe(BACKUP);
     const name = new globalThis.URL(url).hostname.replace(/\.limo$/, "");
-    expect(eth.getEnsResolver).toHaveBeenCalledWith({ name });
-    expect(eth.readContract).toHaveBeenCalledWith(expect.objectContaining({ address: resolver, functionName: "contenthash", args: [namehash(name)] }));
+    expect(eth.readContract).toHaveBeenCalledWith(expect.objectContaining({ address: mainnet.contracts.ensUniversalResolver.address, functionName: "resolve" }));
+    expect(vi.mocked(eth.readContract).mock.calls[0]![0].args![1]).toContain(namehash(name).slice(2));
     expect(record.cid).toBe(CID);
     expect(save).toHaveBeenCalledOnce();
     expect(safeFetch).not.toHaveBeenCalled();
@@ -43,7 +44,7 @@ describe("IMD site backups", () => {
 
   it("uses a stored CID before the cache or either network source", async () => {
     expect(await new SiteBackups().get(URL, { cid: CID })).toBe(BACKUP);
-    expect(eth.getEnsResolver).not.toHaveBeenCalled();
+    expect(eth.readContract).not.toHaveBeenCalled();
     expect(safeFetch).not.toHaveBeenCalled();
   });
 
@@ -56,7 +57,7 @@ describe("IMD site backups", () => {
   });
 
   it("returns null on failures, missing labels, bad CIDs and malformed responses", async () => {
-    vi.mocked(eth.getEnsResolver).mockRejectedValue(new Error("offline"));
+    vi.mocked(eth.readContract).mockRejectedValue(new Error("offline"));
     for (const response of [null, new Response("unavailable", { status: 503 }), new Response("bad JSON"), Response.json({ sites: null }), Response.json({ sites: [null, { label: "other", cid: CID }, { label: "ns-nightwatch-981", cid: "bad" }] })]) {
       vi.mocked(safeFetch).mockResolvedValue(response);
       expect(await new SiteBackups().get(URL)).toBeNull();
@@ -68,7 +69,7 @@ describe("IMD site backups", () => {
   it("ignores unrelated URLs and lookalike hosts without a network call", async () => {
     const backups = new SiteBackups();
     for (const url of [null, "bad", "https://example.com", `${URL}.evil.test`, URL.replace("https:", "http:"), URL.replace("https://", "https://user@")]) expect(await backups.get(url, { cid: CID })).toBeNull();
-    expect(eth.getEnsResolver).not.toHaveBeenCalled();
+    expect(eth.readContract).not.toHaveBeenCalled();
     expect(safeFetch).not.toHaveBeenCalled();
   });
 
@@ -84,22 +85,22 @@ describe("IMD site backups", () => {
 
   it("briefly caches failures and retries after the delay", async () => {
     vi.useFakeTimers();
-    vi.mocked(eth.getEnsResolver).mockRejectedValue(new Error("offline"));
+    vi.mocked(eth.readContract).mockRejectedValue(new Error("offline"));
     const backups = new SiteBackups();
     expect(await backups.get(URL)).toBeNull();
     expect(await backups.get(URL)).toBeNull();
     expect(safeFetch).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(60_001);
-    vi.mocked(eth.getEnsResolver).mockResolvedValue(resolver);
+    vi.mocked(eth.readContract).mockResolvedValue([RESULT, resolver]);
     expect(await backups.get(URL)).toBe(BACKUP);
   });
 
   it("falls back quickly when the mainnet client stalls", async () => {
     vi.useFakeTimers();
-    vi.mocked(eth.getEnsResolver).mockReturnValue(new Promise(() => {}));
+    vi.mocked(eth.readContract).mockReturnValue(new Promise(() => {}));
     vi.mocked(safeFetch).mockResolvedValue(Response.json({ sites: [{ label: "ns-nightwatch-981", cid: CID }] }));
     const work = new SiteBackups().get(URL);
-    await vi.advanceTimersByTimeAsync(1501);
+    await vi.advanceTimersByTimeAsync(5001);
     expect(await work).toBe(BACKUP);
   });
 
@@ -113,7 +114,7 @@ describe("IMD site backups", () => {
     expect(save).toHaveBeenCalledTimes(2);
     vi.clearAllMocks();
     await new SiteBackups().company(c, save);
-    expect(eth.getEnsResolver).not.toHaveBeenCalled();
+    expect(eth.readContract).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
     expect(productSite(p)).toEqual({ site: URL, siteBackup: BACKUP });
     p.deliverableUrl = "https://new.identitymd.eth.limo";
