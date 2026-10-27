@@ -43,6 +43,13 @@ describe("SWARM MIND", () => {
     expect(a.answer).toBe("Blackout curtains help [1].");
     expect(a.sources[0]).toMatchObject({ n: 1, title: "Research: night shift sleep science", url: "https://explorer.imd.fun/jobs/r1" });
     expect((await m.ask("zzzz qqqq", llm as never, "free")).sources).toEqual([]);
+    // every asker shares one model budget; past it the sources still come back, without a model answer
+    let calls = 0;
+    const counted = { chat: async (r: never) => { calls++; return llm.chat(r); } };
+    const answers = [];
+    for (let i = 0; i < 61; i++) answers.push(await m.ask(`night workers sleep curtains${"x".repeat(i + 1)}`, counted as never, "free"));
+    expect(calls).toBe(59);
+    expect(answers.at(-1)).toMatchObject({ model: null, sources: [{ n: 1 }] });
   });
 });
 

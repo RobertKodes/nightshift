@@ -7,6 +7,8 @@ export interface Connection {
   id: string;
   account: string;
   agent: boolean;
+  /** The caller's address, for the limit on new guest characters. */
+  ip?: string;
   send(msg: ServerMsg): void;
   close(): void;
 }

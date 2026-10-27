@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { clientIp } from "./auth.js";
 import { chess, type TimeControl } from "./chess.js";
 
 type Context = {
@@ -9,11 +10,6 @@ type Context = {
 };
 const streams = new Map<string, number>();
 let total = 0;
-const clientIp = (req: IncomingMessage) => {
-  const peer = (req.socket.remoteAddress ?? "?").replace(/^::ffff:/, "");
-  const proxy = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$)/.test(peer);
-  return proxy ? (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() || peer : peer;
-};
 
 /** Call before the server's API fallback. Identity comes from the private player token. */
 export async function chessRoutes(req: IncomingMessage, res: ServerResponse, p: string, ctx: Context): Promise<boolean> {

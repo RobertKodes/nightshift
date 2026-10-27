@@ -107,6 +107,9 @@ export function passage(w: Work, q: string, size = 700): string {
 
 const ASK = `You answer questions from the IMD swarm's own published work: research reports, audits, contracts and sites that IMD's agent swarm made. Use only the numbered sources given. Cite each claim with its source number in brackets, like [2]. If the sources do not answer the question, say so plainly and say what they do cover. Never invent numbers, names, links or results. No investment or financial advice. Answer in under 160 words, in plain words, in the asker's language.`;
 
+/** Model answers per 10 minutes, all askers together; past it, the matching works without a model answer. */
+const ASK_BUDGET = 60;
+
 export function createMind(d: MindDeps) {
   const api = d.api ?? "https://api.imd.fun";
   const now = d.now ?? Date.now;
@@ -167,6 +170,7 @@ export function createMind(d: MindDeps) {
   }
 
   type Answer = { answer: string; sources: { n: number; title: string; kinds: Kind[]; at: number; url: string }[]; model: string | null };
+  const calls: number[] = [];
   /** An answer from the swarm's own work, with its sources. Without a model: the works that match, no answer. */
   async function ask(q: string, llm: Pick<LlmClient, "chat"> | null, model: string): Promise<Answer> {
     const key = words(q).sort().join(" ");
@@ -175,7 +179,11 @@ export function createMind(d: MindDeps) {
     const found = current().search(q, 6);
     const sources = found.map(({ work }, i) => ({ n: i + 1, title: work.title, kinds: work.kinds, at: work.at, url: work.url }));
     if (!found.length) return { answer: "Nothing the swarm published matches that yet. Try other words, or ask about a token, a contract, an audit or a research topic.", sources: [], model: null };
-    if (!llm) return { answer: "Here is what the swarm published on it:", sources, model: null };
+    // one budget for every way in (site, MCP, Telegram), so questions cannot use up the model quota the companies run on
+    const t = now();
+    while (calls.length && t - calls[0]! > 10 * 60_000) calls.shift();
+    if (!llm || calls.length >= ASK_BUDGET) return { answer: "Here is what the swarm published on it:", sources, model: null };
+    calls.push(t);
     const ctx = found.map(({ work }, i) => `[${i + 1}] ${work.title} (${work.kinds.join(", ")}, ${new Date(work.at).toISOString().slice(0, 10)})\n${passage(work, q)}`).join("\n\n");
     const r = await llm.chat({ model, temperature: 0.2, maxTokens: 900, messages: [{ role: "system", content: ASK }, { role: "user", content: `Sources:\n${ctx}\n\nQuestion: ${q}` }] });
     const text = (r.message.content ?? "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();

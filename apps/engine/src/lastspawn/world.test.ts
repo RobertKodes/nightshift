@@ -13,6 +13,7 @@ afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: tru
 const temp = () => { const dir = mkdtempSync(join(tmpdir(), "lastspawn-")); dirs.push(dir); return dir; };
 
 class FakeConnection implements Connection {
+  ip?: string;
   agent = false;
   closed = false;
   messages: ServerMsg[] = [];
@@ -733,5 +734,33 @@ describe("LASTSPAWN quests, chat and persistence", () => {
     const world = new World({ dataDir: dir });
     expect(world.stats().characters).toBe(0); expect(readFileSync(`${file}.bad`, "utf8")).toBe(raw);
     world.save(); expect(JSON.parse(readFileSync(file, "utf8"))).toEqual([]);
+  });
+});
+
+describe("LASTSPAWN limits on free guest characters", () => {
+  const guest = (world: World, n: number, ip: string) => {
+    const conn = new FakeConnection(`guest-${n}`, ""); conn.ip = ip;
+    world.connect(conn); world.handle(conn, { t: "hello", version: PROTOCOL_VERSION });
+    return conn;
+  };
+  it("lets one address make six new guest characters an hour", () => {
+    let now = 100000;
+    const world = new World({ dataDir: temp(), now: () => now });
+    for (let i = 0; i < 6; i++) create(world, guest(world, i, "198.51.100.7"), `Guest${"abcdef"[i]}`);
+    const seventh = guest(world, 6, "198.51.100.7"); create(world, seventh, "Guestg");
+    expect(seventh.last("error").msg).toMatch(/Too many new characters/);
+    create(world, guest(world, 7, "198.51.100.8"), "Guesth");
+    now += 3_600_001; create(world, guest(world, 8, "198.51.100.7"), "Guesti");
+    expect(world.stats().characters).toBe(8);
+  });
+  it("makes room in a full world from idle level-1 guests only, and refuses when there is none", () => {
+    const idle = character("idle", { account: `g:${"a".repeat(64)}`, lastSeen: 1 }), hero = character("hero", { account: `g:${"b".repeat(64)}`, level: 4, lastSeen: 1 });
+    const g = game([idle, hero]);
+    let now = 15 * 86_400_000;
+    const world = new World({ dataDir: g.dir, now: () => now, maxCharacters: 2 });
+    create(world, guest(world, 1, "198.51.100.9"), "Newfrog");
+    expect(world.stats().characters).toBe(2);
+    const full = guest(world, 2, "198.51.100.10"); create(world, full, "Nextfrog");
+    expect(full.last("error").msg).toMatch(/world is full/);
   });
 });

@@ -39,12 +39,19 @@ const all = (): Sub[] => {
 };
 const persist = () => writeAtomic(subsFile(), JSON.stringify(all()));
 
+// The browsers' own push services (Chrome, Brave and Opera use Google's; Firefox, Safari and Edge their own).
+// Only these are sent to: an address anyone could type would let a caller make this server call it.
+const PUSH_HOST = /^(fcm\.googleapis\.com|updates\.push\.services\.mozilla\.com|web\.push\.apple\.com|[a-z0-9-]+\.notify\.windows\.com)$/;
+export function pushEndpoint(endpoint: string): boolean {
+  try { const u = new URL(endpoint); return u.protocol === "https:" && !u.port && !u.username && !u.password && PUSH_HOST.test(u.hostname); } catch { return false; }
+}
+
 /** A subscription as the browser hands it over, or null when it is not one. */
 export function parseSub(v: unknown): Pick<Sub, "endpoint" | "keys"> | null {
   const s = v as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } } | null;
   const endpoint = typeof s?.endpoint === "string" ? s.endpoint : "";
   const p256dh = typeof s?.keys?.p256dh === "string" ? s.keys.p256dh : "", auth = typeof s?.keys?.auth === "string" ? s.keys.auth : "";
-  if (!/^https:\/\/[^\s]{8,900}$/.test(endpoint) || !/^[A-Za-z0-9_-]{40,200}$/.test(p256dh) || !/^[A-Za-z0-9_-]{8,64}$/.test(auth)) return null;
+  if (!/^https:\/\/[^\s]{8,900}$/.test(endpoint) || !pushEndpoint(endpoint) ||!/^[A-Za-z0-9_-]{40,200}$/.test(p256dh) || !/^[A-Za-z0-9_-]{8,64}$/.test(auth)) return null;
   return { endpoint, keys: { p256dh, auth } };
 }
 
@@ -78,12 +85,12 @@ export async function audience(list: Sub[], topic: Topic, only: "holders" | "eve
 /** Sends a note; subscriptions the push service says are gone are dropped. */
 export async function send(topic: Topic, note: Note, only: "holders" | "everyone" | "others", holds: (wallet: string) => Promise<boolean>): Promise<number> {
   vapid();
-  const to = await audience(all(), topic, only, holds);
+  const to = await audience(all().filter((s) => pushEndpoint(s.endpoint)), topic, only, holds);
   let sent = 0;
   const gone: string[] = [];
   for (let i = 0; i < to.length; i += 50) {
     await Promise.all(to.slice(i, i + 50).map(async (s) => {
-      try { await webpush.sendNotification(s, JSON.stringify(note), { TTL: 6 * 3600, urgency: "high", topic: note.tag?.slice(0, 32) }); sent++; }
+      try { await webpush.sendNotification(s, JSON.stringify(note), { TTL: 6 * 3600, urgency: "high", topic: note.tag?.slice(0, 32), timeout: 10_000 }); sent++; }
       catch (e) { const code = (e as { statusCode?: number }).statusCode; if (code === 404 || code === 410) gone.push(s.endpoint); }
     }));
   }

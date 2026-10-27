@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket, WebSocketServer } from "ws";
 import type { ClientMsg, ServerMsg } from "@nightshift/lastspawn";
 import { MAX_MSGS_PER_SEC, SLOTS, encodeLook } from "@nightshift/lastspawn";
+import { clientIp, parseNets } from "../auth.js";
 import { attachLastspawn, parseClientMsg } from "./net.js";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -18,7 +19,7 @@ async function server() {
   const http = createServer(), logs: string[] = [];
   const attached = attachLastspawn(http, {
     dataDir: dir, wallet: (req) => typeof req.headers["x-wallet"] === "string" ? req.headers["x-wallet"] : null,
-    savedName: () => null, log: (s) => logs.push(s),
+    ip: (req) => clientIp(req, parseNets("127.0.0.1/32")), savedName: () => null, log: (s) => logs.push(s),
   });
   await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
   const host = `127.0.0.1:${(http.address() as AddressInfo).port}`, url = `ws://${host}/api/lastspawn/ws`;
@@ -96,10 +97,10 @@ describe("LASTSPAWN WebSocket transport", () => {
     await new Promise<void>((resolve) => guest.ws.once("close", () => resolve()));
   });
 
-  it("limits each forwarded IP to four sockets, taking the first hop", async () => {
+  it("limits each caller to four sockets, by the address the proxy saw", async () => {
     const s = await server();
-    for (let i = 0; i < 4; i++) await s.open({ "x-forwarded-for": `192.0.2.1, 198.51.100.${i}` });
-    await expect(s.open({ "x-forwarded-for": "192.0.2.1, 198.51.100.5" })).rejects.toThrow(/429/);
+    for (let i = 0; i < 4; i++) await s.open({ "x-forwarded-for": `198.51.100.${i}, 192.0.2.1` });
+    await expect(s.open({ "x-forwarded-for": "198.51.100.5, 192.0.2.1" })).rejects.toThrow(/429/);
     await s.open({ "x-forwarded-for": "192.0.2.2" });
     expect(s.world.stats().connections).toBe(5);
   });

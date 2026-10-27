@@ -19,7 +19,12 @@ export interface WorldOptions {
   now?: () => number;
   random?: () => number;
   savedName?: (wallet: string) => string | null;
+  /** Characters the world keeps in all (guest accounts cost nothing to make). */
+  maxCharacters?: number;
 }
+
+// New guest characters per address per hour, and how long an untouched level-1 guest is kept once the world is full.
+const NEW_PER_IP = 6, NEW_WINDOW_MS = 3_600_000, GUEST_IDLE_MS = 14 * 86_400_000;
 
 const npcLines: Record<string, string> = {
   keeper_wend: "Rest a moment. There is still light enough for both of us.",
@@ -39,6 +44,8 @@ export class World {
   private readonly now: () => number;
   private readonly random: () => number;
   private readonly characters: Map<string, Character>;
+  private readonly maxCharacters: number;
+  private readonly made = new Map<string, number[]>();
   private readonly sessions = new Map<string, Session>();
   private readonly players = new Map<string, Player>();
   private readonly mobs = new Map<string, Mob>();
@@ -49,6 +56,7 @@ export class World {
     this.file = join(options.dataDir, "lastspawn", "characters.json");
     this.now = options.now ?? Date.now;
     this.random = options.random ?? Math.random;
+    this.maxCharacters = options.maxCharacters ?? 10_000;
     this.characters = loadCharacters(this.file);
     for (const zone of Object.values(ZONES)) {
       zone.camps.forEach((camp, i) => {
@@ -178,12 +186,28 @@ export class World {
     const all = Array.from(this.characters.values());
     if (all.some((c) => c.name.toLowerCase() === msg.name.toLowerCase())) { this.error(s, "That name is already taken."); return; }
     if (all.filter((c) => c.account === s.conn.account).length >= 3) { this.error(s, "An account may have three characters."); return; }
+    const now = this.now(), ip = s.conn.account.startsWith("g:") ? s.conn.ip : undefined;
+    const recent = ip ? (this.made.get(ip) ?? []).filter((at) => now - at < NEW_WINDOW_MS) : [];
+    if (recent.length >= NEW_PER_IP) { this.error(s, "Too many new characters from here. Try again in an hour."); return; }
+    if (this.characters.size >= this.maxCharacters) this.pruneGuests(now);
+    if (this.characters.size >= this.maxCharacters) { this.error(s, "The world is full right now. Try again later."); return; }
+    if (ip) {
+      if (this.made.size > 5000) for (const [k, v] of this.made) if (!v.some((at) => now - at < NEW_WINDOW_MS)) this.made.delete(k);
+      this.made.set(ip, [...recent, now]);
+    }
     const c: Character = { id: randomUUID(), account: s.conn.account, name: msg.name, cls: msg.cls, look: msg.look,
       level: 1, xp: 0, zone: "cistern", ...ZONES.cistern.spawn, hp: CLASSES[msg.cls].hp,
       quests: [], bag: [], equip: starterEquip(msg.cls), flags: {}, createdAt: this.now(), lastSeen: this.now() };
     this.characters.set(c.id, c);
     this.play(s, c.id);
     this.save();
+  }
+
+  /** Makes room in a full world: level-1 guest characters nobody has opened for two weeks. */
+  private pruneGuests(now: number): void {
+    for (const c of this.characters.values()) {
+      if (c.account.startsWith("g:") && c.level === 1 && !this.players.has(c.id) && now - c.lastSeen > GUEST_IDLE_MS) this.characters.delete(c.id);
+    }
   }
 
   private play(s: Session, id: string): void {

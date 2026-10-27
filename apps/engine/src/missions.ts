@@ -75,7 +75,9 @@ export class Missions {
     if (!frogs.some((f) => f.id === frogId)) throw new MissionError(403, "That frog is not in your wallet (holdings are read every hour).", "not_your_frog");
     const runs = (this.s.runs[w] ??= []);
     if (runs.some((r) => r.mission === missionId)) throw new MissionError(409, "That mission is already crewed this week.", "taken");
-    if (!frogs.find((f) => f.id === frogId)!.crew && runs.some((r) => r.frog === frogId)) throw new MissionError(409, `Frog #${frogId} is already out on a mission this week.`, "busy");
+    // the week counts per frog, not per wallet: a frog passed to another wallet cannot crew the same week again
+    const crew = frogs.find((f) => f.id === frogId)!.crew;
+    if (Object.values(this.s.runs).flat().some((r) => r.frog === frogId && (r.mission === missionId || !crew))) throw new MissionError(409, `${label(frogId)} is already out on a mission this week.`, "busy");
     runs.push({ mission: missionId, frog: frogId, startedAt: this.now(), baseline: facts, doneAt: null, hours: 0 });
     this.save();
   }

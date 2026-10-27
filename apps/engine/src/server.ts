@@ -504,7 +504,9 @@ export function serve(engine: Engine) {
   onCrewEvent((e) => stats.onCrewEvent(e));
   setInterval(() => void stats.tick().catch((e) => console.error("owner stats", (e as Error).message)), 60_000).unref();
   const server = createServer(async (req, res) => {
-    const url = new URL(req.url ?? "/", config.publicUrl);
+    let url: URL;
+    // a request line the URL parser refuses (GET //[) would throw outside the catch below and stop the whole server
+    try { url = new URL(req.url ?? "/", config.publicUrl); } catch { res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" }); res.end("Bad request"); return; }
     const p = url.pathname;
     const seg = p.split("/").filter(Boolean);
     if (!p.startsWith("/api/admin") && !p.startsWith("/assets/") && !/\.(js|css|png|jpg|webp|svg|mp4|ico|woff2?)$/.test(p)) sawVisitor(clientIp(req), req.headers["user-agent"]);
@@ -1243,7 +1245,7 @@ export function serve(engine: Engine) {
     }
   });
   // LASTSPAWN: the MMORPG's world, one WebSocket on this same server (LASTSPAWN=0 turns it off)
-  if (process.env.LASTSPAWN !== "0") attachLastspawn(server, { dataDir: config.dataDir, wallet: (req) => engine.auth.caller(req)?.addr ?? null, savedName, log: (s) => console.error(s) });
+  if (process.env.LASTSPAWN !== "0") attachLastspawn(server, { dataDir: config.dataDir, wallet: (req) => engine.auth.caller(req)?.addr ?? null, ip: (req) => clientIp(req), savedName, log: (s) => console.error(s) });
   server.once("close", stopLive);
   server.listen(config.port, () => console.log(`NIGHTSHIFT engine on ${config.publicUrl} (${config.mode} mode${engine.llm ? `, CEO model ${config.model}` : ", playbook CEO: set OPENROUTER_API_KEY for the model"})`));
   return server;

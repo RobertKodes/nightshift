@@ -58,6 +58,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
 export interface LastspawnDeps {
   dataDir: string;
   wallet(req: IncomingMessage): string | null;
+  /** The caller's address as the proxy saw it (the first X-Forwarded-For entry is whatever the caller wrote). */
+  ip?(req: IncomingMessage): string;
   savedName(wallet: string): string | null;
   log?(s: string): void;
 }
@@ -87,8 +89,7 @@ export function attachLastspawn(server: Server, deps: LastspawnDeps): { world: W
         }
       } catch { reject(socket, "403 Forbidden"); return; }
     }
-    const forwarded = req.headers["x-forwarded-for"];
-    const ip = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+    const ip = deps.ip?.(req) || req.socket.remoteAddress || "unknown";
     if (total >= 500 || (ips.get(ip) ?? 0) >= 4) { reject(socket, "429 Too Many Requests"); return; }
     let wallet: string | null;
     try { wallet = deps.wallet(req); } catch (error) { log(error); reject(socket, "401 Unauthorized"); return; }
@@ -104,7 +105,7 @@ export function attachLastspawn(server: Server, deps: LastspawnDeps): { world: W
     try {
       wss.handleUpgrade(req, socket, head, (ws) => {
         const conn: Connection = {
-          id: randomUUID(), account: wallet ? `w:${wallet.toLowerCase()}` : "", agent: false,
+          id: randomUUID(), account: wallet ? `w:${wallet.toLowerCase()}` : "", agent: false, ip,
           send: (msg) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); },
           close: () => { safely(() => world.disconnect(conn)); ws.close(); },
         };

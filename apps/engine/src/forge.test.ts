@@ -124,6 +124,18 @@ describe("Night Watchers on missions", () => {
     expect(ms.report("0xW", frogs, "desk-duty", facts)).toBe(24 * 12);
     expect(() => ms.report("0xW", [], "board-watch", facts)).toThrow(/Night Watcher #1 has left/);
   });
+  it("counts the week per frog, so passing a frog to another wallet does not crew it again", () => {
+    const facts = { leagueTrades: 3, leagueBestPct: null, benchmarkPct: null, arenaGames: 0 };
+    const ms = new Missions(null, () => Date.UTC(2026, 9, 21));
+    const frog = [{ id: 1, multiplier: 7 }], watcher = [{ id: FORGED_ID + 1, multiplier: 12, crew: true }];
+    ms.start("0xA", frog, "desk-duty", 1, facts);
+    expect(ms.report("0xA", frog, "desk-duty", facts)).toBe(24 * 7);
+    expect(() => ms.start("0xB", frog, "desk-duty", 1, facts)).toThrow(/Frog #1 is already out/);
+    expect(() => ms.start("0xB", frog, "board-watch", 1, facts)).toThrow(/Frog #1 is already out/);
+    ms.start("0xA", watcher, "board-watch", FORGED_ID + 1, facts);
+    expect(() => ms.start("0xB", watcher, "board-watch", FORGED_ID + 1, facts)).toThrow(/Night Watcher #1 is already out/);
+    ms.start("0xB", watcher, "beat-the-holder", FORGED_ID + 1, facts);
+  });
 });
 
 describe("the identity layer and the perks", () => {
