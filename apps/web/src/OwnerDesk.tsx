@@ -147,7 +147,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
           <p>{d.requireAuth && !d.signedIn ? "Sign in to see the companies you run." : "You do not run a company yet. One sentence is enough to start one."}</p>
           {d.requireAuth && !d.signedIn
             ? <button className="nx-btn nx-btn-acc" disabled={signing} onClick={() => void signIn()}><NxIcon name="wallet" size={16} />Sign in with your wallet</button>
-            : <Link to="/launch" className="nx-btn nx-btn-acc"><NxIcon name="founder" size={16} />Launch a company</Link>}
+            : <Link to="/launch" className="nx-btn nx-btn-acc"><NxIcon name="founder" size={16} />Start a business</Link>}
         </div>
       ) : (
         <div className="dk-grid">

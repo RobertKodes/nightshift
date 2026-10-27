@@ -16,6 +16,16 @@ const co = (slug: string, extra: Partial<Company> = {}) => ({ id: slug, slug, na
 const prod = (id: string, usd: number, kind = "guide", sales = 0, createdAt = 1) => ({ id, name: `P ${id}`, kind, pitch: "Useful.", priceUsdc: BigInt(Math.round(usd * 1e6)), status: "live", sales, createdAt }) as unknown as Product;
 
 describe("agent market", () => {
+  it("exposes the company and tool backup links beside their sites", () => {
+    const cid = "bafybeifmibbcoyqpiq7t6u2su7jr7vwegpakyw4ezcjr723mrmmrcbdfve";
+    const url = "https://ns-nightwatch-981.identitymd.eth.limo", backup = `https://imd-ipfs.xyz/ipfs/${cid}/`;
+    const c = co("nightwatch", { site: { url, jobId: "j", cid } });
+    const p = { ...prod("checker", 9, "tool"), deliverableUrl: url, site: { url, cid } };
+    expect(M.card({ c, p, text: TEXT })).toMatchObject({ site: url, siteBackup: backup, company: { site: url, siteBackup: backup } });
+    expect(M.detail({ c, p, text: TEXT }).siteBackup).toBe(backup);
+    expect(M.catalog([{ c, p, text: TEXT }]).items[0]?.metadata.siteBackup).toBe(backup);
+  });
+
   it("previews the outline and opening, never more than 10% of the text or 700 characters", () => {
     const pv = M.previewOf(TEXT);
     expect(pv.title).toBe("Cold email kit for designers");

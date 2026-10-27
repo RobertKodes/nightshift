@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { UtilityLinks } from "../HowThisConnects";
 import { webOnly } from "../store";
 import { short } from "../api";
 import { InstallButton } from "../landing/app";
@@ -15,16 +16,16 @@ export function lastRoom(): RoomId | null { try { const v = localStorage.getItem
 
 const isOn = (path: string, to: string) => path === to || (to !== "/" && path.startsWith(`${to}/`));
 
-/** The station bar: the mark, the five rooms, the swarm's pulse and the wallet. Same on every room. */
+/** Three doors and an optional wallet. */
 export function StationBar({ room, title }: { room: RoomId | null; title?: string }) {
   const swarm = useSwarm();
   const { address, signIn, signOut, busy, error } = useSession();
   return (
     <div className="nx-station">
-      <Link to="/" className="nx-mark" aria-label="NIGHTSHIFT: choose your way"><Crescent size={22} /><span>NIGHTSHIFT</span></Link>
+      <Link to="/" className="nx-mark" aria-label="NIGHTSHIFT home"><Crescent size={22} /><span>NIGHTSHIFT</span></Link>
       <b className="nx-apptitle" aria-hidden="true">{title ?? "NIGHTSHIFT"}</b>
-      <nav className="nx-rooms" aria-label="Rooms">
-        <Link to="/" className={room === null ? "on" : ""} style={{ "--acc": "#a48bff" } as React.CSSProperties}><NxIcon name="way" size={15} /><span>Gate</span></Link>
+      <nav className="nx-rooms" aria-label="Three doors">
+        <Link to="/" className={room === null ? "on" : ""} style={{ "--acc": "#a48bff" } as React.CSSProperties}><NxIcon name="way" size={15} /><span>Home</span></Link>
         {ROOM_ORDER.map((id) => (
           <Link key={id} to={ROOMS[id].nav[0]!.to} className={room === id ? "on" : ""} style={{ "--acc": ROOMS[id].accent } as React.CSSProperties}>
             <i className="nx-dot" /><span>{ROOMS[id].name}</span>
@@ -49,21 +50,20 @@ export function StationBar({ room, title }: { room: RoomId | null; title?: strin
 /** The room's own header: its emblem, its pages and its main action. */
 function RoomBar({ room, path }: { room: RoomId; path: string }) {
   const r = ROOMS[room];
-  const [open, setOpen] = useState(false);
-  useEffect(() => setOpen(false), [path]);
   return (
     <div className="nx-roombar">
       <Link to={r.nav[0]!.to} className="nx-roomid">
         <img src={r.emblem} alt="" width={40} height={40} />
         <span><small>{r.deck}</small><b>{r.name}</b></span>
       </Link>
-      <nav className={`nx-roomnav${open ? " open" : ""}`} aria-label={`${r.name} pages`}>
+      <nav className="nx-roomnav" aria-label={`${r.name} pages`}>
         {r.nav.filter((n) => !webOnly(n.to)).map((n) => (
           <Link key={n.to} to={n.to} className={isOn(path, n.to) ? "on" : ""} style={n.room ? ({ "--acc": ROOMS[n.room].accent } as React.CSSProperties) : undefined}>
             <NxIcon name={n.icon} size={16} /><span>{n.label}</span>
           </Link>
         ))}
       </nav>
+      {r.more && <details className="clarity-more nx-more"><summary>More</summary><nav aria-label={`${r.name} more`}>{r.more.filter((n) => !webOnly(n.to)).map((n) => <Link key={n.to} to={n.to}>{n.label}</Link>)}</nav></details>}
       {r.cta && !webOnly(r.cta.to) && <Link to={r.cta.to} className="nx-btn nx-btn-acc nx-roomcta"><NxIcon name={r.cta.icon} size={16} />{r.cta.label}</Link>}
     </div>
   );
@@ -76,14 +76,20 @@ export function Footer({ room }: { room: RoomId | null }) {
         {ROOM_ORDER.map((id) => (
           <div key={id} className={room === id ? "here" : ""} style={{ "--acc": ROOMS[id].accent } as React.CSSProperties}>
             <b><i className="nx-dot" />{ROOMS[id].name}</b>
-            {ROOMS[id].nav.filter((n) => !n.room && !webOnly(n.to)).map((n) => <Link key={n.to} to={n.to}>{n.label}</Link>)}
+            {[...ROOMS[id].nav, ...(ROOMS[id].more ?? [])].filter((n) => !n.room && !webOnly(n.to)).map((n) => <Link key={n.to} to={n.to}>{n.label}</Link>)}
           </div>
         ))}
         <div style={{ "--acc": "#a48bff" } as React.CSSProperties}>
-          <b><i className="nx-dot" />Station</b>
-          <Link to="/">Choose your way</Link>
+          <b><i className="nx-dot" />NIGHTSHIFT</b>
+          <Link to="/">Home</Link>
           <Link to="/story">The story</Link>
-          <Link to="/launch">Launch a company</Link>
+          <Link to="/how-it-works">How it works</Link>
+          <Link to="/proof">Proof</Link>
+          <Link to="/security">Security</Link>
+          <Link to="/mcp">Connect</Link>
+          <Link to="/changelog">Changelog</Link>
+          <Link to="/terms">Terms</Link>
+          <Link to="/privacy">Privacy</Link>
           <a href="/llms.txt">llms.txt</a>
           <a href="/imd-status/">IMD status</a>
         </div>
@@ -104,11 +110,11 @@ export function Footer({ room }: { room: RoomId | null }) {
   );
 }
 
-/** Phones: the gate and the five rooms, always one tap away. */
+/** Phones: home and the three doors. */
 export function NxTabs({ room }: { room: RoomId | null }) {
   return (
     <nav className="nx-tabs" aria-label="Station">
-      <a href="/" className={room === null ? "on" : ""} style={{ "--acc": "#a48bff" } as React.CSSProperties} onClick={(e) => { e.preventDefault(); go("/"); scrollTo(0, 0); }}><NxIcon name="way" size={21} /><span>Gate</span></a>
+      <a href="/" className={room === null ? "on" : ""} style={{ "--acc": "#a48bff" } as React.CSSProperties} onClick={(e) => { e.preventDefault(); go("/"); scrollTo(0, 0); }}><NxIcon name="way" size={21} /><span>Home</span></a>
       {ROOM_ORDER.map((id) => {
         const r = ROOMS[id];
         return (
@@ -132,9 +138,10 @@ export function RoomShell({ room, path, lean = false, children }: { room: RoomId
       <div className="nx-backdrop" aria-hidden="true" />
       <header className="nx-head">
         <StationBar room={room} title={here?.label === r.nav[0]!.label ? r.name : here?.label ?? r.name} />
+        <UtilityLinks />
         {!lean && <RoomBar room={room} path={path} />}
       </header>
-      <main>{children}</main>
+      <main className={["/services", "/games", "/token", "/how-it-works", "/breakroom", "/geek", "/info"].includes(path) ? "clarity-main" : undefined}>{children}</main>
       <Footer room={room} />
       <NightFrog />
       <NxTabs room={room} />

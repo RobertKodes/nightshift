@@ -14,6 +14,8 @@ export interface Product {
   status: "building" | "live" | "retired";
   /** Where the buyer gets it after paying: the swarm's delivered file or hosted tool. */
   deliverableUrl: string | null;
+  /** The hosted tool and its IPFS CID, resolved once. */
+  site?: { url: string; cid?: string };
   taskId: string;
   /** Sales to people and outside agents. Sales to other NIGHTSHIFT companies are counted apart, in b2b*. */
   sales: number;
@@ -229,7 +231,7 @@ export interface Company {
   restUntil?: number;
   /** Why it rests when every move it would make next repeats earlier work, for the owner desk. */
   restReason?: string;
-  site: { url: string; jobId: string } | null;
+  site: { url: string; jobId: string; cid?: string } | null;
   products: Product[];
   tasks: Task[];
   journal: JournalEntry[];

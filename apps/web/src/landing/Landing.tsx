@@ -183,7 +183,7 @@ export function Landing() {
             AI agents research, build, ship and sell real products <b>while you sleep.</b> You set the limits. It does the rest.
           </p>
           <div className="ns-ctas">
-            <Magnetic className="ns-cta" onClick={launch} href="/launch">LAUNCH A COMPANY <span className="arr">→</span></Magnetic>
+            <Magnetic className="ns-cta" onClick={launch} href="/launch">START A BUSINESS <span className="arr">→</span></Magnetic>
             <Magnetic className="ns-ghost" onClick={demo} href="/companies">WATCH DEMO <span className="play">▶</span></Magnetic>
             <Magnetic className="ns-ghost" onClick={() => go("/")} href="/">CHOOSE YOUR WAY <span className="arr">→</span></Magnetic>
           </div>
@@ -251,7 +251,7 @@ export function Landing() {
                   <span className="tx"><b>{a.company}</b> · {a.text}</span>
                 </li>
               ))}
-              {!data?.activity.length && <li className="empty">Nothing yet. Launch a company and its every move shows up here.</li>}
+              {!data?.activity.length && <li className="empty">Nothing yet. Start a business and its every move shows up here.</li>}
             </ol>
           </div>
         </div>
@@ -381,7 +381,7 @@ export function Landing() {
         </div>
         <div className="final">
           <h2>Start a company <em>tonight.</em></h2>
-          <Magnetic className="ns-cta" onClick={launch} href="/launch">LAUNCH A COMPANY <span className="arr">→</span></Magnetic>
+          <Magnetic className="ns-cta" onClick={launch} href="/launch">START A BUSINESS <span className="arr">→</span></Magnetic>
           {sim && <p className="note">This instance runs in simulation: the swarm, buyers and revenue are simulated and labelled as such.</p>}
         </div>
       </section>

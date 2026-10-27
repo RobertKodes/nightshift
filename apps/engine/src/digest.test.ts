@@ -52,6 +52,15 @@ function records() {
 describe("the daily company digest", () => {
   afterEach(() => setTelegramTransport(null));
 
+  it("puts the backup line next to a launched site", () => {
+    const cid = "bafybeifmibbcoyqpiq7t6u2su7jr7vwegpakyw4ezcjr723mrmmrcbdfve";
+    const url = "https://ns-nightwatch-981.identitymd.eth.limo";
+    const c = company("nightwatch", { site: { url, jobId: "j", cid }, tasks: [task("build_site", NOW - H, { result: { siteUrl: url } })] });
+    const facts = digestFacts([c], [], NOW, base);
+    expect(facts.sites[0]?.siteBackup).toBe(`https://imd-ipfs.xyz/ipfs/${cid}/`);
+    expect(digestCard(facts, base)?.text).toContain(`href="https://imd-ipfs.xyz/ipfs/${cid}/">Backup link (if the site does not open)</a>`);
+  });
+
   it("counts a site once however many builds ended at its address", () => {
     const site = (n: number) => ({ ...(task("build_site", NOW - n * H) as object), cycle: n, result: { siteUrl: "https://lead.example" } });
     const f = digestFacts([company("lead", { tasks: [site(1), site(2), site(3)] as never })], [], NOW, base);

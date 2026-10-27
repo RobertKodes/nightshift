@@ -87,11 +87,11 @@ function Socials() {
 export const UTILITIES: { to: string; label: string; note: string; soon?: boolean }[] = [
   { to: "/token", label: "$SHIFT", note: "The platform token: what it does, live" },
   { to: "/tokenomics", label: "Tokenomics", note: "Supply, fees, wallets and every rule" },
-  { to: "/frogs", label: "NIGHT FROGS", note: "The collection and its rewards" },
+  { to: "/frogs", label: "Frogs", note: "The collection and its rewards" },
   { to: "/swap", label: "Swap", note: "Swap across Ethereum, Base, Solana and into XRP" },
   { to: "/stake", label: "Stake", note: "Lock $SHIFT, earn from every sell" },
-  { to: "/launchpad", label: "Launchpad", note: "Launch a coin on IMD, buy it from any chain" },
-  { to: "/games", label: "Game Room", note: "Chess, Pool, Pinball and Poker, free or staked" },
+  { to: "/launchpad", label: "Launch a token", note: "Launch a coin on IMD, buy it from any chain" },
+  { to: "/games", label: "Play", note: "Chess, Pool, Pinball and Poker, free or staked" },
   { to: "/arena", label: "Agent Arena", note: "AI agents play chess, rated and live" },
   { to: "/impact", label: "IMD Impact", note: "What NIGHTSHIFT gives the IMD network" },
   { to: "/mcp", label: "MCP for agents", note: "Let AI agents use NIGHTSHIFT" },
@@ -101,11 +101,9 @@ const UTIL_KEYS: Active[] = ["token", "tokenomics", "frogs", "swap", "stake", "l
 
 /** The station's five rooms, a menu of their own. */
 export const ROOM_LINKS: { to: string; label: string; note: string; dot: string; key: Active }[] = [
-  { to: "/breakroom", label: "Breakroom", note: "Games for people and agents", dot: "#ff5ca8", key: "breakroom" },
-  { to: "/geek", label: "Geek Room", note: "Night League, MCP, agent APIs", dot: "#4ad8ff", key: "geek" },
-  { to: "/info", label: "Info Room", note: "$SHIFT, NIGHT FROGS, contracts", dot: "#c9c2ff", key: "info" },
-  { to: "/economy", label: "HR & Economy", note: "The crew we hired, where fees go", dot: "#ffc861", key: "economy" },
-  { to: "/command", label: "Command Room", note: "Send your frogs on missions", dot: "#b8ff4a", key: "command" },
+  { to: "/services", label: "AI tools", note: "Check, test, research or hire agents", dot: "#4ad8ff", key: "geek" },
+  { to: "/games", label: "Play", note: "Four games, no wallet needed to start", dot: "#ff5ca8", key: "games" },
+  { to: "/token", label: "$SHIFT", note: "Benefits, swap, staking and rewards", dot: "#c9c2ff", key: "token" },
 ];
 const ROOM_KEYS: Active[] = ["breakroom", "geek", "info", "economy", "command", "league"];
 function RoomsMenu({ active }: { active: Active }) {
@@ -121,7 +119,7 @@ function RoomsMenu({ active }: { active: Active }) {
   return (
     <div ref={ref} className={`ns-drop${open ? " open" : ""}`} onMouseLeave={() => setOpen(false)}>
       <button type="button" className={ROOM_KEYS.includes(active) ? "on" : ""} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen(!open)} onMouseEnter={() => setOpen(true)}>
-        Rooms <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+        Explore <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 3.5 5 7l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
       </button>
       <div className="ns-drop-menu" role="menu">
         {ROOM_LINKS.map((u) => (
@@ -175,14 +173,12 @@ function MobileMenu({ home }: { home: boolean }) {
         <div className="ns-mnav">
           <a href="/" onClick={(e) => { e.preventDefault(); nav("/"); }}>Home</a>
           <a href={home ? "#mission" : "/#mission"} onClick={() => setOpen(false)}>Mission</a>
-          <span>ROOMS</span>
+          <span>EXPLORE</span>
           {ROOM_LINKS.map((u) => <a key={u.to} href={u.to} onClick={(e) => { e.preventDefault(); nav(u.to); }}><i className="room-dot" style={{ background: u.dot }} />{u.label}</a>)}
-          <a href="/companies" onClick={(e) => { e.preventDefault(); nav("/companies"); }}>Companies</a>
-          <a href="/market" onClick={(e) => { e.preventDefault(); nav("/market"); }}>Market</a>
-          <span>UTILITIES</span>
-          {UTILITIES.map((u) => <a key={u.to} href={u.to} onClick={(e) => { e.preventDefault(); nav(u.to); }}>{u.label}{u.soon && <sup className="nav-soon">SOON</sup>}</a>)}
-          <a href="/guide" onClick={(e) => { e.preventDefault(); nav("/guide"); }}>Guide</a>
-          <a className="ns-cta sm" href="/launch" onClick={(e) => { e.preventDefault(); nav("/launch"); }}>LAUNCH A COMPANY →</a>
+          <a href="/mcp" onClick={(e) => { e.preventDefault(); nav("/mcp"); }}>Connect</a>
+          <a href="/proof" onClick={(e) => { e.preventDefault(); nav("/proof"); }}>Proof</a>
+          <a href="/security" onClick={(e) => { e.preventDefault(); nav("/security"); }}>Security</a>
+          <a href="/how-it-works" onClick={(e) => { e.preventDefault(); nav("/how-it-works"); }}>How it works</a>
         </div>,
         document.body,
       )}
@@ -191,9 +187,9 @@ function MobileMenu({ home }: { home: boolean }) {
 }
 
 const APP_TITLES: Partial<Record<Active, string>> = {
-  home: "NIGHTSHIFT", companies: "Companies", company: "Your company", market: "Market", token: "$SHIFT", tokenomics: "Tokenomics", frogs: "NIGHT FROGS",
-  swap: "Trade", stake: "Earn", guide: "Guide", games: "Game Room", arena: "Agent Arena", impact: "IMD Impact", launchpad: "Launchpad", mcp: "MCP", terms: "Terms",
-  breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "Night League",
+  home: "NIGHTSHIFT", companies: "Companies", company: "Your company", market: "Market", token: "$SHIFT", tokenomics: "Tokenomics", frogs: "Frogs",
+  swap: "Trade", stake: "Earn", guide: "Guide", games: "Play", arena: "Agent Arena", impact: "IMD Impact", launchpad: "Launch a token", mcp: "MCP", terms: "Terms",
+  breakroom: "Play", geek: "AI tools", info: "$SHIFT", economy: "Activity & receipts", command: "Frog missions", league: "Night League",
 };
 
 export function SiteHeader({ active, home = false }: { active: Active; home?: boolean }) {
@@ -205,14 +201,9 @@ export function SiteHeader({ active, home = false }: { active: Active; home?: bo
     <header className="ns-bar">
       <Link to="/" className="ns-logo"><Crescent /><span>NIGHTSHIFT</span><small>AUTONOMOUS<br />COMPANIES<br />WHILE YOU SLEEP</small></Link>
       <b className="ns-app-title" aria-hidden="true">{APP_TITLES[active] ?? "NIGHTSHIFT"}</b>
-      <nav className="ns-nav">
-        <Link to="/" className={active === "home" ? "on" : ""}>Home</Link>
-        <a href={hash("mission")}>Mission</a>
-        <RoomsMenu active={active} />
-        <Link to="/companies" className={active === "companies" || active === "company" ? "on" : ""}>Companies</Link>
-        <Link to="/market" className={active === "market" ? "on" : ""}>Market</Link>
-        <UtilitiesMenu active={active} />
-        <Link to="/guide" className={active === "guide" ? "on" : ""}>Guide</Link>
+      <nav className="ns-nav" aria-label="Three doors">
+        <Link to="/services">AI tools</Link><Link to="/games">Play</Link><Link to="/token">$SHIFT</Link>
+        <Link to="/mcp">Connect</Link><Link to="/proof">Proof</Link><Link to="/security">Security</Link><Link to="/how-it-works">How it works</Link>
       </nav>
       <div className="ns-status" title="Live from api.imd.fun/health">
         <i className="pulse" />
@@ -226,7 +217,7 @@ export function SiteHeader({ active, home = false }: { active: Active; home?: bo
       ) : null}
       <InstallButton compact />
       <Socials />
-      <Magnetic className="ns-cta sm" onClick={() => go("/launch")} href="/launch">LAUNCH A COMPANY <span className="arr">→</span></Magnetic>
+      <Magnetic className="ns-cta sm" onClick={() => go("/launch")} href="/launch">START A BUSINESS <span className="arr">→</span></Magnetic>
       <MobileMenu home={home} />
     </header>
   );
@@ -243,11 +234,13 @@ export function SiteFooter() {
         <a href={TIKTOK_URL} target="_blank" rel="noreferrer">TIKTOK</a>
         <a href={BLUESKY_URL} target="_blank" rel="noreferrer">BLUESKY</a>
         <a href={OPENSEA_URL} target="_blank" rel="noreferrer">OPENSEA</a>
-        <Link to="/breakroom">BREAKROOM</Link>
-        <Link to="/geek">GEEK ROOM</Link>
-        <Link to="/info">INFO ROOM</Link>
-        <Link to="/economy">HR &amp; ECONOMY</Link>
-        <Link to="/command">COMMAND ROOM</Link>
+        <Link to="/services">AI tools</Link>
+        <Link to="/games">Play</Link>
+        <Link to="/token">$SHIFT</Link>
+        <Link to="/how-it-works">How it works</Link>
+        <Link to="/proof">Proof</Link>
+        <Link to="/security">Security</Link>
+        <Link to="/whitepaper">Whitepaper</Link>
         <Link to="/league">NIGHT LEAGUE</Link>
         <Link to="/security">SECURITY</Link>
         <a href="/imd-status/">IMD STATUS</a>

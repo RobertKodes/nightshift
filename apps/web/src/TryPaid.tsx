@@ -1,3 +1,4 @@
+import { serviceLabel } from "./labels";
 import { useEffect, useRef, useState } from "react";
 import type { Address } from "viem";
 import { type BuildCheckReport, type WatchReport } from "./api";
@@ -126,7 +127,7 @@ export function TryPaid({ offer }: { offer: ServiceOffer }) {
   const price = terms ? Number(terms.requirement.amount) / 1e6 : offer.priceUsd;
   return (
     <details className="st-panel svc-paid" open={offer.id === "token-verdict-quick" || offer.id === "watchtower-check"}>
-      <summary className="svc-paid-head"><b>{offer.name}</b><span className="mono">{dollars(offer.priceUsd)}{terms?.holderPrice && <> · your holder price {dollars(price)}</>}</span></summary>
+      <summary className="svc-paid-head"><b>{serviceLabel(offer.name)}</b><span className="mono">{dollars(offer.priceUsd)}{terms?.holderPrice && <> · your holder price {dollars(price)}</>}</span></summary>
       <div className="svc-paid-body">
         <p className="st-note">You pay {dollars(price)} in USDC on Base from your wallet. No account.</p>
         <p className="st-note svc-small">{offer.pitch}</p>

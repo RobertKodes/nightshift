@@ -5,6 +5,7 @@ import { writeAtomic } from "./atomic.js";
 import { join } from "node:path";
 import type { Company, Product } from "@nightshift/core";
 import type { LlmClient } from "@nightshift/llm";
+import { productSite, siteBackups } from "./site-backup.js";
 
 /**
  * What a buyer actually receives. The IMD swarm publishes its work openly (research lands in a
@@ -17,7 +18,7 @@ export class ProductFiles {
   readonly #key: string;
   readonly #inflight = new Set<string>();
 
-  constructor(dataDir: string, secretMaterial: string, private readonly llm: LlmClient | null, private readonly model: string, private readonly publicUrl: string) {
+  constructor(dataDir: string, secretMaterial: string, private readonly llm: LlmClient | null, private readonly model: string, private readonly publicUrl: string, private readonly resolveSites: (c: Company) => Promise<void> = (c) => siteBackups.company(c, () => {})) {
     this.#dir = join(dataDir, "products");
     mkdirSync(this.#dir, { recursive: true });
     this.#key = createHmac("sha256", secretMaterial).update("nightshift-downloads-v1").digest("hex");
@@ -37,6 +38,15 @@ export class ProductFiles {
   has(c: Company, p: Product): boolean { return existsSync(this.#file(c, p)) || existsSync(this.#bin(c, p)); }
   /** The text of a Markdown product (research, guides, tool links); null for a studio download. */
   read(c: Company, p: Product): string | null { return existsSync(this.#file(c, p)) ? readFileSync(this.#file(c, p), "utf8") : null; }
+  /** Repairs old tool files too, so a repeat download includes the backup. */
+  async delivery(c: Company, p: Product): Promise<string | null> {
+    const text = this.read(c, p);
+    if (text === null || p.kind !== "tool" || !p.deliverableUrl) return text;
+    await this.resolveSites(c);
+    const updated = toolBackup(text, p, p.deliverableUrl);
+    if (updated !== text) writeAtomic(this.#file(c, p), updated, { mode: 0o600 });
+    return updated;
+  }
   /** A studio product's download, as the buyer gets it. */
   bytes(c: Company, p: Product): { data: Buffer; name: string; type: string } | null {
     const f = this.#bin(c, p);
@@ -71,7 +81,8 @@ export class ProductFiles {
     try {
       const raw = await source();
       if (!raw) return;
-      const body = await this.#package(c, p, raw);
+      if (p.kind === "tool") await this.resolveSites(c);
+      const body = await this.#package(c, p, p.kind === "tool" && p.deliverableUrl ? toolBackup(raw, p, p.deliverableUrl) : raw);
       const checked = await checkLinks(body);
       writeAtomic(f, `${body.trim()}\n\n---\n\n${checked}\n`, { mode: 0o600 });
     } catch (e) {
@@ -108,6 +119,20 @@ export class ProductFiles {
 /** Ids from before products got full UUIDs (randomUUID().slice(0, 8)). */
 const legacy = (id: string) => id.length <= 8;
 
+/** Inserts the fallback under the first site link, keeping old tool files intact. */
+function toolBackup(text: string, p: Product, url: string): string {
+  const backup = productSite(p).siteBackup;
+  if (!backup) return text;
+  const line = `Backup link (if the site does not open): ${backup}`;
+  if (text.includes(line)) return text;
+  const start = text.indexOf(url);
+  if (start < 0) return text;
+  const tail = text.slice(start).search(/[\r\n]/);
+  const end = tail < 0 ? text.length : start + tail;
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  return `${text.slice(0, end)}${eol}${eol}${line}${text.slice(end)}`;
+}
+
 /** Tests every http(s) link in the text and reports which answered. */
 async function checkLinks(text: string): Promise<string> {
   const urls = [...new Set((text.match(/https?:\/\/[^\s)\]>"'`]+/g) ?? []).map((u) => u.replace(/[.,;:]+$/, "")))].slice(0, 60);
@@ -143,5 +168,5 @@ export async function fetchDelivery(files: Record<string, string> | undefined, r
 
 /** What the buyer of a web tool receives: its address and how to use it. */
 export function toolAccess(c: Company, p: Product, url: string): string {
-  return `## Open ${p.name}\n\n${url}\n\nIt runs in your browser: nothing to install and no account. Bookmark the address to come back to it.\n\nMade for ${c.audience}.`;
+  return `## Open ${p.name}\n\n${toolBackup(url, p, url)}\n\nIt runs in your browser: nothing to install and no account. Bookmark the address to come back to it.\n\nMade for ${c.audience}.`;
 }

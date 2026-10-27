@@ -33,7 +33,7 @@ function BoardPage() {
   const [n, setN] = useState(30);
   const mine = useMemo(myLaunches, []);
   useEffect(() => {
-    document.title = "Launchpad · NIGHTSHIFT";
+    document.title = "Launch a token · NIGHTSHIFT";
     const load = () => lpApi.board().then((x) => { setB(x); setErr(null); }, (e: Error) => setErr(e.message));
     void load();
     const t = setInterval(load, 120_000);
@@ -57,7 +57,7 @@ function BoardPage() {
         <img className="st-hero-art" src="/art/station/room-geek-1600x900.webp" alt="" />
         <div className="st-hero-in">
           <span className="st-deck"><Link to="/geek">GEEK ROOM</Link> · LAUNCHPAD · BUILT ON IMD</span>
-          <h1>Launchpad</h1>
+          <h1>Launch a token</h1>
           <p>Launch a coin with the IMD swarm: it is built, tested, audited and deployed with its Uniswap v4 pool, from your own wallet. Then anyone buys it from Ethereum, Base, Robinhood Chain or Solana, into that one pool.</p>
           <div className="st-row">
             <Link to="/launchpad/new" className="st-cta">Launch a coin on IMD</Link>

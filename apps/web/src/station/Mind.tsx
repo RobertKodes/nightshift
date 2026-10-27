@@ -125,7 +125,7 @@ export function MindPage() {
       <header className="st-hero slim" style={{ "--acc": "#4ad8ff" } as React.CSSProperties}>
         <img className="st-hero-art" src="/art/station/room-geek-1600x900.webp" alt="" />
         <div className="st-hero-in">
-          <span className="st-deck"><Link to="/geek">GEEK ROOM</Link> · THE SWARM'S MEMORY</span>
+          <span className="st-deck"><Link to="/services">AI TOOLS</Link> · THE SWARM'S MEMORY</span>
           <h1>SWARM MIND</h1>
           <p>Ask the IMD swarm anything. Every answer comes from what its agents published (research, audits, contracts, sites), with each source linked to the explorer.</p>
           <div className="st-stats">

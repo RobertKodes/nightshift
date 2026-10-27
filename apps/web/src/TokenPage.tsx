@@ -1,3 +1,6 @@
+import { BenefitsCard } from "./BenefitsCard";
+import { HowThisConnects } from "./HowThisConnects";
+import { RewardsCard } from "./nx/Rewards";
 import { LIVE_LAUNCH, SHIFT } from "./shift";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
@@ -145,7 +148,7 @@ export function TokenPage() {
     ["Pool hook", live ? address(contracts?.hook) : null],
     ["Fee splitter", live ? address(contracts?.splitter) : null],
     ["Staking & rewards", live ? address(contracts?.rewards) : null],
-    ["NIGHT FROGS", FROGS],
+    ["Frogs", FROGS],
     ["IMD swarm distributor", live ? IMD_DISTRIBUTOR : null],
   ];
   const swapLaunch = live && l ? { ...l, token: ca ?? l.token, symbol: t?.symbol ?? l.symbol ?? "SHIFT", pool: l.pool ?? undefined } : null;
@@ -159,9 +162,11 @@ export function TokenPage() {
       <header className="tk-intro">
         <div className="tk-topline"><span className="tk-label">$SHIFT / ETHEREUM</span><span className={`tk-status${live ? " is-live" : ""}`}><i />{token.loading ? "CONNECTING" : prelaunch ? "PRE-LAUNCH" : live ? "LIVE ON ETHEREUM" : "STATUS NOT AVAILABLE"}</span></div>
         <h1>The fuel of the <em>night shift.</em></h1>
-        <div className="tk-intro-bottom"><p>Get it. Put it to work. Follow every fee.</p><span className="tk-refresh" title={overview.updatedAt ? `Last read ${new Date(overview.updatedAt).toLocaleTimeString()}` : undefined}>{overview.loading ? "READING LIVE DATA…" : overview.updatedAt ? "DATA REFRESHES EVERY 60S" : "LIVE DATA NOT AVAILABLE"}</span></div>
+        <div className="tk-intro-bottom"><p>See your benefits. Swap, stake and check funded rewards.</p><span className="tk-refresh" title={overview.updatedAt ? `Last read ${new Date(overview.updatedAt).toLocaleTimeString()}` : undefined}>{overview.loading ? "READING LIVE DATA…" : overview.updatedAt ? "DATA REFRESHES EVERY 60S" : "LIVE DATA NOT AVAILABLE"}</span></div>
       </header>
 
+      <nav className="clarity-start" aria-label="$SHIFT"><a href="#benefits">Benefits</a><a href="#tk-swap">Swap</a><a href="/stake">Stake SHIFT</a><a href="#rewards">Rewards</a><a href="/frogs">Frogs</a></nav>
+      <BenefitsCard />
       <section className="tk-actions" aria-label="Put $SHIFT to work">
         <article className="tk-action">
           <div className="tk-action-content"><div className="tk-action-heading"><Icon name="swap" size={20} /><span className="tk-label">01 / GET</span></div><h2>Get <em>$SHIFT.</em></h2>
@@ -180,14 +185,17 @@ export function TokenPage() {
           </div><footer className="tk-action-footer"><a className="tk-action-link" href="/stake">STAKE<Icon name="arrow" size={16} /></a><span className="tk-footer-note">EARN YOUR SHARE</span></footer>
         </article>
         <article className="tk-action tk-frog-action">
-          <div className="tk-action-content"><div className="tk-action-heading"><Icon name="frog" size={20} /><span className="tk-label">03 / HOLD</span></div><h2>Hold a <em>NIGHT FROG.</em></h2>
-            <div className="tk-big"><Metric value={minted} loading={overview.loading || frogs.loading} format={whole} /><small>/ {whole(frogMax)}</small></div><p>minted</p><p className="tk-support">Half of every reward goes to frog holders.</p>
-          </div><footer className="tk-action-footer"><a className="tk-action-link" href="/frogs">NIGHT FROGS<Icon name="arrow" size={16} /></a><Icon name="frog" size={18} /></footer>
+          <div className="tk-action-content"><div className="tk-action-heading"><Icon name="frog" size={20} /><span className="tk-label">03 / HOLD</span></div><h2>Explore <em>Frogs.</em></h2>
+            <div className="tk-big"><Metric value={minted} loading={overview.loading || frogs.loading} format={whole} /><small>/ {whole(frogMax)}</small></div><p>minted</p><p className="tk-support">Earned hours weight a share of the funded Frog reward pot.</p>
+          </div><footer className="tk-action-footer"><a className="tk-action-link" href="/frogs">Frogs<Icon name="arrow" size={16} /></a><Icon name="frog" size={18} /></footer>
         </article>
       </section>
 
       {prelaunch && <p className="tk-notice"><Icon name="alert" size={18} /><span><b>$SHIFT has not launched.</b> The contract is announced at launch, here and on our official channels. Any other $SHIFT token or contract is fake.</span></p>}
 
+      <section id="rewards"><RewardsCard /></section>
+      <HowThisConnects current="token" />
+      <details className="clarity-more"><summary>More</summary><nav><a href="/tokenomics">Tokenomics</a><a href="/whitepaper">Whitepaper</a><a href="/watch">Run a keeper</a></nav></details>
       <div className="tk-workspace">
         <section id="tk-swap" className="tk-contract-box" aria-label="$SHIFT contract and swap" tabIndex={-1}>
           <div className="tk-contract-header"><div className="tk-token-name"><span className="tk-token-mark"><Icon name="crescent" size={24} /></span><h2>$SHIFT</h2></div><span className="tk-label">ETHEREUM</span></div>
@@ -201,7 +209,7 @@ export function TokenPage() {
             <li><span className="tk-timeline-dot" /><div><span className="tk-label">THE FIRST BUY</span><p>{live ? "Treasury made the first buy; trading opened to everyone." : "Treasury makes the first buy; trading opens to everyone."}</p><TxLink tx={live ? l?.openTx : null} label="The first buy" /></div></li>
             <li><span className="tk-timeline-dot" /><div><span className="tk-label">THE ONE RULE</span><p>Fee splitter, rewards and the burn keeper {live ? "went" : "go"} live.</p>{live && address(contracts?.splitter) && <a className="tk-proof" href={etherscan(contracts!.splitter!)} target="_blank" rel="noreferrer">Fee splitter<Icon name="external" size={12} /></a>}</div></li>
             <li><span className="tk-timeline-dot" /><div><span className="tk-label">PUT IT TO WORK</span><p>Staking {live ? "opened" : "opens"}.</p><a className="tk-proof" href="/stake">Stake $SHIFT<Icon name="arrow" size={12} /></a></div></li>
-            <li><span className="tk-timeline-dot" /><div><span className="tk-label">THE NIGHT CREW</span><p>NIGHT FROGS rewards by shift hours.</p><a className="tk-proof" href="/frogs">Meet the crew<Icon name="arrow" size={12} /></a></div></li>
+            <li><span className="tk-timeline-dot" /><div><span className="tk-label">THE NIGHT CREW</span><p>Frog rewards use earned hours toward the funded pot.</p><a className="tk-proof" href="/frogs">Meet the crew<Icon name="arrow" size={12} /></a></div></li>
             <li className="tk-next"><span className="tk-timeline-dot" /><div><span className="tk-label tk-next-label">NEXT</span><p>Space Pinball duels in $SHIFT and IMD.</p></div></li>
           </ol>
         </section>
@@ -212,18 +220,13 @@ export function TokenPage() {
         <h2 id="tk-supply-title"><span><b><Metric value={o?.circulating} loading={overview.loading} /></b> <em>circulating.</em></span> <span><b><Metric value={o?.staked} loading={overview.loading} /></b> <em>staked.</em></span> <span><b><Metric value={o?.burnedShift} loading={overview.loading} /></b> <em>burned forever.</em></span></h2>
         <div className={`tk-supply-bar${hasSupply ? "" : " is-unavailable"}`} role="img" aria-label={hasSupply ? `${whole(segments[0]!)} circulating, ${whole(segments[1]!)} staked, ${whole(segments[2]!)} burned SHIFT` : overview.loading ? "Loading supply breakdown" : "Supply breakdown not available"}>{hasSupply && segments.map((value, i) => <span key={i} className={["tk-circulating", "tk-staked", "tk-burned"][i]} style={{ width: `${(value! / segmentTotal) * 100}%` }} />)}</div>
         <div className="tk-supply-legend">{[["Circulating", "tk-circulating", o?.circulating], ["Staked", "tk-staked", o?.staked], ["Burned forever", "tk-burned", o?.burnedShift]].map(([label, color, value]) => <div key={String(label)}><i className={String(color)} /><span>{label}</span><b><Metric value={value} loading={overview.loading} /></b></div>)}</div>
-        <p>1,000,000,000 minted once. No mint function. Sells pay 5% (2.5% SHIFT + 2.5% ETH). Buys pay no token fee.</p>
+        <p>1,000,000,000 minted once. No mint function. Pool and hook costs affect trading output. Review the actual quote before signing.</p>
       </section>
 
       <section className="tk-fees tk-section" aria-labelledby="tk-fees-title">
-        <div className="tk-section-heading"><span className="tk-label">40 / 20 / 20 / 20</span><h2 id="tk-fees-title">One rule for <em>every fee.</em></h2></div>
-        <div className="tk-fee-grid">
-          <article><Icon name="user" size={20} /><b>40<span>%</span></b><h3>Stakers &<br />NIGHT FROGS holders</h3><p>Half to $SHIFT stakers.<br />Half to the frog holders.</p></article>
-          <article><Icon name="bolt" size={20} /><b>20<span>%</span></b><h3>Dev wallet</h3><p>Keep building through<br />the night.</p></article>
-          <article><Icon name="shield" size={20} /><b>20<span>%</span></b><h3>Treasury</h3><p>Fund what<br />comes next.</p></article>
-          <article className="tk-burn-tile"><Icon name="flame" size={20} /><b>20<span>%</span></b><h3>Burned forever</h3><p>$SHIFT to 0xdead. ETH buys IMD and burns it at IMD’s BurnExecutor daily.</p></article>
-        </div>
-        <div className="tk-burn-totals"><Icon name="flame" size={20} /><div><span><b><Metric value={o?.burnedShift} loading={overview.loading} /></b> $SHIFT burned</span><span><b><Metric value={o?.burnedImd} loading={overview.loading} /></b> IMD burned</span></div><a className="tk-text-link" href="/impact">BURN PROOFS<Icon name="arrow" size={15} /></a></div>
+        <div className="tk-section-heading"><span className="tk-label">FEESPLITTER · ETHEREUM</span><h2 id="tk-fees-title">Follow the <em>received fees.</em></h2></div>
+        <p>FeeSplitter handles the Ethereum assets it receives. House USDC sales on Base do not automatically reach it. Staking rewards and the Frog pot depend on funding; Agent Reserve buys go to the team wallet.</p>
+        <a className="tk-text-link" href="/how-it-works">How payments, fees and rewards connect →</a>
       </section>
 
       <section className="tk-verification tk-section" aria-labelledby="tk-checks-title">

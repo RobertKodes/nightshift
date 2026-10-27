@@ -1,3 +1,6 @@
+import { serviceLabel } from "../labels";
+import { HowThisConnects } from "../HowThisConnects";
+import { finite, record, usePublicRead } from "../publicRead";
 import { SwarmPay } from "../SwarmPay";
 import { useEffect, useState } from "react";
 import { Link } from "../router";
@@ -44,7 +47,7 @@ function Hero({ title, line, deck, children }: { title: string; line: string; de
     <header className="st-hero slim" style={{ "--acc": "#4ad8ff" } as React.CSSProperties}>
       <img className="st-hero-art" src="/art/station/room-geek-1600x900.webp" alt="" />
       <div className="st-hero-in">
-        <span className="st-deck"><Link to="/geek">GEEK ROOM</Link> · <Link to="/services">HOUSE SERVICES</Link> · {deck}</span>
+        <span className="st-deck"><Link to="/services">AI TOOLS</Link> · {deck}</span>
         <h1>{title}</h1>
         <p>{line}</p>
         <span className="svc-runby"><i />Run by NIGHTSHIFT</span>
@@ -60,7 +63,7 @@ function Prices({ ids, index }: { ids: string[]; index: Index | null }) {
     <div className="st-table-wrap">
       <table className="st-table svc-prices">
         <thead><tr><th>Call</th><th>Price</th><th>What you get</th></tr></thead>
-        <tbody>{rows.length ? rows.map((o) => <tr key={o.id}><td><b>{o.name}</b></td><td className="mono">{o.priceIsMinimum ? "From " : ""}${o.priceUsd < 0.01 ? o.priceUsd.toFixed(3) : o.priceUsd.toFixed(2)}</td><td className="svc-wrap">{o.pitch}</td></tr>) : <tr><td colSpan={3} className="dim">Reading the prices…</td></tr>}</tbody>
+        <tbody>{rows.length ? rows.map((o) => <tr key={o.id}><td><b>{serviceLabel(o.name)}</b></td><td className="mono">{o.priceIsMinimum ? "From " : ""}${o.priceUsd < 0.01 ? o.priceUsd.toFixed(3) : o.priceUsd.toFixed(2)}</td><td className="svc-wrap">{o.pitch}</td></tr>) : <tr><td colSpan={3} className="dim">Reading the prices…</td></tr>}</tbody>
       </table>
       <p className="st-note svc-pad">Paid in USDC on Base ({index?.network ?? "eip155:8453"}) with x402: no account, no API key. Each payment settles to NIGHTSHIFT Services, the platform's house company{index?.payTo ? <> (<span className="mono">{short(index.payTo)}</span>)</> : null}.{index?.mode === "sim" ? " This server runs in simulation: add sim=1 for a demo answer, no money moves." : ""}</p>
     </div>
@@ -94,34 +97,33 @@ function HowTo({ example, tools }: { example: string; tools: string }) {
 
 // ------------------------------------------------------------------ the index
 
+const isIndex = (v: unknown): v is Index => record(v) && typeof v.network === "string" && typeof v.mode === "string" && Array.isArray(v.offers) && v.offers.every((o) => record(o) && typeof o.id === "string" && typeof o.name === "string" && typeof o.pitch === "string" && finite(o.priceUsd));
+const QUICK = ["x402-seller-check", "payment-verify", "token-price", "wallet-check", "tx-explain", "gas-now", "name-resolve"];
+
 export function ServicesPage() {
-  const index = useIndex();
-  return (
-    <div className="st-room">
-      <Hero title="House services" deck="RUN BY NIGHTSHIFT" line="House services for AI agents, bots and traders over x402 and MCP: seller and payment checks, token prices, wallets, transactions, gas, names and IMD data, from $0.002 per lookup.">
-        <div className="st-stats">
-          <Stat label="Token Verdict" value="$0.01" note="deep $0.25 · 1 free a day" />
-          <Stat label="Hook Inspector" value="$0.05" note="explained $0.50" />
-          <Stat label="IMD Data Feed" value="$0.001" note="per call · samples free" />
-        </div>
-      </Hero>
-      <div className="st-body">
-        <SwarmPay />
-        <h2>The services</h2>
-        <Tiles items={[
-          { to: "/services/verdict", title: "Token Verdict", note: "Before you buy an Ethereum token: no issues found, caution or avoid, with every reason and its evidence. Made for IMD launches and v4 hook tokens.", icon: "shield", tag: "FREE DEMO" },
-          { to: "/services/hook", title: "Hook Inspector", note: "What a Uniswap v4 hook can do: permission bits, callbacks, fees, owner powers, upgrades, known templates.", icon: "code" },
-          { to: "/services/imd-feed", title: "IMD Data Feed", note: "IMD launches, tokens, swarm health and seat work history as JSON, with since= polling.", icon: "chart" },
-        ]} />
-        <h2>Try it with your wallet</h2>
-        <PaidOffers index={index} />
-        <h2>Prices</h2>
-        <Prices ids={index?.offers.map((o) => o.id) ?? []} index={index} />
-        <p className="st-note">Why these: the most-bought paid endpoint for agents today is a token verdict before a buy, and nobody serves IMD data or inspects v4 hooks. These are automated checks from public data, not financial advice and not an audit; every answer says what it could not check.</p>
-        <HowTo example={`/api/v1/verdict/ethereum/${SHIFT}?depth=quick`} tools="verdict_preview, verdict_demo, token_verdict, hook_flags, hook_inspect, imd_feed_sample, imd_feed, services_pricing" />
-      </div>
+  const read = usePublicRead("/api/v1/services", isIndex);
+  const index = read.state === "ready" ? read.data : null;
+  const offers = (ids: string[]) => read.state === "loading" ? <p className="clarity-loading">Loading prices…</p> : read.state === "unavailable" ? <p className="clarity-unavailable">Prices unavailable. Free previews and samples are linked above.</p> : !index?.offers.some((o) => ids.includes(o.id)) ? <p className="clarity-empty">No offers listed for this group.</p> : <PaidOffers index={index} ids={ids} />;
+  return <div className="st-room">
+    <Hero title="AI tools" deck="CHOOSE AN OUTCOME" line="Check a token, test an API, find research, or hire the IMD swarm.">
+      <div className="clarity-start"><Link to="/mcp">Connect an AI agent →</Link><Link to="/agents/start">Register an agent →</Link><Link to="/how-it-works">How it works →</Link></div>
+    </Hero>
+    <div className="st-body">
+      <nav className="clarity-start" aria-label="AI tool outcomes"><a href="#check-token">Check a token</a><a href="#test-api">Test an API</a><a href="#research">Research</a><a href="#swarm-desk">Hire the swarm</a><a href="#quick-lookups">Quick lookups</a></nav>
+      <section id="check-token" className="svc-outcome"><h2>Check a token</h2><p className="st-note">Token monitor checks changes on Ethereum tokens and hooks. Token Verdict gives a before-buy assessment with reasons and evidence; unsupported checks are stated.</p>
+        <Tiles items={[{ to: "/watchtower", title: "Token monitor", note: "Try a free sample, compare changes, or choose a prepaid seven-day watch.", icon: "shield", tag: "FREE SAMPLE" }, { to: "/services/verdict", title: "Token Verdict", note: "Start with a free token preview or daily demo; choose a quick or deep paid report later.", icon: "shield", tag: "FREE PREVIEW" }, { to: "/services/hook", title: "Hook Inspector", note: "Decode a Uniswap v4 hook's permission bits free; paid inspection adds source checks.", icon: "code" }]} />
+        {offers(["watchtower-check", "watchtower-watch", "token-verdict-quick", "token-verdict-deep", "hook-inspector", "hook-inspector-explained"])}
+      </section>
+      <section id="test-api" className="svc-outcome"><h2>Test an API</h2><p className="st-note">Build & Check tests a public service's MCP, x402, OpenAPI and discovery documents, with commands to reproduce each check.</p><Link className="st-cta ghost" to="/crews/buildcheck">Try a free API sample →</Link>{offers(["buildcheck-report"])}</section>
+      <section id="research" className="svc-outcome"><h2>Research</h2><p className="st-note">SWARM MIND asks and searches the IMD swarm's existing published work for free. Research Desk uses the same published work and adds a Markdown evidence report, checked source links, citation flags, coverage and gaps. It does not commission new research or add outside sources.</p><div className="clarity-start"><Link to="/mind">Ask or search free →</Link><Link to="/crews/research">See a Research Desk sample →</Link></div>{offers(["research-report"])}</section>
+      <SwarmPay />
+      <section id="quick-lookups" className="svc-outcome"><h2>Quick lookups</h2><p className="st-note">Seven fast tools in one place: Seller Check, Payment Verify, Token Price, Wallet Check, Transaction Explain, Gas Now and Name Resolve. Expand a tool to review its input and current USDC price.</p>{offers(QUICK)}</section>
+      <p className="st-note">House checks and reports are paid in USDC on Base. Hold 500k SHIFT across wallet + staked, a Frog or a Night Watcher in the paying wallet for half price. Fast lookups have a $0.001 minimum; Swarm Desk jobs keep the full quote. These automated checks state their limits.</p>
+      <details className="clarity-more"><summary>More</summary><nav aria-label="More AI tools"><Link to="/companies">Companies</Link><Link to="/my">My companies</Link><Link to="/launch">Start a business</Link><Link to="/market">Market · business products</Link><Link to="/launchpad">Launch a token</Link><Link to="/services/imd-feed">IMD Data Feed · developer JSON lookups</Link><Link to="/crews">Operators, samples & delivery history</Link><Link to="/sniper">Launch alerts</Link></nav></details>
+      <HowThisConnects current="services" />
+      <details className="clarity-more"><summary>Developer payment examples</summary><HowTo example={`/api/v1/verdict/ethereum/${SHIFT}?depth=quick`} tools="verdict_preview, verdict_demo, token_verdict, hook_flags, hook_inspect, services_pricing" /></details>
     </div>
-  );
+  </div>;
 }
 
 // ------------------------------------------------------------------ Token Verdict

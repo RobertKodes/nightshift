@@ -76,7 +76,7 @@ export function GuidePage() {
       <Faq />
 
       <div className="guide-end">
-        <Link to="/launch" className="btn primary">Launch a company</Link>
+        <Link to="/launch" className="btn primary">Start a business</Link>
         <Link to="/my" className="btn">Owner desk</Link>
         <Link to="/whitepaper" className="btn">Whitepaper</Link>
         <Link to="/terms" className="btn ghost">Terms & risks</Link>

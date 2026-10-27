@@ -72,7 +72,7 @@ function rowsOf(d: Data, me: string): Row[] {
     const token = f.token.toLowerCase();
     if (token !== ETH && token !== SHIFT.token.toLowerCase()) continue;
     const left = f.postedAt ? Math.max(0, Math.ceil((f.postedAt + 30 * 86_400_000 - Date.now()) / 86_400_000)) : null;
-    rows.push({ key: `frog-${f.epoch}-${token}`, icon: "frogs", acc: "#b8ff4a", title: `NIGHT FROGS · epoch ${f.epoch}`, sub: left !== null ? `holder rewards · about ${left} day${left === 1 ? "" : "s"} left to claim` : "holder rewards · 30 days to claim", amount: tok(f.amount, f.symbol), usd: valued(f.amount, f.symbol, p), button: "Claim",
+    rows.push({ key: `frog-${f.epoch}-${token}`, icon: "frogs", acc: "#b8ff4a", title: `Frogs · epoch ${f.epoch}`, sub: left !== null ? `holder rewards · about ${left} day${left === 1 ? "" : "s"} left to claim` : "holder rewards · 30 days to claim", amount: tok(f.amount, f.symbol), usd: valued(f.amount, f.symbol, p), button: "Claim",
       call: async () => ({ address: SHIFT.rewards, abi: REWARDS, functionName: "claimFrogs", args: [BigInt(f.epoch), token as Address, BigInt(f.amount), f.proof as Hex[]] }) });
   }
   for (const g of d.games.claimable) {
@@ -81,7 +81,7 @@ function rowsOf(d: Data, me: string): Row[] {
       call: g.kind === "refund" ? async () => ({ address: ESCROW, abi: ESCROW_ABI, functionName: "refund", args: [g.matchId] }) : () => settleCall(g.matchId, me) });
   }
   for (const c of d.companies ?? []) {
-    rows.push({ key: `co-${c.id}`, icon: "companies", acc: "#ffc861", title: `${c.name} · sales`, sub: `company revenue in USDC on Base${c.feeBps ? ` · ${(c.feeBps / 100).toFixed(2)}% platform fee, 0% for $SHIFT and NIGHT FROGS holders` : ""}`, amount: `${c.usd.toFixed(2)} USDC`, usd: c.usd, button: "Withdraw", company: c.id });
+    rows.push({ key: `co-${c.id}`, icon: "companies", acc: "#ffc861", title: `${c.name} · sales`, sub: `company revenue in USDC on Base${c.feeBps ? ` · ${(c.feeBps / 100).toFixed(2)}% platform fee for this withdrawal` : ""}`, amount: `${c.usd.toFixed(2)} USDC`, usd: c.usd, button: "Withdraw", company: c.id });
   }
   return rows;
 }
@@ -121,7 +121,7 @@ export function RewardsCard() {
     <section className="nx-rw" aria-label="Your rewards">
       <div className="nx-rw-head">
         <span className="nx-rw-k"><NxIcon name="money" size={16} />YOUR REWARDS</span>
-        <p className="nx-rw-line">$SHIFT staking, NIGHT FROGS holder rewards, staked-game winnings and company sales, claimed in one place.</p>
+        <p className="nx-rw-line">$SHIFT staking, Frog holder rewards, staked-game winnings and company sales, claimed in one place.</p>
         <button type="button" className="nx-rw-all" disabled={session.busy} onClick={() => void session.signIn()}>{session.busy ? "Check your wallet…" : "Check my rewards"}<NxIcon name="arrow" size={16} /></button>
       </div>
       {session.error && <p className="nx-rw-msg bad" role="alert">{session.error}</p>}
@@ -232,7 +232,7 @@ export function RewardsCard() {
       <PrizeLines wallet={me} />
       <nav className="nx-rw-foot" aria-label="Rewards pages">
         <Link to="/stake">Staking</Link>
-        <Link to="/frogs">NIGHT FROGS{d?.frogsClaimed ? ` · ${d.frogsClaimed} claimed` : ""}</Link>
+        <Link to="/frogs">Frogs{d?.frogsClaimed ? ` · ${d.frogsClaimed} claimed` : ""}</Link>
         {d?.companies && <Link to="/my">Owner desk</Link>}
         <button type="button" className="nx-rw-link" aria-expanded={history} onClick={() => setHistory((h) => !h)}>Staked games{recent.length ? ` · ${recent.length} recent` : ""} {history ? "▴" : "▾"}</button>
       </nav>

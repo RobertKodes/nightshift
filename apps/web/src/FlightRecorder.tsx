@@ -217,7 +217,8 @@ export function FlightDrawer({ load, onClose, accent = "#4ad8ff", share }: { loa
               {f.receipts.orderId && <span>order <code>{f.receipts.orderId.slice(0, 8)}</code></span>}
               {f.receipts.jobId && (f.receipts.jobUrl ? <a href={f.receipts.jobUrl} target="_blank" rel="noreferrer">IMD job {f.receipts.jobId.slice(0, 8)} <NxIcon name="external" size={13} /></a> : <span>job <code>{f.receipts.jobId.slice(0, 8)}</code></span>)}
               {f.receipts.txHash && (f.receipts.txUrl ? <a href={f.receipts.txUrl} target="_blank" rel="noreferrer">payment {short(f.receipts.txHash)} <NxIcon name="external" size={13} /></a> : <span>payment <code>{short(f.receipts.txHash)}</code></span>)}
-              {f.receipts.siteUrl && <a href={f.receipts.siteUrl} target="_blank" rel="noreferrer">the site <NxIcon name="external" size={13} /></a>}
+              {f.receipts.siteUrl && <a href={safeHref(f.receipts.siteUrl)} target="_blank" rel="noreferrer">Site <NxIcon name="external" size={13} /></a>}
+              {f.receipts.siteBackup && <a href={safeHref(f.receipts.siteBackup)} target="_blank" rel="noreferrer">Backup link (if the site does not open) <NxIcon name="external" size={13} /></a>}
               {Object.entries(f.receipts.files ?? {}).map(([k, v]) => <a key={k} href={v} target="_blank" rel="noreferrer">{k} <NxIcon name="external" size={13} /></a>)}
               {f.market?.bought && <a href={`/c/${f.market.bought.slug}#${f.market.bought.productId}`}>bought from {f.market.bought.company}</a>}
               {f.market?.bought?.tx && (f.market.bought.txUrl ? <a href={f.market.bought.txUrl} target="_blank" rel="noreferrer">x402 payment {short(f.market.bought.tx)} <NxIcon name="external" size={13} /></a> : <span>x402 payment <code>{short(f.market.bought.tx)}</code></span>)}

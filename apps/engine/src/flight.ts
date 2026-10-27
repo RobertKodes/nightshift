@@ -4,6 +4,7 @@ import type { LedgerTx } from "@nightshift/ledger";
 import { buildTree, type SpanKind, type SpanRecord, type SpanStatus } from "@nightshift/trace";
 import { config } from "./config.js";
 import type { Engine } from "./engine.js";
+import { backupUrl, productSite, siteBackups } from "./site-backup.js";
 
 /**
  * The flight recorder: one shift, rebuilt from its record as a trace (what the CEO saw, each phase
@@ -183,6 +184,7 @@ export function flight(c: Company, t: Task, o: FlightInput) {
       txHash: t.imd?.txHash ?? null,
       txUrl: o.live && t.imd?.txHash ? `https://etherscan.io/tx/${t.imd.txHash}` : null,
       siteUrl: t.result?.siteUrl ?? null,
+      siteBackup: t.result?.siteUrl === c.site?.url ? backupUrl(c.site?.cid) : product && t.result?.siteUrl === product.deliverableUrl ? productSite(product).siteBackup : null,
       files,
     },
     ...(o.owner && t.imd ? { brief: String((t.imd.input as { objective?: unknown })?.objective ?? "") } : {}),
@@ -196,6 +198,9 @@ export type Flight = ReturnType<typeof flight>;
 export async function flightFor(engine: Engine, c: Company, taskId: string, owner: boolean): Promise<Flight | null> {
   const t = c.tasks.find((x) => x.id === taskId || String(x.cycle) === taskId);
   if (!t) return null;
+  await engine.resolveSites(c);
   const m = engine.store.metricsOf(c.id);
-  return flight(c, t, { imdUsd: config.imdUsd, owner, live: config.mode === "live", ledger: await engine.ledger.store.list(`co:${c.id}:`), sales: m.sales, visits: m.visits, salesChainId: config.salesChainId });
+  const view = flight(c, t, { imdUsd: config.imdUsd, owner, live: config.mode === "live", ledger: await engine.ledger.store.list(`co:${c.id}:`), sales: m.sales, visits: m.visits, salesChainId: config.salesChainId });
+  view.receipts.siteBackup ??= await siteBackups.get(t.result?.siteUrl);
+  return view;
 }

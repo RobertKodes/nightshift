@@ -17,7 +17,7 @@ const readers = { 1: createPublicClient({ chain: mainnet, transport: http(RPC[1]
 const errText = (e: unknown) => String((e as { shortMessage?: string }).shortMessage ?? (e as Error).message ?? e).split("\n")[0]!.slice(0, 220);
 
 /**
- * Launch a coin on IMD from the creator's own wallet. The page builds IMD's coin request from the form
+ * Launch a token on IMD from the creator's own wallet. The page builds IMD's coin request from the form
  * (@nightshift/launch, the same code the engine checks with), IMD's free check reads it, and the
  * creator approves 0.5 IMD and sends one Intake request: the creator is the launch's requester, and
  * nothing passes through NIGHTSHIFT.
@@ -31,7 +31,7 @@ export function NewLaunch() {
   const [err, setErr] = useState<string | null>(null);
   const [usdPrice, setUsdPrice] = useState<{ eth: number | null; imd: number | null }>({ eth: null, imd: null });
   const [showBody, setShowBody] = useState(false);
-  useEffect(() => { document.title = "Launch a coin · Launchpad · NIGHTSHIFT"; lpApi.board().then((b) => setUsdPrice(b.usd)).catch(() => {}); }, []);
+  useEffect(() => { document.title = "Launch a token · Launch a token · NIGHTSHIFT"; lpApi.board().then((b) => setUsdPrice(b.usd)).catch(() => {}); }, []);
 
   const chain = LAUNCH_CHAINS[f.chainId], pair = chain.pairings[f.pairWith];
   const problems = formProblems(f);
@@ -102,7 +102,7 @@ export function NewLaunch() {
     <div className="st-room lp">
       <div className="st-body lp-new">
         <span className="st-deck lp-deck"><Link to="/launchpad">LAUNCHPAD</Link> · LAUNCH A COIN ON IMD</span>
-        <h1 className="lp-h1">Launch a coin</h1>
+        <h1 className="lp-h1">Launch a token</h1>
         <p className="st-note">IMD's swarm builds, tests, audits and deploys it with its Uniswap v4 pool. You pay 0.5 IMD from your own wallet; IMD checks the request for free first. Once it is live, anyone can buy it from Ethereum, Base, Robinhood Chain or Solana through NIGHTSHIFT's swap.</p>
 
         <div className="lp-form">

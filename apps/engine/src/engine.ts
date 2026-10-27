@@ -89,6 +89,7 @@ import { betCard, duelCard, freeDuelCard } from "./duelcards.js";
 import { liveBets } from "./bets-routes.js";
 import { liveGames } from "./spectate.js";
 import { startDigest } from "./digest.js";
+import { backupUrl, productSite, siteBackups } from "./site-backup.js";
 import { startChangelog } from "./changelog.js";
 import { type ChessEvent, onChess } from "./chess.js";
 import { accrueStaking, frogCached, frogCount, frogSlots, frogStats, frogsOn, markRevealAnnounced, milestoneSeen, newMints, revealAnnounced, setMilestone, stakingBoard } from "./frogs.js";
@@ -199,7 +200,7 @@ export class Engine {
       const id = typeof input === "object" && input ? this.#inputOwner.get(input) : undefined;
       return id ? this.store.companies.get(id) : undefined;
     }, `${config.dataDir}/sim-files`);
-    this.files = new ProductFiles(config.dataDir, this.vault.material, this.llm, config.model, config.publicUrl);
+    this.files = new ProductFiles(config.dataDir, this.vault.material, this.llm, config.model, config.publicUrl, (c) => this.resolveSites(c));
     this.studio = new Studio({
       files: this.files,
       // the company's own paid brain designs it when it has one; the free model otherwise
@@ -334,7 +335,7 @@ export class Engine {
       setInterval(() => void dex.tick().catch((e) => console.error("dex", e)), 60_000);
     }
     // The daily digest of what the live companies did, from their records and the ledger (sim mode: a dry-run log only).
-    startDigest(() => this.store.companies.values(), () => this.ledger.store.list(""));
+    startDigest(() => this.store.companies.values(), () => this.ledger.store.list(""), (c) => this.resolveSites(c));
     // Mondays 09:00 UTC: last week's changelog entries to the community chat, pinned (sim mode: a dry-run log only).
     startChangelog();
     setInterval(() => void this.#followTokenLaunch(), 60_000);
@@ -1811,12 +1812,16 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
   }
   async disconnectBluesky(c: Company): Promise<void> { await this.connect.disconnect(c, "bluesky"); }
 
+  /** Finds and saves backup addresses for the company and its browser tools. */
+  async resolveSites(c: Company): Promise<void> { await siteBackups.company(c, () => this.store.markDirty()); }
+
   /** Every product on sale across all companies: the public catalog for people and agents. */
-  market(q = ""): { company: string; slug: string; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; featured: boolean; buyUrl: string; page: string }[] {
+  market(q = ""): { company: string; slug: string; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; featured: boolean; buyUrl: string; page: string; site: string | null; siteBackup: string | null }[] {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return [...this.store.companies.values()]
       .flatMap((c) => c.products.filter((p) => p.status === "live" && this.files.has(c, p)).map((p) => ({
         company: c.name, slug: c.slug, id: p.id, name: p.name, kind: p.kind, pitch: p.pitch,
+        ...(p.kind === "tool" ? productSite(p) : { site: c.site?.url ?? null, siteBackup: backupUrl(c.site?.cid) }),
         priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, featured: holdsCached(c.owner) || frogCached(c.owner),
         buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, page: `${config.publicUrl}/c/${c.slug}#${p.id}`,
         text: `${c.name} ${c.mission} ${c.audience} ${p.name} ${p.pitch}`.toLowerCase(),
@@ -1855,6 +1860,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       if (c.status === "active" && c.policy.autopilot && c.nextShiftAt && now >= c.nextShiftAt && !this.#busy.has(c.id)) {
         await this.shiftNow(c).catch((e) => console.error("shift", c.slug, e));
       }
+      await this.resolveSites(c);
       // the owner's own accounts: posts out by their rules, Gumroad in step, Gumroad sales read (also while paused)
       if (!(config.mode === "live" && c.sim)) await this.connect.tick(c, c.status === "active").catch((e) => console.error("connect", c.slug, (e as Error).message));
       if (config.mode === "live" && config.blueskyCompanyPosts && houseOn() && !c.connections?.channels.bluesky && c.status === "active") {

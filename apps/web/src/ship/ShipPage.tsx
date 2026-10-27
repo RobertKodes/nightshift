@@ -308,7 +308,7 @@ function Loading({ scene }: { scene: ShipScene }) {
 
 /** The ship map: the seven rooms where they sit in the hull, bow to the right. */
 const MAP: { k: RoomKey; area: string; label: string }[] = [
-  { k: "forge", area: "1 / 2 / 3 / 3", label: "Forge" }, { k: "engine", area: "1 / 3 / 3 / 4", label: "Engine" },
+  { k: "forge", area: "1 / 2 / 3 / 3", label: "Upgrade Frogs" }, { k: "engine", area: "1 / 3 / 3 / 4", label: "Engine" },
   { k: "breakroom", area: "1 / 4 / 2 / 5", label: "Break" }, { k: "missions", area: "2 / 4 / 3 / 5", label: "Missions" },
   { k: "quarters", area: "1 / 5 / 2 / 6", label: "Quarters" }, { k: "offices", area: "2 / 5 / 3 / 6", label: "Offices" },
   { k: "bridge", area: "1 / 6 / 3 / 7", label: "Bridge" },
@@ -526,7 +526,7 @@ function FrogCard({ id, st, snap, onOpen, onWallet, follow }: { id: number; st: 
         {owner ? <><a className="mono" href={`https://etherscan.io/address/${owner}`} target="_blank" rel="noreferrer">{short(owner)}</a><button className="sh-link" onClick={() => onWallet(owner)}>See this crew</button></> : <b>{f?.dead ? "0x…dEaD (forged)" : "…"}</b>}
       </div>
       <div className="sh-links">
-        <Link to={owner ? `/forge?wallet=${owner}` : "/forge"} className="nx-btn nx-btn-acc"><NxIcon name="forge" size={16} /> Forge</Link>
+        <Link to={owner ? `/forge?wallet=${owner}` : "/forge"} className="nx-btn nx-btn-acc"><NxIcon name="forge" size={16} /> Upgrade Frogs</Link>
         <a className="nx-btn" href={`https://etherscan.io/nft/${NIGHT_FROGS}/${id}`} target="_blank" rel="noreferrer">Etherscan ↗</a>
         <a className="nx-btn" href={`https://opensea.io/assets/ethereum/${NIGHT_FROGS}/${id}`} target="_blank" rel="noreferrer">OpenSea ↗</a>
       </div>
@@ -587,7 +587,7 @@ function WatcherCard({ n, st, snap, onOpen, onWallet, follow }: { n: number; st:
         {owner ? <><a className="mono" href={`https://etherscan.io/address/${owner}`} target="_blank" rel="noreferrer">{short(owner)}</a><button className="sh-link" onClick={() => onWallet(owner)}>See this crew</button></> : <b>…</b>}
       </div>
       <div className="sh-links">
-        <Link to="/forge" className="nx-btn nx-btn-acc"><NxIcon name="forge" size={16} /> Forge</Link>
+        <Link to="/forge" className="nx-btn nx-btn-acc"><NxIcon name="forge" size={16} /> Upgrade Frogs</Link>
         <a className="nx-btn" href={`https://etherscan.io/nft/${FORGE}/${n}`} target="_blank" rel="noreferrer">Etherscan ↗</a>
         <a className="nx-btn" href={`https://opensea.io/assets/ethereum/${FORGE}/${n}`} target="_blank" rel="noreferrer">OpenSea ↗</a>
       </div>
@@ -615,7 +615,7 @@ function SeatCard({ seat, st, snap, scene, onOpen }: { seat: number; st: ShipSta
       <span className="sh-kicker">The Night Watch</span>
       <h2>An open seat</h2>
       <p className="sh-fine">{forged} of 50 Night Watchers are forged ({bosses} of 4 possible Night Bosses), so {50 - forged} seats are still open. A Night Watcher takes a seat here the hour it is forged: burn 10 NIGHT FROGS, get 10× to 40× shift hours, a crew boost and a keeper seat over imdUSD.</p>
-      <Link to="/forge" className="nx-btn nx-btn-acc"><NxIcon name="forge" size={16} /> Open the Forge</Link>
+      <Link to="/forge" className="nx-btn nx-btn-acc"><NxIcon name="forge" size={16} /> Upgrade Frogs</Link>
     </>
   );
 }
@@ -634,9 +634,9 @@ function RoomCard({ k, st, snap, rooms }: { k: RoomKey; st: ShipStatic; snap: Sn
         <div className="sh-note"><b>The radar:</b> {radar ? `live from the imdUSD vault: ${radar.loans.length} open loans worth a liquidation, ${fmt(radar.totalDebt, 0)} imdUSD owed. A blip nearer the centre is closer to the ${radar.mat}% liquidation line (dashed red); its bearing is fixed by the borrower's address. Loans under ${radar.mat}% can be marked by a Night Watch seat, then liquidated after ${radar.lullHours} hours. The vault charges the loan a ${radar.bonusPct}% liquidation penalty; the seats share it.${radar.stale.length ? ` Stale feeds right now: ${radar.stale.join(", ")}.` : ""}` : "waiting for the first read of the imdUSD vault."}</div>
       )}
       {k === "forge" && <p className="sh-fine">{snap ? `${snap.totals.burned} frogs forged so far into ${snap.watchers.length} Night Watcher${snap.watchers.length === 1 ? "" : "s"}. The memorial wall shows each one with the 10 it burned.` : ""} <Link to="/forge">Open the Forge</Link></p>}
-      {k === "missions" && <p className="sh-fine">{snap ? `${snap.totals.onMissions} frogs are out on this week's missions.` : ""} Holders send frogs from the <Link to="/command">Command Room</Link>; a frog out rides a launch pod until it is back.</p>}
+      {k === "missions" && <p className="sh-fine">{snap ? `${snap.totals.onMissions} frogs are out on this week's missions.` : ""} Holders send frogs from the <Link to="/command">Missions</Link>; a frog out rides a launch pod until it is back.</p>}
       {k === "breakroom" && <p className="sh-fine">The games are one deck over: NIGHT CHESS, NIGHT POOL, NIGHT POKER and Space Pinball, against people or AI agents. <Link to="/games">The Game Room</Link></p>}
-      {k === "offices" && <p className="sh-fine">A wallet with a frog runs up to 7 AI companies instead of 5; a Night Watcher adds 3 to 8 slots by tier. <Link to="/launch">Launch a company</Link></p>}
+      {k === "offices" && <p className="sh-fine">A wallet with a frog runs up to 7 AI companies instead of 5; a Night Watcher adds 3 to 8 slots by tier. <Link to="/launch">Start a business</Link></p>}
     </>
   );
 }
@@ -684,7 +684,7 @@ function CrewPanel({ crew, st, snap, wallet, session, now, signIn, busy, paste, 
             <div><dt>Crew boost</dt><dd>{crew.boost ? `+${crew.boost}%` : "none"}</dd></div>
             <div><dt>Company slots</dt><dd>{crew.slots}{crew.companies ? ` · ${crew.companies} used` : ""}</dd></div>
           </dl>
-          <p className="sh-fine">Shift hours share the weekly frog pot (ETH, $SHIFT and IMD) every Monday; claim at <Link to="/frogs">NIGHT FROGS</Link>.{crew.seat ? " This wallet holds an IMD seat: its hours count double." : ""}</p>
+          <p className="sh-fine">Earned hours weight a share of the funded Frog pot (ETH, $SHIFT and IMD). Claim after an epoch root is posted at <Link to="/frogs">Frogs</Link>.{crew.seat ? " This wallet holds an IMD seat: its hours count double." : ""}</p>
           {crew.missions.length > 0 && <p className="sh-fine"><b>Missions this week:</b> {crew.missions.map((m) => `${m.frog >= FORGED_ID ? `NW #${m.frog - FORGED_ID}` : `#${m.frog}`} on ${m.title}${m.done ? " (done)" : ""}`).join(", ")}</p>}
           {crew.forge && (
             <div className="sh-forge" style={{ "--tc": st?.tiers[crew.forge.tier - 1]?.color } as React.CSSProperties}>
@@ -692,7 +692,7 @@ function CrewPanel({ crew, st, snap, wallet, session, now, signIn, busy, paste, 
               <b>Tier {st?.tiers[crew.forge.tier - 1]?.roman} {crew.forge.name} · {crew.forge.points} pts</b>
               <p>The forge planner's pick: these 10 earn {crew.forge.before} h/h as frogs and would make a Night Watcher earning {crew.forge.rate} h/h, keeping your rarest frogs.</p>
               <div className="sh-ids">{crew.forge.ids.map((id) => <button key={id} onClick={() => onOpen({ kind: "frog", id })}>#{id}</button>)}</div>
-              <Link to={`/forge?wallet=${crew.wallet}&ids=${crew.forge.ids.join(",")}`} className="nx-btn nx-btn-acc"><NxIcon name="forge" size={16} /> Preview it in the Forge</Link>
+              <Link to={`/forge?wallet=${crew.wallet}&ids=${crew.forge.ids.join(",")}`} className="nx-btn nx-btn-acc"><NxIcon name="forge" size={16} /> Preview Upgrade Frogs</Link>
             </div>
           )}
           <div className="sh-crewlist">

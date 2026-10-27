@@ -138,7 +138,7 @@ export function CommandPage() {
       </RoomHero>
       <div className="st-body">
         <h2>This week's missions</h2>
-        <p className="st-note">Each frog crews one mission a week. A mission is real work on the station that the server checks for itself; bring it home and the frog earns its base hours times its multiplier (50× for #1, 3× for #2–25, 2× Genesis, 1× the rest). A Night Watcher from <Link to="/forge">the Forge</Link> crews all three at once, at 10× to 40×. Shift hours are the same points soft staking pays every hour: your total is cumulative and never resets, missions reset every Monday at 00:00 UTC, and that same Monday the frog rewards epoch pays out by the hours each wallet added since the last paid epoch.</p>
+        <p className="st-note">Each frog crews one mission a week. A mission is real work on the station that the server checks for itself; bring it home and the frog earns its base hours times its multiplier (50× for #1, 3× for #2–25, 2× Genesis, 1× the rest). A Night Watcher from <Link to="/forge">Upgrade Frogs</Link> crews all three at once, at 10× to 40×. Earned hours are reward weights from holding Frogs: your total is cumulative and never resets, missions reset every Monday at 00:00 UTC, and a funded Frog reward epoch uses hours added since the last paid epoch. Claims open only after the team posts the root.</p>
         {msg && <p className="st-msg">{msg}</p>}
         {!address ? (
           <>
@@ -147,7 +147,7 @@ export function CommandPage() {
           </>
         ) : !b ? <p className="st-empty">Reading your frogs…</p> : b.frogs.length === 0 ? (
           <>
-            <p className="st-empty">No NIGHT FROGS in this wallet yet (holdings are read every hour). <Link to="/frogs">Get a frog</Link> to send it out.</p>
+            <p className="st-empty">No Frogs in this wallet yet (holdings are read every hour). <Link to="/frogs">Frogs</Link> to send it out.</p>
             <div className="st-missions">{b.missions.map((m) => <div key={m.id} className="st-mission"><b>{m.title}</b><p>{m.brief}</p><span>{m.hours} h × frog · {m.progress}</span></div>)}</div>
           </>
         ) : (
@@ -169,8 +169,8 @@ export function CommandPage() {
         <h2>The crew board</h2>
         {st?.board.length ? <ol className="st-rank wide">{st.board.slice(0, 10).map((w) => <li key={w.wallet}><b className="mono">{w.wallet.slice(0, 6)}…{w.wallet.slice(-4)}</b><span>{w.frogs} frog{w.frogs === 1 ? "" : "s"}</span><i>{w.hours.toLocaleString("en-US")} h</i></li>)}</ol> : <p className="st-empty">No shift hours yet.</p>}
         <Tiles items={[
-          { to: "/frogs", title: "NIGHT FROGS", note: "Mint in IMD, see the crew and the perks.", icon: "frog" },
-          { to: "/forge", title: "The Forge", note: "Burn 10 frogs, forge 1 Night Watcher.", icon: "flame" },
+          { to: "/frogs", title: "Frogs", note: "Mint in IMD, see the crew and the perks.", icon: "frog" },
+          { to: "/forge", title: "Upgrade Frogs", note: "Burn 10 frogs, forge 1 Night Watcher.", icon: "flame" },
           { to: "/league", title: "Night League", note: "Missions: Desk duty, Beat the holder.", icon: "chart" },
           { to: "/arena", title: "Agent Arena", note: "Mission: Board watch.", icon: "swords" },
         ]} />

@@ -89,6 +89,7 @@ import { sniperRoutes } from "./sniper-routes.js";
 import { mindRoutes } from "./mind-routes.js";
 import { HOUSE_ID, liveHouseServices } from "./services/house.js";
 import { catalogItems } from "./services/catalog.js";
+import { backupUrl, productSite } from "./site-backup.js";
 
 /** Open live-event streams, per IP and in all. */
 const streams = new Map<string, number>();
@@ -128,6 +129,7 @@ async function body(req: IncomingMessage, max = 64_000): Promise<Record<string, 
 
 /** The owner view: everything, including tasks, journal, ledger and wallet. */
 async function full(engine: Engine, c: Company) {
+  await engine.resolveSites(c);
   const imd = await engine.ledger.balance(`co:${c.id}:imd`, "IMD");
   const held = await engine.ledger.balance(`co:${c.id}:usdc`, "USDC");
   const b = await b2bBooks(engine.ledger, c.id);
@@ -139,6 +141,8 @@ async function full(engine: Engine, c: Company) {
   const m = engine.store.metricsOf(c.id);
   return {
     ...c,
+    siteBackup: backupUrl(c.site?.cid),
+    products: c.products.map((p) => ({ ...p, ...productSite(p), site: p.site })),
     chat: undefined,
     tasks: c.tasks.slice(-60),
     journal: c.journal.slice(-150),
@@ -167,6 +171,7 @@ async function desk(engine: Engine, owner: string | null) {
   const mineOf = (c: Company) => (owner !== null && c.owner === owner) || (!config.requireAuth && c.owner === null);
   const list = [...engine.store.companies.values()].filter(mineOf).sort((a, b) => b.createdAt - a.createdAt);
   const companies = await Promise.all(list.map(async (c) => {
+    await engine.resolveSites(c);
     let spent = 0n;
     for (const t of c.tasks) spent += t.costImd;
     const held = await engine.ledger.balance(`co:${c.id}:usdc`, "USDC");
@@ -182,7 +187,7 @@ async function desk(engine: Engine, owner: string | null) {
       id: c.id, slug: c.slug, name: c.name, idea: c.idea, mission: c.mission, audience: c.audience, direction: c.direction ?? "",
       status: c.status, cycle: c.cycle, createdAt: c.createdAt, nextShiftAt: c.nextShiftAt, wallet: c.wallet, sim: Boolean(c.sim),
       rest: c.restUntil && c.restUntil > Date.now() ? { until: c.restUntil, why: c.restReason || resting?.text.startsWith("Saver:") ? "saver" as const : "budget" as const, reason: c.restReason ?? null } : null,
-      policy: c.policy, site: c.site?.url ?? null, alerts: Boolean(c.notify?.telegram),
+      policy: c.policy, site: c.site?.url ?? null, siteBackup: backupUrl(c.site?.cid), alerts: Boolean(c.notify?.telegram),
       products: c.products.map((x) => ({ id: x.id, name: x.name, pitch: x.pitch, kind: x.kind, status: x.status, priceUsd: fromUsdc(x.priceUsdc), priceByOwner: Boolean(x.priceByOwner), sales: x.sales, revenueUsd: fromUsdc(x.revenueUsdc), b2bSales: x.b2bSales ?? 0, packaged: engine.files.has(c, x), ...studioView(c, x) })),
       pnl: { revenueUsd, spentUsd, profitUsd: revenueUsd + soldUsd - spentUsd - boughtUsd },
       b2b: {
@@ -231,7 +236,8 @@ async function books(engine: Engine, c: Company): Promise<string> {
 const studioView = (c: Company, p: Product) => p.studio ? { format: p.format, studio: { pages: p.studio.pages, links: p.studio.links, files: p.studio.files.filter((f) => f.endsWith(".pdf")), mb: Math.round(p.studio.bytes / 1e5) / 10, year: p.studio.year, images: p.studio.images.map((n) => `${config.publicUrl}/api/studio/${c.slug}/${p.id}/${n}.png`) } } : {};
 
 /** The public view: what a visitor or investor may see. No wallet keys, no drafts. */
-function publicView(engine: Engine, c: Company) {
+async function publicView(engine: Engine, c: Company) {
+  await engine.resolveSites(c);
   const m = engine.store.metricsOf(c.id);
   let spent = 0n;
   for (const t of c.tasks) spent += t.costImd;
@@ -239,8 +245,8 @@ function publicView(engine: Engine, c: Company) {
   const bought = c.b2b?.bought ?? [];
   return {
     slug: c.slug, name: c.name, mission: c.mission, audience: c.audience, createdAt: c.createdAt, wallet: c.wallet, status: c.status, cycle: c.cycle,
-    site: c.site?.url ?? null,
-    products: c.products.filter((p) => p.status === "live").map((p) => ({ id: p.id, name: p.name, kind: p.kind, pitch: honestPitch(p), delivery: deliveryOf(p.kind), priceUsd: fromUsdc(p.priceUsdc), sales: p.sales, b2bSales: p.b2bSales ?? 0, buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, ...studioView(c, p) })),
+    site: c.site?.url ?? null, siteBackup: backupUrl(c.site?.cid),
+    products: c.products.filter((p) => p.status === "live").map((p) => ({ id: p.id, name: p.name, kind: p.kind, pitch: honestPitch(p), delivery: deliveryOf(p.kind), priceUsd: fromUsdc(p.priceUsdc), sales: p.sales, b2bSales: p.b2bSales ?? 0, buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, ...productSite(p), ...studioView(c, p) })),
     // sales to people and outside agents; sales to and purchases from other NIGHTSHIFT companies apart
     pnl: { revenueUsd: revenue, spentUsd: fromImd(spent) * config.imdUsd, sales: m.sales.length },
     b2b: {
@@ -722,7 +728,7 @@ export function serve(engine: Engine) {
         }
         return json(res, 200, proofCache.v);
       }
-      if (await stationRoutes(req, res, p, { json, body, limited, owner, vault: engine.vault, market: (q) => engine.market(q), live: () => liveProducts(engine), token: tokenOverview,
+      if (await stationRoutes(req, res, p, { json, body, limited, owner, vault: engine.vault, market: (q) => engine.market(q), live: async () => { await Promise.all([...engine.store.companies.values()].map((c) => engine.resolveSites(c))); return liveProducts(engine); }, token: tokenOverview,
         mind: engine.mind ? { ask: (q) => engine.mind!.ask(q, engine.llm, config.chatModel), search: (q) => engine.mind!.search(q, 12) } : null })) return;
       // the owners' connected accounts: OAuth callbacks, Gumroad's sale pings, product covers
       if (p.startsWith("/api/connect/") && await connectRoutes(req, res, p, { json, body, limited, url, connect: engine.connect, owner, find: (x) => engine.get(x) })) return;
@@ -861,10 +867,14 @@ export function serve(engine: Engine) {
           launch: launchState(), verification: verification(),
         });
       }
-      if (p === "/api/market") return json(res, 200, { mode: config.mode, chainId: config.salesChainId, products: engine.market(url.searchParams.get("q") ?? "") });
+      if (p === "/api/market") {
+        await Promise.all([...engine.store.companies.values()].map((c) => engine.resolveSites(c)));
+        return json(res, 200, { mode: config.mode, chainId: config.salesChainId, products: engine.market(url.searchParams.get("q") ?? "") });
+      }
       // ---- the market for agents: search with filters, the discovery catalog, one product with its free preview
       if (p.startsWith("/api/market/")) {
         if (limited(req, "market-read", 240, 60_000)) return json(res, 429, { error: "slow down" });
+        await Promise.all([...engine.store.companies.values()].map((c) => engine.resolveSites(c)));
         const live = liveProducts(engine);
         if (p === "/api/market/search") {
           const max = url.searchParams.get("maxUsd");
@@ -963,7 +973,7 @@ export function serve(engine: Engine) {
         const onlyMine = url.searchParams.get("mine") === "1";
         // Live: retired demo companies stay in their owner's own list only.
         const list = await Promise.all([...engine.store.companies.values()].filter((c) => onlyMine ? owner !== null && c.owner === owner : (config.mode !== "live" || !c.sim) && !c.house).sort((a, b) => b.createdAt - a.createdAt).map(async (c) => {
-          const v = publicView(engine, c);
+          const v = await publicView(engine, c);
           const working = c.tasks.find((t) => ["checking", "ordering", "building", "awaiting_approval"].includes(t.status));
           return { id: c.id, ...v, nextShiftAt: c.nextShiftAt, working: working ? { title: working.title, status: working.status, activity: working.activity } : null, mine: owner !== null && c.owner === owner };
         }));
@@ -1111,7 +1121,7 @@ export function serve(engine: Engine) {
           if (m.via.length > 5000) m.via.splice(0, m.via.length - 5000);
           engine.store.markDirty();
         }
-        return c ? json(res, 200, publicView(engine, c)) : json(res, 404, { error: "no such company" });
+        return c ? json(res, 200, await publicView(engine, c)) : json(res, 404, { error: "no such company" });
       }
 
       // x402: pay in USDC, get the product. Agents and people use the same door.
@@ -1179,7 +1189,7 @@ export function serve(engine: Engine) {
           res.writeHead(200, { "Content-Type": bin.type, "Content-Length": bin.data.length, "Content-Disposition": `attachment; filename="${bin.name.replace(/"/g, "")}"`, "Cache-Control": "private, no-store" });
           return res.end(bin.data);
         }
-        const text = engine.files.read(c, product);
+        const text = await engine.files.delivery(c, product);
         if (text === null) return json(res, 404, { error: "not packaged yet" });
         res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8", "Content-Disposition": `attachment; filename="${c.slug}-${product.id.replace(/[^\w-]/g, "")}.md"`, "Cache-Control": "private, no-store", "Content-Security-Policy": SANDBOX_CSP });
         return res.end(text);

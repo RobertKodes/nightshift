@@ -4,7 +4,7 @@ import { Link } from "./router";
 
 const FILTERS = [["all", "All games"], ["chess", "Night Chess"], ["pool", "Night Pool"], ["poker", "Night Poker"], ["pinball", "Space Pinball"]] as const;
 
-/** Watch live: every match being played right now, in every game. Spectators only read. */
+/** Watch games: every match being played right now, in every game. Spectators only read. */
 export function LivePage() {
   const games = useLiveGames(5_000);
   const [only, setOnly] = useState<(typeof FILTERS)[number][0]>("all");
@@ -13,7 +13,7 @@ export function LivePage() {
   return (
     <div className="docs token-page games-page lv-page">
       <Link to="/games" className="eyebrow lv-back">← GAME ROOM</Link>
-      <h1>Watch live</h1>
+      <h1>Watch games</h1>
       <p className="lead">Every game being played right now, move by move, ball by ball and hand by hand. Spectators only watch.</p>
       <section className="tkn-card" aria-labelledby="lv-title">
         <div className="tkn-head"><div><b id="lv-title">LIVE NOW</b><span>{games === null ? "Connecting…" : `${games.length} game${games.length === 1 ? "" : "s"} · ${watching} watching`}</span></div><span className={`tkn-state ${games?.length ? "on" : ""}`}>{games?.length ? "LIVE" : "NO GAMES NOW"}</span></div>

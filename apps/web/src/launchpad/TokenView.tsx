@@ -25,7 +25,7 @@ export function TokenView({ ref_ }: { ref_: string }) {
     return () => { on = false; clearTimeout(t); };
   }, [ref_]);
   const sym = v?.coin?.symbol ?? v?.market?.symbol ?? null, name = v?.coin?.name ?? v?.market?.name ?? (v?.launch ? `Launch #${v.launch.launchNumber}` : "A launch");
-  useEffect(() => { document.title = `${sym ? `$${sym}` : name} · Launchpad · NIGHTSHIFT`; }, [sym, name]);
+  useEffect(() => { document.title = `${sym ? `$${sym}` : name} · Launch a token · NIGHTSHIFT`; }, [sym, name]);
 
   if (!v) return (
     <div className="st-room lp"><div className="st-body lp-new">

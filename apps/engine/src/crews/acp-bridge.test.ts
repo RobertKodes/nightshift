@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ACP_AGENT, ACP_OFFERINGS, ACP_WALLET, AcpBridge, acpKind, type AcpEvent } from "./acp-bridge.js";
 import { SwarmDesk, SWARM_IMD } from "./swarm.js";
 import { JobLedger } from "./ledger.js";
+import { siteBackups } from "../site-backup.js";
 
 const A = "0x1111111111111111111111111111111111111111";
 const NOW = Date.parse("2026-10-26T12:00:00Z");
@@ -210,6 +211,20 @@ describe("ACP provider bridge", () => {
     x.h.state = "completed"; x.event("job.completed"); await x.bridge.tick();
     expect(x.ledger.list()[0]?.status).toBe("done"); expect(x.ledger.metrics("swarm").revenueUsd).toBe(4);
     await x.fund(); expect(x.plane.open).toHaveBeenCalledTimes(1); expect(x.bridge.status().running).toBe(0);
+  });
+
+  it("adds the backup line to a site delivery", async () => {
+    const url = "https://ns-nightwatch-981.identitymd.eth.limo";
+    const backup = "https://imd-ipfs.xyz/ipfs/bafybeifmibbcoyqpiq7t6u2su7jr7vwegpakyw4ezcjr723mrmmrcbdfve/";
+    const resolve = vi.spyOn(siteBackups, "get").mockResolvedValue(backup);
+    try {
+      const x = harness();
+      vi.mocked(x.plane.result).mockImplementation(async (jobId) => ({ jobId, siteUrl: url, repoUrl: null, files: {}, summary: "Delivered" }));
+      await x.bridge.tick(); await x.fund(); x.h.done = true; x.h.now += 30_000; await x.bridge.tick();
+      const args = x.commands("provider submit")[0]![0];
+      expect(args[args.indexOf("--deliverable") + 1]).toContain(`Site (IPFS): ${url}\nBackup link (if the site does not open): ${backup}`);
+      expect(resolve).toHaveBeenCalledWith(url);
+    } finally { resolve.mockRestore(); }
   });
 
   it("records returned escrow as failed and alerts once on rejection", async () => {

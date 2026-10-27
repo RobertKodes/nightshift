@@ -1,3 +1,4 @@
+import { crewLabel, serviceLabel } from "../labels";
 import { Fragment } from "react";
 import { type Health, type ProofView, api } from "../api";
 import { Link } from "../router";
@@ -65,7 +66,7 @@ function Body({ d }: { d: ProofView }) {
         <div className="st-table-wrap">
           <table className="st-table">
             <thead><tr><th>When</th><th>What</th><th className="cr-num">Amount</th><th>Wallet</th><th>Transaction</th></tr></thead>
-            <tbody>{latest.map((p, i) => <tr key={`${p.at}-${i}`}><td className="dim">{day(p.at)} · {when(p.at)}</td><td style={{ whiteSpace: "normal", minWidth: 200 }}>{p.what}</td><td className="cr-num">{price(p.usd)}</td><td className="mono">{p.wallet}</td><td>{p.tx ? <a href={p.tx} target="_blank" rel="noreferrer">Basescan ↗</a> : <span className="dim">no tx recorded</span>}</td></tr>)}</tbody>
+            <tbody>{latest.map((p, i) => <tr key={`${p.at}-${i}`}><td className="dim">{day(p.at)} · {when(p.at)}</td><td style={{ whiteSpace: "normal", minWidth: 200 }}>{serviceLabel(p.what)}</td><td className="cr-num">{price(p.usd)}</td><td className="mono">{p.wallet}</td><td>{p.tx ? <a href={p.tx} target="_blank" rel="noreferrer">Basescan ↗</a> : <span className="dim">no tx recorded</span>}</td></tr>)}</tbody>
           </table>
         </div>
       ) : <p className="st-empty">No customer payment yet. Internal, owner, company-to-company and test payments are never listed here.</p>}
@@ -77,7 +78,7 @@ function Body({ d }: { d: ProofView }) {
             <thead><tr><th>Crew</th><th className="cr-num">Done</th><th className="cr-num">Failed</th><th className="cr-num">Success</th><th className="cr-num">Customer-paid</th><th className="cr-num">Paying wallets</th><th className="cr-num">Repeat</th><th className="cr-num">Revenue</th><th className="cr-num">Known cost</th></tr></thead>
             <tbody>{crews.map((x) => (
               <tr key={x.id}>
-                <td><Link to={`/crews/${encodeURIComponent(x.id)}`}>{x.name}</Link> <span className={`cr-tag${x.house ? "" : " warn"}`}>{x.house ? "house" : "outside"}</span></td>
+                <td><Link to={`/crews/${encodeURIComponent(x.id)}`}>{crewLabel(x.id, x.name)}</Link> <span className={`cr-tag${x.house ? "" : " warn"}`}>{x.house ? "house" : "outside"}</span></td>
                 <td className="cr-num">{count(x.done)}</td><td className="cr-num">{count(x.failed)}</td><td className="cr-num">{pct(x.successRate)}</td>
                 <td className="cr-num">{count(x.paidJobs)}</td><td className="cr-num">{count(x.payingWallets)}</td><td className="cr-num">{count(x.repeatWallets)}</td>
                 <td className="cr-num">{price(x.revenueUsd)}</td><td className="cr-num">{price(x.knownCostUsd)}</td>

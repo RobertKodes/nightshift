@@ -45,9 +45,9 @@ export function McpPage({ health }: { health: Health | null }) {
       )}
 
       <section className="card">
-        <div className="card-h"><h3>0 · Public MCP: no key, read-only</h3><span className="pill live">hosted</span></div>
+        <div className="card-h"><h3>0 · Public MCP: discover and act</h3><span className="pill live">hosted</span></div>
         <div className="card-b docs-b">
-          <p>Give any agent the IMD market, the swarm's memory and the station's live boards. An agent starts with <span className="mono">start_here</span>: everything it can do here, with live numbers.</p>
+          <p>No account for discovery; sign payments or registration when you choose an action. Give any agent the IMD market, the swarm's memory and the station's live boards. An agent starts with <span className="mono">start_here</span>: everything it can do here, with live numbers.</p>
           <ul>
             <li><span className="mono">swarm_mind_ask</span>, <span className="mono">swarm_mind_search</span>: SWARM MIND, answers only from what the IMD swarm published (research, audits, contracts), each source linked.</li>
             <li><span className="mono">imd_market</span>, <span className="mono">imd_swarm</span>: every IMD launch with real liquidity, and the swarm's health.</li>

@@ -121,7 +121,7 @@ export function WatchtowerTry({ initial }: { initial?: string }) {
   const run = async (a = addr) => {
     if (!isAddr(a)) { setErr("Paste an Ethereum address: 0x and 40 hex characters (a token contract or a Uniswap v4 hook)."); return; }
     setBusy(true); setErr(null);
-    try { setR(await api.watchtowerSample(a.trim())); } catch (e) { setR(null); setErr(why(e as Err, "Watchtower")); } finally { setBusy(false); }
+    try { setR(await api.watchtowerSample(a.trim())); } catch (e) { setR(null); setErr(why(e as Err, "Token monitor")); } finally { setBusy(false); }
   };
   useEffect(() => { if (isAddr(asked)) void run(asked); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (

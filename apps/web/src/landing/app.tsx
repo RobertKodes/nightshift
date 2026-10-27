@@ -12,33 +12,19 @@ const TELEGRAM_URL = "https://t.me/getnightshift";
 /** The four tabs people use most; everything else lives under More. */
 const TABS: { to: string; label: string; icon: string; on: Active[] }[] = [
   { to: "/", label: "Home", icon: "home", on: ["home"] },
-  { to: "/companies", label: "Companies", icon: "briefcase", on: ["companies", "company", "market"] },
-  { to: "/swap", label: "Trade", icon: "swap", on: ["swap", "token", "tokenomics"] },
-  { to: "/stake", label: "Earn", icon: "layers", on: ["stake", "frogs"] },
+  { to: "/services", label: "AI tools", icon: "code", on: ["companies", "company", "market", "geek", "mcp"] },
+  { to: "/games", label: "Play", icon: "play", on: ["games", "arena", "breakroom"] },
+  { to: "/token", label: "$SHIFT", icon: "crescent", on: ["swap", "token", "tokenomics", "stake", "frogs", "forge", "watch", "command", "info"] },
 ];
 
-/** Everything else, as app tiles. */
 const MORE: { to: string; label: string; note: string; icon: string }[] = [
-  { to: "/breakroom", label: "Breakroom", note: "Games for people and agents", icon: "play" },
-  { to: "/geek", label: "Geek Room", note: "Night League, MCP, APIs", icon: "code" },
-  { to: "/info", label: "Info Room", note: "Token, frogs, contracts", icon: "diamond" },
-  { to: "/economy", label: "HR & Economy", note: "Our crew, where fees go", icon: "coins" },
-  { to: "/command", label: "Command Room", note: "Frog missions", icon: "target" },
-  { to: "/league", label: "Night League", note: "Agents trade IMD, paper", icon: "chart" },
-  { to: "/games/pinball", label: "Space Pinball", note: "PvP duels, free now", icon: "flipper" },
-  { to: "/games/pool", label: "NIGHT POOL", note: "3D 8-ball, WPA rules", icon: "pool" },
-  { to: "/games/poker", label: "NIGHT POKER", note: "Heads-up Hold'em, fair deck", icon: "cards" },
-  { to: "/token", label: "$SHIFT", note: "Price, supply, contracts", icon: "crescent" },
-  { to: "/frogs", label: "NIGHT FROGS", note: "The crew and its rewards", icon: "frog" },
-  { to: "/market", label: "Market", note: "Everything companies sell", icon: "bag" },
-  { to: "/tokenomics", label: "Tokenomics", note: "Every rule and wallet", icon: "chart" },
-  { to: "/games", label: "Game Room", note: "Games between shifts", icon: "trophy" },
-  { to: "/arena", label: "Agent Arena", note: "AI agents play chess", icon: "swords" },
-  { to: "/launchpad", label: "Launchpad", note: "Launch with the IMD swarm", icon: "rocket" },
-  { to: "/impact", label: "IMD Impact", note: "What we give IMD", icon: "flame" },
-  { to: "/guide", label: "Guide", note: "Your first company", icon: "book" },
-  { to: "/mcp", label: "MCP", note: "For AI agents", icon: "code" },
+  { to: "/mcp", label: "Connect", note: "Connect an AI agent", icon: "code" },
+  { to: "/proof", label: "Proof", note: "Payments and receipts", icon: "chart" },
+  { to: "/security", label: "Security", note: "Official contracts", icon: "diamond" },
+  { to: "/how-it-works", label: "How it works", note: "How the pieces connect", icon: "book" },
   { to: "/terms", label: "Terms", note: "Risks, in plain words", icon: "file" },
+  { to: "/privacy", label: "Privacy", note: "Your information", icon: "file" },
+  { to: "/whitepaper", label: "Whitepaper", note: "Project background", icon: "book" },
 ];
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -77,7 +63,7 @@ export function AppTabs({ active }: { active: Active }) {
                 : <><div><b>Your wallet</b><span>Sign in to run companies and stake</span></div><button type="button" className="app-btn" disabled={busy} onClick={() => { setMore(false); void signIn(); }}>{busy ? "Check wallet…" : "Sign in"}</button></>}
             </div>
             <a className="app-launch" href="/launch" onClick={(e) => { e.preventDefault(); open("/launch"); }}>
-              <Icon name="rocket" size={20} /><div><b>Launch a company</b><span>One sentence, a budget, and it starts working</span></div><Icon name="arrow" size={18} />
+              <Icon name="rocket" size={20} /><div><b>Start a business</b><span>One sentence, a budget, and it starts working</span></div><Icon name="arrow" size={18} />
             </a>
             <div className="app-grid">
               {MORE.map((m) => (

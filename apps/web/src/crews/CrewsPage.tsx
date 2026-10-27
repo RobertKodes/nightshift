@@ -1,3 +1,4 @@
+import { crewLabel, serviceLabel } from "../labels";
 import { useEffect } from "react";
 import { type CrewJob, type CrewProfile, type CrewRanked, type CrewSeason, type Health, api } from "../api";
 import { Link } from "../router";
@@ -33,12 +34,12 @@ function CrewCard({ p }: { p: CrewProfile }) {
   const limits = (p.limits ?? []).filter((l) => !/^holders/i.test(l)).slice(0, 3);
   return (
     <article className="st-panel cr-card">
-      <div className="cr-card-h"><h3><Link to={page}>{p.name}</Link></h3><StatusTag p={p} /></div>
+      <div className="cr-card-h"><h3><Link to={page}>{crewLabel(p.id, p.name)}</Link></h3><StatusTag p={p} /></div>
       <RunBy p={p} />
       <p>{p.service}</p>
       <p className="cr-for"><b>For</b>{p.customer}</p>
       <ul className="cr-prices">
-        {(p.pricing ?? []).map((r) => <li key={r.offer}><b>{r.label}</b><span>{p.id === "swarm" ? "from " : ""}{price(r.usd)}</span><small>{p.id === "swarm" ? "exact quote, no holder discount" : `holders ${price(r.holderUsd)}`}</small></li>)}
+        {(p.pricing ?? []).map((r) => <li key={r.offer}><b>{serviceLabel(r.label)}</b><span>{p.id === "swarm" ? "from " : ""}{price(r.usd)}</span><small>{p.id === "swarm" ? "exact quote, no holder discount" : `holders ${price(r.holderUsd)}`}</small></li>)}
         {p.sample && <li><b>{p.sample.label}</b><span>free</span></li>}
         {!(p.pricing ?? []).length && p.operator?.kind === "house" && <li><b>Paid calls</b><span className="dim">not open yet</span></li>}
       </ul>
@@ -73,7 +74,7 @@ function Board({ rows }: { rows: CrewRanked[] }) {
         <tbody>{rows.map((r, i) => (
           <tr key={r.crew}>
             <td className="mono dim">{r.rank ?? i + 1}</td>
-            <td><Link to={`/crews/${encodeURIComponent(r.crew)}`}>{r.name}</Link></td>
+            <td><Link to={`/crews/${encodeURIComponent(r.crew)}`}>{crewLabel(r.crew, r.name)}</Link></td>
             <td className="cr-num">{count(r.completedPaidJobs)}</td>
             <td className="cr-num">{pct(r.acceptance)}</td>
             <td className="cr-num">{pct(r.reliability)}</td>
@@ -121,7 +122,7 @@ export function CrewsPage({ health }: { health: Health | null }) {
   const feed = useLoad(api.crewActivity, [], 15_000);
   const { house, external } = splitCrews(crews.data);
   const all = [...house, ...external];
-  const names = new Map<string, string>([...(season.data?.external ?? []).map((r) => [r.crew, r.name] as [string, string]), ...all.map((c) => [c.id, c.name] as [string, string])]);
+  const names = new Map<string, string>([...(season.data?.external ?? []).map((r) => [r.crew, r.name] as [string, string]), ...all.map((c) => [c.id, crewLabel(c.id, c.name)] as [string, string])]);
   const events = feed.data?.events ?? [];
   useHash(!!crews.data || !!crews.error);
   const sum = (f: (c: CrewProfile) => number | undefined) => all.reduce((a, c) => a + (f(c) ?? 0), 0);
@@ -221,10 +222,10 @@ export function CrewPage({ id, health }: { id: string; health: Health | null }) 
   const first = (p.pricing ?? [])[0];
   return (
     <div className="st-room cr-room">
-      <Hero docTitle={p.name} trail={<><Link to="/crews">CREWS</Link> · {house ? "HOUSE CREW" : "OUTSIDE CREW"}</>} title={p.name} line={p.service}>
+      <Hero docTitle={crewLabel(p.id, p.name)} trail={<><Link to="/crews">CREWS</Link> · {house ? "HOUSE CREW" : "OUTSIDE CREW"}</>} title={crewLabel(p.id, p.name)} line={p.service}>
         <div className="st-row"><RunBy p={p} /><StatusTag p={p} /></div>
         <div className="st-stats">
-          {first ? <Stat label={first.label} value={`${p.id === "swarm" ? "from " : ""}${price(first.usd)}`} note={p.id === "swarm" ? "exact quote, no holder discount" : `holders ${price(first.holderUsd)}`} /> : <Stat label="Paid calls" value="—" note={house ? "not open yet" : "priced by the operator"} />}
+          {first ? <Stat label={serviceLabel(first.label)} value={`${p.id === "swarm" ? "from " : ""}${price(first.usd)}`} note={p.id === "swarm" ? "exact quote, no holder discount" : `holders ${price(first.holderUsd)}`} /> : <Stat label="Paid calls" value="—" note={house ? "not open yet" : "priced by the operator"} />}
           <Stat label="Sample" value="free" note={p.sample?.label} />
           <Stat label="Jobs done" value={count(m?.done)} note={m ? `success ${pct(m.successRate)}` : undefined} />
           <Stat label="Repeat wallets" value={count(m?.repeatWallets)} note={m ? `of ${plural(m.payingWallets ?? 0, "paying wallet")}` : undefined} />
@@ -236,7 +237,7 @@ export function CrewPage({ id, health }: { id: string; health: Health | null }) 
 
         <h2 id="try" className="cr-anchor">Try it free</h2>
         <TryFree id={p.id} href={p.sample?.href} />
-        {p.id === "watchtower" && <p className="st-note">The full Watchtower page, with how a 7-day watch works: <Link to="/watchtower">Watchtower</Link>.</p>}
+        {p.id === "watchtower" && <p className="st-note">The full Token monitor page, with how a 7-day watch works: <Link to="/watchtower">Token monitor</Link>.</p>}
 
         <h2>Prices</h2>
         <PriceTable p={p} holders={svc?.holders} />

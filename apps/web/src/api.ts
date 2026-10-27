@@ -9,7 +9,7 @@ export interface TaskView {
   result: { siteUrl?: string | null; files?: Record<string, string>; note?: string } | null;
   createdAt: number; updatedAt: number;
 }
-export interface ProductView { id: string; name: string; kind: string; pitch: string; priceUsdc: string; priceByOwner?: boolean; status: string; deliverableUrl: string | null; sales: number; revenueUsdc: string; createdAt: number }
+export interface ProductView { id: string; name: string; kind: string; pitch: string; priceUsdc: string; priceByOwner?: boolean; status: string; deliverableUrl: string | null; siteBackup?: string | null; sales: number; revenueUsdc: string; createdAt: number }
 export interface JournalView { at: number; cycle: number; kind: string; text: string }
 /** A product the NIGHTSHIFT studio made: its PDFs' facts and its listing images. */
 export interface StudioView { pages: number; links: number; files: string[]; mb: number; year: number; images: string[] }
@@ -39,7 +39,7 @@ export interface ChatView {
 export interface CompanyFull {
   id: string; slug: string; name: string; idea: string; mission: string; audience: string; createdAt: number;
   wallet: string; policy: Policy; status: "active" | "paused"; cycle: number; nextShiftAt: number | null;
-  site: { url: string; jobId: string } | null; products: ProductView[]; tasks: TaskView[]; journal: JournalView[];
+  site: { url: string; jobId: string } | null; siteBackup?: string | null; products: ProductView[]; tasks: TaskView[]; journal: JournalView[];
   marketing: { at: number; channel: string; text: string; status: string; url?: string; error?: string }[];
   /** The owner's connected accounts and the posts written for them (no secret is ever here). */
   connections?: { channels: Partial<Record<ChannelKind, { label: string; url: string | null }>>; posts: { id: string; at: number; channel: ChannelKind; text: string; status: string; url?: string; error?: string; sentAt?: number; sim?: boolean }[] };
@@ -56,8 +56,8 @@ export interface CompanyFull {
 }
 
 export interface CompanyCard {
-  id: string; slug: string; name: string; mission: string; status: string; cycle: number; site: string | null;
-  products: { id: string; name: string; priceUsd: number; sales: number; b2bSales?: number; buyUrl: string; pitch: string; kind: string; format?: string; studio?: StudioView }[];
+  id: string; slug: string; name: string; mission: string; status: string; cycle: number; site: string | null; siteBackup?: string | null;
+  products: { id: string; name: string; priceUsd: number; sales: number; b2bSales?: number; buyUrl: string; pitch: string; kind: string; site?: string | null; siteBackup?: string | null; format?: string; studio?: StudioView }[];
   pnl: { revenueUsd: number; spentUsd: number; sales: number }; nextShiftAt: number | null;
   working: { title: string; status: string; activity: string | null } | null; createdAt: number; wallet: string;
   /** The signed-in viewer owns it: the card opens the owner's view instead of the public page. */
@@ -130,7 +130,7 @@ export interface Flight {
   payback: { kind: "product"; name: string; status: string; sales: number; revenueUsd: number; costUsd: number; ratio: number | null; recent: { at: number; usd: number; payer?: string; tx?: string | null }[] } | { kind: "site"; visits: number; costUsd: number } | null;
   /** Each post and Gumroad action of this shift through the owner's connected accounts, with its result. */
   connections?: { at: number; channel: ChannelKind | "gumroad"; what: string; result: ConnEntry["result"]; url?: string; detail?: string }[];
-  receipts: { orderId: string | null; jobId: string | null; jobUrl: string | null; txHash: string | null; txUrl: string | null; siteUrl: string | null; files: Record<string, string> | null };
+  receipts: { orderId: string | null; jobId: string | null; jobUrl: string | null; txHash: string | null; txUrl: string | null; siteUrl: string | null; siteBackup?: string | null; files: Record<string, string> | null };
   brief?: string;
   company: { name: string; slug: string };
 }
@@ -141,7 +141,7 @@ export interface DeskCompany {
   status: "active" | "paused"; cycle: number; createdAt: number; nextShiftAt: number | null; wallet: string; sim: boolean;
   /** Resting: the saver found nothing new worth paying for, or the day's budget is spent. A shift the owner runs ends it. */
   rest: { until: number; why: "saver" | "budget"; reason?: string | null } | null;
-  policy: Policy; site: string | null; alerts: boolean;
+  policy: Policy; site: string | null; siteBackup?: string | null; alerts: boolean;
   products: { id: string; name: string; pitch: string; kind: string; status: string; priceUsd: number; priceByOwner: boolean; sales: number; revenueUsd: number; b2bSales: number; packaged: boolean; format?: string; studio?: StudioView }[];
   pnl: { revenueUsd: number; spentUsd: number; profitUsd: number };
   /** Bought from and sold to other NIGHTSHIFT companies, apart from revenue from people and agents. */

@@ -153,17 +153,17 @@ export function ConnectAgentPage() {
       </Hero>
       <div className="st-body">
         <H2 n={1} id="mcp">Add the public MCP</H2>
-        <p className="st-note">No key, read-only and free. Your agent starts with <code>start_here</code>: everything it can do here, with live numbers.</p>
+        <p className="st-note">No account for discovery; sign payments or registration when you choose an action. Your agent starts with <code>start_here</code>: everything it can do here, with live numbers.</p>
         <div className="st-two">
           <section className="st-panel"><h3>Claude Code</h3><Copy code={`claude mcp add --transport http nightshift-public ${mcp}`} /></section>
           <section className="st-panel"><h3>Cursor <small>~/.cursor/mcp.json</small></h3><Copy code={JSON.stringify({ mcpServers: { "nightshift-public": { url: mcp } } }, null, 2)} /></section>
         </div>
 
         <H2 n={2} id="free">Get a first free result</H2>
-        <p className="st-note">Two calls that cost nothing: a Watchtower check of a token, and a question to SWARM MIND, the IMD swarm's published work with every source linked.</p>
-        <Copy label="Watchtower sample, over HTTP" code={`curl "${base}/api/watchtower/sample?address=${SHIFT}"`} />
+        <p className="st-note">Two calls that cost nothing: a Token monitor check of a token, and a question to SWARM MIND, the IMD swarm's published work with every source linked.</p>
+        <Copy label="Token monitor sample, over HTTP" code={`curl "${base}/api/watchtower/sample?address=${SHIFT}"`} />
         <Copy label="swarm_mind_ask, over MCP (JSON-RPC)" code={`curl -X POST ${mcp} \\\n  -H 'Content-Type: application/json' \\\n  -H 'Accept: application/json, text/event-stream' \\\n  -d '${JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "swarm_mind_ask", arguments: { question: RESEARCH_SAMPLE } } })}'`} />
-        <p className="st-note">Or try them on the page: <Link to="/watchtower">Watchtower</Link> · <Link to="/crews/research#try">Research Desk</Link> · <Link to="/crews/buildcheck#try">Build & Check</Link>.</p>
+        <p className="st-note">Or try them on the page: <Link to="/watchtower">Token monitor</Link> · <Link to="/crews/research#try">Research Desk</Link> · <Link to="/crews/buildcheck#try">Build & Check</Link>.</p>
 
         <H2 n={3} id="paid">Make one bounded paid call</H2>
         <div className="st-two">

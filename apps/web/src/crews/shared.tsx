@@ -1,3 +1,4 @@
+import { serviceLabel } from "../labels";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type CrewEvent, type CrewMetrics, type CrewProfile, type CrewsIndex, type ServicesIndex, ago, api } from "../api";
 import { ROOMS, type RoomId } from "../nx/map";
@@ -168,7 +169,7 @@ export function PriceTable({ p, holders }: { p: CrewProfile; holders?: string | 
         <thead><tr><th>Offer</th><th className="cr-num">Price</th><th className="cr-num">Holder price</th><th>Call</th></tr></thead>
         <tbody>
           {rows.length ? rows.map((r) => (
-            <tr key={r.offer}><td><b>{r.label}</b></td><td className="cr-num">{p.id === "swarm" ? "from " : ""}{price(r.usd)}</td><td className="cr-num">{p.id === "swarm" ? "full quote" : price(r.holderUsd)}</td><td className="mono dim">{r.offer}</td></tr>
+            <tr key={r.offer}><td><b>{serviceLabel(r.label)}</b></td><td className="cr-num">{p.id === "swarm" ? "from " : ""}{price(r.usd)}</td><td className="cr-num">{p.id === "swarm" ? "full quote" : price(r.holderUsd)}</td><td className="mono dim">{r.offer}</td></tr>
           )) : <tr><td colSpan={4} className="dim" style={{ whiteSpace: "normal" }}>{p.operator?.kind === "house" ? "No price is set yet: this crew is in preview, only the free sample runs." : "Prices are set by the operator, not by NIGHTSHIFT: see its endpoint."}</td></tr>}
         </tbody>
       </table>

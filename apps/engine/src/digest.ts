@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { Company } from "@nightshift/core";
 import type { LedgerTx } from "@nightshift/ledger";
 import { writeAtomic } from "./atomic.js";
+import { backupUrl, siteBackups } from "./site-backup.js";
 import { chats } from "./community.js";
 import { config } from "./config.js";
 import { type Button, esc, telegram } from "./social.js";
@@ -21,7 +22,7 @@ type Product = { name: string; kind: string; company: string; link: string };
 export type DigestFacts = {
   from: number; to: number;
   shifts: number; companiesWorking: number;
-  products: Product[]; sites: { company: string; url: string }[];
+  products: Product[]; sites: { company: string; url: string; siteBackup?: string }[];
   sales: { count: number; usd: number }; b2b: { count: number; usd: number };
   imd: { count: number; imd: number };
   top: { name: string; slug: string; why: string } | null;
@@ -62,7 +63,8 @@ export function digestFacts(all: Iterable<Company>, txs: LedgerTx[], now: number
         const url = t.result?.siteUrl ?? c.site?.url;
         // a site is launched once: builds that ended at the same address are one site
         if (!url || f.sites.some((x) => x.url === url)) continue;
-        f.sites.push({ company: c.name, url });
+        const backup = c.site?.url === url ? backupUrl(c.site.cid) : null;
+        f.sites.push({ company: c.name, url, ...(backup ? { siteBackup: backup } : {}) });
         row(c.id).built++;
       }
     }
@@ -121,6 +123,7 @@ export function digestCard(f: DigestFacts, base = config.publicUrl): { text: str
     if (f.products.length > 8) lines.push(`  …and ${f.products.length - 8} more`);
   }
   if (f.sites.length) lines.push(`🌐 <b>${s(f.sites.length, "site")}</b> launched: ${f.sites.slice(0, 5).map((x) => `<a href="${esc(x.url)}">${esc(x.company)}</a>`).join(", ")}${f.sites.length > 5 ? `, +${f.sites.length - 5}` : ""}`);
+  for (const x of f.sites.slice(0, 5)) if (x.siteBackup) lines.push(`  ${esc(x.company)}: <a href="${esc(x.siteBackup)}">Backup link (if the site does not open)</a>`);
   lines.push(`💰 <b>${s(f.sales.count, "sale")}</b> · <b>$${f.sales.usd.toFixed(2)}</b> to people and outside agents`);
   if (f.b2b.count) lines.push(`🤝 ${s(f.b2b.count, "sale")} between NIGHTSHIFT companies · $${f.b2b.usd.toFixed(2)} (counted apart)`);
   lines.push(`🧠 <b>${s(f.imd.count, "IMD order")}</b> paid · <b>${f.imd.imd.toLocaleString("en-US", { maximumFractionDigits: 2 })} IMD</b> to the swarm`);
@@ -131,6 +134,7 @@ export function digestCard(f: DigestFacts, base = config.publicUrl): { text: str
 type State = { lastDay?: string; lastAt?: number };
 export type DigestOptions = {
   companies: () => Iterable<Company>; ledger: () => Promise<LedgerTx[]>;
+  prepare?: (c: Company) => Promise<void>;
   now?: () => number; file?: string | null; dryRun?: string | null;
   mode?: () => "live" | "sim"; on?: () => boolean; hour?: () => number;
   token?: () => string; chats?: () => string[];
@@ -154,7 +158,15 @@ export class Digest {
     if (this.s.lastAt && now - this.s.lastAt < 20 * 3_600_000) return "wait";
     // the day is taken before anything is sent: a crash or a retry never posts it twice
     this.s.lastDay = day; this.save();
-    const card = digestCard(digestFacts(this.o.companies(), await this.o.ledger(), now));
+    const companies = [...this.o.companies()];
+    const facts = digestFacts(companies, await this.o.ledger(), now);
+    await Promise.all(facts.sites.map(async (site) => {
+      const c = companies.find((c) => c.site?.url === site.url);
+      if (c) await this.o.prepare?.(c);
+      const backup = await siteBackups.get(site.url, c?.site ?? undefined);
+      if (backup) site.siteBackup = backup;
+    }));
+    const card = digestCard(facts);
     if (!card) { console.log(`daily digest ${day}: a quiet day, nothing posted`); return "quiet"; }
     if ((this.o.mode ?? (() => config.mode))() !== "live") {
       if (this.o.dryRun) appendFileSync(this.o.dryRun, `--- ${new Date(now).toISOString()} (sim mode: not posted)\n${card.text}\n\n`);
@@ -170,8 +182,8 @@ export class Digest {
 }
 
 /** The live digest, checked every minute (off with DIGEST=0). */
-export function startDigest(companies: () => Iterable<Company>, ledger: () => Promise<LedgerTx[]>): Digest {
-  const d = new Digest({ companies, ledger, file: join(config.dataDir, "digest.json"), dryRun: join(config.dataDir, "digest-dryrun.log") });
+export function startDigest(companies: () => Iterable<Company>, ledger: () => Promise<LedgerTx[]>, prepare?: (c: Company) => Promise<void>): Digest {
+  const d = new Digest({ companies, ledger, prepare, file: join(config.dataDir, "digest.json"), dryRun: join(config.dataDir, "digest-dryrun.log") });
   setInterval(() => void d.tick().catch((e) => console.error("digest", (e as Error).message)), 60_000).unref();
   return d;
 }

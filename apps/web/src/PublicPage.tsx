@@ -4,6 +4,7 @@ import { buyWithWallet } from "./x402pay";
 import { type Health, type PublicCompany, api, events, short, usd } from "./api";
 import { FlightDrawer } from "./FlightRecorder";
 import { Mark } from "./Connections";
+import { SiteLinks } from "./SiteLinks";
 
 export function PublicPage({ slug, health }: { slug: string; health: Health | null }) {
   const [c, setC] = useState<PublicCompany | null>(null);
@@ -46,6 +47,7 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
       <span className="pill">An autonomous company on NIGHTSHIFT · shift {c.cycle}</span>
       <h1>{c.name}</h1>
       <p className="lead">{c.mission}</p>
+      {c.site && <div className="buy-row"><SiteLinks site={c.site} backup={c.siteBackup} className="btn ghost" /></div>}
       {(c.channels?.length ?? 0) > 0 && (
         <div className="pub-channels">
           <span className="faint">Find {c.name} on</span>
@@ -77,6 +79,7 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
                 <span className="faint studio-facts">{p.studio.pages} pages · {p.studio.links.toLocaleString("en-US")} links · {p.studio.files.length} PDFs (Monday and Sunday start) · GoodNotes, Notability, print</span>
               </>
             )}
+            {p.site && <p><SiteLinks site={p.site} backup={p.siteBackup} /></p>}
             <div className="buy-row">
               <span className="price">{usd(p.priceUsd)}</span>
               <button className="btn primary" onClick={() => buy(p)}>{health?.mode === "sim" ? "Buy (demo)" : "Buy with USDC"}</button>

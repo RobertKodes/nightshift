@@ -37,6 +37,9 @@ import { StakedBanner } from "./games/staked";
 import "./styles.css";
 import "./lite"; // marks <html data-lite> before the first paint
 import "./landing/landing.css";
+import "./clarity.css";
+import { HowItWorksPage } from "./HowItWorksPage";
+import { UtilityLinks } from "./HowThisConnects";
 
 // where this visitor first came from, kept for the company they may start
 noteFirstTouch();
@@ -49,10 +52,6 @@ const PokerPage = lazy(() => import("./poker/PokerPage").then((x) => ({ default:
 const LeaguePage = lazy(() => import("./station/LeaguePage").then((x) => ({ default: x.LeaguePage })));
 const WhitepaperPage = lazy(() => import("./WhitepaperPage").then((x) => ({ default: x.WhitepaperPage })));
 const ChangelogPage = lazy(() => import("./ChangelogPage").then((x) => ({ default: x.ChangelogPage })));
-const BreakroomPage = lazy(() => import("./station/Rooms").then((x) => ({ default: x.BreakroomPage })));
-const GeekPage = lazy(() => import("./station/Rooms").then((x) => ({ default: x.GeekPage })));
-const InfoPage = lazy(() => import("./station/Rooms").then((x) => ({ default: x.InfoPage })));
-const EconomyPage = lazy(() => import("./station/EconomyCommand").then((x) => ({ default: x.EconomyPage })));
 const CommandPage = lazy(() => import("./station/EconomyCommand").then((x) => ({ default: x.CommandPage })));
 const LivePage = lazy(() => import("./LivePage").then((x) => ({ default: x.LivePage })));
 const NightshiftLivePage = lazy(() => import("./live/LivePage").then((x) => ({ default: x.LivePage })));
@@ -76,7 +75,9 @@ function App() {
   const [health, setHealth] = useState<Health | null>(null);
   useEffect(() => { api.health().then(setHealth).catch(() => setHealth(null)); }, []);
   const seg = path.split("/").filter(Boolean);
-  // The gate: choose your way. The cinematic landing is now the story; every other page lives in a room.
+  const oldDoors: Record<string, string> = { breakroom: "games", geek: "services", info: "token", economy: "proof", hr: "proof" };
+  if (seg[0] && oldDoors[seg[0]]) seg[0] = oldDoors[seg[0]]!;
+  // Existing room URLs open the matching door; the story keeps its art.
   if (seg.length === 0) return <Gate />;
   if (seg[0] === "story") return <Landing />;
   if (seg[0] === "live") return <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#040611" }} />}><NightshiftLivePage /></Suspense>;
@@ -100,6 +101,7 @@ function App() {
   let page: React.ReactNode = <Home health={health} />;
   if (seg[0] === "co" && seg[1]) page = <CompanyPage id={seg[1]} health={health} />;
   if (seg[0] === "c" && seg[1]) page = <PublicPage slug={seg[1]} health={health} />;
+  if (seg[0] === "how-it-works") page = <HowItWorksPage />;
   if (seg[0] === "mcp") page = <McpPage health={health} />;
   if (seg[0] === "terms") page = <TermsPage health={health} />;
   if (seg[0] === "privacy") page = <PrivacyPage />;
@@ -120,10 +122,6 @@ function App() {
   if (seg[0] === "tokenomics") page = <TokenomicsPage />;
   if (seg[0] === "games") page = seg[1] === "live" ? <Suspense fallback={null}><LivePage /></Suspense> : <GameRoomPage />;
   if (seg[0] === "launchpad") page = <Suspense fallback={<div className="st-room" />}><LaunchpadPage seg={seg} /></Suspense>;
-  if (seg[0] === "breakroom") page = <Suspense fallback={<div className="st-room" />}><BreakroomPage /></Suspense>;
-  if (seg[0] === "geek") page = <Suspense fallback={<div className="st-room" />}><GeekPage /></Suspense>;
-  if (seg[0] === "info") page = <Suspense fallback={<div className="st-room" />}><InfoPage /></Suspense>;
-  if (seg[0] === "economy" || seg[0] === "hr") page = <Suspense fallback={<div className="st-room" />}><EconomyPage /></Suspense>;
   if (seg[0] === "command") page = <Suspense fallback={<div className="st-room" />}><CommandPage /></Suspense>;
   if (seg[0] === "league") page = <Suspense fallback={<div className="st-room" />}><LeaguePage id={seg[1]} /></Suspense>;
   if (seg[0] === "mind") page = <Suspense fallback={<div className="st-room" />}><MindPage /></Suspense>;
@@ -140,16 +138,16 @@ function App() {
   const key = seg[0] === "staking" ? "stake" : seg[0] === "hr" ? "economy" : seg[0];
   const active: Active = seg[0] === "co" ? "company" : named.includes(key as Active) ? (key as Active) : "companies";
   // Each page names itself in the tab; pages that know more (a company, a product) set their own.
-  document.title = `${seg[0] === "games" && seg[1] === "live" ? "Watch live" : TITLES[key ?? ""] ?? "Companies"} · NIGHTSHIFT`;
+  document.title = `${seg[0] === "games" && seg[1] === "live" ? "Watch games" : TITLES[key ?? ""] ?? "Companies"} · NIGHTSHIFT`;
   void active;
   return <RoomShell room={roomOf(path) ?? "geek"} path={path} lean={seg[0] === "games"}>{page}</RoomShell>;
 }
 
 const TITLES: Record<string, string> = {
-  companies: "Companies", launch: "Launch a company", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
-  market: "Market", token: "$SHIFT", frogs: "NIGHT FROGS", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
-  tokenomics: "Tokenomics", games: "Game Room", launchpad: "Launchpad", arena: "Agent Arena",
-  services: "House services", crews: "Crews", watchtower: "Watchtower", agents: "Connect an agent", proof: "Proof", breakroom: "Breakroom", geek: "Geek Room", info: "Info Room", economy: "HR & Economy", command: "Command Room", league: "The Night League", forge: "The Forge", watch: "The Night Watch", ship: "The Ship",
+  companies: "Companies", launch: "Start a business", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
+  market: "Market", token: "$SHIFT", frogs: "Frogs", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
+  tokenomics: "Tokenomics", games: "Play", launchpad: "Launch a token", arena: "Agent Arena",
+  "how-it-works": "How it works", services: "AI tools", crews: "Crews", watchtower: "Token monitor", agents: "Connect an agent", proof: "Proof", breakroom: "Play", geek: "AI tools", info: "$SHIFT", economy: "Activity & receipts", command: "Frog missions", league: "The Night League", forge: "Upgrade Frogs", watch: "Run a keeper", ship: "The Ship",
 };
 
 // The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.
@@ -185,4 +183,11 @@ function Banners() {
   return path === "/live" || path.startsWith("/live/") || path === "/tg" || path.startsWith("/tg/") ? null : <><WaitingBanner /><StakedBanner /></>;
 }
 
-createRoot(document.getElementById("root")!).render(<StrictMode><Crash><SessionProvider><App /><Banners /></SessionProvider></Crash></StrictMode>);
+/** Full-screen pages keep a small way to connect and get help. */
+function FullscreenUtilities() {
+  const path = useRoute();
+  if (!/^(\/games\/(pinball|chess|pool|poker)|\/live(?:\/|$)|\/story$|\/ship$|\/sniper$|\/play$|\/tg(?:\/|$))/.test(path)) return null;
+  return <aside className="clarity-floating" aria-label="Site links"><UtilityLinks /><details><summary>More</summary><nav className="clarity-start"><a href="/services">AI tools</a><a href="/games">Play</a><a href="/token">$SHIFT</a></nav><nav className="clarity-start"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/whitepaper">Whitepaper</a></nav></details></aside>;
+}
+
+createRoot(document.getElementById("root")!).render(<StrictMode><Crash><SessionProvider><App /><Banners /><FullscreenUtilities /></SessionProvider></Crash></StrictMode>);

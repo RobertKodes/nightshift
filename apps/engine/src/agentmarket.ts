@@ -2,6 +2,7 @@ import type { Company, Product } from "@nightshift/core";
 import { type Offer, requirement } from "@nightshift/x402";
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { config } from "./config.js";
+import { backupUrl, productSite } from "./site-backup.js";
 
 /**
  * The market as AI agents use it. Researched 2026-10-20: x402 discovery (CDP Bazaar, agentic.market)
@@ -44,7 +45,7 @@ export const productIdOf = (seg: string) => (seg.startsWith("p-") && BARE_ID.tes
  */
 export function deliveryOf(kind: string): { type: "browser-tool" | "document"; callable: false; what: string } {
   return kind === "tool"
-    ? { type: "browser-tool", callable: false, what: "a small web tool hosted on IPFS: after payment you get a Markdown file with its address, to open in a browser" }
+    ? { type: "browser-tool", callable: false, what: "a small web tool hosted on IPFS: after payment you get a Markdown file with its address and a backup link when available, to open in a browser" }
     : { type: "document", callable: false, what: `a Markdown ${kind} you download after payment` };
 }
 const CLAIMS_API = /\b(callable|apis?|endpoints?|per[- ]call|one x402 call returns|returns? json)\b/i;
@@ -121,7 +122,8 @@ export function card({ c, p, text }: Live) {
   const pv = text ? previewOf(text) : null;
   return {
     id: p.id, name: p.name, kind: p.kind, pitch: honestPitch(p), delivery: deliveryOf(p.kind), priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, b2bSales: p.b2bSales ?? 0, createdAt: p.createdAt,
-    company: { name: c.name, slug: c.slug, page: `${config.publicUrl}/c/${c.slug}` },
+    ...productSite(p),
+    company: { name: c.name, slug: c.slug, page: `${config.publicUrl}/c/${c.slug}`, site: c.site?.url ?? null, siteBackup: backupUrl(c.site?.cid) },
     words: pv?.words ?? null, sections: pv?.sections ?? null,
     preview: `${config.publicUrl}/api/market/${c.slug}/${p.id}`,
     buy: { url: buyUrl(c, p), protocol: "x402 v2", asset: "USDC", chainId: config.salesChainId, network: `eip155:${config.salesChainId}`, payTo: c.wallet },

@@ -39,7 +39,7 @@ type Context = {
   /** Products on sale across the companies (engine.market). */
   market(q: string): unknown[];
   /** The same products with their packaged text, for the agent market tools. */
-  live(): { c: Company; p: Product; text: string | null }[];
+  live(): Promise<{ c: Company; p: Product; text: string | null }[]> | { c: Company; p: Product; text: string | null }[];
   /** $SHIFT as the token page shows it: market, supply, staked, burned. */
   token(): Promise<unknown>;
   /** SWARM MIND, when it is on: answers from the IMD swarm's published work. */
@@ -354,16 +354,16 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
     title: "Search NIGHTSHIFT products",
     description: "Digital products made by NIGHTSHIFT's AI companies (reports, guides, templates…), sold over x402 in USDC on Base. Filter by words, kind and maximum price; sort by best-selling, newest or price. Each result has a free preview URL and its exact payment terms.",
     inputSchema: { query: z.string().max(200).default(""), kind: z.string().max(40).optional(), maxPriceUsd: z.number().positive().optional(), sort: z.enum(["best", "new", "price"]).default("best") },
-  }, safe((a: { query: string; kind?: string; maxPriceUsd?: number; sort: "best" | "new" | "price" }) => {
-    const rows = search(ctx.live(), { q: a.query, kind: a.kind, maxUsd: a.maxPriceUsd, sort: a.sort });
+  }, safe(async (a: { query: string; kind?: string; maxPriceUsd?: number; sort: "best" | "new" | "price" }) => {
+    const rows = search(await ctx.live(), { q: a.query, kind: a.kind, maxUsd: a.maxPriceUsd, sort: a.sort });
     return { mode: config.mode, count: rows.length, items: rows.slice(0, 25).map(card) };
   }));
   server.registerTool("nightshift_product", {
     title: "One product, with its free preview",
     description: "Everything about one product before paying: description, outline, opening lines, word count, price, and the exact steps to buy it with x402.",
     inputSchema: { company: z.string().max(80).describe("company slug"), product: z.string().max(80).describe("product id") },
-  }, safe((a: { company: string; product: string }) => {
-    const hit = ctx.live().find((l) => l.c.slug === a.company && l.p.id === a.product);
+  }, safe(async (a: { company: string; product: string }) => {
+    const hit = (await ctx.live()).find((l) => l.c.slug === a.company && l.p.id === a.product);
     if (!hit) throw new Error("No such product on sale. Search with nightshift_products.");
     return { mode: config.mode, ...detail(hit) };
   }));

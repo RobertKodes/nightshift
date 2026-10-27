@@ -1,13 +1,13 @@
+import { WAYS } from "../nx/map";
 import { useEffect, useState } from "react";
 import { Icon } from "../Icon";
-import { Link, go } from "../router";
-import { ROOMS, type Room, type RoomId, type StationData, roomOf } from "./roomdata";
+import { Link } from "../router";
+import { ROOMS, type RoomId, type StationData, roomOf } from "./roomdata";
 import "./station.css";
 
 /** The room this visitor last walked into, so the door remembers their side of the station. */
 const KEY = "ns_room";
 export function rememberRoom(id: RoomId) { try { localStorage.setItem(KEY, id); } catch { /* private mode */ } }
-function lastRoom(): RoomId | null { try { const v = localStorage.getItem(KEY); return v && roomOf(v) ? (v as RoomId) : null; } catch { return null; } }
 
 let stationCache: { at: number; d: StationData } | null = null;
 export function useStation(): StationData | null {
@@ -19,49 +19,16 @@ export function useStation(): StationData | null {
   return d;
 }
 
-function doorStat(r: Room, s: StationData | null): string | null {
-  if (!s) return null;
-  switch (r.id) {
-    case "breakroom": return `${s.breakroom.agentsInArena} agents in the arena · ${s.breakroom.liveGames} live`;
-    case "geek": return s.leader ? `League leader: ${s.leader.name} ${s.leader.returnPct >= 0 ? "+" : ""}${s.leader.returnPct}%` : `${s.geek.tradableTokens ?? "…"} IMD tokens tradable`;
-    case "info": return "$SHIFT live on Ethereum · NIGHT FROGS onchain";
-    case "economy": return s.economy.swarmAgentsOnline ? `${s.economy.swarmAgentsOnline.toLocaleString("en-US")} IMD agents online` : "Crew roster from IMD's records";
-    case "command": return `${s.command.missions} missions this week`;
-  }
-}
-
-/** The station's front door: five rooms, pick a side. Used on the landing. */
+/** The same three doors on the story page. */
 export function StationDoors() {
-  const s = useStation();
-  const [mine, setMine] = useState<RoomId | null>(null);
-  useEffect(() => setMine(lastRoom()), []);
-  const enter = (r: Room) => { rememberRoom(r.id); go(r.path); scrollTo(0, 0); };
-  return (
-    <section id="station" className="st-doors" aria-label="The station's rooms">
-      <picture className="st-doors-bg" aria-hidden="true"><img src="/art/station/station-hero-1920x1080.webp" alt="" loading="lazy" /></picture>
-      <div className="st-doors-in">
-        <span className="eyebrow">THE STATION · CHOOSE YOUR ROOM</span>
-        <h2>Five rooms. <em>One night shift.</em></h2>
-        <p className="ns-intro">Play, build, read, follow the money or command the fleet. Every room is live: real games, real agents, real numbers from the chain and the IMD swarm.</p>
-        {mine && <button className="st-back" onClick={() => enter(roomOf(mine)!)}>Back to the {roomOf(mine)!.name} <span>→</span></button>}
-        <div className="st-door-grid">
-          {ROOMS.map((r) => (
-            <a key={r.id} href={r.path} className={`st-door${mine === r.id ? " mine" : ""}`} style={{ "--acc": r.accent } as React.CSSProperties} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); enter(r); }}>
-              <span className="st-door-art"><img src={r.door} alt="" loading="lazy" /></span>
-              <span className="st-door-deck">{r.deck}{mine === r.id ? " · YOUR ROOM" : ""}</span>
-              <b>{r.name}</b>
-              <p>{r.line}</p>
-              <span className="st-door-stat">{doorStat(r, s) ?? " "}</span>
-              <span className="st-door-go">ENTER <span>→</span></span>
-            </a>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
+  return <section id="station" className="st-doors" aria-label="Three doors">
+    <picture className="st-doors-bg" aria-hidden="true"><img src="/art/station/station-hero-1920x1080.webp" alt="" loading="lazy" /></picture>
+    <div className="st-doors-in"><span className="eyebrow">NIGHTSHIFT</span><h2>Three doors. <em>One night shift.</em></h2><p className="ns-intro">Choose what you want to do. <Link to="/how-it-works">See how it works →</Link></p>
+      <div className="st-door-grid">{WAYS.map((way) => <Link key={way.key} to={way.to} className="st-door" style={{ "--acc": way.accent } as React.CSSProperties}><span className="st-door-art"><img src={way.emblem} alt="" loading="lazy" /></span><b>{way.title}</b><p>{way.line}</p><span className="st-door-go">OPEN →</span></Link>)}</div>
+    </div>
+  </section>;
 }
 
-/** The top of a room: its art, its name, its line, and the other doors. */
 export function RoomHero({ id, children }: { id: RoomId; children?: React.ReactNode }) {
   const r = roomOf(id)!;
   useEffect(() => rememberRoom(id), [id]);
@@ -74,8 +41,8 @@ export function RoomHero({ id, children }: { id: RoomId; children?: React.ReactN
         <p>{r.line}</p>
         {children}
       </div>
-      <nav className="st-switch" aria-label="Other rooms">
-        {ROOMS.map((o) => <Link key={o.id} to={o.path} className={o.id === id ? "on" : ""}><i style={{ background: o.accent }} />{o.name}</Link>)}
+      <nav className="st-switch" aria-label="Three doors">
+        {ROOMS.filter((o) => ["geek", "breakroom", "info"].includes(o.id)).map((o) => <Link key={o.id} to={o.path} className={o.id === id ? "on" : ""}><i style={{ background: o.accent }} />{o.name}</Link>)}
       </nav>
     </header>
   );

@@ -11,6 +11,7 @@ import { live } from "./games-routes.js";
 import { leagueTools } from "./league-routes.js";
 import { card, detail, search } from "./agentmarket.js";
 import { flightFor } from "./flight.js";
+import { backupUrl, productSite } from "./site-backup.js";
 
 /** The agent an MCP call acts as: the arena key's own agent, or one of the key owner's agents named by agentId. */
 function agentFor(engine: Engine, owner: string | null, key: string) {
@@ -41,15 +42,16 @@ function build(engine: Engine, owner: string | null) {
     if (!c || (config.requireAuth && c.owner !== owner)) throw new Error("No such company for this key.");
     return c;
   };
-  const brief = (c: ReturnType<typeof pick>) => {
+  const brief = async (c: ReturnType<typeof pick>) => {
+    await engine.resolveSites(c);
     let spent = 0n;
     for (const t of c.tasks) spent += t.costImd;
     const s = engine.stats(c);
     return {
       id: c.id, slug: c.slug, name: c.name, mission: c.mission, status: c.status, shift: c.cycle,
-      site: c.site?.url ?? null, publicPage: `${config.publicUrl}/c/${c.slug}`, dashboard: `${config.publicUrl}/co/${c.id}`,
+      site: c.site?.url ?? null, siteBackup: backupUrl(c.site?.cid), publicPage: `${config.publicUrl}/c/${c.slug}`, dashboard: `${config.publicUrl}/co/${c.id}`,
       revenueUsd: c.products.reduce((a, p) => a + fromUsdc(p.revenueUsdc), 0), spentImd: fromImd(spent), visits7d: s.visits7d, sales7d: s.sales7d,
-      products: c.products.map((p) => ({ id: p.id, name: p.name, status: p.status, priceUsd: fromUsdc(p.priceUsdc), sales: p.sales, buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}` })),
+      products: c.products.map((p) => ({ id: p.id, name: p.name, status: p.status, priceUsd: fromUsdc(p.priceUsdc), sales: p.sales, buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, ...productSite(p) })),
       waitingForApproval: c.tasks.filter((t) => t.status === "awaiting_approval").map((t) => ({ taskId: t.id, title: t.title, why: t.why, reason: t.activity })),
       working: c.tasks.filter((t) => ["checking", "ordering", "building"].includes(t.status)).map((t) => ({ title: t.title, status: t.status, activity: t.activity, steps: `${t.stepsDone}/${t.stepsTotal}` })),
       policy: c.policy,
@@ -80,6 +82,7 @@ function build(engine: Engine, owner: string | null) {
     description: "Searches every product on sale across NIGHTSHIFT companies, by words, kind and maximum price. Each result has a free preview URL and an x402 buy URL: GET it for the USDC price, pay with an x402 client, and the response holds a download link.",
     inputSchema: { query: z.string().max(200).default(""), kind: z.string().max(40).optional(), maxPriceUsd: z.number().positive().optional(), sort: z.enum(["best", "new", "price"]).default("best") },
   }, run(async (a: { query: string; kind?: string; maxPriceUsd?: number; sort: "best" | "new" | "price" }) => {
+    await Promise.all([...engine.store.companies.values()].map((c) => engine.resolveSites(c)));
     const rows = search(live(), { q: a.query, kind: a.kind, maxUsd: a.maxPriceUsd, sort: a.sort });
     return { mode: config.mode, count: rows.length, items: rows.slice(0, 25).map(card) };
   }));
@@ -90,11 +93,12 @@ function build(engine: Engine, owner: string | null) {
   }, run(async (a: { company: string; product: string }) => {
     const hit = live().find((l) => l.c.slug === a.company && l.p.id === a.product);
     if (!hit) throw new Error("No such product on sale.");
+    await engine.resolveSites(hit.c);
     return { mode: config.mode, ...detail(hit) };
   }));
 
   server.registerTool("nightshift_companies", { title: "Your companies", description: "Every company you run, with revenue, spend and what each is doing.", inputSchema: {} },
-    run(async () => mine().map((c) => { const b = brief(c); return { id: b.id, name: b.name, status: b.status, shift: b.shift, revenueUsd: b.revenueUsd, spentImd: b.spentImd, waiting: b.waitingForApproval.length, working: b.working[0]?.title ?? null }; })));
+    run(async () => Promise.all(mine().map(async (c) => { const b = await brief(c); return { id: b.id, name: b.name, status: b.status, shift: b.shift, revenueUsd: b.revenueUsd, spentImd: b.spentImd, waiting: b.waitingForApproval.length, working: b.working[0]?.title ?? null }; }))));
 
   server.registerTool("nightshift_company", { title: "One company in detail", description: "Products, P&L, current work, pending approvals, limits and the CEO's latest log.", inputSchema: { id: z.string() } },
     run(async ({ id }: { id: string }) => brief(pick(id))));
@@ -106,7 +110,7 @@ function build(engine: Engine, owner: string | null) {
   }, run(async (a: { idea: string; dailyBudgetUsd: number; askOverUsd: number; autopilot: boolean }) => {
     if (config.requireAuth && !owner) throw new Error("This key has no owner.");
     const c = await engine.create(a.idea, { dailyBudgetUsd: a.dailyBudgetUsd, approvalOverUsd: a.askOverUsd, autopilot: a.autopilot }, owner, { via: "mcp", from: "mcp" });
-    return { ok: true, ...brief(c), fund: config.mode === "live" ? `Send IMD (and a little ETH for the one-time Permit2 approval) to ${c.wallet} on Ethereum.` : "Simulation: it starts with 20 simulated IMD." };
+    return { ok: true, ...await brief(c), fund: config.mode === "live" ? `Send IMD (and a little ETH for the one-time Permit2 approval) to ${c.wallet} on Ethereum.` : "Simulation: it starts with 20 simulated IMD." };
   }));
 
   server.registerTool("nightshift_shift", { title: "Run a shift now", description: "Makes the CEO decide and start its next move now instead of waiting for autopilot.", inputSchema: { id: z.string() } },

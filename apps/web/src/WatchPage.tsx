@@ -50,11 +50,11 @@ export function WatchPage() {
       <header className="fg-hero nw-hero" style={{ "--tc": "#3fe6ff" } as React.CSSProperties}>
         <div className="fg-hero-in">
           <span className="fg-eyebrow"><NxIcon name="security" size={16} /> DECK 05 · THE NIGHT WATCH · imdUSD KEEPERS</span>
-          <h1>Hold the dollar. <em>Keep the bonus.</em></h1>
+          <h1>Run a keeper</h1>
           <p className="fg-lead">imdUSD is IMD's dollar, borrowed against staked IMD. When IMD falls and a loan drops under {b?.mat ?? 170}%, someone has to mark it and, {b ? num(b.lullHours) : 6} hours later, repay it: whoever does takes staked IMD worth {b?.bonusPct ?? 20}% more than the debt they repay. The Night Watch is the crew that does it, one seat per Night Watcher and the Captain's seat for NIGHT FROG #1 (The Captain's, once #1 is forged), each running its own bot with its own wallet, working in turn instead of racing.</p>
           <div className="fg-cta">
             <a className="nx-btn nx-btn-acc" href="#run"><NxIcon name="security" size={18} /> Set up my seat</a>
-            <Link className="nx-btn" to="/forge">Forge a Night Watcher</Link>
+            <Link className="nx-btn" to="/forge">Upgrade Frogs</Link>
           </div>
           <div className="st-stats">
             <Stat label="imdUSD price" value={b?.peg ? `$${b.peg.toFixed(4)}` : "—"} note="in its USDC peg pool" />
@@ -201,7 +201,7 @@ function SeatDesk() {
           <b>1 · Check your wallet</b>
           <span>Connect the wallet that holds your Night Watcher, NIGHT FROG #1 or The Captain. The page reads the chain and shows every seat it holds.</span>
           {!held ? <button className="nx-btn nx-btn-acc" onClick={() => void check()} disabled={busy}>{busy ? "Checking…" : "Check my seats"}</button> : (
-            held.length === 0 ? <p className="fg-dim">{me?.slice(0, 6)}…{me?.slice(-4)} holds no seat. <Link to="/forge">Forge a Night Watcher</Link>, or hold NIGHT FROG #1 for the Captain's seat.</p> : (
+            held.length === 0 ? <p className="fg-dim">{me?.slice(0, 6)}…{me?.slice(-4)} holds no seat. <Link to="/forge">Upgrade Frogs</Link>, or hold NIGHT FROG #1 for the Captain's seat.</p> : (
               <ul className="nw-held">{held.map((x) => (
                 <li key={x.watcher} className={x.online ? "on" : x.paired ? "half" : ""}>
                   <label><input type="radio" name="seat" checked={seat === x.watcher} onChange={() => setSeat(x.watcher)} /> <b>{seatLabel(x.watcher)}</b>{x.tier && x.watcher !== 0 ? ` · ${x.tier}` : ""} · {x.weight}× share, {x.cutBps / 100}% cut</label>

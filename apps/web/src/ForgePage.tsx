@@ -153,7 +153,7 @@ export function ForgePage() {
       <header className="fg-hero" style={tone(ft?.color ?? "#ffc46b")}>
         <div className="fg-hero-in">
           <span className="fg-eyebrow"><NxIcon name="forge" size={16} /> DECK 05 · THE FORGE · NIGHT WATCHERS · GEN 2</span>
-          <h1>Burn 10. <em>Forge 1.</em></h1>
+          <h1>Upgrade Frogs</h1>
           <p className="fg-lead">Put 10 NIGHT FROGS through the night shift's forge and 1 Night Watcher comes out: fully onchain, glowing in its tier's colour, earning 10× to 40× of the frog pot and holding a seat in the Night Watch, the bot crew that liquidates unsafe imdUSD loans for a bonus. The rarer your 10, the higher the tier. No luck and no reveal: you see the exact Night Watcher before you sign.</p>
           <div className="fg-cta">
             <a className="nx-btn nx-btn-acc" href="#bench"><NxIcon name="forge" size={18} /> Start forging</a>
@@ -301,7 +301,7 @@ export function ForgePage() {
                       : <p className="fg-dim">Preview only: forge from the wallet that holds these 10.</p>
                   ) : <p className="fg-soon">Waiting for IMD: the forge opens when the swarm has built, audited and deployed it. This preview is exactly the Night Watcher it will make.</p>}
                   {step && <div className="launch-stage"><i className="pulse" /><span>{step}</span></div>}
-                  {done && <div className="good">Forged. <a href={`https://etherscan.io/tx/${done}`} target="_blank" rel="noreferrer">See the transaction ↗</a> · <a href="/watch">Take your Night Watch seat</a> · <a href="#room">Enter the Watch Room</a></div>}
+                  {done && <div className="good">Forged. <a href={`https://etherscan.io/tx/${done}`} target="_blank" rel="noreferrer">See the transaction ↗</a> · <a href="/watch">Run a keeper</a> · <a href="#room">Enter the Watch Room</a></div>}
                 </>
               ) : (
                 <div className="fg-empty">
@@ -403,7 +403,7 @@ export function ForgePage() {
             <details><summary>Burned means burned?</summary><p>Yes. The NIGHT FROGS contract has no burn function, so the 10 go to 0x…dEaD, where nobody can ever move them. The forge also refuses to give less than the tier you saw.</p></details>
             <details><summary>Do rarer frogs give a better Night Watcher?</summary><p>Yes, always. Rarer frogs bring more forge points, more points mean a higher tier, and a higher tier means a higher multiplier (10× up to 40×), a bigger crew boost, a bigger Night Watch share, a smaller cut and more effects in the art. The preview shows exactly where your 10 land.</p></details>
             <details><summary>Is this an investment?</summary><p>No. Shift hours, missions, slots, the seat and the room are NIGHTSHIFT perks for crew who take part. What a Night Watch seat earns depends on loans going under and on the imdUSD its owner puts in; nothing here is a promise of income.</p></details>
-            <details><summary>Who builds it?</summary><p>The IMD swarm: two contracts (the art renderer and the forge), each coded, tested, audited by four agents and deployed by IMD, fully onchain. <Link to="/frogs">About NIGHT FROGS</Link> · <Link to="/command">Missions</Link></p></details>
+            <details><summary>Who builds it?</summary><p>The IMD swarm: two contracts (the art renderer and the forge), each coded, tested, audited by four agents and deployed by IMD, fully onchain. <Link to="/frogs">Frogs</Link> · <Link to="/command">Missions</Link></p></details>
           </div>
         </section>
       </div>

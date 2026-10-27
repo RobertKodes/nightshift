@@ -142,6 +142,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
           <Link to={`/my?edit=${c.id}`} className="btn ghost">Edit</Link>
           <Link to={`/c/${c.slug}`} className="btn ghost">Public page</Link>
           {c.site && <a className="btn ghost" href={safeHref(c.site.url)} target="_blank" rel="noreferrer">Site ↗</a>}
+          {c.siteBackup && <a className="btn ghost" href={safeHref(c.siteBackup)} target="_blank" rel="noreferrer" title="Backup link (if the site does not open)">Backup ↗</a>}
           {c.status === "active"
             ? <button className="btn" disabled={busy} onClick={() => act(() => api.pause(c.id))}>Pause</button>
             : <button className="btn" disabled={busy} onClick={() => act(() => api.resume(c.id))}>Resume</button>}
@@ -195,7 +196,7 @@ export function CompanyPage({ id, health }: { id: string; health: Health | null 
                 <tbody>
                   {c.products.map((p) => (
                     <tr key={p.id}>
-                      <td><b>{p.name}</b><div className="dim" style={{ fontSize: 12.5 }}>{p.pitch}</div>{p.status === "live" && <a className="faint mono" style={{ fontSize: 11 }} href={`/api/companies/${c.id}/products/${p.id}/download`} target="_blank" rel="noreferrer">what buyers get ↗</a>}{p.deliverableUrl && <a className="faint mono" style={{ fontSize: 11, marginLeft: 12 }} href={p.deliverableUrl} target="_blank" rel="noreferrer">swarm source ↗</a>}</td>
+                      <td><b>{p.name}</b><div className="dim" style={{ fontSize: 12.5 }}>{p.pitch}</div>{p.status === "live" && <a className="faint mono" style={{ fontSize: 11 }} href={`/api/companies/${c.id}/products/${p.id}/download`} target="_blank" rel="noreferrer">what buyers get ↗</a>}{p.deliverableUrl && <a className="faint mono" style={{ fontSize: 11, marginLeft: 12 }} href={p.deliverableUrl} target="_blank" rel="noreferrer">swarm source ↗</a>}{p.siteBackup && <a className="faint mono" style={{ fontSize: 11, marginLeft: 12 }} href={safeHref(p.siteBackup)} target="_blank" rel="noreferrer">Backup link (if the site does not open) ↗</a>}</td>
                       <td><span className={`pill ${p.status}`}>{p.status}</span></td>
                       <td className="r">{c.isOwner && p.status !== "retired" ? <PriceCell id={c.id} productId={p.id} usdc={p.priceUsdc} byOwner={Boolean(p.priceByOwner)} onSaved={load} /> : usd(fromUsdc(p.priceUsdc))}</td>
                       <td className="r">{p.sales}</td>

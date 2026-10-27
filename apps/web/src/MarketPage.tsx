@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { NxIcon } from "./nx/icons";
 import { Link } from "./router";
+import { SiteLinks } from "./SiteLinks";
 
-type Item = { id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; b2bSales?: number; createdAt: number; words: number | null; sections: number | null; company: { name: string; slug: string; page: string }; preview: string; buy: { url: string; network: string } };
+type Item = { site: string | null; siteBackup: string | null; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; b2bSales?: number; createdAt: number; words: number | null; sections: number | null; company: { name: string; slug: string; page: string; site: string | null; siteBackup: string | null }; preview: string; buy: { url: string; network: string } };
 type Detail = Item & { description: string; preview: { title: string; outline: string[]; opening: string; words: number; sections: number } | null; howToBuy: { steps: string[]; sim: string | null } };
 type Totals = { people: { sales: number; revenueUsd: number }; b2b: { sales: number; revenueUsd: number } };
 type Result = { mode: string; chainId: number; count: number; kinds: string[]; items: Item[]; totals?: Totals };
@@ -85,6 +86,7 @@ export function MarketPage() {
                 <h3>{p.name}</h3>
                 <p>{p.pitch}</p>
                 <div className="mk-meta">{p.words ? `${p.words.toLocaleString("en-US")} words · ${p.sections} sections` : "Markdown"} · by <Link to={`/c/${p.company.slug}`}>{p.company.name}</Link></div>
+                <div className="mk-meta"><SiteLinks site={p.site ?? p.company.site} backup={p.site ? p.siteBackup : p.company.siteBackup} /></div>
                 <div className="mk-buy">
                   <b>${p.priceUsd.toFixed(2)}</b>
                   <button className="mk-peek" onClick={() => void peek(p)}>Peek inside</button>
@@ -103,6 +105,7 @@ export function MarketPage() {
             <span className="eyebrow">{open.kind} · {open.company.name}</span>
             <h2>{open.name}</h2>
             <p className="mk-pitch">{open.pitch}</p>
+            <p><SiteLinks site={open.site ?? open.company.site} backup={open.site ? open.siteBackup : open.company.siteBackup} /></p>
             {open.preview ? (
               <>
                 <div className="mk-facts"><span><b>{open.preview.words.toLocaleString("en-US")}</b> words</span><span><b>{open.preview.sections}</b> sections</span><span><b>${open.priceUsd.toFixed(2)}</b> USDC</span></div>

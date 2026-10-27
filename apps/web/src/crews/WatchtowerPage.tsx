@@ -1,3 +1,4 @@
+import { serviceLabel } from "../labels";
 import { type Health, type WatchtowerInfo, api } from "../api";
 import { Link } from "../router";
 import { PaidOffers } from "../TryPaid";
@@ -48,11 +49,11 @@ export function WatchtowerPage({ health }: { health: Health | null }) {
   const pricing = p?.pricing ?? [];
   return (
     <div className="st-room cr-room">
-      <Hero docTitle="Watchtower" trail={<><Link to="/crews">CREWS</Link> · WATCHTOWER</>} title="Watchtower"
+      <Hero docTitle="Token monitor" trail={<><Link to="/crews">CREWS</Link> · TOKEN MONITOR</>} title="Token monitor"
         line={p?.service ?? "Watches Ethereum tokens and Uniswap v4 hooks for changes to their rules, and shows the evidence for each change."}>
         <span className="svc-runby"><i />Operated by NIGHTSHIFT</span>
         <div className="st-stats">
-          {pricing.slice(0, 2).map((r) => <Stat key={r.offer} label={r.label} value={price(r.usd)} note={`holders ${price(r.holderUsd)}`} />)}
+          {pricing.slice(0, 2).map((r) => <Stat key={r.offer} label={serviceLabel(r.label)} value={price(r.usd)} note={`holders ${price(r.holderUsd)}`} />)}
           {!pricing.length && <Stat label="Paid calls" value={crew.data ? "—" : "…"} note={crew.data ? "not open yet" : undefined} />}
           <Stat label="Sample" value="free" note="one check, below" />
         </div>
@@ -60,14 +61,14 @@ export function WatchtowerPage({ health }: { health: Health | null }) {
       <div className="st-body">
         <SimNote health={health} />
         <h2>Check an address, free</h2>
-        <p className="st-note">Paste an ERC-20 token or a Uniswap v4 hook on Ethereum. The report lists every change with the value before and after, both blocks and the evidence; the checks that could not run and the ones Watchtower does not support are named, never counted as fine.</p>
+        <p className="st-note">Paste an ERC-20 token or a Uniswap v4 hook on Ethereum. The report lists every change with the value before and after, both blocks and the evidence; the checks that could not run and the ones Token monitor does not support are named, never counted as fine.</p>
         <WatchtowerTry />
 
         <h2>Try it with your wallet</h2>
         <PaidOffers ids={["watchtower-check", "watchtower-watch"]} />
 
         <h2>What it covers</h2>
-        <Pending load={info} what="What Watchtower supports" />
+        <Pending load={info} what="What Token monitor supports" />
         {info.data && <Scope info={info.data} />}
 
         <h2>Watch it for 7 days</h2>
@@ -94,7 +95,7 @@ export function WatchtowerPage({ health }: { health: Health | null }) {
 
         <h2>The numbers</h2>
         {p ? <MetricStats m={crew.data?.metrics ?? p.metrics} /> : <Pending load={crew} what="Watchtower's numbers" />}
-        <p className="st-note">Every job, free and paid, with its result: <Link to="/crews/watchtower">Watchtower's delivery history</Link>. How the numbers are counted: <Link to="/proof">Proof</Link>.</p>
+        <p className="st-note">Every job, free and paid, with its result: <Link to="/crews/watchtower">Token monitor delivery history</Link>. How the numbers are counted: <Link to="/proof">Proof</Link>.</p>
       </div>
     </div>
   );

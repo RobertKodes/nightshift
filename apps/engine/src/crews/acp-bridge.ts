@@ -2,6 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { writeAtomic } from "../atomic.js";
+import { siteBackups } from "../site-backup.js";
 import type { InternalInput, SwarmDesk } from "./swarm.js";
 import { swarmBody, type SwarmKind } from "./swarm-kinds.js";
 
@@ -257,9 +258,11 @@ export class AcpBridge {
         if (order.status === "failed" || order.refundOwed) { j.failure = order.error ?? "IMD failed or blocked the job."; j.phase = "submitting"; }
         else if (order.status === "done" && order.result) {
           const result = order.result;
+          const backup = await siteBackups.get(result.siteUrl);
           j.delivery = [`NIGHTSHIFT Swarm Desk: ${j.offering}`, `IMD job: ${result.jobId}`, `IMD order: ${order.imdOrderId}`,
             `Receipt: ${order.imd?.txHash ? `https://etherscan.io/tx/${order.imd.txHash}` : "IMD admission " + order.imd?.state}`,
-            ...(result.siteUrl ? [`Site (IPFS): ${result.siteUrl}`] : []), ...(result.repoUrl ? [`Source: ${result.repoUrl}`] : []),
+            ...(result.siteUrl ? [`Site (IPFS): ${result.siteUrl}`] : []),
+            ...(backup ? [`Backup link (if the site does not open): ${backup}`] : []), ...(result.repoUrl ? [`Source: ${result.repoUrl}`] : []),
             ...Object.entries(result.files).map(([name, url]) => `${name}: ${url}`)].join("\n");
           j.phase = "submitting";
         }
