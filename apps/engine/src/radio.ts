@@ -13,6 +13,9 @@ import { config } from "./config.js";
  * may start IDM radio and ask its status; only the owner stops it, plays another broadcast or sets the key.
  */
 export const IDM_RADIO = "https://x.com/i/broadcasts/1pKkOXBAmryKj";
+/** Without a stream key (none is needed): the broadcast's card, to listen on X. */
+export const LISTEN = `📻 <b>IDM radio</b> · beats for chill, work and study, live now on X from @theidmfun.
+<a href="${IDM_RADIO}">▶️ Listen live</a>`;
 const BROADCAST = /^https:\/\/(?:x|twitter)\.com\/i\/broadcasts\/[A-Za-z0-9]{8,24}$/;
 const SERVER = /^rtmps:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.t\.me(?::\d{2,5})?\/s\/?$/;
 const KEY = /^\d{3,20}:[A-Za-z0-9_-]{8,128}$/;
@@ -70,7 +73,7 @@ export class Radio {
       this.#publicAt = now;
       if (a === "status") return this.status();
       if (a) return "📻 Send /idmradio to start IDM radio. Only the owner can stop it or play another broadcast.";
-      if (!this.#s.server || !this.#s.key) return "📻 IDM radio is not set up yet.";
+      if (!this.#s.server || !this.#s.key) return LISTEN;
       return this.#proc ? "📻 IDM radio is already on: open the live stream at the top of the chat." : this.start(IDM_RADIO);
     }
     if (a === "key") {
@@ -92,7 +95,7 @@ export class Radio {
   }
 
   status(): string {
-    if (!this.#s.server || !this.#s.key) return "📻 IDM radio is not set up. In the group: video chat, then Stream with…, then send me /idmradio key <server URL> <stream key> here.";
+    if (!this.#s.server || !this.#s.key) return LISTEN;
     if (!this.#proc) return `📻 IDM radio is off.${this.#lastError ? ` Last problem: ${this.#lastError}` : ""} Send /idmradio to start it.`;
     const min = Math.round((this.#now() - this.#since) / 60_000);
     return `📻 IDM radio is on, for ${min} min${this.#restarts.length ? `, ${this.#restarts.length} reconnect(s) this hour` : ""}. /idmradio stop to end it.`;

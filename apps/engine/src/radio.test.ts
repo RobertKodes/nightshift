@@ -75,7 +75,7 @@ describe("IDM radio", () => {
     let now = 1_000_000;
     const f = fake({ hls: "https://video.pscp.tv/live/playlist.m3u8" }), { r } = radio(f, () => now);
     const member = { owner: false, private: false };
-    expect(await r.command([], member)).toMatch(/not set up/);
+    expect(await r.command([], member)).toMatch(/Listen live/);
     await r.command(["key", SERVER, KEY], owner);
     expect(await r.command([], member)).toBeNull();
     now += 120_001;
