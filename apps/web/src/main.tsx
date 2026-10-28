@@ -44,6 +44,7 @@ import { UtilityLinks } from "./HowThisConnects";
 // where this visitor first came from, kept for the company they may start
 noteFirstTouch();
 
+const NewHome = lazy(() => import("./station3d/NewHome").then((x) => ({ default: x.NewHome })));
 const LaunchpadPage = lazy(() => import("./launchpad/LaunchpadPage").then((x) => ({ default: x.LaunchpadPage })));
 const ArenaPage = lazy(() => import("./ArenaPage").then((x) => ({ default: x.ArenaPage })));
 const ChessPage = lazy(() => import("./ChessPage").then((x) => ({ default: x.ChessPage })));
@@ -80,6 +81,10 @@ function App() {
   // Existing room URLs open the matching door; the story keeps its art.
   if (seg.length === 0) return <Gate />;
   if (seg[0] === "story") return <Landing />;
+  // Hidden preview routes own their titles, shell and lazy-loaded scene.
+  if (seg[0] === "new") {
+    return <Suspense fallback={<main style={{ minHeight: "100svh", padding: "96px 24px", background: "#05030d", color: "#f4f0ff" }}><h1>NIGHTSHIFT</h1><p>Companies, AI tools, games, $SHIFT, Frogs, and public proof.</p><p>Loading the station preview...</p></main>}><NewHome /></Suspense>;
+  }
   if (seg[0] === "live") return <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#040611" }} />}><NightshiftLivePage /></Suspense>;
   // Where the Telegram Mini App was: the games are on the website and its app now. Outside Telegram
   // this sends the visitor to the same place on the site; inside a Mini App it says the Game Room moved.
@@ -180,7 +185,7 @@ class Crash extends Component<{ children: ReactNode }, { error: Error | null }> 
 /** The banners that follow you across the site (a waiting table, a staked game): never on /tg, where the Mini App was. */
 function Banners() {
   const path = useRoute();
-  return path === "/live" || path.startsWith("/live/") || path === "/tg" || path.startsWith("/tg/") ? null : <><WaitingBanner /><StakedBanner /></>;
+  return path === "/new" || path.startsWith("/new/") || path === "/live" || path.startsWith("/live/") || path === "/tg" || path.startsWith("/tg/") ? null : <><WaitingBanner /><StakedBanner /></>;
 }
 
 /** Full-screen pages keep a small way to connect and get help. */
