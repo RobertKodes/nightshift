@@ -21,7 +21,7 @@ export function FindAnything({ open, close }: { open: boolean; close: () => void
     if (open) document.getElementById(`pv-result-${selected}`)?.scrollIntoView({ block: "nearest" });
   }, [selected, open]);
   const navigate = (path: string) => { close(); if (path.startsWith("/new")) go(path); else location.assign(path); };
-  return <dialog ref={dialog} className="pv-find" aria-labelledby="pv-find-title" onCancel={(event) => { event.preventDefault(); close(); }} onClose={close}>
+  return <dialog ref={dialog} className="pv-find" aria-labelledby="pv-find-title" onCancel={(event) => { event.preventDefault(); close(); }} onClose={() => { if (!dialog.current?.open) close(); }}>
     <div className="pv-find-top"><h2 id="pv-find-title">Find anything</h2><button className="pv-icon-button" type="button" onClick={close} aria-label="Close search"><SectionIcon id="close" /></button></div>
     <div className="pv-find-input"><SectionIcon id="search" /><input ref={input} type="search" placeholder="Company, game, tool, or question" value={query} role="combobox" aria-label="Search the whole site" aria-autocomplete="list" aria-expanded="true" aria-controls="pv-results" aria-activedescendant={results.length ? `pv-result-${selected}` : undefined} onChange={(event) => { setQuery(event.target.value); setSelected(0); }} onKeyDown={(event) => {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setSelected((n) => results.length ? (n + (event.key === "ArrowDown" ? 1 : -1) + results.length) % results.length : 0); }
