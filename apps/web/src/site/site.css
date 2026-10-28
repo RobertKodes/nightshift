@@ -40,7 +40,10 @@
 .pv .pv-wallet summary::-webkit-details-marker { display: none; }
 .pv .pv-wallet > div { position: absolute; top: 50px; right: 0; width: 210px; padding: 6px; border: 1px solid var(--edge); border-radius: 4px; background: var(--surface); }
 .pv .pv-wallet a, .pv .pv-wallet button { display: block; width: 100%; min-height: 44px; text-align: left; background: none; border: 0; padding: 12px; }
-.pv .pv-wallet-error { position: fixed; z-index: 45; top: var(--header); left: 12px; right: 12px; padding: 12px; background: #291e22; border: 1px solid #8e6c74; border-radius: 4px; }
+.pv .pv-wallet-error { position: fixed; z-index: 45; top: var(--header); left: 12px; right: 12px; padding: 12px; background: #291e22; border: 1px solid #8e6c74; border-radius: 4px; display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+.pv .pv-wallet-error p { flex: 1 1 260px; font-size: .82rem; }
+.pv .pv-wallet-error > div { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pv .pv-wallet-error .pv-button { font-size: .72rem; padding: 8px 10px; }
 .pv .pv-bar { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; height: var(--tabs); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); padding: 3px max(3px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(3px, env(safe-area-inset-left, 0px)); background: #0c1016fa; border-top: 1px solid var(--edge); }
 .pv .pv-bar a { min-width: 0; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: clamp(.55rem, 2.4vw, .7rem); color: var(--muted); position: relative; }
 .pv .pv-bar, .pv .pv-chips { font-family: var(--mono); }

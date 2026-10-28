@@ -4,8 +4,8 @@ import { createWalletClient, custom, getAddress } from "viem";
 import { api } from "./api";
 import { rememberWallet, syncName } from "./games/handle";
 
-interface Session { address: string | null; signIn: () => Promise<void>; signOut: () => Promise<void>; signOutEverywhere: () => Promise<void>; busy: boolean; error: string | null; refresh: () => Promise<void> }
-const Ctx = createContext<Session>({ address: null, signIn: async () => {}, signOut: async () => {}, signOutEverywhere: async () => {}, busy: false, error: null, refresh: async () => {} });
+interface Session { address: string | null; signIn: () => Promise<void>; signOut: () => Promise<void>; signOutEverywhere: () => Promise<void>; busy: boolean; error: string | null; refresh: () => Promise<void>; dismiss: () => void }
+const Ctx = createContext<Session>({ address: null, signIn: async () => {}, signOut: async () => {}, signOutEverywhere: async () => {}, busy: false, error: null, refresh: async () => {}, dismiss: () => {} });
 export const useSession = () => useContext(Ctx);
 
 /**
@@ -67,5 +67,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => { const m = await api.me().catch(() => null); setAddress(m?.address ?? null); }, []);
   /** Every session of this wallet, on every device, stops working (a lost phone, a shared computer). */
   const signOutEverywhere = useCallback(async () => { await api.logoutAll().catch(() => {}); await api.logout().catch(() => {}); setAddress(null); await forgetWallet(); }, []);
-  return <Ctx.Provider value={{ address, signIn, signOut, signOutEverywhere, busy, error, refresh }}>{children}</Ctx.Provider>;
+  const dismiss = useCallback(() => setError(null), []);
+  return <Ctx.Provider value={{ address, signIn, signOut, signOutEverywhere, busy, error, refresh, dismiss }}>{children}</Ctx.Provider>;
 }

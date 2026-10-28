@@ -23,7 +23,7 @@ type Reader = Pick<typeof eth, "getBlockNumber" | "getLogs">;
  */
 export class StakeHistory {
   readonly #file: string; readonly #chain: Reader;
-  #index: Index | null = null; #catching: Promise<void> | null = null; #checked = 0;
+  #index: Index | null = null; #catching: Promise<void> | null = null; #checked = 0; #head = 0;
   constructor(dir: string, chain: Reader = eth) {
     this.#file = join(dir, "stake-history.json"); this.#chain = chain;
     try { this.#index = existsSync(this.#file) ? JSON.parse(readFileSync(this.#file, "utf8")) as Index : null; } catch { this.#index = null; }
@@ -32,9 +32,14 @@ export class StakeHistory {
   async #catchUp(contract: string, from: number) {
     if (!this.#index || this.#index.contract !== contract) this.#index = { contract, next: from, rows: [] };
     const index = this.#index, head = await this.#chain.getBlockNumber();
+    this.#head = Number(head);
+    // one request at a time, each tried twice: free nodes refuse bursts of log reads
+    const logs = async <E extends typeof STAKED | typeof WITHDRAWN | typeof PAID>(range: { address: Address; fromBlock: bigint; toBlock: bigint }, event: E) => {
+      try { return await this.#chain.getLogs({ ...range, event }); } catch { await new Promise((r) => setTimeout(r, 1_000)); return this.#chain.getLogs({ ...range, event }); }
+    };
     for (let a = BigInt(index.next); a <= head; a += SPAN) {
       const range = { address: contract as Address, fromBlock: a, toBlock: a + SPAN - 1n > head ? head : a + SPAN - 1n };
-      const [s, w, p] = await Promise.all([this.#chain.getLogs({ ...range, event: STAKED }), this.#chain.getLogs({ ...range, event: WITHDRAWN }), this.#chain.getLogs({ ...range, event: PAID })]);
+      const s = await logs(range, STAKED), w = await logs(range, WITHDRAWN), p = await logs(range, PAID);
       const rows: Row[] = [
         ...s.map((l) => ({ kind: "staked" as const, account: String(l.args.account).toLowerCase(), amount: String(l.args.amount), unlockAt: Number(l.args.unlockAt), tx: l.transactionHash!, block: Number(l.blockNumber) })),
         ...w.map((l) => ({ kind: "withdrawn" as const, account: String(l.args.account).toLowerCase(), amount: String(l.args.amount), tx: l.transactionHash!, block: Number(l.blockNumber) })),
@@ -50,11 +55,13 @@ export class StakeHistory {
   async of(wallet: string) {
     const l = launchState(), contract = l?.contracts?.rewards?.toLowerCase();
     if (!l?.open || !contract || !l.scanFrom) return null;
-    // at most one catch-up at a time, and not more than every 12 seconds (one block)
+    // at most one catch-up at a time; after a complete one, the next waits a block (12 s). A failed one is tried again next time.
     if (Date.now() - this.#checked > 12_000) {
-      this.#catching ??= this.#catchUp(contract, Math.max(0, l.scanFrom - 100)).finally(() => { this.#catching = null; this.#checked = Date.now(); });
+      this.#catching ??= this.#catchUp(contract, Math.max(0, l.scanFrom - 100)).then(() => { this.#checked = Date.now(); }).finally(() => { this.#catching = null; });
     }
     if (this.#catching) await this.#catching;
+    // never a history that stops short of the chain: a stake missing from it would look withdrawable or gone
+    if (!this.#index || this.#index.next <= this.#head) throw new Error("The stake history is still being read.");
     const who = wallet.toLowerCase(), mine = (this.#index?.rows ?? []).filter((r) => r.account === who);
     return {
       stakes: mine.filter((r) => r.kind === "staked").map((r) => ({ amount: r.amount, unlockAt: r.unlockAt!, tx: r.tx })),

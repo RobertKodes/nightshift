@@ -85,7 +85,13 @@ const wantsSolana = () => /^\/swap(\/|$)/.test(location.pathname);
 
 async function init(): Promise<Kit> {
   if (inTelegramApp()) throw new Error("Wallets are not available inside Telegram.");
-  const cfg: Cfg = await fetch("/api/wallet-config").then((r) => r.json() as Promise<Cfg>).catch(() => { throw new Error("NIGHTSHIFT could not be reached to open your wallets. Check the connection and try again."); });
+  // three tries: a single dropped request (or the site restarting for an update) should not stop a wallet from opening
+  let cfg: Cfg | null = null;
+  for (let i = 0; i < 3 && !cfg; i++) {
+    if (i) await sleep(1500 * i);
+    cfg = await fetch("/api/wallet-config").then((r) => (r.ok ? r.json() as Promise<Cfg> : null)).catch(() => null);
+  }
+  if (!cfg) throw new Error("NIGHTSHIFT could not be reached to open your wallets. Check the connection and try again.");
   const projectId = cfg.walletConnect;
   if (!projectId) throw new Error("Wallet connections are not switched on for this site yet.");
   const url = metadataUrl(cfg.site);
