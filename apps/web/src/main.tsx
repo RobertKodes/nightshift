@@ -70,7 +70,8 @@ const ProofPage = lazy(() => import("./crews/ProofPage").then((x) => ({ default:
 
 /** Retired addresses land on the page that replaced them. */
 function Redirect({ to }: { to: string }) {
-  useEffect(() => { history.replaceState(null, "", to); dispatchEvent(new PopStateEvent("popstate")); }, [to]);
+  // a full replace: a child effect runs before the router starts listening, so a popstate here would be missed
+  useEffect(() => { location.replace(to); }, [to]);
   return null;
 }
 
