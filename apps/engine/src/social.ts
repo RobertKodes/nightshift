@@ -110,7 +110,7 @@ export type BotHandlers = {
   /** Operator commands, for the admin ids only. */
   admin: (cmd: string, args: string[], ctx?: CommandContext) => Promise<Reply>;
   /** Commands anyone may use (null: not a public command). */
-  open: (cmd: string, args: string[]) => Promise<Reply | null>;
+  open: (cmd: string, args: string[], where?: { chat: string; username?: string; group: boolean; admin: boolean }) => Promise<Reply | null>;
   /** A plain message from an admin in a private chat, e.g. a shared X link. */
   adminText?: (text: string) => Promise<Reply | null>;
   /** People joined a chat the bot is in. */
@@ -121,7 +121,7 @@ export type BotHandlers = {
   ask?: (m: GroupMessage) => Promise<void>;
   /** A private /start with a code: an owner linking a company's alerts to this chat (null: not a code). */
   link?: (chat: string, code: string) => Promise<Reply | null>;
-  /** The games (/play, /live, /profile, /challenge, a plain /start): links to the website, tried before the public commands (null: not one). */
+  /** The games (/games, /live, /profile, /challenge, a plain /start): links to the website, tried before the public commands (null: not one). */
   games?: (cmd: string, args: string[], ctx: GameContext) => Promise<Reply | null>;
   /** "@bot chess" typed in any chat. */
   inline?: (q: { id: string; from: TgFrom; query: string; chatType?: string }) => Promise<void>;
@@ -130,7 +130,7 @@ export type TgFrom = { id: number; first_name?: string; last_name?: string; user
 /** Who typed a game command, and where. */
 export type GameContext = { chat: string; private: boolean; group: boolean; admin: boolean; from: TgFrom | null; callback: boolean };
 /** Where an operator command was typed, and whose message it answered (for /mute and /unmute). */
-export type CommandContext = { chat: string; group: boolean; private?: boolean; from?: string; replyTo?: { id: string; name: string } };
+export type CommandContext = { chat: string; group: boolean; private?: boolean; from?: string; messageId?: number; replyTo?: { id: string; name: string } };
 export type GroupMessage = { chat: string; chatUsername?: string; messageId: number; user: string; name: string; text: string; replyToBot?: boolean; private?: boolean };
 
 /** One update from Telegram, as far as the bot reads it. */
@@ -149,7 +149,6 @@ export type Update = {
 export function telegramCommands(token: string, admins: string[], h: BotHandlers): void {
   if (offline && !transport) { console.log("telegram: TELEGRAM_OFFLINE=1, the bot is not started and nothing is sent"); return; }
   const games = [
-    { command: "play", description: "The Game Room on the website" },
     { command: "live", description: "Live games on the website" },
     { command: "challenge", description: "Challenge this chat to NIGHT CHESS" },
     { command: "profile", description: "Your Telegram record, and where to play" },
@@ -158,6 +157,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "price", description: "Price, market cap, liquidity" },
     { command: "ca", description: "The official contract address" },
     { command: "links", description: "Website, X, Telegram, Bluesky" },
+    { command: "idmradio", description: "Play IDM radio in the group's live stream" },
     { command: "community", description: "Join the NIGHTSHIFT community on X" },
     { command: "games", description: "The Game Room: chess, pinball and pool" },
     { command: "pinball", description: "Space Pinball and its best players" },
@@ -187,6 +187,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
     { command: "stop", description: "Pause every company now" },
     { command: "live", description: "How many people are on the site right now" },
     { command: "stats", description: "Your private stats: agents, website, crews, sales" },
+    { command: "idmradio", description: "Play IDM radio in the group's live stream" },
     { command: "notify", description: "Private notifications: all, money or off" },
     { command: "announce", description: "Public sales announcements: on or off" },
     { command: "reserve", description: "Agent Reserve status: on, off or dry" },
@@ -222,6 +223,14 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
 }
 
 /** One update: an inline query, a button press, a group message or a command. */
+/** The bot's own username, asked once (asked again after a failed answer). */
+let ownName: Promise<string> | null = null;
+const botName = (token: string): Promise<string> => (ownName ??= tgCall<{ username?: string }>(token, "getMe", {}).then((r) => {
+  const n = r?.username?.toLowerCase() ?? "";
+  if (!n) ownName = null;
+  return n;
+}));
+
 export async function handleUpdate(token: string, admins: string[], h: BotHandlers, u: Update): Promise<void> {
   const iq = u.inline_query;
   if (iq) { if (h.inline && !iq.from.is_bot) await h.inline({ id: iq.id, from: iq.from, query: iq.query ?? "", chatType: iq.chat_type }).catch(() => {}); return; }
@@ -249,6 +258,9 @@ export async function handleUpdate(token: string, admins: string[], h: BotHandle
   if (q) void tg(token, "answerCallbackQuery", { callback_query_id: q.id });
   const [raw, ...args] = text.trim().split(/\s+/);
   const cmd = raw!.slice(1).split("@")[0]!.toLowerCase();
+  // a command written to another bot in the group (/play@MusicBot) is that bot's, never ours
+  const to = raw!.split("@")[1]?.toLowerCase();
+  if (to) { const me = await botName(token); if (me && to !== me) return; }
   if (cmd === "start" && args[0] && m?.chat.type === "private" && h.link) {
     const linked = await h.link(chat, args[0]).catch(() => null);
     if (linked) { await telegram(token, chat, linked.text, linked.buttons); return; }
@@ -264,9 +276,9 @@ export async function handleUpdate(token: string, admins: string[], h: BotHandle
     return;
   }
   const game = h.games ? await h.games(cmd, args, { chat, private: chatType === "private", group, admin: isAdmin, from: q?.from ?? m?.from ?? null, callback: !!q }).catch(() => null) : null;
-  const pub = game ?? await h.open(cmd, args).catch(() => null);
+  const pub = game ?? await h.open(cmd, args, { chat, username: m?.chat.username, group, admin: isAdmin }).catch(() => null);
   const rt = m?.reply_to_message?.from;
-  const ctx: CommandContext = { chat, group, replyTo: rt && !rt.is_bot ? { id: String(rt.id), name: rt.username ? `@${rt.username}` : (rt.first_name ?? String(rt.id)) } : undefined };
+  const ctx: CommandContext = { chat, group, private: chatType === "private", messageId: m?.message_id, replyTo: rt && !rt.is_bot ? { id: String(rt.id), name: rt.username ? `@${rt.username}` : (rt.first_name ?? String(rt.id)) } : undefined };
   const adminHere = isAdmin && (!ctx.group || cmd === "mute" || cmd === "unmute" || cmd === "watchroom");
   const reply: Reply | null = pub ?? (adminHere ? await h.admin(cmd, args, ctx).catch((e) => ({ text: `⚠️ ${esc((e as Error).message)}` })) : m?.chat.type === "private" ? { text: "🌙 Public commands: /price · /ca · /links" } : null);
   if (!reply) return;

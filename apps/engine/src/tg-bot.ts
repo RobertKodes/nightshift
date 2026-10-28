@@ -5,7 +5,7 @@ import { type LiveGame, liveGames } from "./spectate.js";
 import { type Profile, type Profiles, displayName } from "./tg.js";
 
 /**
- * The bot's game side: /play, /live (/watch), /profile, /challenge, a plain /start, /quiet and
+ * The bot's game side: /games, /live (/watch), /profile, /challenge, a plain /start, /quiet and
  * inline mode ("@bot chess" in any chat). The games are played on the website and its installable
  * app, never inside Telegram: every button here is a plain link to the site, which Telegram opens in
  * its in-app browser (where the site's wallet works). Every reply is built here as text and
@@ -89,7 +89,7 @@ export class GameBot {
 
   /** A game command, or null (not one of ours: the public and operator commands answer it). */
   async command(cmd: string, args: string[], ctx: GameContext): Promise<Reply | null> {
-    const known = ["play", "live", "watch", "profile", "me", "challenge", "start", "quiet"];
+    const known = ["games", "live", "watch", "profile", "me", "challenge", "start", "quiet"];
     if (!known.includes(cmd)) return null;
     // an operator's own /live and /start in a private chat stay the operator's commands
     if (ctx.admin && ctx.private && (cmd === "live" || cmd === "start")) return null;
@@ -100,7 +100,7 @@ export class GameBot {
     if (!from) return null;
     if (this.commands.hit(`u:${from.id}`)) return null;
     if (ctx.group && !ctx.callback && this.groups.hit(`g:${ctx.chat}:${cmd}`)) return null;
-    if (cmd === "play" || cmd === "start") {
+    if (cmd === "games" || cmd === "start") {
       const hello = cmd === "start" ? [`🌙 <b>Welcome to the night shift, ${esc(nameOf(from))}.</b>`, ""] : [];
       return {
         text: [...hello, "🎮 <b>NIGHTSHIFT GAME ROOM</b> · on the website", "",

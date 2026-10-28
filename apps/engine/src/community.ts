@@ -314,7 +314,8 @@ export async function publicCommand(cmd: string, args: string[] = []): Promise<{
   if (cmd === "pool" || cmd === "8ball" || cmd === "billiards") {
     return { text: ["🎱 <b>NIGHT POOL</b>", "3D 8-ball on WPA rules: called shots, the open table, ball in hand after a foul, the 8 in the called pocket. Every shot is simulated by the server, the same for both players and every spectator.", "", "Live on the website: free and rated, or staked in IMD and $SHIFT. Collect numbered cues, cloths and tables in your locker.", "", INSTALL].join("\n"), buttons: [[{ text: "🎱 Play NIGHT POOL", url: `${config.publicUrl}/games/pool` }]] };
   }
-  if (cmd === "games" || cmd === "game" || cmd === "play" || cmd === "arcade") {
+  // /play belongs to the group's music bot
+  if (cmd === "games" || cmd === "game" || cmd === "arcade") {
     // the Game Room: what is live, tonight's best, where to play
     const top = (() => { try { const b = pinballBoard() as { board?: { name: string; score: number }[] }; return b.board?.[0]; } catch { return undefined; } })();
     return { text: [

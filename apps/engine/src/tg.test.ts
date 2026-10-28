@@ -100,8 +100,9 @@ describe("the bot", () => {
     expect(menus[0]!.body).toEqual({ menu_button: { type: "commands" } });
     const sets = tg.calls.filter((c) => c.method === "setMyCommands");
     const all = sets.find((c) => !c.body.scope)!.body.commands as { command: string; description: string }[];
-    expect(all.map((c) => c.command)).toEqual(expect.arrayContaining(["price", "ca", "links", "games", "pinball", "chess", "pool", "play", "live", "challenge", "profile"]));
-    expect(all.find((c) => c.command === "play")!.description).toBe("The Game Room on the website");
+    expect(all.map((c) => c.command)).toEqual(expect.arrayContaining(["price", "ca", "links", "games", "pinball", "chess", "pool", "live", "challenge", "profile", "idmradio"]));
+    expect(all.map((c) => c.command)).not.toContain("play");
+    expect(new Set(all.map((c) => c.command)).size).toBe(all.length);
     expect(sets.some((c) => (c.body.scope as { type?: string } | undefined)?.type === "all_group_chats")).toBe(true);
     // the operator keeps the admin list in a private chat
     expect(sets.some((c) => (c.body.scope as { chat_id?: number } | undefined)?.chat_id === 900)).toBe(true);
@@ -117,11 +118,11 @@ describe("the bot", () => {
     expect(seen.open).toEqual([]);
     expect(tg.net).not.toHaveBeenCalled();
   });
-  it("answers a plain /start and /play with the Game Room as links to the website, and the install line", async () => {
+  it("answers a plain /start and /games with the Game Room as links to the website, and the install line", async () => {
     const tg = mockTelegram(), { h, seen } = handlers();
     await handleUpdate(TOKEN, [], h, msg("/start"));
     await handleUpdate(TOKEN, [], h, msg("/start lounge", { from: 501 }));
-    await handleUpdate(TOKEN, [], h, msg("/play@nightshiftimdbot", { from: 502, chat: -100123, type: "supergroup" }));
+    await handleUpdate(TOKEN, [], h, msg("/games@nightshiftimdbot", { from: 502, chat: -100123, type: "supergroup" }));
     expect(seen.link).toEqual(["lounge"]);
     const [a, b, c] = tg.sent();
     expect(String(a!.body.text)).toContain("Welcome to the night shift, Jade");
@@ -175,6 +176,18 @@ describe("the bot", () => {
     noMiniApp(card);
     for (let i = 0; i < 8; i++) await handleUpdate(TOKEN, [], h, msg("/challenge", { from: 600, chat: -100777, type: "group" }));
     expect(tg.sent().length).toBeLessThanOrEqual(4);
+  });
+  it("leaves /play to the group's music bot, and never answers a command written to another bot", async () => {
+    const tg = mockTelegram((method) => ({ ok: true, result: method === "getMe" ? { username: "nightshiftimdbot" } : { message_id: 1 } })), { h, seen } = handlers();
+    const group = { chat: -100124, type: "supergroup" };
+    await handleUpdate(TOKEN, [], h, msg("/play", { from: 601, ...group }));
+    await handleUpdate(TOKEN, [], h, msg("/play@MusicBot some song", { from: 602, ...group }));
+    await handleUpdate(TOKEN, [], h, msg("/price@MusicBot", { from: 603, ...group }));
+    expect(tg.sent()).toHaveLength(0);
+    expect(seen.open).toEqual(["play"]);
+    await handleUpdate(TOKEN, [], h, msg("/price@NightshiftImdBot", { from: 604, ...group }));
+    await handleUpdate(TOKEN, [], h, msg("/games", { from: 605, ...group }));
+    expect(tg.sent().map((m) => String(m.body.text).slice(0, 40))).toEqual(["price card", expect.stringContaining("NIGHTSHIFT GAME ROOM")]);
   });
   it("rate limits each player's commands, and each group's", async () => {
     const tg = mockTelegram(), { bot } = handlers();

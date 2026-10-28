@@ -62,6 +62,7 @@ import { telegramBuildcheck, telegramCrews, telegramWatchtower } from "./crews/g
 import { liveTelegram } from "./live/bus.js";
 import { MarketDesk } from "./b2b.js";
 import { companyBrain } from "./ceo-brain.js";
+import { liveRadio } from "./radio.js";
 import { liveMind, liveWeather } from "./mind-live.js";
 import { weatherText } from "./swarm-weather.js";
 import { Studio } from "./studio/index.js";
@@ -295,7 +296,13 @@ export class Engine {
       telegramCommands(config.telegramToken, config.telegramAdmins, {
         admin: (cmd, args, ctx) => this.#command(cmd, args, ctx),
         // the crews in the chat: Watchtower and Build & Check run free right here, /crews lists who does the work
-        open: async (cmd, args) => {
+        open: async (cmd, args, where) => {
+          // IDM radio: anyone in the main group starts it; in a private chat the owner's command answers
+          if (cmd === "idmradio" || cmd === "imdradio") {
+            if (!where?.group || !chats().some((c) => c === where.chat || (c.startsWith("@") && c.slice(1).toLowerCase() === where.username?.toLowerCase()))) return null;
+            const text = await this.#radio().command(args, { owner: where.admin, private: false });
+            return text ? { text } : null;
+          }
           const reply = await (cmd === "ask" || cmd === "mind" ? this.#askSwarm(args) : cmd === "weather" ? this.#weatherReply() : cmd === "brief" ? this.#briefReply(args)
             : cmd === "watchtower" ? telegramWatchtower(args) : cmd === "buildcheck" ? telegramBuildcheck(args) : cmd === "crews" ? telegramCrews() : publicCommand(cmd, args));
           // a viewer's request from the chat shows up on the live stream (anonymous)
@@ -309,11 +316,13 @@ export class Engine {
         joined: (chat, names) => { const w = welcome(names); void sendCard(chat, "welcome", w.text, w.buttons); },
         // /start nw_<code>: a Night Watcher holder entering the Watch Room; any other code links company alerts
         link: async (chat, code) => (code.startsWith("nw_") ? roomLink(chat, code) : code.startsWith("wt_") ? linkWatchAlerts(chat, code) : this.#linkAlerts(chat, code)),
-        // the games: /play /live /profile /challenge and "@bot chess", each a link to the website
+        // the games: /games /live /profile /challenge and "@bot chess", each a link to the website
         games: (cmd, args, ctx) => this.gameBot.command(cmd, args, ctx),
         inline: (q) => this.gameBot.inline(q),
       });
       startCommunity();
+      // IDM radio plays again after a restart if it was on
+      void this.#radio().resume();
       setInterval(() => void sweepRoom().catch((e) => console.error("watch room", e)), 3_600_000);
     }
     if (this.sniper) {
@@ -548,6 +557,11 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
     if (cmd === "unmute" || cmd === "mute") return this.#muteCommand(cmd, args, ctx);
     // the owner's private stats: agents, the website, the crews, sales and the recruiter, last 24 hours
     if (cmd === "stats") return { text: liveOwnerStats()?.report() ?? "The stats are starting: try again in a minute." };
+    // IDM radio into the group's live stream: the stream key is taken in a private chat only, and that message is deleted
+    if (cmd === "idmradio" || cmd === "imdradio") {
+      if (args[0] === "key" && ctx?.private && ctx.messageId) void tgCall(config.telegramToken, "deleteMessage", { chat_id: ctx.chat, message_id: ctx.messageId });
+      return { text: (await this.#radio().command(args, { owner: true, private: ctx?.private === true })) ?? "" };
+    }
     if (cmd === "notify") return { text: liveOwnerStats()?.notify(args) ?? "The notifications are starting: try again in a minute." };
     if (cmd === "announce") return { text: liveAgentEconomy()?.command(args) ?? "The announcements are starting: try again in a minute." };
     if (cmd === "swarm") return { text: await swarmCommand(args) };
@@ -1733,6 +1747,9 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
 
   readonly #lastAlert = new Map<string, number>();
   /** Tells the operator on Telegram, at most once a minute per topic. */
+  /** IDM radio, its notes to the owner going out like any other engine alert. */
+  #radio() { return liveRadio((t) => void this.alert(t, `radio-${Date.now()}`)); }
+
   async alert(text: string, topic = "engine"): Promise<boolean> {
     const owner = liveOwnerStats();
     if (!owner && !config.telegramToken) return false;
