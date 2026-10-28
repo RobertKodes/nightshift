@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, formatEther, formatUnits, getAddress, isAddress, parseAbi, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { type Step, canBatch, sendSteps } from "../batch";
 import { ethTransport } from "../ethRpc";
 import { useSession } from "../session";
 import { chooseWallet } from "../wallet";
+import { NxIcon } from "../nx/icons";
+import { Stat } from "../station/Station";
 import { SectionIcon } from "./SectionIcon";
+import "../forge.css";
 import "./deals.css";
 
 const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
@@ -84,115 +87,142 @@ export function DealsPage() {
   const mine = (desk?.deals ?? []).filter((d) => me && d.seller.toLowerCase() === me.toLowerCase());
   const open = desk?.open ?? false, fee = (desk?.feeBps ?? 100) / 100, holderFee = (desk?.holderFeeBps ?? 50) / 100;
 
-  const [selling, setSelling] = useState(false);
-  const sell = () => { if (!open) { location.assign("/partners"); return; } setSelling(true); window.setTimeout(() => document.getElementById("pv-dl-sell")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); };
+  const [selling, setSelling] = useState(false), [ex, setEx] = useState(0);
+  const sell = () => { setSelling(true); window.setTimeout(() => document.getElementById("pv-dl-sell")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); };
+  const cap = (desk?.maxFeeBps ?? 200) / 100, openCount = (desk?.deals ?? []).filter((d) => d.status === "open").length;
 
-  return <div className="pv-deals">
-    <section className="pv-dl-hero">
-      <div className="pv-dl-hero-copy">
-        <p className="pv-kicker">$SHIFT<span>TOKEN DEALS</span>{!open && desk && <span>OPENING SOON</span>}</p>
-        <h1>Buy tokens <span className="pv-hl">below market.</span> Safely.</h1>
-        <p>Holders sell straight to you at a fixed price, from an escrow contract. No slippage and no dump on the chart. One transaction: the tokens land in your wallet and the seller gets paid.</p>
-        <div className="pv-dl-cta">
-          {open ? <a className="pv-button pv-primary" href="#pv-dl-board-h">See the deals<SectionIcon id="arrow" /></a>
-            : <a className="pv-button pv-primary" href={TELEGRAM} target="_blank" rel="noreferrer">Get the launch alert<SectionIcon id="arrow" /></a>}
-          <button type="button" className="pv-button" onClick={sell}>{open ? "Sell tokens" : "List your token"}</button>
+  return <div className="st-room fg dl">
+    <header className="fg-hero" style={{ "--tc": EXAMPLES[ex]!.tone } as CSSProperties}>
+      <div className="fg-hero-in">
+        <span className="fg-eyebrow"><NxIcon name="market" size={16} /> $SHIFT · TOKEN DEALS · {open ? "LIVE ON ETHEREUM" : "OPENING SOON"}</span>
+        <h1>Token Deals. <em>Below market, from holders.</em></h1>
+        <p className="fg-lead">Holders sell tokens at a fixed price from an escrow contract on Ethereum. Buy all of a deal or part of it: in one transaction the tokens reach your wallet and the seller is paid. No slippage, nothing dumped on the chart, and nobody in the middle holding your money.</p>
+        <div className="fg-cta">
+          {open ? <a className="nx-btn nx-btn-acc" href="#deals"><NxIcon name="market" size={18} /> See the deals</a>
+            : <a className="nx-btn nx-btn-acc" href={TELEGRAM} target="_blank" rel="noreferrer"><NxIcon name="pulse" size={18} /> Get the launch alert</a>}
+          {open ? <button type="button" className="nx-btn" onClick={sell}>Sell tokens</button> : <a className="nx-btn" href="/partners">List your token</a>}
+          <a className="nx-btn" href="#how">How it works</a>
         </div>
-        <ul className="pv-dl-proof"><li>Escrow contract on Ethereum</li><li>Audited before launch</li><li>Fees feed stakers and the burn</li></ul>
+        <div className="st-stats">
+          <Stat label="Buyer fee" value={`${fee}%`} note="on top; the seller gets the full price" />
+          <Stat label="Holders pay" value={`${holderFee}%`} note="500k $SHIFT, a frog or a Watcher" />
+          <Stat label="Fee cap" value={`${cap}%`} note="written into the contract" />
+          <Stat label="Desk" value={open ? String(openCount) : "SOON"} note={open ? "open deals on Ethereum" : "escrow contract in the build queue"} />
+        </div>
       </div>
-      <div className="pv-dl-hero-art" aria-hidden="true">
-        <img src="/art/frog3d/deals-frog.webp" alt="" width="600" height="893" />
-        {EXAMPLES.map((x, i) => <ExampleCard key={x.sym} x={x} slot={i} />)}
+      <div className="fg-show">
+        <DealTicket x={EXAMPLES[ex]!} />
+        <div className="fg-pills dl-pills" role="group" aria-label="Example deals">{EXAMPLES.map((x, i) => <button key={x.sym} type="button" className={i === ex ? "on" : ""} aria-pressed={i === ex} onClick={() => setEx(i)}><b>{x.pill}</b><span>{x.pillLine}</span></button>)}</div>
       </div>
-    </section>
+    </header>
 
-    {open ? <>
-      <section className="pv-dl-board" aria-labelledby="pv-dl-board-h">
-        <div className="pv-dl-board-head">
-          <h2 id="pv-dl-board-h">Live deals</h2>
-          <div className="pv-dl-filters">
-            <div className="pv-dl-seg" role="group" aria-label="Status">{(["open", "all"] as const).map((s) => <button key={s} type="button" aria-pressed={status === s} onClick={() => setStatus(s)}>{s === "open" ? "Open" : "All"}</button>)}</div>
-            <label><span className="pv-sr">Paid in</span><select value={coin} onChange={(e) => setCoin(e.target.value)}><option value="all">Any coin</option>{desk!.coins.map((c) => <option key={c.symbol} value={c.symbol}>{c.symbol}</option>)}</select></label>
-            <label><span className="pv-sr">Sort</span><select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}><option value="new">Newest</option><option value="discount">Best price vs market</option><option value="size">Largest</option></select></label>
-            <label className="pv-dl-check"><input type="checkbox" checked={partners} onChange={(e) => setPartners(e.target.checked)} />Partners only</label>
-            <label className="pv-dl-check"><input type="checkbox" checked={hideAvoid} onChange={(e) => setHideAvoid(e.target.checked)} />Hide "Avoid"</label>
+    <div className="st-body">
+      {open ? <>
+        <section className="fg-sec" id="deals">
+          <div className="pv-dl-board-head">
+            <div className="fg-head"><span className="fg-kicker">On the desk</span><h2>Open deals</h2></div>
+            <div className="pv-dl-filters">
+              <div className="pv-dl-seg" role="group" aria-label="Status">{(["open", "all"] as const).map((s) => <button key={s} type="button" aria-pressed={status === s} onClick={() => setStatus(s)}>{s === "open" ? "Open" : "All"}</button>)}</div>
+              <label><span className="pv-sr">Paid in</span><select value={coin} onChange={(e) => setCoin(e.target.value)}><option value="all">Any coin</option>{desk!.coins.map((c) => <option key={c.symbol} value={c.symbol}>{c.symbol}</option>)}</select></label>
+              <label><span className="pv-sr">Sort</span><select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}><option value="new">Newest</option><option value="discount">Best price vs market</option><option value="size">Largest</option></select></label>
+              <label className="pv-dl-check"><input type="checkbox" checked={partners} onChange={(e) => setPartners(e.target.checked)} />Partners only</label>
+              <label className="pv-dl-check"><input type="checkbox" checked={hideAvoid} onChange={(e) => setHideAvoid(e.target.checked)} />Hide "Avoid"</label>
+            </div>
           </div>
-        </div>
-        {!shown.length ? <p className="pv-dl-empty">No open deals match. <button type="button" className="pv-dl-link" onClick={sell}>Be the first to sell.</button></p>
-          : <div className="pv-dl-grid">{shown.map((d) => <DealCard key={d.id} d={d} onBuy={() => setBuying(d)} />)}</div>}
+          {!shown.length ? <p className="st-empty">No open deals match. <button type="button" className="pv-dl-link" onClick={sell}>Be the first to sell.</button></p>
+            : <div className="pv-dl-grid">{shown.map((d) => <DealCard key={d.id} d={d} onBuy={() => setBuying(d)} />)}</div>}
+        </section>
+        {selling && <SellForm desk={desk} onDone={() => void load()} setMe={setMe} />}
+        {me && <MyDeals desk={desk!} me={me} deals={mine} onDone={() => void load()} />}
+      </> : <section className="fg-sec">
+        <div className="fg-head"><span className="fg-kicker">Road to launch</span><h2>What happens before the first deal</h2></div>
+        <ol className="fg-steps dl-track">{TRACK.map(([title, line, state]) => <li key={title} data-state={state}><b>{title}</b><span>{line}</span></li>)}</ol>
+        {failed && !desk && <p className="fg-dim">The live status could not be loaded right now.</p>}
+      </section>}
+
+      <section className="fg-sec" id="how">
+        <div className="fg-head"><span className="fg-kicker">How a deal works</span><h2>One transaction. Nothing left to trust.</h2></div>
+        <ol className="fg-steps">
+          <li><b>A holder lists</b><span>They lock their tokens in the escrow contract and set the price, the minimum buy and how long the deal stays open.</span></li>
+          <li><b>You pick a card</b><span>Each card shows the price against the market, the Token Verdict, liquidity and the seller's record. Buy all of it or a part.</span></li>
+          <li><b>It settles at once</b><span>The tokens go to your wallet, the seller gets the full price and the fee goes to the ecosystem. All of it happens, or none of it.</span></li>
+        </ol>
       </section>
-      {selling && <SellForm desk={desk} onDone={() => void load()} setMe={setMe} />}
-      {me && <MyDeals desk={desk!} me={me} deals={mine} onDone={() => void load()} />}
-    </> : <section className="pv-dl-track" aria-labelledby="pv-dl-track-h">
-      <h2 id="pv-dl-track-h">Road to launch</h2>
-      <ol>{TRACK.map(([title, line, state]) => <li key={title} data-state={state}><b>{title}</b><span>{line}</span></li>)}</ol>
-      {failed && !desk && <p className="pv-dl-sub">Live status could not be loaded right now.</p>}
-    </section>}
 
-    <section className="pv-dl-steps" aria-labelledby="pv-dl-how">
-      <h2 id="pv-dl-how">How a deal works</h2>
-      <ol>
-        <li><b>A holder lists</b><span>They lock their tokens in the escrow contract and set the price, the minimum buy and how long the deal stays open.</span></li>
-        <li><b>You pick a card</b><span>Every card shows the price against the market, the Token Verdict, liquidity and the seller's record. Buy all of it or just a part.</span></li>
-        <li><b>One transaction</b><span>The tokens go to your wallet, the seller gets the full price and the fee goes to the ecosystem. All of it happens, or none of it.</span></li>
-      </ol>
-    </section>
+      <section className="fg-sec">
+        <div className="fg-head"><span className="fg-kicker">Why buy here</span><h2>Checked before you buy</h2></div>
+        <div className="fg-perks">{PERKS.map(([icon, title, text]) => <article key={title} className="fg-perk"><NxIcon name={icon} size={22} /><b>{title}</b><p>{text.replace("{fee}", String(fee)).replace("{holder}", String(holderFee)).replace("{cap}", String(cap))}</p></article>)}</div>
+      </section>
 
-    <section className="pv-dl-why" aria-label="Why buy here">
-      <div><b>Below-market prices</b><p>Big holders sell at a fixed price to move size without crashing the chart. Each card tells you how far below (or above) the market it is.</p></div>
-      <div><b>Escrow, not trust</b><p>The contract holds the tokens until you buy. Nobody, us included, can move them. A seller can only cancel and take back what is left.</p></div>
-      <div><b>Tokens checked for you</b><p>Token Verdict on every card, copycat warnings for fake tickers, and "Avoid" tokens hidden unless you ask to see them.</p></div>
-      <div><b>Holders pay half</b><p>The buyer pays a {fee}% fee on top of the price. Holders of 500k $SHIFT, a NIGHT FROG or a Night Watcher pay {holderFee}%. The contract caps it at {(desk?.maxFeeBps ?? 200) / 100}% forever.</p></div>
-    </section>
+      <section className="fg-sec">
+        <div className="fg-head"><span className="fg-kicker">Where the fee goes</span><h2>Every deal pays the ecosystem</h2></div>
+        <div className="pv-dl-split" role="img" aria-label="40% to stakers and NIGHT FROGS holders, 20% burned, 20% treasury, 20% team">
+          <span style={{ flex: 40 }} data-tone="stake"><b>40%</b>$SHIFT stakers and NIGHT FROGS</span>
+          <span style={{ flex: 20 }} data-tone="burn"><b>20%</b>Burned</span>
+          <span style={{ flex: 20 }}><b>20%</b>Treasury</span>
+          <span style={{ flex: 20 }}><b>20%</b>Team</span>
+        </div>
+        <p className="fg-dim">Each fee goes to the FeeSplitter, the same contract behind every NIGHTSHIFT fee. Its split can never change.</p>
+      </section>
 
-    <section className="pv-dl-eco" aria-labelledby="pv-dl-eco-h">
-      <div><h2 id="pv-dl-eco-h">Every deal pays the ecosystem</h2><p>Each fee goes to the FeeSplitter, the same contract behind every NIGHTSHIFT fee. Its split is fixed forever.</p></div>
-      <div className="pv-dl-split" role="img" aria-label="40% to stakers and NIGHT FROGS holders, 20% burned, 20% treasury, 20% team">
-        <span style={{ flex: 40 }} data-tone="stake"><b>40%</b>Stakers and NIGHT FROGS</span>
-        <span style={{ flex: 20 }} data-tone="burn"><b>20%</b>Burned</span>
-        <span style={{ flex: 20 }}><b>20%</b>Treasury</span>
-        <span style={{ flex: 20 }}><b>20%</b>Team</span>
-      </div>
-    </section>
+      <section className="fg-sec">
+        <div className="pv-dl-projects">
+          <div className="fg-head"><span className="fg-kicker">For projects</span><h2>Bring your token to the desk</h2><p className="fg-dim">Partners carry a badge on every deal, get announced to our community and a place in our tools. Joining is free.</p></div>
+          <a className="nx-btn nx-btn-acc" href="/partners"><NxIcon name="crew" size={18} /> Become a partner</a>
+        </div>
+      </section>
 
-    <section className="pv-dl-projects">
-      <div><p className="pv-kicker">FOR PROJECTS</p><h2>Got a token? Bring it to the desk.</h2><p>Partners get a badge on every deal, an announcement to our community and a spot in our tools. Joining is free.</p></div>
-      <a className="pv-button pv-primary" href="/partners">Become a partner<SectionIcon id="arrow" /></a>
-    </section>
-
-    <section className="pv-dl-faq" aria-labelledby="pv-dl-faq-h">
-      <h2 id="pv-dl-faq-h">Questions</h2>
-      <details><summary>Who sets the price?</summary><p>The seller. Each card shows that price next to the token's market price, so you can see whether it is a discount. A deal priced above the market says so in amber.</p></details>
-      <details><summary>Can I buy part of a deal?</summary><p>Yes, from the seller's minimum up to everything that is left. The rest of a deal can always be bought, even below the minimum.</p></details>
-      <details><summary>Who counts as a holder?</summary><p>{desk?.holderRule ?? "A wallet with 500,000+ $SHIFT (wallet plus staked), a NIGHT FROG or a Night Watcher."} The page checks the wallet that receives the tokens and applies the lower fee by itself.</p></details>
-      <details><summary>What if the token has a transfer tax?</summary><p>The contract counts what actually arrives, so the deal holds the right amount. When you buy, the token's own tax still applies to what reaches your wallet, as with any transfer.</p></details>
-      <details><summary>Is this financial advice?</summary><p>No. Anyone can sell any token here. The checks on each card help, but they cannot rule out every risk. Only buy what you understand.</p></details>
-    </section>
+      <section className="fg-sec">
+        <div className="fg-head"><span className="fg-kicker">Questions</span><h2>The fine print</h2></div>
+        <div className="fg-faq">
+          <details open><summary>Who sets the price?</summary><p>The seller. Each card shows that price next to the token's market price, so you can see whether it is a discount. A deal priced above the market says so in amber.</p></details>
+          <details><summary>Can I buy part of a deal?</summary><p>Yes, from the seller's minimum up to everything that is left. The rest of a deal can always be bought, even below the minimum.</p></details>
+          <details><summary>Who counts as a holder?</summary><p>{desk?.holderRule ?? "A wallet with 500,000+ $SHIFT (wallet plus staked), a NIGHT FROG or a Night Watcher."} The page checks the wallet that receives the tokens and applies the lower fee by itself.</p></details>
+          <details><summary>What if the token has a transfer tax?</summary><p>The contract counts what actually arrives, so the deal holds the right amount. When you buy, the token's own tax still applies to what reaches your wallet, as with any transfer.</p></details>
+          <details><summary>Is this financial advice?</summary><p>No. Anyone can sell any token here. The checks on each card help, but they cannot rule out every risk. Only buy what you understand.</p></details>
+        </div>
+      </section>
+    </div>
 
     {buying && desk && <BuyDialog desk={desk} d={buying} onClose={() => setBuying(null)} onDone={() => void load()} setMe={setMe} />}
   </div>;
 }
 
-type Example = { sym: string; name: string; price: string; usd: string; vs: number; sold: number; verdict: string; partner?: boolean };
-/** Sample cards for the hero, marked as examples: what a deal looks like before the desk opens. */
+type Example = { id: string; sym: string; name: string; price: string; usd: string; vs: string; left: string; min: string; ends: string; verdict: string; sold: number; tone: string; pill: string; pillLine: string; partner?: boolean };
+/** The hero's sample tickets, each marked as an example: what a deal looks like before the desk opens. */
 const EXAMPLES: Example[] = [
-  { sym: "SHIFT", name: "NIGHTSHIFT", price: "0.00005 USDC", usd: "$0.00005 each", vs: -21, sold: 38, verdict: "No issues found" },
-  { sym: "IMD", name: "Identity.md", price: "0.0019 ETH", usd: "$4.50 each", vs: -1.3, sold: 64, verdict: "No issues found", partner: true },
+  { id: "0412", sym: "SHIFT", name: "NIGHTSHIFT", price: "0.00005 USDC", usd: "$0.00005 each", vs: "21% below market", left: "620,000", min: "10,000", ends: "3d 4h", verdict: "No issues", sold: 38, tone: "#ad9bd2", pill: "$SHIFT", pillLine: "paid in USDC" },
+  { id: "0413", sym: "IMD", name: "Identity.md", price: "0.0019 ETH", usd: "$4.50 each", vs: "1.3% below market", left: "500", min: "Any", ends: "6d 12h", verdict: "No issues", sold: 0, tone: "#7fd6a6", pill: "$IMD", pillLine: "paid in ETH" },
+  { id: "0414", sym: "YOU", name: "Your token", price: "You set it", usd: "ETH, USDC, USDT, IMD or $SHIFT", vs: "Shown live vs market", left: "Your amount", min: "You choose", ends: "1 to 365 days", verdict: "Checked", sold: 0, tone: "#d9ad66", pill: "Yours", pillLine: "partner badge", partner: true },
 ];
 const TELEGRAM = "https://t.me/getnightshift";
 const TRACK: [string, string, "done" | "next" | "later"][] = [
   ["Contract designed", "The escrow rules are written and passed IMD's check with no blockers.", "done"],
-  ["Built and audited", "The IMD swarm builds it, tests it, and four specialist auditors and a judge review it.", "next"],
-  ["Live on Ethereum", "Deployed, verified on Etherscan, and switched on here.", "later"],
+  ["Built and audited", "The IMD swarm builds and tests it; four specialist auditors and a judge review it.", "next"],
+  ["Live on Ethereum", "Deployed, verified on Etherscan and switched on here.", "later"],
   ["First deals", "Partner projects and holders list the first cards.", "later"],
 ];
-function ExampleCard({ x, slot }: { x: Example; slot: number }) {
-  return <div className="pv-dl-ex" data-slot={slot}>
-    <header><i>{x.sym[0]}</i><div><b>{x.name}</b><span>${x.sym}</span></div><em>EXAMPLE</em></header>
-    <p className="pv-dl-ex-price">{x.price}<small>{x.usd}</small></p>
-    <p className="pv-dl-ex-vs">{Math.abs(x.vs)}% below market</p>
-    <div className="pv-dl-bar"><span style={{ width: `${x.sold}%` }} /></div>
-    <footer><span>{x.verdict}</span>{x.partner && <span data-tone="partner">PARTNER</span>}</footer>
+const PERKS: [Parameters<typeof NxIcon>[0]["name"], string, string][] = [
+  ["money", "Below-market prices", "Big holders sell at a fixed price to move size without crashing the chart. Each card tells you how far below, or above, the market it is."],
+  ["security", "Escrow, not trust", "The contract holds the tokens until you buy. Nobody, us included, can move them. A seller can only cancel and take back what is left."],
+  ["sniper", "Token Verdict on every card", "Every token is checked before you see it: who controls it, whether it can be sold, its liquidity. Tokens rated Avoid stay hidden unless you ask."],
+  ["crew", "Copycats flagged", "A token that borrows a partner's ticker from another contract is marked on its card, so a fake never looks like the real one."],
+  ["stake", "Holders pay half", "The buyer pays {fee}% on top of the price. Holders of 500k $SHIFT, a NIGHT FROG or a Night Watcher pay {holder}%. Capped at {cap}% forever."],
+  ["swap", "Buy all or a part", "Take the whole deal or any amount from the seller's minimum. Pay in the coin the seller chose: ETH, USDC, USDT, IMD or $SHIFT."],
+];
+
+/** The hero card: one deal as an escrow ticket, in the style of the Forge's Night Watcher card. */
+function DealTicket({ x }: { x: Example }) {
+  return <div className="dl-ticket" aria-label={`Example deal: ${x.name}`}>
+    <div className="dl-ticket-in">
+      <header><span>TOKEN DEALS / ESCROW</span><span>DEAL #{x.id}</span></header>
+      <div className="dl-ticket-token"><i>{x.sym[0]}</i><div><b>{x.name}</b><span>${x.sym} · Ethereum</span></div>{x.partner && <em>PARTNER</em>}</div>
+      <div className="dl-ticket-price"><span>Price per token</span><b>{x.price}</b><small>{x.usd}</small></div>
+      <p className="dl-ticket-vs">{x.vs}</p>
+      <dl><div><dt>Left</dt><dd>{x.left}</dd></div><div><dt>Min buy</dt><dd>{x.min}</dd></div><div><dt>Ends in</dt><dd>{x.ends}</dd></div><div><dt>Verdict</dt><dd>{x.verdict}</dd></div></dl>
+      <div className="dl-ticket-bar"><i style={{ width: `${Math.max(x.sold, 2)}%` }} /></div>
+      <footer><span>ESCROW LOCKED</span><span>EXAMPLE</span></footer>
+    </div>
   </div>;
 }
 
