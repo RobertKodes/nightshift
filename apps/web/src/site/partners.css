@@ -1,0 +1,48 @@
+/* The partner program page, inside the station shell. */
+.pv .pv-partners { width: 100%; max-width: 1080px; margin: 0 auto; padding: 22px 16px 48px; display: grid; gap: 28px; }
+.pv .pv-partners h2 { font-size: 1.15rem; margin-bottom: 12px; }
+.pv .pv-partners .pv-hub-heading > p:last-child { max-width: 680px; }
+.pv .pv-pt-status { padding: 14px 16px; border: 1px solid var(--edge); border-left: 3px solid #e0a54a; border-radius: 4px; background: var(--surface); }
+.pv .pv-pt-status[data-state="accepted"] { border-left-color: #6fdcab; }
+.pv .pv-pt-status[data-state="declined"] { border-left-color: #e07a86; }
+.pv .pv-pt-status p { margin-top: 4px; color: var(--muted); font-size: .82rem; }
+.pv .pv-pt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.pv .pv-pt-card { padding: 14px; border: 1px solid var(--edge); border-radius: 4px; background: var(--surface); }
+.pv .pv-pt-card b { font-size: .88rem; }
+.pv .pv-pt-card p { margin-top: 6px; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.pv .pv-pt-steps ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; counter-reset: step; }
+.pv .pv-pt-steps li { counter-increment: step; display: grid; gap: 4px; padding: 14px; border: 1px solid var(--edge); border-radius: 4px; background: var(--surface); }
+.pv .pv-pt-steps li::before { content: "0" counter(step); font: 600 .62rem var(--mono); color: var(--accent); letter-spacing: .1em; }
+.pv .pv-pt-steps li b { font-size: .86rem; }
+.pv .pv-pt-steps li span { color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.pv .pv-pt-partners { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.pv .pv-pt-partner { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--edge); border-radius: 4px; background: var(--surface); }
+.pv .pv-pt-partner-head { display: flex; align-items: center; gap: 10px; }
+.pv .pv-pt-partner-head img, .pv .pv-pt-partner-head i { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; object-fit: cover; background: #1a202a; display: grid; place-items: center; font: 600 1rem var(--text); font-style: normal; }
+.pv .pv-pt-partner-head div { display: grid; min-width: 0; }
+.pv .pv-pt-partner-head b { font-size: .9rem; }
+.pv .pv-pt-partner-head span { font: .66rem var(--mono); color: var(--muted); }
+.pv .pv-pt-partner-head em { margin-left: auto; font: 600 .56rem var(--mono); font-style: normal; letter-spacing: .1em; color: #6fdcab; border: 1px solid #6fdcab55; padding: 3px 6px; border-radius: 3px; }
+.pv .pv-pt-partner p { color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.pv .pv-pt-partner code { font: .66rem var(--mono); color: var(--muted); }
+.pv .pv-pt-partner nav { display: flex; flex-wrap: wrap; gap: 12px; font-size: .74rem; }
+.pv .pv-pt-partner nav a { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
+.pv .pv-pt-form { display: grid; gap: 16px; padding: 18px; border: 1px solid var(--edge); border-radius: 5px; background: #0c1016; }
+.pv .pv-pt-form fieldset { margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.pv .pv-pt-form legend { padding: 0 0 8px; font: 600 .66rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.pv .pv-pt-form label { display: grid; gap: 6px; font-size: .76rem; color: var(--muted); }
+.pv .pv-pt-form .pv-pt-wide { grid-column: 1 / -1; }
+.pv .pv-pt-form :is(input, select, textarea) { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 4px; background: var(--surface); color: var(--ink); font: 16px/1.4 var(--text); }
+.pv .pv-pt-form textarea { resize: vertical; }
+.pv .pv-pt-form small { justify-self: end; font: .62rem var(--mono); }
+.pv .pv-pt-wants { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px; }
+.pv .pv-pt-form .pv-pt-check { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border: 1px solid var(--edge); border-radius: 4px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.pv .pv-pt-form .pv-pt-check input { width: 18px; min-height: 18px; height: 18px; accent-color: #ad9bd2; }
+.pv .pv-pt-note { grid-column: 1 / -1; color: var(--muted); font-size: .78rem; }
+.pv .pv-pt-post { grid-column: 1 / -1; margin: 0; padding: 12px; white-space: pre-wrap; border: 1px dashed var(--edge); border-radius: 4px; background: var(--surface); font: .8rem/1.5 var(--text); color: var(--ink); }
+.pv .pv-pt-actions { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+.pv .pv-pt-error { padding: 10px 12px; border: 1px solid #8e6c74; border-radius: 4px; background: #291e22; font-size: .8rem; }
+.pv .pv-pt-submit { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.pv .pv-pt-submit .pv-button { min-width: 260px; justify-content: center; }
+.pv .pv-pt-submit p { color: var(--muted); font-size: .74rem; }
+@media (min-width: 821px) { .pv .pv-partners { padding-top: 30px; } }

@@ -81,7 +81,7 @@ function lazy(fn: CreateConnectorFn): CreateConnectorFn {
 const noThirdParty = () => { (WagmiAdapter.prototype as unknown as { addThirdPartyConnectors: () => Promise<void> }).addThirdPartyConnectors = async () => {}; };
 
 /** The kit takes Solana wallets only where they are used: the first load on /swap. */
-const wantsSolana = () => /^\/swap(\/|$)/.test(location.pathname);
+const wantsSolana = () => /^\/(swap|partners)(\/|$)/.test(location.pathname);
 
 async function init(): Promise<Kit> {
   if (inTelegramApp()) throw new Error("Wallets are not available inside Telegram.");

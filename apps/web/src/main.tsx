@@ -66,6 +66,8 @@ const CrewsPage = lazy(() => import("./crews/CrewsPage").then((x) => ({ default:
 const CrewPage = lazy(() => import("./crews/CrewsPage").then((x) => ({ default: x.CrewPage })));
 const WatchtowerPage = lazy(() => import("./crews/WatchtowerPage").then((x) => ({ default: x.WatchtowerPage })));
 const ConnectAgentPage = lazy(() => import("./crews/ConnectAgentPage").then((x) => ({ default: x.ConnectAgentPage })));
+const PartnersPage = lazy(() => import("./site/PartnersPage").then((x) => ({ default: x.PartnersPage })));
+const DealsPage = lazy(() => import("./site/DealsPage").then((x) => ({ default: x.DealsPage })));
 const ProofPage = lazy(() => import("./crews/ProofPage").then((x) => ({ default: x.ProofPage })));
 
 /** Retired addresses land on the page that replaced them. */
@@ -140,6 +142,8 @@ function App() {
   if (seg[0] === "crews") page = <Suspense fallback={<div className="st-room" />}>{seg[1] ? <CrewPage id={seg[1]} health={health} /> : <CrewsPage health={health} />}</Suspense>;
   if (seg[0] === "watchtower") page = <Suspense fallback={<div className="st-room" />}><WatchtowerPage health={health} /></Suspense>;
   if (seg[0] === "agents" && (!seg[1] || seg[1] === "start")) page = <Suspense fallback={<div className="st-room" />}><ConnectAgentPage /></Suspense>;
+  if (seg[0] === "partners") page = <Suspense fallback={<div className="st-room" />}><PartnersPage /></Suspense>;
+  if (seg[0] === "deals") page = <Suspense fallback={<div className="st-room" />}><DealsPage /></Suspense>;
   if (seg[0] === "proof") page = <Suspense fallback={<div className="st-room" />}><ProofPage health={health} /></Suspense>;
   if (seg[0] === "arena") page = <Suspense fallback={<div className="docs"><p className="dim">Loading the arena…</p></div>}><ArenaPage /></Suspense>;
   // the Play Store app leaves what moves money to the website
@@ -157,7 +161,7 @@ const TITLES: Record<string, string> = {
   companies: "Companies", launch: "Start a business", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
   market: "Market", token: "$SHIFT", frogs: "Frogs", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
   tokenomics: "Tokenomics", games: "Play", launchpad: "Launch a token", arena: "Agent Arena",
-  "how-it-works": "How it works", services: "AI tools", crews: "Crews", watchtower: "Token monitor", agents: "Connect an agent", proof: "Proof", breakroom: "Play", geek: "AI tools", info: "$SHIFT", economy: "Activity & receipts", command: "Frog missions", league: "The Night League", forge: "Upgrade Frogs", watch: "Run a keeper", ship: "The Ship",
+  "how-it-works": "How it works", deals: "Token Deals", partners: "Partners", services: "AI tools", crews: "Crews", watchtower: "Token monitor", agents: "Connect an agent", proof: "Proof", breakroom: "Play", geek: "AI tools", info: "$SHIFT", economy: "Activity & receipts", command: "Frog missions", league: "The Night League", forge: "Upgrade Frogs", watch: "Run a keeper", ship: "The Ship",
 };
 
 // The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.

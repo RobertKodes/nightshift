@@ -62,6 +62,8 @@ import { shipRoutes } from "./ship-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
 import { joinRoutes } from "./agent-join-routes.js";
 import { liveStakeHistory } from "./stake-history.js";
+import { partnerRoutes } from "./partner-routes.js";
+import { dealRoutes } from "./deal-routes.js";
 import { leagueRoutes } from "./league-routes.js";
 import { stationRoutes, withPageHead } from "./station-routes.js";
 import { card, catalog, deliveryOf, detail, honestPitch, offerFor, productIdOf, search } from "./agentmarket.js";
@@ -712,6 +714,8 @@ export function serve(engine: Engine) {
         return;
       }
       if (await joinRoutes(req, res, p, { json, body, vault: engine.vault })) return;
+      if (await partnerRoutes(req, res, p, { json, body, isAdmin })) return;
+      if (await dealRoutes(req, res, p, { json, body, limited, vault: engine.vault })) return;
       // ---- the crews: house crews and outside operators, their jobs, the season
       if ((p.startsWith("/api/crews") || p === "/api/season" || p.startsWith("/api/agents/operators")) && await crewRoutes(req, res, p, {
         json, body, limited, ip: clientIp(req), ledger: crewLedger(), operators: crewOperators(), profiles: crewProfiles, season: crewSeason, buildCheck,

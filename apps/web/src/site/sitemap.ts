@@ -80,10 +80,12 @@ export const SECTIONS: SiteSection[] = [
     items: [
       { path: "/token", group: "Use $SHIFT", title: "About $SHIFT", line: "Read what the token does and its holder benefits.", keywords: "token SHIFT benefits discounts rewards", wallet: "none", aliases: ["/info"] },
       { path: "/swap", group: "Use $SHIFT", title: "Swap tokens", line: "Exchange tokens using your connected wallet.", keywords: "buy sell swap exchange SHIFT USDC", wallet: "required" },
+      { path: "/deals", group: "Use $SHIFT", title: "Token Deals", line: "Buy and sell tokens at a fixed price through an escrow contract.", keywords: "otc deals deal escrow buy sell tokens discount desk marketplace bulk", wallet: "optional" },
       { path: "/stake", group: "Use $SHIFT", title: "Stake $SHIFT", line: "Deposit tokens to take part in staking rewards.", keywords: "staking stake lock deposit withdraw rewards", wallet: "required", aliases: ["/staking"] },
       { path: "/tokenomics", group: "Learn and follow", title: "Token supply explained", line: "See how $SHIFT is allocated and used.", keywords: "supply distribution allocation economics tokenomics", wallet: "none" },
       { path: "/whitepaper", group: "Learn and follow", title: "Read the whitepaper", line: "Read the full design and rules of NIGHTSHIFT.", keywords: "whitepaper documentation technical token rules", wallet: "none" },
       { path: "/watch", group: "Learn and follow", title: "Run a keeper", line: "Learn how to run a keeper for the network.", keywords: "keeper watchdog operations node run watch", wallet: "optional" },
+      { path: "/partners", group: "Ecosystem", title: "Partner with NIGHTSHIFT", line: "Projects apply to bring their token into the ecosystem. Free.", keywords: "partners partnership apply register token project ecosystem listing collaborate", wallet: "optional" },
       { path: "/impact", group: "Learn and follow", title: "Track IMD impact", line: "See the published record of IMD activity.", keywords: "impact activity IMD outcomes record", wallet: "none" },
     ],
   },

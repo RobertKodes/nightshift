@@ -155,6 +155,11 @@ export const config = {
     /** The Watch Room: the private Telegram group (chat id) only Night Watcher holders may join; the bot must be its admin. */
     room: env.WATCH_ROOM_CHAT ?? "",
   },
+  /** Token Deals, the OTC escrow (built by the IMD swarm, order token-deals): the desk opens when DEALS_ADDRESS is set; DEALS_BLOCK is its deploy block. */
+  deals: {
+    address: (env.DEALS_ADDRESS ?? "") as `0x${string}` | "",
+    block: num(env.DEALS_BLOCK, 0),
+  },
   /**
    * Live betting for spectators (BetPool on Ethereum, built by the IMD swarm): off while
    * BETPOOL_ADDRESS is empty. BETPOOL_BLOCK is its deploy block, where the event follower starts.

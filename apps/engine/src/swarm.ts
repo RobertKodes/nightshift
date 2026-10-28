@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { writeAtomic } from "./atomic.js";
 import { join } from "node:path";
 import { config } from "./config.js";
+import { DEALS_ORDER } from "./order-deals.js";
 import { FORGE_ART_ORDER, FORGE_ORDER, FORGE_SKIN_ORDER } from "./order-forge.js";
 
 /**
@@ -127,6 +128,7 @@ Tests (Foundry): full flows for both tokens with several bettors on both sides a
   FORGE_ART_ORDER,
   FORGE_SKIN_ORDER,
   FORGE_ORDER,
+  DEALS_ORDER,
 ];
 
 type Placed = { tx: string; at: number; posted?: boolean; earlier?: string[]; job?: string; milestones?: string[] };
