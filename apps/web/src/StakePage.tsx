@@ -29,6 +29,17 @@ type Stake = { amount: bigint; unlockAt: number; tx: string };
 const fmt = (v: bigint) => Number(formatEther(v)).toLocaleString("en-US", { maximumFractionDigits: 2 });
 const errText = (e: unknown) => ((e as { shortMessage?: string }).shortMessage ?? (e as Error).message ?? "").split("\n")[0]!.slice(0, 160);
 
+/**
+ * Stops before the wallet opens when this wallet cannot pay Ethereum's fee for about `gas` units (with room for a
+ * rise): otherwise the wallet's own check fails and the page can only show an empty "reverted".
+ */
+async function feeCheck(a: Address, gas: bigint) {
+  const [balance, price] = await Promise.all([rpc.getBalance({ address: a }), rpc.getGasPrice()]).catch(() => [null, null] as const);
+  if (balance === null || price === null) return; // the wallet still checks for itself
+  const need = (gas * price * 3n) / 2n, eth = (v: bigint) => Number(formatEther(v)).toPrecision(2);
+  if (balance < need) throw new Error(`This wallet has ${eth(balance)} ETH, not enough for the Ethereum network fee (about ${eth(need)} ETH). Add a little ETH on Ethereum to this wallet, then try again.`);
+}
+
 /** The stake history the server keeps; null when it cannot answer. */
 async function serverHistory(who: Address) {
   try {
@@ -174,6 +185,7 @@ export function StakePage() {
     // exactly the amount staked, never more
     if (allowed < amt) steps.push({ call: { address: token!, abi: erc20Abi, functionName: "approve", args: [rewards!, amt] }, sign: `Approve ${fmt(amt)} $${sym} for staking…`, wait: "Waiting for the approval…", fail: "The approval failed. Nothing was staked." });
     steps.push({ call: { address: rewards!, abi: REWARDS, functionName: "stake", args: [amt, BigInt(lock)] }, sign: `Stake ${fmt(amt)} $${sym} for ${lockText}…` });
+    await feeCheck(a, (allowed < amt ? 60_000n : 0n) + 180_000n);
     const batched = steps.length > 1 && (await canBatch(w, a));
     return (await sendSteps(w, a, steps, { batched, once: `Confirm once in your wallet (approve + stake ${fmt(amt)} $${sym} for ${lockText})…`, say: setStep })).hash;
   });
@@ -206,6 +218,7 @@ export function StakePage() {
     }
     // a dry run first: a locked stake is refused here with a clear message, before any gas is spent
     await rpc.simulateContract({ account: a, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [v] }).catch(() => { throw new Error("The contract refused the withdrawal: part of this stake may still be locked."); });
+    await feeCheck(a, 120_000n);
     return w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "withdraw", args: [v] });
   });
 
@@ -281,7 +294,7 @@ export function StakePage() {
           </tbody></table>}
           {withdrawable > 0n && <p className="dim" style={{ fontSize: 13, margin: "10px 0 0" }}>Want only part of it out? <button type="button" className="swap-max" onClick={() => { setMode("unstake"); scrollTo({ top: 0, behavior: "smooth" }); }}>Unstake an amount</button></p>}
           <div className="setup-tools" style={{ marginTop: 10 }}>
-            <button className="btn primary" disabled={Boolean(step)} onClick={() => void run("Confirm the claim…", ({ w, a }) => w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "getReward" }))}>Claim rewards</button>
+            <button className="btn primary" disabled={Boolean(step)} onClick={() => void run("Confirm the claim…", async ({ w, a }) => (await feeCheck(a, 160_000n), w.writeContract({ account: a, chain: mainnet, address: rewards!, abi: REWARDS, functionName: "getReward" })))}>Claim rewards</button>
             <button className="btn" disabled={Boolean(step) || withdrawable <= 0n} onClick={() => void withdraw(withdrawable)}>Withdraw all unlocked ({fmt(withdrawable)})</button>
           </div>
         </section>
