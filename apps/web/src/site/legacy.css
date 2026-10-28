@@ -1,0 +1,91 @@
+/* The older pages inside the new shell. Their own styles stay; this moves them onto the new tokens:
+   graphite surfaces, system type, one muted accent per section, flat controls, no neon or cartoon art. */
+/* .pv-legacy.ns outranks the old .ns and .ns.nx-shell token blocks that sit on the same element.
+   Old pages use --text as their text colour, so the system font is --pv-font here. */
+.pv .pv-legacy.ns {
+  --pv-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --ink: #e7ebf0; --edge: #303741; --muted: #a2acb9;
+  /* the old base (styles.css, landing.css) */
+  --bg: transparent; --bg-2: #0e1319; --card: #11161d; --card-2: #151b23; --glass: #11161df2;
+  --line: #262d36; --line-2: #39414c; --text: #e7ebf0; --dim: #a2acb9; --faint: #7b8592;
+  --moon: var(--acc); --moon-dim: #ad9bd21f; --sky: #8fb7c8; --uv: #8d7cb4; --uv-hi: var(--acc); --uv-soft: #ad9bd21a; --acid: #6fdcab;
+  --warn: #e0a54a; --bad: #e07a86; --good: #6fdcab; --radius: 4px;
+  --serif: var(--pv-font); --sans: var(--pv-font);
+  /* the station shell (nx.css) */
+  --nx-bg: transparent; --nx-bg2: #0e1319; --nx-panel: #11161d; --nx-panel2: #ffffff05;
+  --nx-line: #262d36; --nx-line2: #39414c; --nx-ink: #e7ebf0; --nx-dim: #a2acb9; --nx-faint: #7b8592;
+  --nx-ui: var(--pv-font); --nx-mono: var(--mono); --nx-cut: 0px;
+  --acc-soft: color-mix(in srgb, var(--acc) 12%, transparent); --acc-line: color-mix(in srgb, var(--acc) 34%, transparent);
+  position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100svh; margin: 0; width: 100%;
+  padding-top: var(--header); background: #080b10; color: var(--ink); font: 400 .9375rem/1.55 var(--pv-font);
+}
+.pv .pv-legacy > main { flex: 1; width: 100%; }
+
+/* the trail: the section and its pages, where the old room bar was */
+.pv .pv-trail { position: sticky; top: var(--header); z-index: 30; display: flex; align-items: center; gap: 4px; min-height: 46px; padding: 0 max(12px, env(safe-area-inset-left, 0px)); background: #0b0f14f2; border-bottom: 1px solid var(--edge); }
+.pv .pv-trail-home { flex-shrink: 0; display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px 0 0; margin-right: 4px; border-right: 1px solid var(--edge); font: 600 .7rem var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acc); }
+.pv .pv-trail > div { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.pv .pv-trail > div::-webkit-scrollbar { display: none; }
+.pv .pv-trail a:not(.pv-trail-home) { flex-shrink: 0; display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; font-size: .74rem; color: var(--muted); white-space: nowrap; border-bottom: 2px solid transparent; }
+.pv .pv-trail a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--acc); }
+@media (hover: hover) { .pv .pv-trail a:not(.pv-trail-home):hover { color: var(--ink); } }
+
+/* type: one family, no serif display lines, no gradient or glowing text */
+.pv .pv-legacy, .pv .pv-legacy :is(h1, h2, h3, h4, p, li, td, th, label, input, select, textarea, button, a) { font-family: var(--pv-font); }
+.pv .pv-legacy :is(code, pre, kbd, .mono, [class*="mono"], [class*="-num"], [class*="tabular"]) { font-family: var(--mono); }
+.pv .pv-legacy :is(h1, h2, h3) { font-weight: 600; letter-spacing: -.025em; color: var(--ink); }
+.pv .pv-legacy h1 { line-height: 1.08; }
+.pv .pv-legacy * { text-shadow: none !important; }
+.pv .pv-legacy :is(h1, h2, h3, em, span, b, strong, a) { -webkit-text-fill-color: currentColor; }
+.pv .pv-legacy :is(h1, h2, h3) :is(em, i, span) { color: inherit; font-style: normal; background: none; }
+.pv .pv-legacy a { color: inherit; }
+.pv .pv-legacy p a, .pv .pv-legacy li > a:not([class]) { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #ad9bd266; }
+
+/* controls: flat, rounded, graphite; the accent only on the primary action */
+.pv .pv-legacy :is(button, [class*="btn"], [class*="button"], [class*="cta"]) { clip-path: none !important; border-radius: 4px; }
+.pv .pv-legacy :is(.nx-btn, .btn, [class$="-btn"], [class*="-btn "]) { background: #161c25; color: var(--ink); box-shadow: none; border: 1px solid var(--edge); font-family: var(--pv-font); font-weight: 500; letter-spacing: 0; text-transform: none; }
+.pv .pv-legacy :is(.nx-btn-acc, .btn.primary, .primary[class*="btn"], [class*="btn-acc"], [class*="btn-primary"]) { background: #292434 !important; color: #eee9f7 !important; border: 1px solid #716581 !important; }
+.pv .pv-legacy :is(.nx-btn-acc, .btn.primary) * { color: #eee9f7 !important; }
+@media (hover: hover) { .pv .pv-legacy :is(.nx-btn, .btn):hover { background: #1d2430; border-color: #4a5260; } }
+.pv .pv-legacy :is(input, select, textarea) { background: #0c1117; color: var(--ink); border: 1px solid var(--edge); border-radius: 4px; }
+.pv .pv-legacy :is(input, select, textarea):focus { outline: 2px solid #ad9bd255; outline-offset: 1px; border-color: #716581; }
+
+/* panels and cards: one surface, one edge, no cut corners or glow */
+.pv .pv-legacy :is([class*="panel"], [class*="card"], [class*="tile"], [class*="box"]):not(input, select, textarea) { clip-path: none !important; }
+.pv .pv-legacy [class*="glow"] { box-shadow: none !important; }
+
+/* the old station decorations: mascots, room art, scanlines and starfields */
+.pv .pv-legacy :is(.nx-backdrop, .ns-frog, .night-frog, [class*="mascot"], [class*="scanline"], [class*="stars"], .nx-utility, .utility-links) { display: none !important; }
+
+@media (min-width: 821px) {
+  .pv .pv-legacy.ns { padding-top: calc(var(--header) + 48px); }
+  .pv .pv-trail { top: calc(var(--header) + 48px); padding: 0 max(24px, calc((100vw - 1280px) / 2)); }
+}
+
+/* every inner accent follows the section's accent, whatever the old page set inline */
+.pv .pv-legacy [style*="--acc"] { --acc: inherit !important; --acc2: inherit !important; }
+
+/* page heroes: no room illustrations, the new page heading instead */
+.pv .pv-legacy .st-hero { min-height: 0 !important; padding: 34px max(16px, calc((100vw - 1280px) / 2 + 24px)) 26px !important; display: block; border-bottom: 1px solid var(--edge); background: none; }
+.pv .pv-legacy .st-hero-art, .pv .pv-legacy .st-hero::after, .pv .pv-legacy .st-hero::before { display: none !important; }
+.pv .pv-legacy .st-hero-in { max-width: 880px; gap: 10px; }
+.pv .pv-legacy .st-hero h1 { font: 600 clamp(1.8rem, 5vw, 3rem)/1.08 var(--pv-font); letter-spacing: -.03em; animation: none; }
+.pv .pv-legacy .st-hero p { font-size: .95rem; color: var(--muted); max-width: 640px; }
+.pv .pv-legacy :is(.st-kicker, .st-eyebrow, [class*="kicker"], [class*="eyebrow"]) { font: 600 .66rem var(--mono); letter-spacing: .14em; color: var(--acc); text-transform: uppercase; }
+
+/* type set in the old stylesheets by name */
+.pv .pv-legacy :is(.clarity-box, .clarity-page, .clarity-utilities a, .nx-dock-tx b) { font-family: var(--pv-font); }
+
+/* room-era decoration: the fixed megastructure art, starfields, the pixel frog, cut corners */
+.pv .pv-legacy.ns-app::before, .pv .pv-legacy.ns-app::after, .pv .pv-legacy.ns::before, .pv .pv-legacy.ns::after, .pv .pv-legacy :is(.imd-frog, .visit-room, .lc-thumb) { display: none !important; }
+.pv .pv-legacy *:not(svg, svg *) { clip-path: none !important; }
+.pv .pv-legacy > main { padding-top: 14px; }
+.pv .pv-legacy > main > :first-child { margin-top: 0 !important; }
+
+/* headlines: one weight, no italic accent words */
+.pv .pv-legacy :is(h1, h2) em, .pv .pv-legacy :is(h1, h2) i { font-style: normal !important; color: var(--muted) !important; background: none !important; }
+/* the Forge and keeper heroes: the room illustration behind them goes, the panel art stays */
+.pv .pv-legacy .fg-hero::before { background: none !important; }
+.pv .pv-legacy .fg-hero::after { background: var(--edge) !important; opacity: 1; }
+.pv .pv-legacy .fg-hero h1 { font: 600 clamp(2rem, 5vw, 3.2rem)/1.05 var(--pv-font); }

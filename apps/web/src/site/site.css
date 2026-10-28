@@ -305,3 +305,6 @@
 .pv .pv-patch-inset figcaption { margin-top: 4px; text-align: center; color: var(--muted); font: 6px/1.4 var(--mono); white-space: nowrap; letter-spacing: .02em; }
 @media (min-width: 821px) { .pv .pv-station .pv-patch-inset { left: 24px; top: auto; bottom: 90px; width: 88px; } .pv .pv-station .pv-patch-inset canvas { width: 88px; height: 88px; } .pv .pv-patch-inset figcaption { font-size: 8px; } }
 @media (max-height: 740px) and (max-width: 820px), (orientation: landscape) and (max-height: 540px) { .pv .pv-station .pv-patch-inset { display: none; } }
+/* full-screen pages carry only the phone tab bar */
+.pv.pv-tabs-only { min-height: 0; padding: 0; background: none; overflow: visible; }
+@media (min-width: 821px) { .pv.pv-tabs-only { display: none; } }

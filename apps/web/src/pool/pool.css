@@ -1,6 +1,6 @@
 /* NIGHT POOL: a lamp-lit table in NIGHTSHIFT's after-hours Game Room. */
-.np { --uv:#7c5cff; --uv-hi:#a48bff; --moon:#e9e2ff; --dim:#b3abc9; --lime:#b8ff4a; --gold:#ffc46b; --bad:#ff6b7d; --edge:rgba(164,139,255,.24); --glass:rgba(12,8,25,.78); --serif:"Instrument Serif",Georgia,serif; --mono:"JetBrains Mono",ui-monospace,monospace; --grot:"Space Grotesk",Inter,system-ui,sans-serif;
-  position:relative; isolation:isolate; width:100%; min-height:100vh; min-height:100dvh; overflow-x:clip; color:var(--moon); background:radial-gradient(ellipse at 50% -10%,#2a1660 0,transparent 55%),radial-gradient(ellipse at 90% 80%,rgba(124,92,255,.08),transparent 45%),#03020a; font:400 14px/1.55 Inter,system-ui,sans-serif; }
+.np { --uv:#8d7cb4; --uv-hi:#ad9bd2; --moon:#ddd8e8; --dim:#b3abc9; --lime:#7fd6a6; --gold:#d9ad66; --bad:#e07a86; --edge:rgba(150, 160, 175,.24); --glass:rgba(12,8,25,.78); --serif:-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace; --grot:-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  position:relative; isolation:isolate; width:100%; min-height:100vh; min-height:100dvh; overflow-x:clip; color:var(--moon); background:radial-gradient(ellipse at 50% -10%,#2a1660 0,transparent 55%),radial-gradient(ellipse at 90% 80%,rgba(141, 124, 180,.08),transparent 45%),#080b10; font:400 14px/1.55 Inter,system-ui,sans-serif; }
 .np *, .np *::before, .np *::after { box-sizing:border-box; }
 .np a { color:inherit; text-decoration:none; }
 .np button, .np input { font:inherit; color:inherit; }
@@ -10,18 +10,18 @@
 .np .icon { flex:none; vertical-align:middle; }
 .np-kicker { display:inline-flex; align-items:center; gap:8px; font:500 9px/1.6 var(--mono); letter-spacing:.15em; color:var(--dim); text-transform:uppercase; }
 .np-live { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--lime); box-shadow:0 0 10px #b8ff4a80; }
-.np-btn { display:inline-flex; justify-content:center; align-items:center; gap:9px; min-height:44px; padding:10px 16px; border:1px solid var(--uv-hi); background:linear-gradient(175deg,#7856f8,#4a2bd2); box-shadow:inset 0 1px #ffffff18,0 12px 30px -16px #7c5cff; color:#fff; font:600 10px/1.4 var(--mono); letter-spacing:.12em; text-transform:uppercase; transition:background .2s,box-shadow .2s,transform .1s; }
-.np-btn:hover:not(:disabled) { background:linear-gradient(175deg,#8c70ff,#5938e5); }
+.np-btn { display:inline-flex; justify-content:center; align-items:center; gap:9px; min-height:44px; padding:10px 16px; border:1px solid var(--uv-hi); background:linear-gradient(175deg,#4a3f63,#2a2339); box-shadow:inset 0 1px #ffffff18,0 12px 30px -16px #8d7cb4; color:#fff; font:600 10px/1.4 var(--mono); letter-spacing:.12em; text-transform:uppercase; transition:background .2s,box-shadow .2s,transform .1s; }
+.np-btn:hover:not(:disabled) { background:linear-gradient(175deg,#8d7cb4,#332b46); }
 .np-btn:active:not(:disabled) { transform:translateY(1px); }
-.np-btn.ghost { background:rgba(124,92,255,.05); border-color:var(--edge); color:var(--dim); box-shadow:none; }
-.np-btn.ghost:hover:not(:disabled) { color:var(--moon); border-color:var(--uv-hi); background:rgba(124,92,255,.12); }
+.np-btn.ghost { background:rgba(141, 124, 180,.05); border-color:var(--edge); color:var(--dim); box-shadow:none; }
+.np-btn.ghost:hover:not(:disabled) { color:var(--moon); border-color:var(--uv-hi); background:rgba(141, 124, 180,.12); }
 .np-btn.small { min-height:34px; padding:7px 11px; font-size:9px; }
 .np-btn.primary { width:100%; min-height:56px; font-size:12px; }
 .np-btn.primary>span { flex:1; }
-.np-icon-btn { display:inline-grid; place-items:center; width:38px; height:38px; border:1px solid var(--edge); background:rgba(124,92,255,.05); color:var(--dim); }
+.np-icon-btn { display:inline-grid; place-items:center; width:38px; height:38px; border:1px solid var(--edge); background:rgba(141, 124, 180,.05); color:var(--dim); }
 
 /* ---- the bar */
-.np-top { position:relative; z-index:6; height:64px; padding:0 clamp(12px,3vw,44px); display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:12px; border-bottom:1px solid var(--edge); background:rgba(3,2,10,.82); backdrop-filter:blur(14px); }
+.np-top { position:relative; z-index:6; height:64px; padding:0 clamp(12px,3vw,44px); display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:12px; border-bottom:1px solid var(--edge); background:rgba(8, 11, 16,.82); backdrop-filter:blur(14px); }
 .np-back { display:inline-flex; align-items:center; gap:8px; justify-self:start; color:var(--dim); font:500 10px var(--mono); letter-spacing:.14em; }
 .np-back .icon { transform:rotate(180deg); }
 .np-brand { display:flex; justify-content:center; }
@@ -31,7 +31,7 @@
 .np-wordmark em { color:var(--uv-hi); font-style:italic; }
 .np-wordmark small { display:block; margin-top:6px; font:500 7px var(--mono); letter-spacing:.24em; color:var(--dim); }
 .np-account { justify-self:end; display:flex; gap:8px; align-items:center; }
-.np-wallet { display:inline-flex; align-items:center; gap:8px; min-height:38px; padding:0 12px; border:1px solid var(--edge); background:rgba(184,255,74,.06); color:var(--moon); font:600 9px var(--mono); letter-spacing:.12em; }
+.np-wallet { display:inline-flex; align-items:center; gap:8px; min-height:38px; padding:0 12px; border:1px solid var(--edge); background:rgba(127, 214, 166,.06); color:var(--moon); font:600 9px var(--mono); letter-spacing:.12em; }
 .np-wallet .icon { color:var(--lime); }
 
 /* ---- the lobby */
@@ -51,7 +51,7 @@
 .np-money { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border:1px solid var(--edge); }
 .np-money button { min-height:44px; border:0; border-right:1px solid var(--edge); background:none; color:var(--dim); font:600 11px var(--mono); letter-spacing:.12em; }
 .np-money button:last-child { border-right:0; }
-.np-money button.on { color:var(--moon); background:rgba(124,92,255,.18); box-shadow:inset 0 -2px var(--lime); }
+.np-money button.on { color:var(--moon); background:rgba(141, 124, 180,.18); box-shadow:inset 0 -2px var(--lime); }
 .np-steps { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
 .np-steps li { display:flex; align-items:center; gap:10px; padding:9px 10px; border:1px solid var(--edge); background:rgba(255,255,255,.015); }
 .np-steps li>i { flex:none; display:grid; place-items:center; width:24px; height:24px; border-radius:50%; border:1px solid var(--edge); font:600 11px var(--mono); font-style:normal; color:var(--dim); }
@@ -63,7 +63,7 @@
 .np-more { grid-column:1 / -1; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; align-items:start; }
 .np-more>.np-controls, .np-more>.np-legal { grid-column:1 / -1; }
 .np-controls { display:flex; gap:9px; margin:0; color:var(--dim); font-size:12px; } .np-controls .icon { flex:none; margin-top:2px; color:var(--lime); }
-.np-cabinet { position:relative; border:1px solid var(--edge); background:radial-gradient(ellipse at 50% 20%,rgba(255,240,220,.06),transparent 60%),#05030e; box-shadow:0 30px 90px -40px #7c5cff,inset 0 1px #ffffff08; }
+.np-cabinet { position:relative; border:1px solid var(--edge); background:radial-gradient(ellipse at 50% 20%,rgba(255,240,220,.06),transparent 60%),#05030e; box-shadow:0 30px 90px -40px #8d7cb4,inset 0 1px #ffffff08; }
 .np-cabinet::before { content:""; position:absolute; left:24px; top:-1px; width:48px; height:1px; background:var(--lime); box-shadow:0 0 12px var(--lime); }
 .np-showcase { position:relative; height:clamp(240px,27vw,400px); }
 .np-showcase canvas, .np-stage canvas, .np-preview-stage canvas { position:absolute; inset:0; display:block; }
@@ -81,7 +81,7 @@
 .np-choice button { display:grid; gap:4px; align-content:start; text-align:left; min-height:74px; padding:11px 12px; border:1px solid var(--edge); background:rgba(255,255,255,.02); }
 .np-choice button b { font:600 13px var(--grot); letter-spacing:.04em; }
 .np-choice button small { color:var(--dim); font-size:11px; line-height:1.35; }
-.np-choice button.on { border-color:var(--uv-hi); background:rgba(124,92,255,.16); box-shadow:inset 0 -2px var(--lime); }
+.np-choice button.on { border-color:var(--uv-hi); background:rgba(141, 124, 180,.16); box-shadow:inset 0 -2px var(--lime); }
 .np-error { display:flex; align-items:center; gap:8px; margin:0; padding:9px 11px; border:1px solid #ff6b7d55; background:#ff6b7d12; color:#ffd6dc; font-size:12px; }
 .np-error button { margin-left:auto; background:none; border:0; color:inherit; }
 /* in the game the error floats over the table (the table never shrinks for it) */
@@ -93,13 +93,13 @@
 .np-rank { font:500 10px var(--mono); color:var(--dim); }
 .np-tabs { display:flex; gap:6px; margin-top:8px; }
 .np-tabs button { padding:6px 10px; border:1px solid var(--edge); background:none; color:var(--dim); font:500 9px var(--mono); letter-spacing:.1em; }
-.np-tabs button.on { color:var(--moon); border-color:var(--uv-hi); background:rgba(124,92,255,.14); }
+.np-tabs button.on { color:var(--moon); border-color:var(--uv-hi); background:rgba(141, 124, 180,.14); }
 .np-empty { color:var(--dim); font-size:12px; }
 .np-legal { display:flex; gap:9px; margin:4px 0 0; color:var(--dim); font-size:11px; }
 .np-legal .icon { color:var(--uv-hi); margin-top:2px; }
 
 /* ---- overlays */
-.np-overlay { position:absolute; inset:0; z-index:20; display:grid; place-items:center; padding:16px; background:rgba(3,2,10,.72); backdrop-filter:blur(6px); }
+.np-overlay { position:absolute; inset:0; z-index:20; display:grid; place-items:center; padding:16px; background:rgba(8, 11, 16,.72); backdrop-filter:blur(6px); }
 .np-page>.np-overlay { position:fixed; }
 .np-dialog { position:relative; display:grid; gap:12px; justify-items:center; text-align:center; width:min(440px,100%); max-height:100%; overflow:auto; padding:24px; border:1px solid var(--edge); background:linear-gradient(170deg,#1a1036,#08061a); box-shadow:0 30px 80px -30px #000,0 0 0 1px #ffffff06 inset; }
 .np-dialog h2 { margin:0; font:400 clamp(30px,5vw,40px)/1 var(--serif); }
@@ -127,10 +127,10 @@
 .np-hud { position:relative; z-index:4; display:flex; justify-content:space-between; align-items:stretch; gap:10px; padding:10px 12px; border-bottom:1px solid var(--edge); background:rgba(5,3,14,.6); }
 .np-player { position:relative; display:flex; align-items:center; gap:10px; min-width:0; flex:1; max-width:420px; padding:6px 10px 6px 6px; border:1px solid transparent; transition:border-color .2s,background .2s; }
 .np-player.seat-1 { flex-direction:row-reverse; text-align:right; padding:6px 6px 6px 10px; }
-.np-player.active { border-color:var(--edge); background:linear-gradient(90deg,rgba(124,92,255,.16),transparent); }
-.np-player.seat-1.active { background:linear-gradient(270deg,rgba(124,92,255,.16),transparent); }
-.np-ring { position:relative; flex:none; border-radius:50%; padding:3px; background:conic-gradient(var(--lime) calc(var(--p,0) * 360deg),rgba(164,139,255,.18) 0); }
-.np-player:not(.active) .np-ring { background:rgba(164,139,255,.14); }
+.np-player.active { border-color:var(--edge); background:linear-gradient(90deg,rgba(141, 124, 180,.16),transparent); }
+.np-player.seat-1.active { background:linear-gradient(270deg,rgba(141, 124, 180,.16),transparent); }
+.np-ring { position:relative; flex:none; border-radius:50%; padding:3px; background:conic-gradient(var(--lime) calc(var(--p,0) * 360deg),rgba(150, 160, 175,.18) 0); }
+.np-player:not(.active) .np-ring { background:rgba(150, 160, 175,.14); }
 .np-avatar { position:relative; display:inline-block; flex:none; border-radius:50%; }
 .np-avatar img { width:100%; height:100%; border-radius:50%; object-fit:cover; background:#120a2a; padding:9%; }
 .np-avatar svg { position:absolute; inset:-6%; width:112%; height:112%; overflow:visible; pointer-events:none; }
@@ -182,7 +182,7 @@
 /* on the cloth: the pockets to call, the aim's state, the banners, the power read-out, the first-time hints */
 .np-pocket { position:absolute; z-index:7; width:42px; height:42px; margin:-21px 0 0 -21px; padding:0; border:2px dashed #e9e2ffaa; border-radius:50%!important; background:rgba(8,5,20,.2); animation:np-call 1.6s ease-in-out infinite; }
 .np-pocket:hover { border-color:var(--lime); border-style:solid; }
-.np-pocket.on { border:3px solid var(--lime); background:rgba(184,255,74,.2); box-shadow:0 0 18px #b8ff4a99; animation:none; }
+.np-pocket.on { border:3px solid var(--lime); background:rgba(127, 214, 166,.2); box-shadow:0 0 18px #b8ff4a99; animation:none; }
 .touch .np-pocket { width:52px; height:52px; margin:-26px 0 0 -26px; }
 @keyframes np-call { 50% { transform:scale(1.12); border-color:#b8ff4acc; } }
 .np-pill { position:absolute; z-index:5; left:50%; top:8px; transform:translateX(-50%); max-width:calc(100% - 16px); overflow:hidden; text-overflow:ellipsis; padding:4px 10px; border:1px solid var(--edge); background:rgba(8,5,20,.75); font:600 8px var(--mono); letter-spacing:.12em; color:var(--dim); white-space:nowrap; pointer-events:none; }
@@ -196,7 +196,7 @@
 .np-banner.foul { border-color:#ff6b7d88; } .np-banner.foul b { color:var(--bad); }
 @keyframes np-banner { 0% { opacity:0; transform:translate(-50%,-50%) scale(.94); } 12%,82% { opacity:1; transform:translate(-50%,-50%); } 100% { opacity:0; transform:translate(-50%,-50%); } }
 /* the hints never block the table: the shot clock runs, and the controls work under them */
-.np-hints { position:absolute; inset:0; z-index:15; display:grid; place-items:center; padding:16px; background:rgba(3,2,10,.35); pointer-events:none; }
+.np-hints { position:absolute; inset:0; z-index:15; display:grid; place-items:center; padding:16px; background:rgba(8, 11, 16,.35); pointer-events:none; }
 .np-hint-card { pointer-events:auto; }
 .np-hints.step-1 { justify-items:start; padding-left:76px; }
 .np-hints.step-2 { align-items:start; justify-items:end; padding-right:76px; }
@@ -207,16 +207,16 @@
 .np-hint-acts { display:flex; gap:8px; justify-self:end; margin-top:4px; }
 .np-bar { position:relative; z-index:4; display:flex; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid var(--edge); background:rgba(5,3,14,.75); min-height:54px; overflow-x:auto; }
 .np-chip { display:inline-flex; align-items:center; gap:7px; flex:none; min-height:38px; padding:0 11px; border:1px solid var(--edge); background:rgba(255,255,255,.03); color:var(--moon); font:600 9px var(--mono); letter-spacing:.1em; white-space:nowrap; }
-.np-chip.on { border-color:var(--uv-hi); background:rgba(124,92,255,.2); }
+.np-chip.on { border-color:var(--uv-hi); background:rgba(141, 124, 180,.2); }
 .np-chip.call { border-color:#b8ff4a66; color:var(--lime); }
 .np-chip.call.warn { border-color:var(--gold); color:var(--gold); }
 .np-chip.icon { width:38px; padding:0; justify-content:center; color:var(--dim); }
 .np-spin-dot { position:relative; width:20px; height:20px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#fff,#d8d4ea); }
-.np-spin-dot::after { content:""; position:absolute; left:calc(50% + var(--sx,0%) - 3px); top:calc(50% + var(--sy,0%) - 3px); width:6px; height:6px; border-radius:50%; background:#ff3d6e; }
+.np-spin-dot::after { content:""; position:absolute; left:calc(50% + var(--sx,0%) - 3px); top:calc(50% + var(--sy,0%) - 3px); width:6px; height:6px; border-radius:50%; background:#d9677a; }
 .np-chip.np-sound { display:none; }
 .np-tag.turn { color:#0b0a10; background:var(--lime); border-color:var(--lime); }
 .np-player.active { border-color:#b8ff4a40; }
-.np-ring.low { background:conic-gradient(var(--bad) calc(var(--p,0) * 360deg),rgba(164,139,255,.18) 0); }
+.np-ring.low { background:conic-gradient(var(--bad) calc(var(--p,0) * 360deg),rgba(150, 160, 175,.18) 0); }
 .np-status { color:var(--dim); font-size:12px; }
 .np-bar-end { display:flex; gap:6px; margin-left:auto; }
 .np-panel { position:absolute; z-index:12; left:12px; bottom:62px; padding:14px; border:1px solid var(--edge); background:rgba(10,6,24,.96); box-shadow:0 20px 60px -20px #000; }
@@ -226,9 +226,9 @@
 .np-spin-limit, .np-spin-cross, .np-spin-face b { pointer-events:none; }
 .np-spin-note { color:var(--dim); font-size:11px; }
 .np-spin-acts { display:flex; gap:6px; }
-.np-spin-face { position:relative; width:150px; height:150px; flex:none; border-radius:50%; background:radial-gradient(circle at 36% 30%,#ffffff,#e4e0f2 45%,#a9a3c4); box-shadow:inset -10px -12px 24px #00000040; touch-action:none; cursor:crosshair; }
+.np-spin-face { position:relative; width:150px; height:150px; flex:none; border-radius:50%; background:radial-gradient(circle at 36% 30%,#ffffff,#e4e0f2 45%,#a2acb9); box-shadow:inset -10px -12px 24px #00000040; touch-action:none; cursor:crosshair; }
 .np-spin-limit { position:absolute; inset:25%; border-radius:50%; border:1px dashed #7c5cff88; }
-.np-spin-face b { position:absolute; width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%; background:#ff3d6e; box-shadow:0 0 0 3px #ffffffaa; }
+.np-spin-face b { position:absolute; width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%; background:#d9677a; box-shadow:0 0 0 3px #ffffffaa; }
 .np-spin-side { display:grid; gap:8px; min-width:150px; }
 .np-spin-side p { margin:0; font:600 15px var(--grot); }
 .np-spin-side label { display:grid; gap:4px; font:500 9px var(--mono); letter-spacing:.12em; color:var(--dim); }
@@ -283,7 +283,7 @@
 .np-faces img { display:block; width:40px; height:40px; border-radius:50%; object-fit:cover; }
 .np-kinds { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; }
 .np-kinds button { flex:none; padding:9px 12px; border:1px solid var(--edge); background:rgba(255,255,255,.02); color:var(--dim); font:600 9px var(--mono); letter-spacing:.1em; text-transform:uppercase; }
-.np-kinds button.on { color:var(--moon); border-color:var(--uv-hi); background:rgba(124,92,255,.16); box-shadow:inset 0 -2px var(--lime); }
+.np-kinds button.on { color:var(--moon); border-color:var(--uv-hi); background:rgba(141, 124, 180,.16); box-shadow:inset 0 -2px var(--lime); }
 .np-preview { position:relative; border:1px solid var(--edge); background:#05030e; }
 .np-preview-stage { position:relative; height:clamp(240px,34vw,380px); }
 .np-preview>.np-kicker { position:absolute; left:12px; bottom:10px; }
@@ -292,9 +292,9 @@
 .np-item { position:relative; display:grid; grid-template-rows:auto 1fr auto; border:1px solid var(--edge); background:rgba(10,6,24,.7); }
 .np-item.worn { border-color:#b8ff4a77; }
 .np-item.picked { box-shadow:0 0 0 1px var(--uv-hi); }
-.np-item.r-rare { --r:#8fb0ff; } .np-item.r-epic { --r:#c58bff; } .np-item.r-legendary { --r:#ffc46b; } .np-item.r-mythic { --r:#ff6bd5; } .np-item.r-standard { --r:#b3abc9; }
+.np-item.r-rare { --r:#8fb7c8; } .np-item.r-epic { --r:#c58bff; } .np-item.r-legendary { --r:#d9ad66; } .np-item.r-mythic { --r:#ff6bd5; } .np-item.r-standard { --r:#b3abc9; }
 .np-item::before { content:""; position:absolute; left:0; right:0; top:0; height:2px; background:var(--r); box-shadow:0 0 12px var(--r); }
-.np-item-art { display:block; width:100%; padding:0; border:0; border-bottom:1px solid var(--edge); background:radial-gradient(ellipse at 50% 30%,rgba(124,92,255,.14),transparent 70%),#06040f; }
+.np-item-art { display:block; width:100%; padding:0; border:0; border-bottom:1px solid var(--edge); background:radial-gradient(ellipse at 50% 30%,rgba(141, 124, 180,.14),transparent 70%),#06040f; }
 .np-art { display:grid; place-items:center; height:130px; overflow:hidden; }
 .np-art img { width:100%; height:100%; object-fit:contain; }
 .np-art.banner { padding:14px; } .np-art.banner svg { height:80px; }

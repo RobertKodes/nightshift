@@ -110,7 +110,6 @@ export const SECTIONS: SiteSection[] = [
       { path: "/setup", group: "About the site", title: "Site administrator setup", line: "Configure the site with your administrator access key.", keywords: "admin configure settings setup operations environment", wallet: "optional" },
       { path: "/terms", group: "Rules and safety", title: "Terms and risks", line: "Read the terms for using NIGHTSHIFT.", keywords: "legal terms conditions risks policy", wallet: "none" },
       { path: "/privacy", group: "Rules and safety", title: "Your data privacy", line: "See how the site handles your data.", keywords: "privacy data cookies personal information", wallet: "none" },
-      { path: "/story", group: "About the site", title: "The NIGHTSHIFT story", line: "Visit the original illustrated introduction to NIGHTSHIFT.", keywords: "story brand illustrated station introduction", wallet: "none" },
       { path: "/llms.txt", group: "About the site", title: "Agent reading guide", line: "Read the plain text guide for AI agents.", keywords: "llms text documentation agent AI machine readable", wallet: "none" },
       { path: "/imd-status/", group: "Activity", title: "IMD service status", line: "Check the published status of the IMD swarm.", keywords: "IMD uptime status service health", wallet: "none" },
     ],

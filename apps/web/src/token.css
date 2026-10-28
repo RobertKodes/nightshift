@@ -1,13 +1,13 @@
 /* The token hub lives inside the shared NIGHTSHIFT shell. */
 .tk {
-  --uv: #7c5cff;
-  --uv-hi: #a48bff;
-  --acid: #b8ff4a;
-  --ink: #f2efff;
-  --dim: #a9a3c4;
-  --faint: #6c6688;
-  --glass: rgba(10, 8, 22, .62);
-  --edge: rgba(164, 139, 255, .28);
+  --uv: #8d7cb4;
+  --uv-hi: #ad9bd2;
+  --acid: #7fd6a6;
+  --ink: #e7ebf0;
+  --dim: #a2acb9;
+  --faint: #7b8592;
+  --glass: rgba(17, 22, 29, .62);
+  --edge: rgba(150, 160, 175, .28);
   max-width: 1100px;
   min-width: 0;
   margin: 0 auto;
@@ -31,7 +31,7 @@
 .tk .tk-refresh { font: 400 9px/1.7 var(--mono); letter-spacing: .1em; color: var(--faint); }
 .tk .tk-status { display: inline-flex; align-items: center; gap: 8px; font: 500 9px/1.5 var(--mono); letter-spacing: .12em; color: var(--dim); }
 .tk .tk-status i { width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
-.tk .tk-status.is-live i { background: var(--acid); box-shadow: 0 0 10px rgba(184, 255, 74, .35); }
+.tk .tk-status.is-live i { background: var(--acid); box-shadow: 0 0 10px rgba(127, 214, 166, .35); }
 .tk .tk-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 30px; border: 1px solid var(--edge); background: var(--glass); }
 .tk .tk-action { display: flex; flex-direction: column; min-width: 0; }
 .tk .tk-action + .tk-action { border-left: 1px solid var(--edge); }
@@ -55,24 +55,24 @@
 .tk .tk-action-link:hover .icon { transform: translateX(3px); }
 .tk .tk-market-links { display: flex; }
 .tk .tk-market-links a { display: grid; place-items: center; width: 30px; height: 38px; color: var(--dim); }
-.tk .tk-market-links a:hover { color: var(--uv-hi); background: rgba(124, 92, 255, .1); }
+.tk .tk-market-links a:hover { color: var(--uv-hi); background: rgba(141, 124, 180, .1); }
 .tk .tk-footer-note { font: 400 8px var(--mono); letter-spacing: .1em; color: var(--faint); }
 .tk .tk-frog-action .tk-action-footer > .icon { margin-right: 9px; color: var(--faint); }
-.tk .tk-notice { display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px; margin-top: 20px; color: #ffc46b; border: 1px solid rgba(255, 196, 107, .3); background: rgba(255, 196, 107, .04); font-size: 13px; }
+.tk .tk-notice { display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px; margin-top: 20px; color: #d9ad66; border: 1px solid rgba(217, 173, 102, .3); background: rgba(217, 173, 102, .04); font-size: 13px; }
 .tk .tk-notice .icon { margin-top: 2px; }
 .tk .tk-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .93fr); gap: 64px; align-items: start; margin-top: 40px; }
-.tk .tk-contract-box { min-width: 0; scroll-margin-top: 108px; border: 1px solid var(--edge); background: radial-gradient(ellipse at 0 0, rgba(124, 92, 255, .1), transparent 65%), var(--glass); box-shadow: 0 16px 80px -45px rgba(124, 92, 255, .45); }
+.tk .tk-contract-box { min-width: 0; scroll-margin-top: 108px; border: 1px solid var(--edge); background: radial-gradient(ellipse at 0 0, rgba(141, 124, 180, .1), transparent 65%), var(--glass); box-shadow: 0 16px 80px -45px rgba(141, 124, 180, .45); }
 .tk .tk-contract-header { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 22px 22px 18px; }
 .tk .tk-token-name { display: flex; align-items: center; gap: 12px; }
 .tk .tk-token-name h2 { font: 500 22px/1 var(--mono); letter-spacing: -.04em; }
-.tk .tk-token-mark { display: grid; place-items: center; width: 38px; height: 38px; color: var(--uv-hi); border: 1px solid var(--edge); border-radius: 50%; background: rgba(124, 92, 255, .1); box-shadow: 0 0 22px rgba(124, 92, 255, .16); }
+.tk .tk-token-mark { display: grid; place-items: center; width: 38px; height: 38px; color: var(--uv-hi); border: 1px solid var(--edge); border-radius: 50%; background: rgba(141, 124, 180, .1); box-shadow: 0 0 22px rgba(141, 124, 180, .16); }
 .tk .tk-contract-header > .tk-label { font-size: 9px; }
 .tk .tk-address { display: grid; gap: 8px; padding: 0 22px 20px; border-bottom: 1px solid var(--edge); }
 .tk .tk-address > .tk-label { font-size: 8px; color: var(--faint); }
 .tk .tk-address > div, .tk .tk-contracts td > div { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .tk .tk-address a { flex: 1; min-width: 0; font: 400 10px/1.7 var(--mono); overflow-wrap: anywhere; color: var(--dim); }
 .tk .tk-copy { flex: none; min-width: 47px; min-height: 30px; padding: 5px 6px; background: transparent; border: 1px solid var(--edge); color: var(--uv-hi); font: 500 8px var(--mono); letter-spacing: .08em; }
-.tk .tk-copy:hover { border-color: var(--uv-hi); background: rgba(124, 92, 255, .1); }
+.tk .tk-copy:hover { border-color: var(--uv-hi); background: rgba(141, 124, 180, .1); }
 .tk .tk-address-empty { color: var(--dim); font: 400 12px var(--mono); }
 .tk .tk-swap-loading { min-height: 280px; display: grid; place-items: center; padding: 24px; color: var(--dim); }
 /* Reuse the actual /swap controls. These overrides only affect this hub. */
@@ -80,9 +80,9 @@
 .tk .swap-card > .tkn-head, .tk .swap-links { display: none; }
 .tk .swap-tabs { gap: 0; margin: 0; border-bottom: 1px solid var(--edge); }
 .tk .swap-tabs button { padding: 12px 10px; border: 0; border-bottom: 1px solid transparent; margin-bottom: -1px; font: 500 11px var(--mono); letter-spacing: .08em; color: var(--faint); }
-.tk .swap-tabs button.on { border-bottom-color: var(--uv-hi); color: var(--ink); background: rgba(124, 92, 255, .07); }
+.tk .swap-tabs button.on { border-bottom-color: var(--uv-hi); color: var(--ink); background: rgba(141, 124, 180, .07); }
 .tk .swap-box { gap: 12px; min-width: 0; }
-.tk .swap-leg { min-width: 0; padding: 15px; border: 1px solid var(--edge); background: rgba(3, 2, 10, .4); }
+.tk .swap-leg { min-width: 0; padding: 15px; border: 1px solid var(--edge); background: rgba(8, 11, 16, .4); }
 .tk .swap-leg > span { font-size: 9px; letter-spacing: .1em; color: var(--dim); }
 .tk .swap-leg > div { gap: 10px; min-width: 0; }
 .tk .swap-in { font: 400 29px/1.3 var(--mono); color: var(--ink); }
@@ -92,7 +92,7 @@
 .tk .swap-slip { gap: 5px; font-size: 11px; margin: 3px 0; }
 .tk .swap-slip > span { margin-right: auto; color: var(--dim); }
 .tk .swap-slip button { min-height: 30px; padding: 4px 8px; border-color: var(--edge); font-size: 10px; }
-.tk .swap-slip button.on { color: var(--uv-hi); border-color: var(--uv-hi); background: rgba(124, 92, 255, .08); }
+.tk .swap-slip button.on { color: var(--uv-hi); border-color: var(--uv-hi); background: rgba(141, 124, 180, .08); }
 .tk .swap-box .ns-cta { min-height: 46px; height: auto; padding: 13px 10px; font-size: 10px; letter-spacing: .09em; white-space: normal; line-height: 1.6; cursor: pointer; box-shadow: 0 6px 25px -12px var(--uv); }
 .tk .swap-box .ns-cta:disabled { cursor: not-allowed; opacity: .45; box-shadow: none; }
 .tk .swap-box p, .tk .tkn-warn { overflow-wrap: anywhere; }
@@ -105,7 +105,7 @@
 .tk .tk-timeline li::before { content: ""; position: absolute; left: 5px; top: 11px; bottom: -5px; width: 1px; background: var(--edge); }
 .tk .tk-timeline li:last-child { padding-bottom: 0; }
 .tk .tk-timeline li:last-child::before { display: none; }
-.tk .tk-timeline-dot { position: relative; z-index: 1; width: 5px; height: 5px; margin: 6px 0 0 3px; border-radius: 50%; background: var(--uv-hi); box-shadow: 0 0 8px rgba(124, 92, 255, .3); }
+.tk .tk-timeline-dot { position: relative; z-index: 1; width: 5px; height: 5px; margin: 6px 0 0 3px; border-radius: 50%; background: var(--uv-hi); box-shadow: 0 0 8px rgba(141, 124, 180, .3); }
 .tk .tk-timeline .tk-label { font-size: 9px; color: var(--faint); }
 .tk .tk-timeline p { margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: var(--dim); }
 .tk .tk-timeline-missing { color: var(--faint); font-size: 11px; }
@@ -119,7 +119,7 @@
 .tk .tk-supply h2 b { font: 400 .8em var(--mono); letter-spacing: -.055em; }
 .tk .tk-supply h2 em { color: var(--ink); }
 .tk .tk-supply h2 > span:last-child em { color: var(--uv-hi); }
-.tk .tk-supply-bar { display: flex; height: 12px; width: 100%; background: rgba(164, 139, 255, .06); border: 1px solid var(--edge); overflow: hidden; }
+.tk .tk-supply-bar { display: flex; height: 12px; width: 100%; background: rgba(150, 160, 175, .06); border: 1px solid var(--edge); overflow: hidden; }
 .tk .tk-supply-bar > span { height: 100%; flex-shrink: 0; }
 .tk .tk-circulating { background: var(--uv); }
 .tk .tk-staked { background: #c5b7ff; }
@@ -137,7 +137,7 @@
 .tk .tk-fee-grid article > b span { font-size: 23px; }
 .tk .tk-fee-grid h3 { min-height: 41px; margin: 22px 0 12px; font-size: 13px; font-weight: 500; line-height: 1.6; }
 .tk .tk-fee-grid p { color: var(--dim); font-size: 11px; line-height: 1.8; }
-.tk .tk-burn-tile { background: rgba(124, 92, 255, .04); }
+.tk .tk-burn-tile { background: rgba(141, 124, 180, .04); }
 .tk .tk-burn-totals { display: flex; align-items: center; gap: 14px; padding: 18px 0 0; }
 .tk .tk-burn-totals > .icon { color: var(--uv-hi); }
 .tk .tk-burn-totals > div { display: flex; flex-wrap: wrap; gap: 8px 24px; }
@@ -149,13 +149,13 @@
 .tk .tk-heading-row > .tk-label { font-size: 9px; }
 .tk .tk-checks { list-style: none; margin: 24px 0 0; padding: 0; }
 .tk .tk-checks[hidden] { display: none; }
-.tk .tk-checks li { display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid rgba(164, 139, 255, .13); padding: 13px 0; }
+.tk .tk-checks li { display: flex; align-items: flex-start; gap: 12px; border-bottom: 1px solid rgba(150, 160, 175, .13); padding: 13px 0; }
 .tk .tk-checks li > .icon { margin-top: 2px; }
 .tk .tk-checks li > div { min-width: 0; flex: 1; }
 .tk .tk-checks b { display: block; font-size: 12px; font-weight: 500; line-height: 1.6; }
 .tk .tk-checks li > div > span { display: block; margin-top: 3px; color: var(--dim); font: 400 11px/1.7 var(--mono); overflow-wrap: anywhere; }
 .tk .tk-check-pass { color: var(--acid); }
-.tk .tk-check-alert { color: #ffc46b; }
+.tk .tk-check-alert { color: #d9ad66; }
 .tk .tk-check-result { margin-top: 3px; color: var(--faint); font: 400 8px/1.7 var(--mono); letter-spacing: .1em; }
 .tk .tk-expand { display: inline-flex; gap: 12px; align-items: center; padding: 14px 0 0; background: none; border: 0; color: var(--uv-hi); font: 500 9px var(--mono); letter-spacing: .1em; }
 .tk .tk-expand .icon { transform: rotate(90deg); }
@@ -166,7 +166,7 @@
 .tk .tk-contracts th:first-child { width: 24%; }
 .tk .tk-contracts tbody th { color: var(--dim); font: 400 12px/1.6 var(--sans); text-align: left; text-transform: none; letter-spacing: 0; }
 .tk .tk-contracts th, .tk .tk-contracts td { border-bottom: 0; }
-.tk .tk-contracts tbody th, .tk .tk-contracts td { padding: 13px 0; border-top: 1px solid rgba(164, 139, 255, .13); }
+.tk .tk-contracts tbody th, .tk .tk-contracts td { padding: 13px 0; border-top: 1px solid rgba(150, 160, 175, .13); }
 .tk .tk-contracts td > div { justify-content: space-between; }
 .tk .tk-contract-link { display: inline-flex; align-items: center; gap: 9px; min-width: 0; font: 400 11px/1.8 var(--mono); color: var(--dim); }
 .tk .tk-contract-link > span { min-width: 0; overflow-wrap: anywhere; }
@@ -225,7 +225,7 @@
   .tk .tk-fee-grid article + article { border-left: 0; border-top: 1px solid var(--edge); }
   .tk .tk-fee-grid h3 { min-height: 0; }
   .tk .tk-contracts thead { display: none; }
-  .tk .tk-contracts tbody tr { display: block; padding: 13px 0; border-top: 1px solid rgba(164, 139, 255, .13); }
+  .tk .tk-contracts tbody tr { display: block; padding: 13px 0; border-top: 1px solid rgba(150, 160, 175, .13); }
   .tk .tk-contracts tbody th, .tk .tk-contracts td { display: block; width: 100%; padding: 0; border: 0; }
   .tk .tk-contracts td { margin-top: 8px; }
   .tk .tk-contracts th:first-child { width: 100%; }

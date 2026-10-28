@@ -5,8 +5,8 @@ import { type Landed, type Live, PinballGame, type Rival, type Shot } from "./pi
 import type { Input } from "./pinball/engine";
 import { useSession } from "./session";
 import { InstallButton, useGameApp } from "./pinball/install";
-import { NxTabs as AppTabsNx } from "./nx/Shell";
-const AppTabs = (_: { active: string }) => <AppTabsNx room="breakroom" />;
+import { StationTabs } from "./site/StationTabs";
+const AppTabs = (_: { active: string }) => <StationTabs active="play" />;
 import { type Seat, StakeLobby, StakeResult, useEscrow } from "./stakes";
 import { alertJoined, doneWaiting, keepSeat, keepWaiting, Lounge, primeAlerts, waitText } from "./games/lounge";
 import { useStakedSeat } from "./games/staked";

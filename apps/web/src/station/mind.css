@@ -1,17 +1,17 @@
 /* SWARM MIND: the ask box, the answer with its numbered sources, and the works found */
 .mind-form input { min-width: 0; }
 .mind-asks { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
-.mind-ask { min-height: 34px; padding: 0 12px; border: 1px solid rgba(74, 216, 255, .28); background: rgba(74, 216, 255, .06); color: var(--ink, #eef); font: 500 13px Inter, system-ui, sans-serif; border-radius: 999px; cursor: pointer; text-align: left; }
-.mind-ask:hover:not(:disabled) { border-color: #4ad8ff; }
+.mind-ask { min-height: 34px; padding: 0 12px; border: 1px solid rgba(143, 183, 200, .28); background: rgba(143, 183, 200, .06); color: var(--ink, #eef); font: 500 13px Inter, system-ui, sans-serif; border-radius: 999px; cursor: pointer; text-align: left; }
+.mind-ask:hover:not(:disabled) { border-color: #8fb7c8; }
 .mind-ask:disabled { opacity: .5; cursor: default; }
-.mind-answer { display: grid; gap: 14px; border-left: 3px solid #4ad8ff; }
+.mind-answer { display: grid; gap: 14px; border-left: 3px solid #8fb7c8; }
 .mind-answer-text { margin: 0; font-size: 17px; line-height: 1.65; white-space: pre-wrap; }
-.mind-cite { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin: 0 2px; padding: 0 5px; border-radius: 6px; background: rgba(74, 216, 255, .16); color: #4ad8ff; font: 700 11px var(--mono, monospace); text-decoration: none; vertical-align: 2px; }
+.mind-cite { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin: 0 2px; padding: 0 5px; border-radius: 6px; background: rgba(143, 183, 200, .16); color: #8fb7c8; font: 700 11px var(--mono, monospace); text-decoration: none; vertical-align: 2px; }
 .mind-sources, .mind-hits { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .mind-sources a, .mind-hits a { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .02); color: inherit; text-decoration: none; border-radius: 10px; }
 .mind-sources a { grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; }
-.mind-sources a:hover, .mind-hits a:hover { border-color: rgba(74, 216, 255, .45); }
-.mind-n { grid-row: span 2; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: rgba(74, 216, 255, .16); color: #4ad8ff; font: 700 12px var(--mono, monospace); }
+.mind-sources a:hover, .mind-hits a:hover { border-color: rgba(143, 183, 200, .45); }
+.mind-n { grid-row: span 2; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: rgba(143, 183, 200, .16); color: #8fb7c8; font: 700 12px var(--mono, monospace); }
 .mind-sources b, .mind-hits b { font-size: 14.5px; line-height: 1.4; overflow-wrap: anywhere; }
 .mind-sources small, .mind-hits small { color: var(--dim, #9a98b0); font: 500 12px var(--mono, monospace); }
 .mind-hits span { color: var(--dim, #b6b3c9); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
@@ -22,16 +22,16 @@
 .mind-weather img { width: 160px; height: 160px; border-radius: 14px; }
 .mind-weather h3 { margin: 6px 0; }
 .mind-topics { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
-.mind-topics span { padding: 3px 9px; border-radius: 999px; background: rgba(184, 255, 74, .1); color: #b8ff4a; font: 600 12px var(--mono, monospace); }
+.mind-topics span { padding: 3px 9px; border-radius: 999px; background: rgba(127, 214, 166, .1); color: #7fd6a6; font: 600 12px var(--mono, monospace); }
 .mind-brief { display: grid; gap: 12px; }
 .mind-brief h3 { margin: 0; }
-.mind-brief-text { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid rgba(74, 216, 255, .3); background: rgba(255, 255, 255, .03); color: inherit; font: 15px/1.5 Inter, system-ui, sans-serif; border-radius: 10px; resize: vertical; }
+.mind-brief-text { width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid rgba(143, 183, 200, .3); background: rgba(255, 255, 255, .03); color: inherit; font: 15px/1.5 Inter, system-ui, sans-serif; border-radius: 10px; resize: vertical; }
 .mind-brief-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.mind-brief-row select { min-height: 44px; padding: 0 12px; border: 1px solid rgba(74, 216, 255, .3); background: #0b0a13; color: inherit; font: 14px Inter, system-ui, sans-serif; border-radius: 8px; }
+.mind-brief-row select { min-height: 44px; padding: 0 12px; border: 1px solid rgba(143, 183, 200, .3); background: #0b0a13; color: inherit; font: 14px Inter, system-ui, sans-serif; border-radius: 8px; }
 .mind-brief-out { display: grid; gap: 12px; font-size: 14.5px; line-height: 1.55; }
 .mind-brief-out ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
 .mind-brief-out small { color: var(--dim, #9a98b0); }
 .mind-brief-out pre { margin: 8px 0; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: rgba(0, 0, 0, .35); border-radius: 8px; font: 13.5px/1.55 var(--mono, monospace); }
-.mind-bad { padding: 10px 12px; border-left: 3px solid #ff6b7d; background: rgba(255, 107, 125, .06); }
-.mind-good { padding: 10px 12px; border-left: 3px solid #b8ff4a; background: rgba(184, 255, 74, .05); }
+.mind-bad { padding: 10px 12px; border-left: 3px solid #e07a86; background: rgba(224, 122, 134, .06); }
+.mind-good { padding: 10px 12px; border-left: 3px solid #7fd6a6; background: rgba(127, 214, 166, .05); }
 @media (max-width: 560px) { .mind-weather { grid-template-columns: 1fr; } .mind-weather img { width: 120px; height: 120px; } }

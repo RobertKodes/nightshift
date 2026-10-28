@@ -4,10 +4,9 @@ import { type Health, api, noteFirstTouch } from "./api";
 import { CompanyPage } from "./CompanyPage";
 import { Home } from "./Home";
 import { type Active } from "./landing/chrome";
-import { RoomShell } from "./nx/Shell";
-import { roomOf } from "./nx/map";
+import { LegacyShell } from "./site/LegacyShell";
+
 import "./landing/app.css";
-import { Landing } from "./landing/Landing";
 import { McpPage } from "./McpPage";
 import { PublicPage } from "./PublicPage";
 import { useRoute } from "./router";
@@ -38,7 +37,6 @@ import "./lite"; // marks <html data-lite> before the first paint
 import "./landing/landing.css";
 import "./clarity.css";
 import { HowItWorksPage } from "./HowItWorksPage";
-import { UtilityLinks } from "./HowThisConnects";
 
 // where this visitor first came from, kept for the company they may start
 noteFirstTouch();
@@ -62,7 +60,6 @@ const MindPage = lazy(() => import("./station/Mind").then((x) => ({ default: x.M
 const LastspawnPage = lazy(() => import("./lastspawn/LastspawnPage").then((x) => ({ default: x.LastspawnPage })));
 const VerdictPage = lazy(() => import("./station/Services").then((x) => ({ default: x.VerdictPage })));
 const HookPage = lazy(() => import("./station/Services").then((x) => ({ default: x.HookPage })));
-const ShipPage = lazy(() => import("./ship/ShipPage").then((x) => ({ default: x.ShipPage })));
 const FeedPage = lazy(() => import("./station/Services").then((x) => ({ default: x.FeedPage })));
 const SniperPage = lazy(() => import("./station/Sniper").then((x) => ({ default: x.SniperPage })));
 const CrewsPage = lazy(() => import("./crews/CrewsPage").then((x) => ({ default: x.CrewsPage })));
@@ -70,6 +67,12 @@ const CrewPage = lazy(() => import("./crews/CrewsPage").then((x) => ({ default: 
 const WatchtowerPage = lazy(() => import("./crews/WatchtowerPage").then((x) => ({ default: x.WatchtowerPage })));
 const ConnectAgentPage = lazy(() => import("./crews/ConnectAgentPage").then((x) => ({ default: x.ConnectAgentPage })));
 const ProofPage = lazy(() => import("./crews/ProofPage").then((x) => ({ default: x.ProofPage })));
+
+/** Retired addresses land on the page that replaced them. */
+function Redirect({ to }: { to: string }) {
+  useEffect(() => { history.replaceState(null, "", to); dispatchEvent(new PopStateEvent("popstate")); }, [to]);
+  return null;
+}
 
 function App() {
   const path = useRoute();
@@ -81,7 +84,7 @@ function App() {
   // The front door is the bridge dashboard; its one button enters the station.
   if (seg.length === 0) return <Suspense fallback={<main style={{ minHeight: "100svh", background: "#0d0f12" }} />}><Welcome /></Suspense>;
   // Existing room URLs open the matching door; the story keeps its art.
-  if (seg[0] === "story") return <Landing />;
+  if (seg[0] === "story") return <Redirect to="/" />;
   // Hidden preview routes own their titles, shell and lazy-loaded scene.
   if (seg[0] === "new") {
     return <Suspense fallback={<main style={{ minHeight: "100svh", padding: "96px 24px", background: "#05030d", color: "#f4f0ff" }}><h1>NIGHTSHIFT</h1><p>Companies, AI tools, games, $SHIFT, Frogs, and public proof.</p><p>Loading the station preview...</p></main>}><NewHome /></Suspense>;
@@ -97,8 +100,8 @@ function App() {
   // NIGHT POOL brings its own three.js table and its own bar, like NIGHT CHESS
   if (seg[0] === "games" && seg[1] === "pool") return <Suspense fallback={<div className="arc-boot" />}><PoolPage /></Suspense>;
   // NIGHT POKER: its own page and bar, the cards drawn in code (no three.js)
-  // THE SHIP: the whole crew live in one isometric scene, full screen under the station bar (its own chunk)
-  if (seg[0] === "ship") return <Suspense fallback={<div className="arc-boot" />}><ShipPage /></Suspense>;
+  // the old isometric Ship and the illustrated story were replaced by the operations deck and the bridge
+  if (seg[0] === "ship") return <Redirect to="/new/ship" />;
   // NIGHT SNIPER: an app screen of its own (iOS layout: its own bars, its own tabs)
   if (seg[0] === "sniper") return <Suspense fallback={<div className="arc-boot" />}><SniperPage /></Suspense>;
   if (seg[0] === "games" && seg[1] === "poker") return <Suspense fallback={<div className="arc-boot" />}><PokerPage /></Suspense>;
@@ -146,7 +149,7 @@ function App() {
   // Each page names itself in the tab; pages that know more (a company, a product) set their own.
   document.title = `${seg[0] === "games" && seg[1] === "live" ? "Watch games" : TITLES[key ?? ""] ?? "Companies"} · NIGHTSHIFT`;
   void active;
-  return <RoomShell room={roomOf(path) ?? "geek"} path={path} lean={seg[0] === "games"}>{page}</RoomShell>;
+  return <LegacyShell path={path} clarity={["/services", "/games", "/token", "/how-it-works"].includes(path)}>{page}</LegacyShell>;
 }
 
 const TITLES: Record<string, string> = {
@@ -189,11 +192,4 @@ function Banners() {
   return path === "/" || path === "/new" || path.startsWith("/new/") || path === "/live" || path.startsWith("/live/") || path === "/tg" || path.startsWith("/tg/") ? null : <><WaitingBanner /><StakedBanner /></>;
 }
 
-/** Full-screen pages keep a small way to connect and get help. */
-function FullscreenUtilities() {
-  const path = useRoute();
-  if (!/^(\/games\/(pinball|chess|pool|poker)|\/live(?:\/|$)|\/story$|\/ship$|\/sniper$|\/play$|\/tg(?:\/|$))/.test(path)) return null;
-  return <aside className="clarity-floating" aria-label="Site links"><UtilityLinks /><details><summary>More</summary><nav className="clarity-start"><a href="/services">AI tools</a><a href="/games">Play</a><a href="/token">$SHIFT</a></nav><nav className="clarity-start"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/whitepaper">Whitepaper</a></nav></details></aside>;
-}
-
-createRoot(document.getElementById("root")!).render(<StrictMode><Crash><SessionProvider><App /><Banners /><FullscreenUtilities /></SessionProvider></Crash></StrictMode>);
+createRoot(document.getElementById("root")!).render(<StrictMode><Crash><SessionProvider><App /><Banners /></SessionProvider></Crash></StrictMode>);
