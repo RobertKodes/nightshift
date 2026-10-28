@@ -28,7 +28,7 @@ const read = async <T,>(url: string, init?: RequestInit): Promise<T> => {
 export function PartnersPage() {
   const [partners, setPartners] = useState<Partner[] | null>(null);
   const [f, setF] = useState({ chain: "ethereum" as Chain, token: "", chainName: "", project: "", website: "", x: "", telegram: "", docs: "", about: "", contact: "", post: "" });
-  const [picked, setPicked] = useState<string[]>(["badge"]), [busy, setBusy] = useState(""), [error, setError] = useState(""), [status, setStatus] = useState<Status | null>(null);
+  const [picked, setPicked] = useState<string[]>(["badge"]), [busy, setBusy] = useState(""), [applying, setApplying] = useState(false), [error, setError] = useState(""), [status, setStatus] = useState<Status | null>(null);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((v) => ({ ...v, [k]: e.target.value }));
   useEffect(() => {
     document.title = "Partner with NIGHTSHIFT";
@@ -73,35 +73,60 @@ export function PartnersPage() {
     } finally { setBusy(""); }
   }
 
+  const openForm = () => { setApplying(true); window.setTimeout(() => document.getElementById("pv-pt-apply-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); };
+
   return <div className="pv-partners">
-    <header className="pv-hub-heading">
-      <p className="pv-kicker">$SHIFT<span>ECOSYSTEM</span></p>
-      <h1>Partner with NIGHTSHIFT.</h1>
-      <p>Bring your token into the NIGHTSHIFT ecosystem. Applying is free: fill in the form, sign with your project's wallet and post that you applied. We review every application and announce our new partners.</p>
-    </header>
+    <section className="pv-pt-hero">
+      <div className="pv-pt-hero-copy">
+        <p className="pv-kicker">$SHIFT<span>ECOSYSTEM</span><span>PARTNERS</span></p>
+        <h1>Bring your token <span className="pv-hl">to the night shift.</span></h1>
+        <p>Partners get in front of NIGHTSHIFT holders, carry a partner badge on Token Deals and in our tools, and get announced to the whole community. Joining is free.</p>
+        <div className="pv-pt-cta">
+          <button type="button" className="pv-button pv-primary" onClick={openForm}>Apply now<SectionIcon id="arrow" /></button>
+          <a className="pv-button" href="#pv-pt-get">What partners get</a>
+        </div>
+        <ul className="pv-pt-proof"><li>Free to join</li><li>Any chain</li><li>Reviewed by hand</li></ul>
+      </div>
+      <div className="pv-pt-hero-art" aria-hidden="true">
+        <img src="/art/frog3d/partners-frog.webp" alt="" width="600" height="893" />
+        <div className="pv-pt-float" data-slot="0"><b>New partner 🤝</b><span>Announced to the NIGHTSHIFT community on Telegram and X</span></div>
+        <div className="pv-pt-float" data-slot="1"><em>PARTNER</em><b>Your token</b><span>Badge on every deal and in search</span></div>
+      </div>
+    </section>
 
     {status && <section className="pv-pt-status" data-state={status.status} aria-live="polite">
       <b>{status.status === "pending" ? "Application received" : status.status === "accepted" ? "You are a NIGHTSHIFT partner" : "Application declined"}</b>
       <p>{status.status === "pending" ? `${status.project} is in our review list (reference ${status.id}). We check every application by hand and announce new partners in our community.` : status.status === "accepted" ? `${status.project} was accepted. Welcome aboard.` : `${status.project} was not accepted this time${status.note ? `: ${status.note}` : ""}. You can apply again after 7 days.`}</p>
     </section>}
 
-    <section className="pv-pt-grid" aria-label="What partners get">{BENEFITS.map((b) => <div key={b.title} className="pv-pt-card"><b>{b.title}</b><p>{b.line}</p></div>)}</section>
+    <section aria-labelledby="pv-pt-list"><h2 id="pv-pt-list">Our partners</h2>
+      {partners?.length ? <div className="pv-pt-partners">{partners.map((p) => <article key={p.id} className="pv-pt-partner">
+        <div className="pv-pt-partner-head">{p.image ? <img src={p.image} alt="" width="40" height="40" loading="lazy" referrerPolicy="no-referrer" /> : <i aria-hidden="true">{p.name.slice(0, 1)}</i>}<div><b>{p.name}</b><span>{p.symbol ? `$${p.symbol} · ` : ""}{p.token.chainName}</span></div><em>PARTNER</em></div>
+        <p>{p.about}</p>
+        <code title={p.token.address}>{short(p.token.address)}</code>
+        <nav><a href={p.website} target="_blank" rel="noreferrer">Website</a><a href={p.x} target="_blank" rel="noreferrer">X</a><a href={p.telegram} target="_blank" rel="noreferrer">Telegram</a>{p.chart && <a href={p.chart} target="_blank" rel="noreferrer">Chart</a>}</nav>
+      </article>)}</div>
+        : <div className="pv-pt-partners">{[1, 2, 3].map((n) => <button key={n} type="button" className="pv-pt-slot" onClick={openForm}><i aria-hidden="true">+</i><b>Your project here</b><span>Be one of the first NIGHTSHIFT partners.</span></button>)}</div>}
+    </section>
 
-    <section className="pv-pt-steps" aria-labelledby="pv-pt-how"><h2 id="pv-pt-how">How it works</h2><ol>
+    <section aria-labelledby="pv-pt-get"><h2 id="pv-pt-get">What partners get</h2>
+      <div className="pv-pt-grid">{BENEFITS.map((b) => <div key={b.title} className="pv-pt-card"><b>{b.title}</b><p>{b.line}</p></div>)}</div>
+    </section>
+
+    <section className="pv-pt-holders">
+      <div><p className="pv-kicker">FOR HOLDERS</p><h2>More partners, more deals, more burn.</h2><p>Every partner token brings new deals to Token Deals. Every deal pays a fee to the FeeSplitter: 40% to $SHIFT stakers and NIGHT FROGS holders, 20% burned.</p></div>
+      <a className="pv-button" href="/deals">See Token Deals<SectionIcon id="arrow" /></a>
+    </section>
+
+    <section className="pv-pt-steps" aria-labelledby="pv-pt-how"><h2 id="pv-pt-how">How to join</h2><ol>
       <li><b>Fill in the form</b><span>Your token, your links and what you would like from the partnership.</span></li>
       <li><b>Sign with your wallet</b><span>The wallet that deployed or owns the token proves it is yours. It signs a message only: no transaction, no fee.</span></li>
       <li><b>Post that you applied</b><span>One public post on X or your Telegram channel, then paste its link here.</span></li>
       <li><b>We review and announce</b><span>We check the token and the project. When we accept, we announce you as an official partner.</span></li>
     </ol></section>
 
-    {!!partners?.length && <section aria-labelledby="pv-pt-list"><h2 id="pv-pt-list">Our partners</h2><div className="pv-pt-partners">{partners.map((p) => <article key={p.id} className="pv-pt-partner">
-      <div className="pv-pt-partner-head">{p.image ? <img src={p.image} alt="" width="40" height="40" loading="lazy" referrerPolicy="no-referrer" /> : <i aria-hidden="true">{p.name.slice(0, 1)}</i>}<div><b>{p.name}</b><span>{p.symbol ? `$${p.symbol} · ` : ""}{p.token.chainName}</span></div><em>PARTNER</em></div>
-      <p>{p.about}</p>
-      <code title={p.token.address}>{short(p.token.address)}</code>
-      <nav><a href={p.website} target="_blank" rel="noreferrer">Website</a><a href={p.x} target="_blank" rel="noreferrer">X</a><a href={p.telegram} target="_blank" rel="noreferrer">Telegram</a>{p.chart && <a href={p.chart} target="_blank" rel="noreferrer">Chart</a>}</nav>
-    </article>)}</div></section>}
-
-    <section className="pv-pt-form" aria-labelledby="pv-pt-apply">
+    {!applying ? <section className="pv-pt-open"><b>Ready?</b><p>The form takes about five minutes. Have your token address, your links and your project wallet at hand.</p><button type="button" className="pv-button pv-primary" onClick={openForm}>Apply now<SectionIcon id="arrow" /></button></section>
+      : <section className="pv-pt-form" id="pv-pt-apply-form" aria-labelledby="pv-pt-apply">
       <h2 id="pv-pt-apply">Apply</h2>
       <fieldset><legend>Your token</legend>
         <label>Chain<select value={f.chain} onChange={set("chain")}>{CHAINS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></label>
@@ -129,6 +154,6 @@ export function PartnersPage() {
         <button type="button" className="pv-button pv-primary" disabled={!!busy || status?.status === "pending"} onClick={() => void apply()}>{busy || (f.chain === "other" ? "Send the application" : "Sign with your wallet and apply")}</button>
         <p>{f.chain === "other" ? "Tokens on other chains are checked by hand." : "The wallet signs a message only. No transaction, no fee."}</p>
       </div>
-    </section>
+    </section>}
   </div>;
 }
