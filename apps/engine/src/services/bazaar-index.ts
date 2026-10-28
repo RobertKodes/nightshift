@@ -1,9 +1,17 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { Net } from "./net.js";
 
 export const BAZAAR_URL = "https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources";
 export const BAZAAR_TTL = 12 * 60 * 60_000;
+/**
+ * The Bazaar passed 100,000 listings: a full copy (100 MB on disk, several times that in memory) plus a crawl in
+ * progress ran the engine out of heap at every start. The index keeps at most this many listings, the first ones
+ * the Bazaar returns, and a file too large to load safely is skipped (a fresh pass replaces it).
+ */
+export const BAZAAR_MAX_ROWS = 30_000;
+const MAX_FILE_BYTES = 48 * 1024 * 1024;
+const sizeOk = (file: string) => stat(file).then((s) => s.size <= MAX_FILE_BYTES, () => false);
 export type Terms = { scheme: string; network: string; asset: string; payTo: string; amount: string; maxTimeoutSeconds: number };
 export type Listing = {
   resource: string; host: string; description: string; accepts: Terms[];
@@ -23,10 +31,10 @@ export function compactListing(raw: Record<string, unknown>, old: Listing | unde
   let url: URL;
   try { url = new URL(raw.resource); } catch { return null; }
   if (url.protocol !== "https:") return null;
-  const accepts: Terms[] = raw.accepts.slice(0, 20).filter((v): v is Terms => !!v && typeof v === "object" && ["scheme", "network", "asset", "payTo", "amount"].every((k) => typeof v[k] === "string")).map((v) => ({ scheme: v.scheme, network: v.network, asset: v.asset, payTo: v.payTo, amount: v.amount, maxTimeoutSeconds: v.maxTimeoutSeconds }));
+  const accepts: Terms[] = raw.accepts.slice(0, 6).filter((v): v is Terms => !!v && typeof v === "object" && ["scheme", "network", "asset", "payTo", "amount"].every((k) => typeof v[k] === "string")).map((v) => ({ scheme: v.scheme, network: v.network, asset: v.asset, payTo: v.payTo, amount: v.amount, maxTimeoutSeconds: v.maxTimeoutSeconds }));
   const quality = raw.quality as { lastCalledAt?: string } | undefined;
   return {
-    resource: url.href, host: url.host, description: String(raw.description ?? "").slice(0, 480), accepts,
+    resource: url.href, host: url.host, description: String(raw.description ?? "").slice(0, 240), accepts,
     lastUpdated: date(raw.lastUpdated), lastPaid: date(raw.lastPaid ?? raw.lastPaidAt), lastCalledAt: date(quality?.lastCalledAt), createdAt: date(raw.createdAt),
     firstObserved: old?.firstObserved ?? new Date(now).toISOString(),
     ...(old && signature(old.accepts) !== signature(accepts) ? { previousAccepts: old.accepts } : old?.previousAccepts ? { previousAccepts: old.previousAccepts } : {}),
@@ -50,7 +58,7 @@ export class BazaarIndex {
   #stopped = false;
   readonly #ready: Promise<void>;
   constructor(private readonly net: Net, private readonly file = join(process.env.DATA_DIR ?? "data", "bazaar-index.json"), private readonly now = Date.now, private readonly pause = (ms: number) => new Promise<void>((resolve) => { const t = setTimeout(resolve, ms); t.unref(); })) {
-    this.#ready = readFile(file, "utf8").then((s) => {
+    this.#ready = sizeOk(file).then((ok) => ok ? readFile(file, "utf8") : Promise.reject(new Error("too large"))).then((s) => {
       const v = JSON.parse(s) as BazaarSnapshot;
       if (v.version === 1 && v.byResource && typeof v.updatedAt === "number") this.#index = buildIndex(v.byResource, v.updatedAt);
     }).catch(() => {});
@@ -78,24 +86,26 @@ export class BazaarIndex {
     await this.#ready;
     if (this.#index.updatedAt && this.now() - this.#index.updatedAt < BAZAAR_TTL) return;
     let crawl: Crawl = { startedAt: this.now(), offset: 0, rows: {} };
-    try { const saved = JSON.parse(await readFile(`${this.file}.crawl.json`, "utf8")) as Crawl; if (saved.startedAt > this.#index.updatedAt && this.now() - saved.startedAt < BAZAAR_TTL && saved.offset >= 0 && saved.rows) crawl = saved; } catch { /* Start a new pass. */ }
+    try { if (!await sizeOk(`${this.file}.crawl.json`)) throw new Error("too large"); const saved = JSON.parse(await readFile(`${this.file}.crawl.json`, "utf8")) as Crawl; if (saved.startedAt > this.#index.updatedAt && this.now() - saved.startedAt < BAZAAR_TTL && saved.offset >= 0 && saved.rows) crawl = saved; } catch { /* Start a new pass. */ }
+    let count = Object.keys(crawl.rows).length;
     for (let pages = 0; pages < 200; pages++) {
       const page = await this.net.json<Page>(`${BAZAAR_URL}?limit=1000&offset=${crawl.offset}`, 3_000);
       if (!Array.isArray(page.items) || page.items.length > 1000) throw new Error("Invalid Bazaar page.");
       for (const raw of page.items) {
         const old = typeof raw.resource === "string" ? this.#index.byResource[raw.resource] ?? crawl.rows[raw.resource] : undefined;
         const row = compactListing(raw, old, this.now());
-        if (row) crawl.rows[row.resource] = row;
+        if (row && count < BAZAAR_MAX_ROWS) { if (!crawl.rows[row.resource]) count++; crawl.rows[row.resource] = row; }
       }
       const step = page.pagination?.limit ?? 1000;
       if (!Number.isInteger(step) || step < 20 || step > 1000 || (page.pagination?.offset != null && page.pagination.offset !== crawl.offset)) throw new Error("Invalid Bazaar pagination.");
       crawl.offset += step;
-      if (!page.items.length || (page.pagination?.total != null ? crawl.offset >= page.pagination.total : page.items.length < step)) {
+      if (count >= BAZAAR_MAX_ROWS || !page.items.length || (page.pagination?.total != null ? crawl.offset >= page.pagination.total : page.items.length < step)) {
         const next = buildIndex(crawl.rows, this.now());
         await this.#save(this.file, next); this.#index = next;
         return;
       }
-      await this.#save(`${this.file}.crawl.json`, crawl);
+      // a checkpoint every ten pages: each one writes the whole pass so far
+      if (pages % 10 === 0) await this.#save(`${this.file}.crawl.json`, crawl);
       await this.pause(600);
     }
     throw new Error("Bazaar crawl page bound reached; checkpoint retained.");
