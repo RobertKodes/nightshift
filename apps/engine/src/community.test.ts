@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { bskyFresh } from "./community.js";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { bskyFresh, chats, learnCommunityIds } from "./community.js";
+import { config } from "./config.js";
 
 const post = (id: string, at: string) => ({ post: { uri: `at://did/app.bsky.feed.post/${id}`, record: { createdAt: at } } });
 const now = Date.parse("2026-10-28T12:00:00Z");
@@ -22,5 +26,22 @@ describe("the Bluesky relay", () => {
     expect(bskyFresh(st, [f, e, d, a, b], now)).toEqual([]);
     // an old post the feed shows again, or one more than a day old, is never relayed
     expect(bskyFresh(st, [post("old", "2026-10-26T10:00:00Z"), f], now)).toEqual([]);
+  });
+});
+
+describe("the community group's id", () => {
+  it("is learnt while @getnightshift is the group, and kept when the name moves to the portal channel", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "community-"));
+    Object.assign(config, { telegramToken: "123:test", telegramCommunity: "@getnightshift", dataDir: dir });
+    let answer = { id: -1001234567890, type: "supergroup" };
+    const lookup = async () => answer;
+    expect(chats()).toEqual(["@getnightshift"]);
+    await learnCommunityIds(lookup);
+    expect(chats()).toEqual(["-1001234567890"]);
+    // the group went private and the portal channel took the name: the group's id stays, also after a restart
+    answer = { id: -1009999999999, type: "channel" };
+    await learnCommunityIds(lookup);
+    expect(chats()).toEqual(["-1001234567890"]);
+    expect(JSON.parse(readFileSync(join(dir, "community-chats.json"), "utf8"))).toEqual({ "@getnightshift": "-1001234567890" });
   });
 });

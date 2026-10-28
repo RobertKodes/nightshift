@@ -46,7 +46,26 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 /** Running totals of what the fee split burned, as the burn watcher counted them. */
 export const burnTotals = () => { const s = load(); return { shift: s.burnedShift ?? 0, imd: s.burnedImd ?? 0 }; };
 
-export const chats = () => config.telegramCommunity.split(",").map((x) => x.trim()).filter(Boolean);
+/**
+ * The community chats the bot posts to. A @name in TELEGRAM_COMMUNITY is looked up once and the group's numeric id
+ * kept, so the group keeps working when it turns private and its name moves to the Safeguard portal channel.
+ */
+const named = () => config.telegramCommunity.split(",").map((x) => x.trim()).filter(Boolean);
+const idsFile = () => join(config.dataDir, "community-chats.json");
+let ids: Record<string, string> | null = null;
+const known = (): Record<string, string> => (ids ??= (() => { try { return existsSync(idsFile()) ? JSON.parse(readFileSync(idsFile(), "utf8")) as Record<string, string> : {}; } catch { return {}; } })());
+export const chats = () => named().map((c) => (c.startsWith("@") && known()[c.toLowerCase()]) || c);
+/** Remembers the group behind each @name while the name still points at a group (a channel, like the portal, is never taken). */
+export async function learnCommunityIds(lookup = (name: string) => tgCall<{ id: number; type: string }>(config.telegramToken, "getChat", { chat_id: name })): Promise<void> {
+  if (!config.telegramToken) return;
+  const k = known();
+  let changed = false;
+  for (const c of named().filter((x) => x.startsWith("@") && !k[x.toLowerCase()])) {
+    const r = await lookup(c);
+    if (r && (r.type === "supergroup" || r.type === "group")) { k[c.toLowerCase()] = String(r.id); changed = true; }
+  }
+  if (changed) writeFileSync(idsFile(), JSON.stringify(k));
+}
 
 export type Buy = { usd: number; imd: number; tokens: number; buyer: string; tx: string; newHolder: boolean; position: number; mcap: number; liquidity: number; wallet?: number; test?: boolean };
 
@@ -352,6 +371,7 @@ export async function publicCommand(cmd: string, args: string[] = []): Promise<{
 /** Runs the watchers. Every step is free and safe to retry. */
 export function startCommunity(): void {
   if (!config.telegramToken || !chats().length) return;
+  void learnCommunityIds().catch(() => {});
   const st = load();
   const tick = async () => {
     try {

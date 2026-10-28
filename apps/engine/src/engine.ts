@@ -571,7 +571,7 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
     if (cmd === "watchroom") {
       if (!ctx?.group) return { text: "Send /watchroom inside the private Night Watchers group, after adding me there as an admin." };
       const community = config.telegramCommunity;
-      if (ctx.chat === community || (community.startsWith("@") && ctx.chat === String(await tgCall<{ id: number }>(config.telegramToken, "getChat", { chat_id: community }).then((c) => c?.id ?? "").catch(() => "")))) return { text: "⚠️ This is the public community chat, not a private group." };
+      if (chats().includes(ctx.chat) || ctx.chat === community || (community.startsWith("@") && ctx.chat === String(await tgCall<{ id: number }>(config.telegramToken, "getChat", { chat_id: community }).then((c) => c?.id ?? "").catch(() => "")))) return { text: "⚠️ This is the public community chat, not a private group." };
       const me = await tgCall<{ status: string; can_invite_users?: boolean; can_restrict_members?: boolean }>(config.telegramToken, "getChatMember", { chat_id: ctx.chat, user_id: Number(config.telegramToken.split(":")[0]) }).catch(() => null);
       if (me?.status !== "administrator" || !me.can_invite_users || !me.can_restrict_members) return { text: "⚠️ Make me an admin of this group with the rights <b>Invite users via link</b> and <b>Ban users</b>, then send /watchroom again." };
       writeSettings({ WATCH_ROOM_CHAT: ctx.chat });
