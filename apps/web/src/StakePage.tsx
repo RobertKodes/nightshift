@@ -1,3 +1,4 @@
+import { ethTransport } from "./ethRpc";
 import { useEffect, useRef, useState } from "react";
 import { LIVE_LAUNCH, SHIFT, fetchLaunch } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, fallback, formatEther, http, parseAbi, parseAbiItem, parseEther } from "viem";
@@ -7,7 +8,7 @@ import { useSession } from "./session";
 import { type Step, canBatch, sendSteps } from "./batch";
 import { StakedSupply } from "./StakedCounter";
 
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 // publicnode refuses logs older than its recent window, so the stake history is read from nodes that serve them
 const logs = createPublicClient({ chain: mainnet, transport: fallback([http("https://rpc.mevblocker.io"), http("https://eth.drpc.org"), http("https://ethereum-rpc.publicnode.com")]) });
 /** ShiftRewards, as fixed in the launch spec IMD checked: stake with a lock, withdraw unlocked, claim. */

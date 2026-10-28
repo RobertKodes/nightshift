@@ -1,8 +1,9 @@
+import { ethTransport } from "./ethRpc";
 import { useEffect, useState } from "react";
 import { type Address, createPublicClient, erc20Abi, http } from "viem";
 import { mainnet } from "viem/chains";
 
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 const POOL_MANAGER: Address = "0x000000000004444c5dc75cB358380D2e3dE08A90";
 const DEAD: Address = "0x000000000000000000000000000000000000dEaD";
 const SWARM: Address = "0x0d4dd35026087e720033786578a7e718c8b34897";

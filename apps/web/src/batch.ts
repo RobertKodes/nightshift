@@ -1,3 +1,4 @@
+import { ethTransport } from "./ethRpc";
 import { type Abi, type Address, type Chain, type Hex, type PublicClient, type WalletClient, createPublicClient, http } from "viem";
 import { getCapabilities, sendCalls, waitForCallsStatus, writeContract } from "viem/actions";
 import { mainnet } from "viem/chains";
@@ -9,7 +10,7 @@ import { mainnet } from "viem/chains";
  * previous one confirmed. Approvals stay for the exact amount: the batch changes how many times
  * the person confirms, never what they allow.
  */
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 
 export type Call = { address: Address; abi: Abi | readonly unknown[]; functionName: string; args?: readonly unknown[]; value?: bigint };
 /**

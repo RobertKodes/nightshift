@@ -1,10 +1,11 @@
+import { ethTransport } from "./ethRpc";
 import { useEffect, useState } from "react";
 import { type Address, createPublicClient, createWalletClient, custom, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
 import { ESCROW } from "./stakes";
 
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 const DEV = "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5";
 const ABI = parseAbi(["function setSigner(address newSigner)", "function signer() view returns (address)"]);
 type State = { escrow: string; serverSigner: string; signer: string | null; paused: boolean | null; live: boolean; keeper: string; keeperEth: string; cursor: string };

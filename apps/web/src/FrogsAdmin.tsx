@@ -1,3 +1,4 @@
+import { ethTransport } from "./ethRpc";
 import { useEffect, useState } from "react";
 import { type Hex, createPublicClient, createWalletClient, custom, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
@@ -11,7 +12,7 @@ const ABI = parseAbi([
   "function revealRequested() view returns (bool)",
   "function revealed() view returns (bool)",
 ]);
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 /** Chainlink VRF v2.5 on Ethereum, the 200 gwei lane (docs.chain.link, checked 2026-10-17). */
 const LANE_200 = "0x8077df514608a09f83e4e8d300645594e5d7234665448ba83f51a50f842bd3d9";
 

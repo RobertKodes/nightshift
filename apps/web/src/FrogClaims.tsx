@@ -1,10 +1,11 @@
+import { ethTransport } from "./ethRpc";
 import { useState } from "react";
 import { SHIFT } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, formatEther, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
 
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 const REWARDS = parseAbi([
   "function claimFrogs(uint256 epoch, address token, uint256 amount, bytes32[] proof)",
   "function frogsClaimed(uint256 epoch, address token, address account) view returns (bool)",

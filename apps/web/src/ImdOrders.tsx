@@ -1,3 +1,4 @@
+import { ethTransport } from "./ethRpc";
 import { useEffect, useState } from "react";
 import { safeHref } from "./safe";
 import { chooseWallet } from "./wallet";
@@ -9,7 +10,7 @@ const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
 const INTAKE = "0xa43e6f75ee006411f79ac1c84120606c2330de82";
 const PRICE = 500000000000000000n; // 0.5 IMD
 const intakeAbi = parseAbi(["function request(bytes32 action, bytes body, (address target, bytes4 selector) callback, address asset, uint256 amount) returns (bytes32)"]);
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 const DEV = "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5";
 const TREASURY = "0x3322e6dd06ade8377f1f1bcb766f6133d7b64d69";
 /** The IMD intake actions an order may use. */

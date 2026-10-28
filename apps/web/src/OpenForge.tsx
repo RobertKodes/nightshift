@@ -1,3 +1,4 @@
+import { ethTransport } from "./ethRpc";
 import { useEffect, useState } from "react";
 import { createPublicClient, createWalletClient, custom, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
@@ -9,7 +10,7 @@ const RENDERER = "0x053471879f65f6b4f644635fbdd798b9d7c5e1f5";
 const SKIN = "0x8509cddf80cfc8cec4aaa3644b125de919da112e";
 const DEV = "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5";
 const ABI = parseAbi(["function renderer() view returns (address)", "function skin() view returns (address)", "function owner() view returns (address)", "function setRenderer(address r, address skin_)"]);
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const ZERO = /^0x0{40}$/;
 

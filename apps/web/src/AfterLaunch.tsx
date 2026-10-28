@@ -1,10 +1,11 @@
+import { ethTransport } from "./ethRpc";
 import { useEffect, useState } from "react";
 import { SHIFT } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
 
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 const DEV = "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5";
 /** Owner calls, as fixed in the launch spec: name the keeper, post a frog epoch's root. */
 const SPLITTER = parseAbi(["function setKeeper(address keeper)"]);

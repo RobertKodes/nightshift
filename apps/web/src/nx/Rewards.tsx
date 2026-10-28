@@ -1,3 +1,4 @@
+import { ethTransport } from "../ethRpc";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type Address, type Hex, createPublicClient, formatEther, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
@@ -16,7 +17,7 @@ import { PrizeLines } from "../games/prizes";
  * Every transaction is built here, to the contracts pinned in the page (ShiftRewards, GameEscrow),
  * dry-run first, and asks for no approval: a claim only ever pays out.
  */
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 const REWARDS = parseAbi(["function getReward()", "function claimFrogs(uint256 epoch, address token, uint256 amount, bytes32[] proof)"]);
 const ESCROW_ABI = parseAbi(["function settle(bytes32 matchId, address winner, bool draw, uint256 deadline, bytes signature)", "function refund(bytes32 matchId)"]);
 const ETH: Address = "0x0000000000000000000000000000000000000000";

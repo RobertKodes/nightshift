@@ -1,3 +1,4 @@
+import { ethTransport } from "./ethRpc";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import "./mswap/page.css";
 import { LIVE_LAUNCH, SHIFT, SHIFT_POOL, fetchLaunch } from "./shift";
@@ -10,7 +11,7 @@ import { type PoolKey, V4, permit2Abi, quoteArgs, quoterAbi, routerAbi, swapCall
 // the multichain swap and its provider code load with /swap only, not with every page
 const MultiSwap = lazy(() => import("./mswap/MultiSwap").then((m) => ({ default: m.MultiSwap })));
 
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 type Launch = { token?: string; symbol: string; open?: boolean; pool?: PoolKey } | null;
 const SLIPPAGE = [1, 3, 5, 10];
 const fmt = (v: bigint, d = 6) => { const n = Number(formatEther(v)); return n === 0 ? "0" : n < 1e-6 ? n.toExponential(2) : n.toLocaleString("en-US", { maximumFractionDigits: n >= 1000 ? 0 : d }); };

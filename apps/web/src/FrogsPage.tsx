@@ -1,3 +1,4 @@
+import { ethTransport } from "./ethRpc";
 import { useEffect, useState } from "react";
 import { FrogClaims } from "./FrogClaims";
 import { Icon } from "./Icon";
@@ -17,7 +18,7 @@ const FROGS = parseAbi([
   "function totalSupply() view returns (uint256)",
   "function mintedBy(address) view returns (uint256)",
 ]);
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 
 type Info = { on: boolean; address: string | null; extraSlots: number; stats: { minted: number; burned: number; price: number; revealed: boolean; revealRequested: boolean } | null; order: { stage: string; done: boolean; error: string | null; jobId: string | null } | null };
 

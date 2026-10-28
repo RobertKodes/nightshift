@@ -1,3 +1,4 @@
+import { ethTransport } from "./ethRpc";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPublicClient, createWalletClient, custom, erc20Abi, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
@@ -20,7 +21,7 @@ const NIGHT_FROGS = "0x55b8c762f1b86fe1d5406edaaae0f8ecf3688a0c";
 const FORGE: string = "0xbdff33cffc3f617f808a6de012a2574dbf69d819";
 const FORGE_ABI = parseAbi(["function forge(uint256[10] ids, uint8 minTier) returns (uint256)", "function fee() view returns (uint256)"]);
 const NF_ABI = parseAbi(["function isApprovedForAll(address owner, address operator) view returns (bool)", "function setApprovalForAll(address operator, bool approved)"]);
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 
 type Tier = { tier: number; roman: string; name: string; min: number; color: string; x: number; slots: number; crew: number };
 type Info = {

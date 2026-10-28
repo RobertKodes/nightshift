@@ -1,3 +1,4 @@
+import { ethTransport } from "./ethRpc";
 import { useEffect, useState } from "react";
 import { type Hex, createPublicClient, createWalletClient, custom, erc20Abi, http, parseAbi, stringToHex } from "viem";
 import { mainnet } from "viem/chains";
@@ -9,7 +10,7 @@ const INTAKE = "0xa43e6f75ee006411f79ac1c84120606c2330de82";
 const PRICE = 500000000000000000n; // 0.5 IMD
 const DEV = "0x6c4c78f2c3bdf4c4318fe305fb1c8bc1694d19b5";
 const intakeAbi = parseAbi(["function request(bytes32 action, bytes body, (address target, bytes4 selector) callback, address asset, uint256 amount) returns (bytes32)"]);
-const rpc = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const TREASURY = "0x3322e6dd06ade8377f1f1bcb766f6133d7b64d69";
 /** The IMD intake actions an order may use. */
