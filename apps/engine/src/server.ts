@@ -61,6 +61,7 @@ import { watchRoutes } from "./watch-routes.js";
 import { shipRoutes } from "./ship-routes.js";
 import { arenaRoutes } from "./arena-routes.js";
 import { joinRoutes } from "./agent-join-routes.js";
+import { liveStakeHistory } from "./stake-history.js";
 import { leagueRoutes } from "./league-routes.js";
 import { stationRoutes, withPageHead } from "./station-routes.js";
 import { card, catalog, deliveryOf, detail, honestPitch, offerFor, productIdOf, search } from "./agentmarket.js";
@@ -832,6 +833,17 @@ export function serve(engine: Engine) {
         return json(res, 404, { error: "not found" });
       }
       if (p === "/api/wallet-config") return json(res, 200, walletConfig());
+      // ---- one wallet's stake history (the Stake page), from the index the server keeps
+      if (seg[0] === "api" && seg[1] === "stake" && seg[2] === "history" && req.method === "GET") {
+        const w = seg[3] ?? "";
+        if (seg.length !== 4 || !/^0x[0-9a-fA-F]{40}$/.test(w)) return json(res, 400, { error: "GET /api/stake/history/<wallet address>" });
+        if (limited(req, "stake-history", 30, 60_000)) return json(res, 429, { error: "slow down" });
+        const h = await liveStakeHistory().of(w).catch(() => undefined);
+        if (h === undefined) return json(res, 503, { error: "The stake history could not be read from Ethereum right now." });
+        if (h === null) return json(res, 404, { error: "Staking is not open." });
+        res.setHeader("Cache-Control", "no-store");
+        return json(res, 200, h);
+      }
       if (p === "/api/staked") {
         const staked = await stakedNow();
         return json(res, 200, { staked, supply: SUPPLY, pct: staked === null ? null : (staked / SUPPLY) * 100 });

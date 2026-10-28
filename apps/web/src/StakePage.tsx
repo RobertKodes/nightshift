@@ -28,8 +28,20 @@ type Stake = { amount: bigint; unlockAt: number; tx: string };
 const fmt = (v: bigint) => Number(formatEther(v)).toLocaleString("en-US", { maximumFractionDigits: 2 });
 const errText = (e: unknown) => ((e as { shortMessage?: string }).shortMessage ?? (e as Error).message ?? "").split("\n")[0]!.slice(0, 160);
 
-/** Reads the stake history, retrying: free nodes drop a request now and then. */
+/** The stake history the server keeps; null when it cannot answer. */
+async function serverHistory(who: Address) {
+  try {
+    const r = await fetch(`/api/stake/history/${who}`, { signal: AbortSignal.timeout(20_000) });
+    if (!r.ok) return null;
+    const d = await r.json() as { stakes: { amount: string; unlockAt: number; tx: string }[]; out: string; paidEth: string };
+    return { stakes: d.stakes.map((s) => ({ amount: BigInt(s.amount), unlockAt: s.unlockAt, tx: s.tx })), out: BigInt(d.out), paidEth: BigInt(d.paidEth) };
+  } catch { return null; }
+}
+
+/** Reads the stake history: from the server first, else from Ethereum directly, retrying (free nodes drop requests). */
 async function historyRetry(rewards: Address, who: Address, from: bigint) {
+  const kept = await serverHistory(who);
+  if (kept) return kept;
   for (let i = 0; ; i++) {
     try { return await history(rewards, who, from); } catch (e) { if (i >= 2) throw e; await new Promise((r) => setTimeout(r, 1500 * (i + 1))); }
   }
