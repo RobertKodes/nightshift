@@ -110,7 +110,7 @@ export function ServicesPage() {
     </Hero>
     <div className="st-body">
       <nav className="clarity-start" aria-label="AI tool outcomes"><a href="#check-token">Check a token</a><a href="#test-api">Test an API</a><a href="#research">Research</a><a href="#swarm-desk">Hire the swarm</a><a href="#quick-lookups">Quick lookups</a></nav>
-      <section id="check-token" className="svc-outcome"><h2 id="check-a-token">Check a token</h2><p className="st-note">Token monitor checks changes on Ethereum tokens and hooks. Token Verdict gives a before-buy assessment with reasons and evidence; unsupported checks are stated.</p>
+      <section id="check-token" className="svc-outcome"><h2>Check a token</h2><p className="st-note">Token monitor checks changes on Ethereum tokens and hooks. Token Verdict gives a before-buy assessment with reasons and evidence; unsupported checks are stated.</p>
         <Tiles items={[{ to: "/watchtower", title: "Token monitor", note: "Try a free sample, compare changes, or choose a prepaid seven-day watch.", icon: "shield", tag: "FREE SAMPLE" }, { to: "/services/verdict", title: "Token Verdict", note: "Start with a free token preview or daily demo; choose a quick or deep paid report later.", icon: "shield", tag: "FREE PREVIEW" }, { to: "/services/hook", title: "Hook Inspector", note: "Decode a Uniswap v4 hook's permission bits free; paid inspection adds source checks.", icon: "code" }]} />
         {offers(["watchtower-check", "watchtower-watch", "token-verdict-quick", "token-verdict-deep", "hook-inspector", "hook-inspector-explained"])}
       </section>
