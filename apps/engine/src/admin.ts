@@ -1,4 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+import { existsSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { IncomingMessage } from "node:http";
 import { isAddress } from "viem";
 import { isCdpSecret } from "@nightshift/x402";
@@ -9,6 +11,26 @@ import { swapSettings } from "./swap.js";
 import { socialLogin } from "./wallet-config.js";
 
 export const ADMIN = adminToken();
+
+/** A new /setup token from the dashboard, kept in the data folder; refused when ADMIN_TOKEN is set on the server (it would come back on restart). */
+export function rotateAdminToken(): string {
+  if (!ADMIN.generated) throw new Error("ADMIN_TOKEN is set in the server's environment; change it there.");
+  const next = randomBytes(24).toString("base64url");
+  writeFileSync(join(config.dataDir, "admin-token"), next, { mode: 0o600 });
+  ADMIN.token = next;
+  return next;
+}
+
+/** The copies the Bazaar index fix (v0.350) left behind: safe to delete once the capped index works. */
+const OLD_BACKUPS = ["bazaar-index.json.bak", "bazaar-index.json.crawl.json.bak"];
+export function oldBackups(): { name: string; bytes: number }[] {
+  return OLD_BACKUPS.flatMap((name) => { const f = join(config.dataDir, name); return existsSync(f) ? [{ name, bytes: statSync(f).size }] : []; });
+}
+export function deleteOldBackups(): { name: string; bytes: number }[] {
+  const gone = oldBackups();
+  for (const b of gone) unlinkSync(join(config.dataDir, b.name));
+  return gone;
+}
 
 export function isAdmin(req: IncomingMessage): boolean {
   const got = Buffer.from(String(req.headers["x-admin-token"] ?? ""));

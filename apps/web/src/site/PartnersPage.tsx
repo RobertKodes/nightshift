@@ -12,6 +12,12 @@ const CHAINS: [Chain, string, number | null][] = [["ethereum", "Ethereum", 1], [
 type Partner = { id: string; name: string; about: string; website: string; x: string; telegram: string; docs: string | null; token: { chain: Chain; chainName: string; address: string }; symbol: string | null; image: string | null; chart: string | null; since: number };
 type Status = { id: string; status: "pending" | "accepted" | "declined"; project: string; at: number; decidedAt: number | null; note: string | null };
 const KEY = "ns-partner-application";
+const DRAFT = "ns-partner-draft";
+const BLANK = { chain: "ethereum" as Chain, token: "", chainName: "", project: "", website: "", x: "", telegram: "", docs: "", about: "", contact: "", post: "" };
+/** The form as it was typed: a phone that reloads the page on the way back from "Post on X" brings it all back. */
+function draft(): { f: Partial<typeof BLANK>; picked: string[] } | null {
+  try { const d = JSON.parse(localStorage.getItem(DRAFT) ?? "null") as { f?: Partial<typeof BLANK>; picked?: unknown } | null; return d?.f ? { f: d.f, picked: Array.isArray(d.picked) ? d.picked.map(String) : ["badge"] } : null; } catch { return null; }
+}
 /** The same choices the server accepts (partners.ts WANTS). */
 const WANTS: [string, string][] = [["badge", "Partner badge across NIGHTSHIFT"], ["deals", "Token Deals listings, when they open"], ["swap", "Their token in our swap"], ["watchtower", "Watchtower monitoring for holders"], ["agents", "Their token in our AI agent tools"], ["games", "Prizes and events in the games"], ["companies", "Work with our AI companies"]];
 /** The hero card: what a partner gets, for the chain the visitor picks. */
@@ -41,15 +47,18 @@ const read = async <T,>(url: string, init?: RequestInit): Promise<T> => {
 /** Projects apply to join the ecosystem with their token: a form, a signature, a public post, then our review. */
 export function PartnersPage() {
   const [partners, setPartners] = useState<Partner[] | null>(null);
-  const [f, setF] = useState({ chain: "ethereum" as Chain, token: "", chainName: "", project: "", website: "", x: "", telegram: "", docs: "", about: "", contact: "", post: "" });
-  const [picked, setPicked] = useState<string[]>(["badge"]), [busy, setBusy] = useState(""), [applying, setApplying] = useState(false), [passChain, setPassChain] = useState(0), [error, setError] = useState(""), [status, setStatus] = useState<Status | null>(null);
+  const [f, setF] = useState(() => ({ ...BLANK, ...draft()?.f }));
+  const [picked, setPicked] = useState<string[]>(() => draft()?.picked ?? ["badge"]), [busy, setBusy] = useState(""), [applying, setApplying] = useState(() => !!draft()), [passChain, setPassChain] = useState(0), [error, setError] = useState(""), [status, setStatus] = useState<Status | null>(null);
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((v) => ({ ...v, [k]: e.target.value }));
   useEffect(() => {
     document.title = "Partner with NIGHTSHIFT";
     void read<{ partners: Partner[] }>("/api/partners").then((d) => setPartners(d.partners)).catch(() => setPartners([]));
     let saved: string | null = null; try { saved = localStorage.getItem(KEY); } catch { /* private mode */ }
     if (saved && /^[a-f0-9]{12}$/.test(saved)) void read<Status>(`/api/partners/status/${saved}`).then(setStatus).catch(() => {});
+    // back from posting with the form half done: straight back to it
+    if (draft()) window.setTimeout(() => document.getElementById("pv-pt-apply-form")?.scrollIntoView({ block: "start" }), 300);
   }, []);
+  useEffect(() => { if (applying) try { localStorage.setItem(DRAFT, JSON.stringify({ f, picked })); } catch { /* private mode */ } }, [f, picked, applying]);
   const chain = CHAINS.find(([k]) => k === f.chain)!;
   const postText = useMemo(() => `We applied to become an official partner of @nightshiftimd, the AI company station built on the IMD swarm 🌙\n\n${f.project || "Our project"} on ${f.chain === "other" ? f.chainName || "our chain" : chain[1]}\n\ngetnightshift.tech/partners`, [f.project, f.chain, f.chainName, chain]);
 
@@ -79,7 +88,7 @@ export function PartnersPage() {
       }
       setBusy("Sending your application…");
       const r = await read<{ id: string }>("/api/partners/apply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...base, ...signed }) });
-      try { localStorage.setItem(KEY, r.id); } catch { /* private mode */ }
+      try { localStorage.setItem(KEY, r.id); localStorage.removeItem(DRAFT); } catch { /* private mode */ }
       setStatus({ id: r.id, status: "pending", project: f.project, at: Date.now(), decidedAt: null, note: null });
       scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {

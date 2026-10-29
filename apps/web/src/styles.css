@@ -512,3 +512,26 @@ html[data-lite] .arc .arc-stage::before { filter: none; opacity: .6; }
 .studio-shots a { flex: 0 0 min(78%, 300px); scroll-snap-align: start; }
 .studio-shots img { display: block; width: 100%; height: auto; aspect-ratio: 1; border-radius: 12px; object-fit: cover; }
 .studio-facts { font-size: 12.5px; line-height: 1.5; }
+
+/* /setup: the owner's to-do, each item one button */
+.todo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.todo-item { padding: 14px 16px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--bg-2); }
+.todo-item.ok { border-color: rgba(184, 255, 74, .35); }
+.todo-h { display: grid; gap: 4px; margin-bottom: 10px; }
+.todo-h b { font-size: 15px; }
+.todo-h .faint, .todo-actions .faint { font-size: 12.5px; }
+.todo-item.ok .todo-h { margin-bottom: 0; }
+.todo-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.todo-app { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.todo-app .faint, .todo-note { display: block; font-size: 12.5px; }
+.todo-note { color: var(--warn); }
+.todo-links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12.5px; }
+.todo-draft { margin: 10px 0; }
+.todo-draft p { margin: 0 0 6px; font-size: 13px; }
+.todo pre { margin: 0 0 8px; padding: 10px; white-space: pre-wrap; word-break: break-all; background: var(--card); border: 1px solid var(--line); font-size: 13px; }
+.todo-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.todo-form label { display: grid; gap: 4px; color: var(--dim); font-size: 12px; }
+.todo-form .wide { grid-column: 1 / -1; }
+.todo-msg { margin: 10px 0 0; font-size: 13px; }
+.todo-msg.bad { color: var(--bad); }
+@media (max-width: 640px) { .todo-app, .todo-form { grid-template-columns: 1fr; } }

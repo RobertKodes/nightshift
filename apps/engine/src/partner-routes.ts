@@ -29,9 +29,11 @@ export async function partnerRoutes(req: IncomingMessage, res: ServerResponse, p
     if (req.method === "POST" && p === "/api/partners/apply") return reply(201, await partners.apply(await ctx.body(req, 20_000), clientIp(req)));
     const status = /^\/api\/partners\/status\/([a-f0-9]{12})$/.exec(p);
     if (req.method === "GET" && status) return reply(200, partners.status(status[1]!));
-    if (p === "/api/partners/applications" || /^\/api\/partners\/[a-f0-9]{12}\/decide$/.test(p)) {
+    if (p === "/api/partners/applications" || p === "/api/partners/add" || /^\/api\/partners\/[a-f0-9]{12}\/decide$/.test(p)) {
       if (!ctx.isAdmin(req)) return reply(401, { error: "wrong admin token", code: "admin" });
       if (req.method === "GET" && p === "/api/partners/applications") return reply(200, { applications: partners.applications() });
+      // a project whose form did not save, registered by the operators from /setup
+      if (req.method === "POST" && p === "/api/partners/add") return reply(201, { application: partners.addByHand(await ctx.body(req, 20_000)) });
       if (req.method === "POST") {
         const b = await ctx.body(req, 2_000), decision = b.decision;
         if (decision !== "accept" && decision !== "decline") return reply(400, { error: "decision: accept or decline.", code: "bad_decision" });

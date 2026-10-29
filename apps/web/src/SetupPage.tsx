@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { TokenLaunch } from "./TokenLaunch";
 import { SwarmOrders } from "./SwarmOrders";
 import { OpenForge } from "./OpenForge";
+import { OwnerTodo } from "./OwnerTodo";
 import { ImdOrders } from "./ImdOrders";
 import { FrogsAdmin } from "./FrogsAdmin";
 import { AfterLaunch } from "./AfterLaunch";
@@ -226,6 +227,11 @@ export function SetupPage() {
         </div>
         <button className="btn ghost" onClick={() => { keep(""); setToken(""); setS(null); }}>Lock</button>
       </div>
+
+      <section className="card">
+        <div className="card-h"><h3>Your to-do</h3><span className="faint" style={{ fontSize: 12 }}>each one a button; done turns green</span></div>
+        <OwnerTodo call={call} token={token} saveSettings={(patch) => save({ ...form, ...patch }, true)} onToken={(t) => { keep(t); setToken(t); }} />
+      </section>
 
       <section className="card">
         <div className="card-h"><h3>Go-live checklist</h3><span className={`pill ${s.readyForLive ? "done" : "failed"}`}>{s.readyForLive ? "ready" : `${blocks.length} to fix`}</span></div>

@@ -45,7 +45,7 @@ import type { Engine } from "./engine.js";
 import { handleMcp } from "./mcp.js";
 import { clientIp, keyAllowed } from "./auth.js";
 import { MAX_TICKS } from "./pinball/engine.js";
-import { ANNOUNCED, checkSetup, isAdmin, pendingChanges, setupState } from "./admin.js";
+import { ANNOUNCED, checkSetup, deleteOldBackups, isAdmin, oldBackups, pendingChanges, rotateAdminToken, setupState } from "./admin.js";
 import { writeSettings } from "./settings.js";
 import { buybacks, checkLaunch, completeContracts, holderStatus, launchBody, launchState, patchLaunch, recordBuyback, recordLaunch, saveVerification, tokenOn, verification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
@@ -608,6 +608,10 @@ export function serve(engine: Engine) {
           for (const c of engine.store.companies.values()) if (c.status === "active") { engine.setStatus(c, "paused"); n++; }
           return json(res, 200, { paused: n });
         }
+        // the owner's to-do on /setup: a new dashboard token, and the old index copies to free disk space
+        if (p === "/api/admin/rotate-token" && req.method === "POST") { try { return json(res, 200, { token: rotateAdminToken() }); } catch (e) { return json(res, 409, { error: (e as Error).message }); } }
+        if (p === "/api/admin/backups" && req.method === "GET") return json(res, 200, { files: oldBackups() });
+        if (p === "/api/admin/backups/delete" && req.method === "POST") return json(res, 200, { deleted: deleteOldBackups() });
         if (p === "/api/admin/test-alert" && req.method === "POST") {
           return json(res, 200, { ok: await engine.alert("Test alert from /setup. Alerts work.", `test-${Date.now()}`) });
         }

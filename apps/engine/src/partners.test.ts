@@ -57,6 +57,37 @@ describe("partner applications", () => {
     expect(() => postLink("https://t.me/moonlabs/42")).not.toThrow();
   });
 
+  it("tells the operators once when an application fails, so the project can be helped", async () => {
+    const { partners, notify } = make({ verifyEvm: async () => false });
+    await expect(partners.apply(form(), "ip")).rejects.toMatchObject({ code: "bad_signature" });
+    await expect(partners.apply(form(), "ip")).rejects.toMatchObject({ code: "bad_signature" });
+    expect(notify).toHaveBeenCalledTimes(1);
+    const [text] = notify.mock.calls[0] as unknown as [string];
+    expect(text).toContain("Partner application failed");
+    expect(text).toContain("Moon Labs on Base");
+    expect(text).toContain("does not match the wallet");
+    expect(partners.applications()).toHaveLength(0);
+  });
+
+  it("lets the operators register a project whose form did not save, once per token", async () => {
+    const { partners, notify } = make();
+    const app = partners.addByHand({ project: "Sovrn One", chain: "robinhood", token: "0x7f7e9b8e9f754c3076e514852552019CB571461b", website: "https://sovrn.one", x: "@SovrnIMD", telegram: "t.me/frensofsolomon", post: "https://x.com/SovrnIMD/status/2115617189474779465?s=19", note: "posted on X, the form did not save" });
+    expect(app).toMatchObject({ status: "pending", proof: "unsigned", signer: null, ipHash: "operators", post: "https://x.com/i/status/2115617189474779465", token: { chain: "robinhood", address: "0x7f7e9b8e9f754c3076e514852552019cb571461b" } });
+    expect(app.note).toBe("Added by hand: posted on X, the form did not save");
+    await settle();
+    const [text, buttons] = notify.mock.calls[0] as unknown as [string, unknown[][]];
+    expect(text).toContain("Sovrn One");
+    expect(text).toContain("Added by hand");
+    expect(buttons).toHaveLength(2);
+    expect(() => partners.addByHand({ project: "Sovrn One", chain: "robinhood", token: "0x7f7e9b8e9f754c3076e514852552019cb571461b" })).toThrow(PartnerError);
+  });
+
+  it("checks an EVM signature on the token's own chain", async () => {
+    const verifyEvm = vi.fn(async () => true);
+    await make({ verifyEvm }).partners.apply(form(), "ip");
+    expect(verifyEvm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("token: base:") }), "base");
+  });
+
   it("keeps one open application per token and limits each address to five a day", async () => {
     const { partners } = make();
     await partners.apply(form(), "ip");

@@ -149,6 +149,12 @@ function evmClient(c: Evm) {
   if (!client) { client = createPublicClient({ transport: fallback(c.rpcs.map((u) => http(u, { timeout: 12_000 })), { retryCount: 1 }) }); evmClients.set(c.id, client); }
   return client;
 }
+/** A signature checks out on the token's own chain first (a smart wallet may exist only there), then on Base and Ethereum. */
+async function verifyOnChain(input: { address: Address; message: string; signature: Hex }, chain: PartnerChain): Promise<boolean> {
+  const c = PARTNER_CHAINS[chain];
+  if (c.kind === "evm" && c.id !== 1 && c.id !== 8453 && await evmClient(c).verifyMessage(input).catch(() => false)) return true;
+  return verifyJoinSignature(input);
+}
 const OWNER = parseAbi(["function owner() view returns (address)", "function getOwner() view returns (address)"]);
 /** Whether the signer controls the token: its owner() or getOwner(), its deployer (Etherscan), or its Solana mint authority. */
 export async function liveControl(token: Application["token"], signer: string, read: typeof fetch = fetch): Promise<Proof> {
@@ -186,7 +192,7 @@ export async function liveMarket(token: Application["token"], read: typeof fetch
 
 export type PartnerDeps = {
   dir: string; now?: () => number;
-  verifyEvm?: (input: { address: Address; message: string; signature: Hex }) => Promise<boolean>;
+  verifyEvm?: (input: { address: Address; message: string; signature: Hex }, chain: PartnerChain) => Promise<boolean>;
   control?: (token: Application["token"], signer: string) => Promise<Proof>;
   market?: (token: Application["token"]) => Promise<Market | null>;
   /** Tells the operators about a new application, with accept and decline buttons. */
@@ -212,7 +218,24 @@ export class Partners {
     return partnerMessage(q.project, tokenOf(q.chain, q.token, q.chainName), q.wallet, new Date(this.#now()).toISOString());
   }
 
+  /** An application; one that fails is logged and the operators hear why, so a project that gave up can be helped. */
   async apply(b: Record<string, unknown>, ip: string): Promise<{ id: string; status: Application["status"] }> {
+    try { return await this.#apply(b, ip); } catch (e) { this.#failed(b, e); throw e; }
+  }
+  readonly #failures = new Map<string, number>();
+  #failed(b: Record<string, unknown>, e: unknown) {
+    if (e instanceof PartnerError && e.code === "rate_limited") return;
+    const project = text(b.project, 60) || "(no name)", chain = typeof b.chain === "string" && b.chain in PARTNER_CHAINS ? PARTNER_CHAINS[b.chain as PartnerChain].name : "?";
+    const why = e instanceof PartnerError ? e.message : `server: ${e instanceof Error ? e.message.slice(0, 160) : "unknown error"}`, code = e instanceof PartnerError ? e.code : "server";
+    console.warn(`partners: application failed (${code}) ${project} on ${chain}: ${why}`);
+    // one alert per project and reason every ten minutes, so retries do not flood the chat
+    const key = `${project.toLowerCase()}|${code}`, now = this.#now();
+    if (now - (this.#failures.get(key) ?? 0) < 10 * 60_000) return;
+    this.#failures.set(key, now);
+    void this.#deps.notify?.(`⚠️ <b>Partner application failed</b>\n${esc(project)} on ${esc(chain)}\n<i>${esc(why)}</i>\n\nNothing was saved; they can apply again.`, []).catch(() => {});
+  }
+
+  async #apply(b: Record<string, unknown>, ip: string): Promise<{ id: string; status: Application["status"] }> {
     const now = this.#now(), ipHash = createHash("sha256").update(`nightshift-partners:${ip}`).digest("hex").slice(0, 24);
     if (this.#store.applications.filter((a) => a.ipHash === ipHash && now - a.at < DAY).length >= 5) throw new PartnerError(429, "Too many applications from here today. Try again tomorrow.", "rate_limited");
     if (this.#store.applications.filter((a) => a.status === "pending").length >= 500) throw new PartnerError(503, "The review list is full. Try again in a few days.", "busy");
@@ -240,7 +263,7 @@ export class Partners {
       if (b.message !== m.message) throw new PartnerError(400, "message: it must be exactly the text from /api/partners/message.", "bad_message");
       const signature = text(b.signature, 200);
       const ok = kind === "solana" ? verifySolanaSignature(m.wallet, m.message, signature)
-        : /^0x[0-9a-fA-F]{130,}$/.test(signature) && await (this.#deps.verifyEvm ?? verifyJoinSignature)({ address: getAddress(m.wallet), message: m.message, signature: signature as Hex });
+        : /^0x[0-9a-fA-F]{130,}$/.test(signature) && await (this.#deps.verifyEvm ?? verifyOnChain)({ address: getAddress(m.wallet), message: m.message, signature: signature as Hex }, token.chain);
       if (!ok) throw new PartnerError(401, "signature: it does not match the wallet.", "bad_signature");
       project.name = m.project; signer = m.wallet; proof = "unknown";
     } else {
@@ -260,7 +283,8 @@ export class Partners {
       (this.#deps.market ?? liveMarket)(app.token).catch(() => null),
     ]);
     Object.assign(app, { proof, market }); this.#save();
-    await this.#deps.notify?.(this.#review(app), [[{ text: "✅ Accept", data: `/partner accept ${app.id}` }, { text: "❌ Decline", data: `/partner decline ${app.id}` }], [{ text: "👀 Their post", url: app.post }, { text: "🌐 Website", url: app.project.website }]]).catch(() => {});
+    const links = [{ text: "👀 Their post", url: app.post }, { text: "🌐 Website", url: app.project.website }].filter((l) => l.url);
+    await this.#deps.notify?.(this.#review(app), [[{ text: "✅ Accept", data: `/partner accept ${app.id}` }, { text: "❌ Decline", data: `/partner decline ${app.id}` }], ...(links.length ? [links] : [])]).catch(() => {});
   }
 
   #review(a: Application): string {
@@ -272,7 +296,21 @@ export class Partners {
       `Wallet: ${PROOF[a.proof]}`,
       m ? `Market: price ${money(m.priceUsd)} · liquidity ${money(m.liquidityUsd)} · 24h volume ${money(m.volume24hUsd)} · FDV ${money(m.fdvUsd)}${m.pairCreatedAt ? ` · pair ${Math.max(0, Math.round((this.#now() - m.pairCreatedAt) / DAY))} days old` : ""}` : "Market: no DEX pair found",
       `Links: ${a.project.website} · ${a.project.x} · ${a.project.telegram}${a.project.docs ? ` · ${a.project.docs}` : ""}`,
-      `Contact: ${esc(a.contact)}`, `Post: ${a.post}${verdict}`].join("\n");
+      `Contact: ${esc(a.contact) || "—"}`, `Post: ${a.post || "—"}${verdict}`, ...(a.ipHash === "operators" ? ["", `📝 ${esc(a.note ?? "Added by hand")}`] : [])].join("\n");
+  }
+
+  /** The operators register a project whose form did not save (from /setup): no signature, marked as added by hand. */
+  addByHand(b: Record<string, unknown>): Application {
+    const token = tokenOf(b.chain, b.token, b.chainName), now = this.#now();
+    if (this.#store.applications.some((a) => a.status !== "declined" && a.token.chain === token.chain && a.token.address.toLowerCase() === token.address.toLowerCase())) throw new PartnerError(409, "This token already has an application or is a partner.", "exists");
+    const has = (k: string) => text(b[k], 300) !== "";
+    const project = { name: projectName(b.project), website: https(b.website, "website", false), x: has("x") ? xAccount(b.x) : "", telegram: has("telegram") ? telegramLink(b.telegram) : "", docs: https(b.docs, "docs", false), about: text(b.about, 600) || "Added by the operators." };
+    const wants = [...new Set((Array.isArray(b.wants) ? b.wants : ["badge"]).map(String))].filter((w): w is Want => w in WANTS);
+    const why = text(b.note, 200);
+    const app: Application = { id: randomBytes(6).toString("hex"), at: now, status: "pending", note: `Added by hand${why ? `: ${why}` : ""}`, project, contact: text(b.contact, 100), wants: wants.length ? wants : ["badge"], token, signer: null, proof: "unsigned", post: has("post") ? postLink(b.post) : "", market: null, ipHash: "operators" };
+    this.#store.applications.push(app); this.#save();
+    void this.#check(app.id);
+    return app;
   }
 
   status(id: string) {
