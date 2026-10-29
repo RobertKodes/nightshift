@@ -1,0 +1,15 @@
+/* The deck inside the station's $SHIFT room: the room's header sits above it, so no fixed bar,
+   and the deck takes the station's night palette instead of the graphite one. */
+.pv.pv-inroom {
+  --space: transparent; --surface: rgba(14, 11, 32, .72); --raised: #1b1440; --edge: rgba(164, 139, 255, .22);
+  --ink: #f2efff; --muted: #a9a3c4; --brand: #a48bff; --accent: #a48bff;
+  --text: "Space Grotesk", "Inter", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+  --header: 0px; --tabs: 0px;
+  min-height: 0; padding-bottom: 0; background: none; overflow: visible;
+}
+.pv.pv-inroom .pv-deck { padding-top: 22px; }
+.pv.pv-inroom .pv-deck-heading h1 { font-family: var(--text); font-weight: 600; letter-spacing: -.02em; }
+.pv.pv-inroom .pv-kicker { color: #a48bff; }
+.pv.pv-inroom .pv-button { border-color: rgba(164, 139, 255, .32); background: rgba(124, 92, 255, .08); }
+.pv.pv-inroom .pv-button[aria-pressed="true"], .pv.pv-inroom .pv-chips button[aria-current] { border-color: #7c5cff; background: rgba(124, 92, 255, .24); color: #fff; }
+.pv.pv-inroom :focus-visible { outline-color: #a48bff; }

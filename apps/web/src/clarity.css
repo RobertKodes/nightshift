@@ -1,46 +1,46 @@
 /* Plain connections in the station's existing colours. */
-.clarity-box, .clarity-page { color: var(--nx-ink, #e7ebf0); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.clarity-box, .clarity-page { color: var(--nx-ink, #f3f1ff); font-family: "Space Grotesk", Inter, sans-serif; }
 .clarity-box, .clarity-box *, .clarity-page, .clarity-page *, .clarity-doors, .clarity-doors * { box-sizing: border-box; min-width: 0; }
-.clarity-box { padding: 24px; border: 1px solid var(--nx-line, rgba(255,255,255,.12)); background: rgba(17, 22, 29,.78); margin: 22px 0; overflow-wrap: anywhere; }
+.clarity-box { padding: 24px; border: 1px solid var(--nx-line, rgba(255,255,255,.12)); background: rgba(12,10,28,.78); margin: 22px 0; overflow-wrap: anywhere; }
 .clarity-box h2 { margin: 0 0 14px; font-size: clamp(22px, 3vw, 30px); line-height: 1.15; letter-spacing: -.02em; }
-.clarity-box p, .clarity-page p, .clarity-flow span, .clarity-flow figcaption { color: var(--nx-dim, #a2acb9); line-height: 1.6; }
-.clarity-box a, .clarity-page a, .clarity-start a { color: var(--acc, #c9c3da); }
+.clarity-box p, .clarity-page p, .clarity-flow span, .clarity-flow figcaption { color: var(--nx-dim, #a7a2c3); line-height: 1.6; }
+.clarity-box a, .clarity-page a, .clarity-start a { color: var(--acc, #c9c2ff); }
 .clarity-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .clarity-grid a { display: grid; gap: 8px; padding: 14px; text-decoration: none; border: 1px solid var(--nx-line, rgba(255,255,255,.12)); min-height: 44px; }
-.clarity-grid a span { color: var(--nx-dim, #a2acb9); font-size: 14px; line-height: 1.5; }
-.clarity-status { padding: 14px; border-left: 2px solid var(--acc, #c9c3da); background: rgba(150, 160, 175,.07); }
+.clarity-grid a span { color: var(--nx-dim, #a7a2c3); font-size: 14px; line-height: 1.5; }
+.clarity-status { padding: 14px; border-left: 2px solid var(--acc, #c9c2ff); background: rgba(164,139,255,.07); }
 .benefits-ladder { margin: 20px 0; }
 .benefits-ladder > div { display: grid; grid-template-columns: minmax(150px, 1fr) 3fr; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--nx-line, rgba(255,255,255,.12)); }
 .benefits-ladder dt { font-weight: 600; }
-.benefits-ladder dd { margin: 0; color: var(--nx-dim, #a2acb9); line-height: 1.6; }
-.clarity-more summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--nx-ink, #e7ebf0); }
+.benefits-ladder dd { margin: 0; color: var(--nx-dim, #a7a2c3); line-height: 1.6; }
+.clarity-more summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--nx-ink, #f3f1ff); }
 .clarity-more summary::after { content: " +"; margin-left: 8px; }
 .clarity-more[open] summary::after { content: " −"; }
 .clarity-more nav { display: grid; gap: 4px; }
 .clarity-more a, .clarity-start a { display: inline-flex; align-items: center; min-height: 44px; padding: 4px 8px; }
 .clarity-utilities { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); gap: 0 14px; border-bottom: 1px solid rgba(255,255,255,.09); }
-.clarity-utilities a { display: inline-flex; align-items: center; min-height: 44px; color: #c9c3da; font: 500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; text-decoration: none; }
+.clarity-utilities a { display: inline-flex; align-items: center; min-height: 44px; color: #c9c2ff; font: 500 12px "Space Grotesk", sans-serif; text-decoration: none; }
 .clarity-page { width: min(1160px, 100%); margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-right)) 80px max(16px, env(safe-area-inset-left)); overflow-wrap: anywhere; }
 .clarity-page h1 { font-size: clamp(36px, 6vw, 64px); letter-spacing: -.04em; margin: 14px 0; }
 .clarity-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin: 30px 0; }
 .clarity-flow > div { display: grid; gap: 10px; align-content: start; }
-.clarity-flow > div > div, .clarity-flow > div > a { display: grid; gap: 8px; border: 1px solid rgba(150, 160, 175,.35); background: #0c0a1c; padding: 18px; text-decoration: none; min-height: 100px; }
-.clarity-flow > div > span { text-align: center; color: #ad9bd2; }
-.clarity-flow figcaption { grid-column: 1 / -1; padding: 14px; border-left: 2px solid #ad9bd2; }
+.clarity-flow > div > div, .clarity-flow > div > a { display: grid; gap: 8px; border: 1px solid rgba(164,139,255,.35); background: #0c0a1c; padding: 18px; text-decoration: none; min-height: 100px; }
+.clarity-flow > div > span { text-align: center; color: #a48bff; }
+.clarity-flow figcaption { grid-column: 1 / -1; padding: 14px; border-left: 2px solid #a48bff; }
 .clarity-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .clarity-metrics > div { border: 1px solid rgba(255,255,255,.12); padding: 16px; }
-.clarity-metrics dt { color: #a2acb9; font-size: 13px; }
+.clarity-metrics dt { color: #a7a2c3; font-size: 13px; }
 .clarity-metrics dd { margin: 12px 0 0; font-size: 20px; }
-.clarity-loading { color: #a2acb9; }
-.clarity-unavailable { color: #d9ad66; }
-.clarity-empty { color: #c9c3da; font-size: 16px; }
+.clarity-loading { color: #a7a2c3; }
+.clarity-unavailable { color: #ffc861; }
+.clarity-empty { color: #c9c2ff; font-size: 16px; }
 .clarity-source { font-size: 12px; overflow-wrap: anywhere; }
 .clarity-start { display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .clarity-doors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.clarity-door { display: grid; grid-template-columns: 64px minmax(0, 1fr) 20px; align-items: center; gap: 12px; padding: 20px; background: rgba(14, 19, 25,.9); border: 1px solid color-mix(in srgb, var(--acc) 45%, transparent); color: #e7ebf0; text-decoration: none; }
+.clarity-door { display: grid; grid-template-columns: 64px minmax(0, 1fr) 20px; align-items: center; gap: 12px; padding: 20px; background: rgba(7,6,26,.9); border: 1px solid color-mix(in srgb, var(--acc) 45%, transparent); color: #f3f1ff; text-decoration: none; }
 .clarity-door img { width: 64px; height: 64px; object-fit: contain; }
 .clarity-door h2 { color: var(--acc); font-size: 26px; margin: 0 0 10px; }
-.clarity-door p { color: #a2acb9; line-height: 1.55; margin: 0; }
+.clarity-door p { color: #a7a2c3; line-height: 1.55; margin: 0; }
 .clarity-home .nx-gate-in { position: relative; z-index: 1; padding-top: clamp(44px, 10vh, 100px); }
 .clarity-home .nx-title { font-size: clamp(42px, 6vw, 82px); white-space: normal; }
 .clarity-home .nx-gate-art { position: absolute; height: 100%; }
@@ -56,7 +56,7 @@
 .nx-foot-map { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .nx-foot a { display: inline-flex; align-items: center; min-height: 44px; }
 .nx-foot-line nav { flex-wrap: wrap; gap: 4px 18px; }
-.clarity-floating { position: fixed; z-index: 90; right: max(16px, env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); border: 1px solid #403556; background: #0c0a1c; color: #e7ebf0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: calc(100vw - 32px); }
+.clarity-floating { position: fixed; z-index: 90; right: max(16px, env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); border: 1px solid #403556; background: #0c0a1c; color: #f3f1ff; font-family: "Space Grotesk", sans-serif; max-width: calc(100vw - 32px); }
 .clarity-floating summary { padding: 0 14px; min-height: 44px; display: flex; align-items: center; cursor: pointer; }
 .clarity-floating .clarity-utilities { max-width: 340px; }
 .svc-outcome { scroll-margin-top: 190px; margin-bottom: 26px; }
@@ -135,3 +135,7 @@
 .clarity-floating > details[open] > nav { position: relative; padding: 8px; }
 .clarity-floating > details[open] { position: absolute; right: -1px; bottom: -1px; width: min(343px, calc(100vw - 32px)); background: #0c0a1c; border: 1px solid #403556; }
 .clarity-floating > details[open] > summary { justify-content: flex-end; }
+
+/* the beginner guide stands out among the help links */
+.clarity-utilities a.clarity-start-here { margin-right: auto; color: #f3f1ff; font-weight: 600; }
+.clarity-utilities a.clarity-start-here::before { content: ""; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: #b8ff4a; box-shadow: 0 0 10px #b8ff4a; }

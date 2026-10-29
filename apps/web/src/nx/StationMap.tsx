@@ -4,11 +4,12 @@ import { ROOMS, ROOM_ORDER, type RoomId } from "./map";
 
 /**
  * Where each room's docking bay sits in the gate art, as a share of the image (measured on the
- * Codex paintings: the wide one for desktops, the tall one for phones).
+ * second-edition Codex paintings: the wide one for desktops, the tall one for phones). Only the three
+ * doors have a bay; the old rooms keep a spot so their pages still have one.
  */
 const BAYS: Record<"wide" | "tall", Record<RoomId, [number, number]>> = {
-  wide: { breakroom: [0.4225, 0.227], geek: [0.5675, 0.142], info: [0.895, 0.32], economy: [0.815, 0.569], command: [0.425, 0.467] },
-  tall: { breakroom: [0.194, 0.297], geek: [0.426, 0.255], info: [0.866, 0.354], economy: [0.759, 0.487], command: [0.19, 0.424] },
+  wide: { geek: [0.494, 0.488], breakroom: [0.689, 0.525], info: [0.882, 0.519], economy: [0.689, 0.62], command: [0.494, 0.62] },
+  tall: { geek: [0.202, 0.442], breakroom: [0.499, 0.451], info: [0.795, 0.442], economy: [0.499, 0.52], command: [0.202, 0.52] },
 };
 
 /**
@@ -50,8 +51,8 @@ export function StationMap({ focus }: { focus: RoomId | null }) {
     <div className="nx-gate-art" aria-hidden="true">
       <div className="nx-art-move">
         <picture>
-          <source media="(max-width: 820px)" srcSet="/art/station/gate-station-mobile-1080x1920.webp" />
-          <img ref={img} src="/art/station/gate-station-2400x1350.webp" alt="" />
+          <source media="(max-width: 820px)" srcSet="/art/v2/home-station-mobile-1080x1920.webp" />
+          <img ref={img} src="/art/v2/home-station-2400x1350.webp" alt="" />
         </picture>
       </div>
       {/* the lights ride above the art's shade, moving with it */}

@@ -4,7 +4,10 @@ import { type Health, api, noteFirstTouch } from "./api";
 import { CompanyPage } from "./CompanyPage";
 import { Home } from "./Home";
 import { type Active } from "./landing/chrome";
-import { LegacyShell } from "./site/LegacyShell";
+import { RoomShell } from "./nx/Shell";
+import { roomOf } from "./nx/map";
+import { Gate } from "./nx/Gate";
+import { Landing } from "./landing/Landing";
 
 import "./landing/app.css";
 import { McpPage } from "./McpPage";
@@ -41,8 +44,8 @@ import { HowItWorksPage } from "./HowItWorksPage";
 // where this visitor first came from, kept for the company they may start
 noteFirstTouch();
 
-const NewHome = lazy(() => import("./station3d/NewHome").then((x) => ({ default: x.NewHome })));
-const Welcome = lazy(() => import("./site/Welcome").then((x) => ({ default: x.Welcome })));
+const StartPage = lazy(() => import("./StartPage").then((x) => ({ default: x.StartPage })));
+const ShipDeckPage = lazy(() => import("./ship3d/ShipDeckPage").then((x) => ({ default: x.ShipDeckPage })));
 const LaunchpadPage = lazy(() => import("./launchpad/LaunchpadPage").then((x) => ({ default: x.LaunchpadPage })));
 const ArenaPage = lazy(() => import("./ArenaPage").then((x) => ({ default: x.ArenaPage })));
 const ChessPage = lazy(() => import("./ChessPage").then((x) => ({ default: x.ChessPage })));
@@ -84,14 +87,14 @@ function App() {
   const seg = path.split("/").filter(Boolean);
   const oldDoors: Record<string, string> = { breakroom: "games", geek: "services", info: "token", economy: "proof", hr: "proof" };
   if (seg[0] && oldDoors[seg[0]]) seg[0] = oldDoors[seg[0]]!;
-  // The front door is the bridge dashboard; its one button enters the station.
-  if (seg.length === 0) return <Suspense fallback={<main style={{ minHeight: "100svh", background: "#0d0f12" }} />}><Welcome /></Suspense>;
+  // The front door is the station gate: pick what you came for.
+  if (seg.length === 0) return <Gate />;
   // Existing room URLs open the matching door; the story keeps its art.
-  if (seg[0] === "story") return <Redirect to="/" />;
-  // Hidden preview routes own their titles, shell and lazy-loaded scene.
-  if (seg[0] === "new") {
-    return <Suspense fallback={<main style={{ minHeight: "100svh", padding: "96px 24px", background: "#05030d", color: "#f4f0ff" }}><h1>NIGHTSHIFT</h1><p>Companies, AI tools, games, $SHIFT, Frogs, and public proof.</p><p>Loading the station preview...</p></main>}><NewHome /></Suspense>;
-  }
+  if (seg[0] === "story") return <Landing />;
+  // Start here: the whole station in plain words, for visitors new to crypto
+  if (seg[0] === "start") { document.title = "Start here · NIGHTSHIFT"; return <RoomShell room={null} path={path} title="Start here"><Suspense fallback={<div className="st-room" />}><StartPage /></Suspense></RoomShell>; }
+  // The station preview's addresses (shared in posts) open the matching room.
+  if (seg[0] === "new") return <Redirect to={NEW_ROUTES[seg[1] ?? ""] ?? "/"} />;
   if (seg[0] === "live") return <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#040611" }} />}><NightshiftLivePage /></Suspense>;
   // Where the Telegram Mini App was: the games are on the website and its app now. Outside Telegram
   // this sends the visitor to the same place on the site; inside a Mini App it says the Game Room moved.
@@ -103,8 +106,8 @@ function App() {
   // NIGHT POOL brings its own three.js table and its own bar, like NIGHT CHESS
   if (seg[0] === "games" && seg[1] === "pool") return <Suspense fallback={<div className="arc-boot" />}><PoolPage /></Suspense>;
   // NIGHT POKER: its own page and bar, the cards drawn in code (no three.js)
-  // the old isometric Ship and the illustrated story were replaced by the operations deck and the bridge
-  if (seg[0] === "ship") return <Redirect to="/new/ship" />;
+  // THE SHIP: the crew at work on the 3D operations deck, inside the $SHIFT room
+  if (seg[0] === "ship") { document.title = "The Ship · NIGHTSHIFT"; return <RoomShell room="info" path={path}><Suspense fallback={<div className="st-room" />}><div className="pv pv-inroom"><ShipDeckPage /></div></Suspense></RoomShell>; }
   // NIGHT SNIPER: an app screen of its own (iOS layout: its own bars, its own tabs)
   if (seg[0] === "sniper") return <Suspense fallback={<div className="arc-boot" />}><SniperPage /></Suspense>;
   if (seg[0] === "games" && seg[1] === "poker") return <Suspense fallback={<div className="arc-boot" />}><PokerPage /></Suspense>;
@@ -154,8 +157,11 @@ function App() {
   // Each page names itself in the tab; pages that know more (a company, a product) set their own.
   document.title = `${seg[0] === "games" && seg[1] === "live" ? "Watch games" : TITLES[key ?? ""] ?? "Companies"} · NIGHTSHIFT`;
   void active;
-  return <LegacyShell path={path} clarity={["/services", "/games", "/token", "/how-it-works"].includes(path)}>{page}</LegacyShell>;
+  return <RoomShell room={roomOf(path) ?? "geek"} path={path} lean={seg[0] === "games"}>{page}</RoomShell>;
 }
+
+/** The station preview's sections and pages, now rooms of the station. */
+const NEW_ROUTES: Record<string, string> = { "": "/", companies: "/companies", tools: "/services", play: "/games", shift: "/token", frogs: "/frogs", proof: "/proof", ship: "/ship" };
 
 const TITLES: Record<string, string> = {
   companies: "Companies", launch: "Start a business", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",

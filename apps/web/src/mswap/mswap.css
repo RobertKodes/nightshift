@@ -23,7 +23,7 @@
 .ms-tokbtn i { font: 400 11.5px Inter, sans-serif; font-style: normal; color: var(--s-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ms-tokbtn em { font-style: normal; color: var(--s-faint); font-size: 11px; }
 .ms-logo { flex: none; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--s-bg2); }
-.ms-letter { display: grid; place-items: center; font: 600 13px Inter, sans-serif; color: #d6cde6; background: var(--s-acc-bg); }
+.ms-letter { display: grid; place-items: center; font: 600 13px Inter, sans-serif; color: #cdbfff; background: var(--s-acc-bg); }
 
 .ms-flip { justify-self: center; position: relative; z-index: 1; width: 36px; height: 36px; margin: -18px 0; border-radius: 10px; border: 1px solid var(--s-line2); background: var(--s-bg); color: var(--s-dim); font-size: 16px; cursor: pointer; }
 .ms-flip:hover { color: var(--s-text); border-color: var(--s-acc); }
@@ -70,7 +70,7 @@
 .ms-contracts li a:hover { color: var(--s-text); }
 .ms-contracts li i { grid-column: 1 / -1; font: 400 12px Inter, sans-serif; font-style: normal; color: var(--s-faint); }
 .ms-contracts li.bad span { color: var(--ms-bad); }
-.ms-refused { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(224, 122, 134, .35); background: rgba(224, 122, 134, .08); color: var(--ms-bad); font: 400 13.5px/1.5 Inter, sans-serif; }
+.ms-refused { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255, 107, 125, .35); background: rgba(255, 107, 125, .08); color: var(--ms-bad); font: 400 13.5px/1.5 Inter, sans-serif; }
 .ms-refused ul { margin: 4px 0 0; padding-left: 18px; }
 .ms-others { display: grid; gap: 6px; }
 .ms-others button { display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--s-line2); background: none; color: var(--s-text); cursor: pointer; text-align: left; }
@@ -93,7 +93,7 @@
 @media (prefers-reduced-motion: reduce) { .ms-steps li.now::before { animation: none; } }
 
 /* token sheet */
-.ms-sheet { --s-bg: #0e0d15; --s-bg2: rgba(255, 255, 255, .03); --s-line: rgba(255, 255, 255, .08); --s-line2: rgba(255, 255, 255, .14); --s-text: #ecebf3; --s-dim: #a4a1b8; --s-faint: #74718a; --s-acc: #9a8ac0; --s-acc-bg: rgba(141, 124, 180, .14); --s-warn: #d9b47e;
+.ms-sheet { --s-bg: #0e0d15; --s-bg2: rgba(255, 255, 255, .03); --s-line: rgba(255, 255, 255, .08); --s-line2: rgba(255, 255, 255, .14); --s-text: #ecebf3; --s-dim: #a4a1b8; --s-faint: #74718a; --s-acc: #8b6dff; --s-acc-bg: rgba(139, 109, 255, .14); --s-warn: #f2c27b;
   position: fixed; inset: 0; z-index: 2147482000; color: var(--s-text); font-family: Inter, system-ui, sans-serif; display: grid; place-items: center; padding: 16px; background: rgba(4, 3, 10, .72); }
 .ms-sheet button { font-family: Inter, system-ui, sans-serif; }
 .ms-sheet .bad { color: #ff8a98; }
@@ -117,7 +117,7 @@
 .ms-tok-n b { font: 600 14.5px Inter, sans-serif; }
 .ms-tok-n i { font: 400 12px Inter, sans-serif; font-style: normal; color: var(--s-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-tok-a { display: grid; justify-items: end; font: 500 12px var(--mono); color: var(--s-faint); }
-.ms-pin { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--s-acc-bg); color: #d6cde6; font: 600 9.5px Inter, sans-serif; font-style: normal; letter-spacing: .06em; vertical-align: 2px; }
+.ms-pin { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--s-acc-bg); color: #cdbfff; font: 600 9.5px Inter, sans-serif; font-style: normal; letter-spacing: .06em; vertical-align: 2px; }
 .ms-unv { font: 500 11px Inter, sans-serif; font-style: normal; color: var(--s-warn); }
 .ms-liq { font: 500 11px Inter, sans-serif; font-style: normal; color: var(--s-dim, #9a93b8); margin-left: 6px; }
 

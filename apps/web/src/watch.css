@@ -1,26 +1,26 @@
 /* THE NIGHT WATCH (/watch): built on the Forge's page parts (forge.css), in the Watch's cyan. */
-.nw { --acc: #8fb7c8; }
+.nw { --acc: #3fe6ff; }
 .nw-table { display: grid; gap: 6px; }
 .nw-row { display: grid; grid-template-columns: 1.3fr 1fr .7fr 1.2fr 1.3fr; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 12px; background: rgba(8, 7, 13, .55); font-size: 14px; }
 .nw-row.nw-seats { grid-template-columns: 1.6fr .9fr 1.6fr .8fr .9fr .7fr; }
-.nw-th { background: none; border-color: transparent; padding-block: 0; font: 600 11px var(--nx-mono, monospace); letter-spacing: .12em; text-transform: uppercase; color: var(--faint, #7b8592); }
-.nw-row i { font-style: normal; color: var(--faint, #7b8592); font-size: 12px; margin-left: 6px; }
-.nw-unmarked, .nw-expired { border-color: color-mix(in srgb, #d9ad66 45%, transparent); }
-.nw-grace { border-color: color-mix(in srgb, #c59da9 45%, transparent); }
-.nw-actionable { border-color: color-mix(in srgb, #7fd6a6 55%, transparent); box-shadow: 0 0 24px color-mix(in srgb, #7fd6a6 12%, transparent); }
-.nw-captain { border-color: color-mix(in srgb, #d9ad66 55%, transparent); background: linear-gradient(90deg, color-mix(in srgb, #d9ad66 9%, transparent), rgba(8, 7, 13, .55)); }
-.nw-recent { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; font-size: 14px; color: var(--dim, #a2acb9); }
+.nw-th { background: none; border-color: transparent; padding-block: 0; font: 600 11px var(--nx-mono, monospace); letter-spacing: .12em; text-transform: uppercase; color: var(--faint, #6c6688); }
+.nw-row i { font-style: normal; color: var(--faint, #6c6688); font-size: 12px; margin-left: 6px; }
+.nw-unmarked, .nw-expired { border-color: color-mix(in srgb, #ffc46b 45%, transparent); }
+.nw-grace { border-color: color-mix(in srgb, #ff4fd8 45%, transparent); }
+.nw-actionable { border-color: color-mix(in srgb, #b8ff4a 55%, transparent); box-shadow: 0 0 24px color-mix(in srgb, #b8ff4a 12%, transparent); }
+.nw-captain { border-color: color-mix(in srgb, #ffc46b 55%, transparent); background: linear-gradient(90deg, color-mix(in srgb, #ffc46b 9%, transparent), rgba(8, 7, 13, .55)); }
+.nw-recent { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; font-size: 14px; color: var(--dim, #a9a3c4); }
 .nw-terms { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
 .nw-term { display: grid; gap: 4px; padding: 16px 14px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 14px; background: rgba(8, 7, 13, .55); }
 .nw-term b { font-size: 16px; }
-.nw-term span, .nw-term small { color: var(--faint, #7b8592); font-size: 12px; }
+.nw-term span, .nw-term small { color: var(--faint, #6c6688); font-size: 12px; }
 .nw-term strong { color: var(--acc); font: 600 20px var(--nx-mono, monospace); }
 .nw-term em { font-style: normal; font: 600 14px var(--nx-mono, monospace); }
-.nw-term.nw-captain strong { color: #d9ad66; }
+.nw-term.nw-captain strong { color: #ffc46b; }
 .nw-setup { display: grid; gap: 14px; margin-bottom: 18px; }
 .nw-code { margin: 0; padding: 16px 18px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 12px; background: #05040a; font: 13px/1.7 var(--nx-mono, monospace); color: #d8f9ff; overflow-x: auto; white-space: pre; }
 .nw-pair { max-width: 560px; }
-.nw-field { display: grid; gap: 6px; width: 100%; font-size: 13px; color: var(--dim, #a2acb9); text-align: left; }
+.nw-field { display: grid; gap: 6px; width: 100%; font-size: 13px; color: var(--dim, #a9a3c4); text-align: left; }
 .nw-field select { width: 100%; }
 @media (max-width: 900px) {
   .nw-terms { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -36,13 +36,13 @@
 .nw-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .nw-steps > li { display: grid; gap: 10px; justify-items: start; padding: 18px 20px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 14px; background: rgba(8, 7, 13, .55); }
 .nw-steps > li > b { font-size: 16px; color: var(--acc); }
-.nw-steps > li > span { color: var(--dim, #a2acb9); font-size: 14px; line-height: 1.55; }
+.nw-steps > li > span { color: var(--dim, #a9a3c4); font-size: 14px; line-height: 1.55; }
 .nw-held { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; width: 100%; }
 .nw-held li { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 10px; font-size: 14px; }
-.nw-held li span { color: var(--faint, #7b8592); font-size: 13px; }
-.nw-held li.on { border-color: color-mix(in srgb, #7fd6a6 55%, transparent); }
-.nw-held li.on span { color: #7fd6a6; }
-.nw-held li.half { border-color: color-mix(in srgb, #d9ad66 45%, transparent); }
+.nw-held li span { color: var(--faint, #6c6688); font-size: 13px; }
+.nw-held li.on { border-color: color-mix(in srgb, #b8ff4a 55%, transparent); }
+.nw-held li.on span { color: #b8ff4a; }
+.nw-held li.half { border-color: color-mix(in srgb, #ffc46b 45%, transparent); }
 .nw-cmd { display: flex; gap: 8px; align-items: center; width: 100%; }
 .nw-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 12px 14px; border-radius: 10px; background: #05040a; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); font: 13px var(--nx-mono, monospace); color: #d8f9ff; }
 
@@ -57,24 +57,24 @@
 .nwg-flow li i { position: absolute; left: 14px; top: 14px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--acc) 18%, transparent); color: var(--acc); font: 600 15px var(--nx-mono, monospace); font-style: normal; }
 .nwg-flow li:not(:last-child)::after { content: "↓"; position: absolute; left: 24px; bottom: -14px; color: var(--acc); z-index: 1; font-size: 14px; }
 .nwg-flow b { font-size: 16px; }
-.nwg-flow span { color: var(--dim, #a2acb9); font-size: 14px; line-height: 1.5; }
+.nwg-flow span { color: var(--dim, #a9a3c4); font-size: 14px; line-height: 1.5; }
 .nwg-need { display: grid; gap: 10px; grid-template-columns: 1fr; }
 .nwg-need article { display: grid; gap: 4px; padding: 16px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 14px; background: rgba(8, 7, 13, .55); }
-.nwg-need span { color: var(--dim, #a2acb9); font-size: 14px; line-height: 1.5; }
+.nwg-need span { color: var(--dim, #a9a3c4); font-size: 14px; line-height: 1.5; }
 .nwg-pick, .nwg-prov { display: grid; gap: 10px; grid-template-columns: 1fr; margin-bottom: 14px; }
 .nwg-pick button, .nwg-prov button { display: grid; gap: 4px; text-align: left; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); background: rgba(8, 7, 13, .55); color: inherit; font: inherit; cursor: pointer; }
 .nwg-pick button.on, .nwg-prov button.on { border-color: var(--acc); box-shadow: 0 0 22px color-mix(in srgb, var(--acc) 16%, transparent); }
 .nwg-pick em { font-style: normal; color: var(--acc); font: 600 12px var(--nx-mono, monospace); }
-.nwg-pick span, .nwg-prov small { color: var(--dim, #a2acb9); font-size: 13px; }
+.nwg-pick span, .nwg-prov small { color: var(--dim, #a9a3c4); font-size: 13px; }
 .nwg-prov { grid-template-columns: 1fr 1fr; }
-.nwg-lead { margin: 0 0 14px; max-width: 760px; line-height: 1.6; color: var(--dim, #a2acb9); }
+.nwg-lead { margin: 0 0 14px; max-width: 760px; line-height: 1.6; color: var(--dim, #a9a3c4); }
 .nwg-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .nwg-step { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding: 16px; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); border-radius: 14px; background: rgba(8, 7, 13, .55); }
 .nwg-n { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--acc); color: #05040a; font: 700 14px var(--nx-mono, monospace); }
 .nwg-step > div { display: grid; gap: 8px; min-width: 0; }
 .nwg-step b { font-size: 16px; }
-.nwg-step p, .nwg-after p { margin: 0; line-height: 1.6; font-size: 14.5px; color: var(--dim, #a2acb9); }
-.nwg-small { font-size: 13px !important; color: var(--faint, #7b8592) !important; }
+.nwg-step p, .nwg-after p { margin: 0; line-height: 1.6; font-size: 14.5px; color: var(--dim, #a9a3c4); }
+.nwg-small { font-size: 13px !important; color: var(--faint, #6c6688) !important; }
 .nwg-step code, .nwg-after p code { font: 13px var(--nx-mono, monospace); color: #d8f9ff; background: rgba(255, 255, 255, .06); padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
 .nwg-cmd { display: flex; gap: 8px; align-items: flex-start; width: 100%; min-width: 0; }
 .nwg-cmd pre { flex: 1; min-width: 0; margin: 0; overflow-x: auto; padding: 12px 14px; border-radius: 10px; background: #05040a; border: 1px solid var(--nx-line, rgba(255, 255, 255, .08)); }

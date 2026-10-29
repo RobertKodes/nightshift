@@ -82,6 +82,7 @@ export function Footer({ room }: { room: RoomId | null }) {
         <div style={{ "--acc": "#a48bff" } as React.CSSProperties}>
           <b><i className="nx-dot" />NIGHTSHIFT</b>
           <Link to="/">Home</Link>
+          <Link to="/start">Start here</Link>
           <Link to="/story">The story</Link>
           <Link to="/how-it-works">How it works</Link>
           <Link to="/proof">Proof</Link>
@@ -127,19 +128,19 @@ export function NxTabs({ room }: { room: RoomId | null }) {
   );
 }
 
-/** A room of the station: its own header, colours and footer around any page. `lean`: one bar only (the page leads to its own parts, as the Game Room does). */
-export function RoomShell({ room, path, lean = false, children }: { room: RoomId; path: string; lean?: boolean; children: React.ReactNode }) {
-  const r = ROOMS[room];
-  useEffect(() => rememberRoom(room), [room]);
+/** A room of the station: its own header, colours and footer around any page. `lean`: one bar only (the page leads to its own parts, as the Game Room does). No room: a station-wide page such as the beginner's guide. */
+export function RoomShell({ room, path, lean = false, title, children }: { room: RoomId | null; path: string; lean?: boolean; title?: string; children: React.ReactNode }) {
+  const r = room ? ROOMS[room] : null;
+  useEffect(() => { if (room) rememberRoom(room); }, [room]);
   // the phone bar names the page, like an app: the menu entry it belongs to, else the room
-  const here = [...r.nav].sort((a, b) => b.to.length - a.to.length).find((n) => isOn(path, n.to));
+  const here = r ? [...r.nav].sort((a, b) => b.to.length - a.to.length).find((n) => isOn(path, n.to)) : undefined;
   return (
-    <div className="ns ns-app nx-shell" data-room={room} style={{ "--acc": r.accent, "--acc2": r.accent2 } as React.CSSProperties}>
+    <div className="ns ns-app nx-shell" data-room={room ?? "station"} style={{ "--acc": r?.accent ?? "#a48bff", "--acc2": r?.accent2 ?? "#c9c2ff" } as React.CSSProperties}>
       <div className="nx-backdrop" aria-hidden="true" />
       <header className="nx-head">
-        <StationBar room={room} title={here?.label === r.nav[0]!.label ? r.name : here?.label ?? r.name} />
+        <StationBar room={room} title={title ?? (!r ? "NIGHTSHIFT" : here?.label === r.nav[0]!.label ? r.name : here?.label ?? r.name)} />
         <UtilityLinks />
-        {!lean && <RoomBar room={room} path={path} />}
+        {room && !lean && <RoomBar room={room} path={path} />}
       </header>
       <main className={["/services", "/games", "/token", "/how-it-works", "/breakroom", "/geek", "/info"].includes(path) ? "clarity-main" : undefined}>{children}</main>
       <Footer room={room} />

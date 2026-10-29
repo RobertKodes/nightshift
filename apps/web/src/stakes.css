@@ -1,11 +1,11 @@
 /* The staked lobby, shared by Space Pinball (.sk-arc) and NIGHT CHESS (.sk-nc): it takes each page's own colours. */
-.sk, .sk-result { --sk-line: rgba(150, 160, 175, .25); --sk-dim: #b3abc9; --sk-hi: #ad9bd2; --sk-bad: #ff8fa3; }
-.sk { display: grid; gap: 10px; padding: 13px 14px; border: 1px solid var(--sk-line); background: rgba(141, 124, 180, .05); color: inherit; min-width: 0; }
+.sk, .sk-result { --sk-line: rgba(164, 139, 255, .25); --sk-dim: #b3abc9; --sk-hi: #a48bff; --sk-bad: #ff8fa3; }
+.sk { display: grid; gap: 10px; padding: 13px 14px; border: 1px solid var(--sk-line); background: rgba(124, 92, 255, .05); color: inherit; min-width: 0; }
 .sk-nc { border-radius: 14px; }
 .sk-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .sk-kicker { font: 600 9px/1.4 "JetBrains Mono", ui-monospace, monospace; letter-spacing: .18em; text-transform: uppercase; color: var(--sk-dim); }
 .sk-limits { font: 500 10px "JetBrains Mono", ui-monospace, monospace; color: var(--sk-dim); }
-.sk-amount { display: flex; align-items: center; gap: 10px; padding: 0 12px; height: 46px; border: 1px solid var(--sk-line); background: rgba(8, 11, 16, .55); }
+.sk-amount { display: flex; align-items: center; gap: 10px; padding: 0 12px; height: 46px; border: 1px solid var(--sk-line); background: rgba(3, 2, 10, .55); }
 .sk-nc .sk-amount { border-radius: 10px; }
 .sk-amount input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: inherit; font: 600 18px "JetBrains Mono", ui-monospace, monospace; }
 .sk-amount:focus-within { border-color: var(--sk-hi); }
@@ -15,35 +15,35 @@
 .sk-note a, .sk-result a { color: var(--sk-hi); }
 .sk-fine { font-size: 10px; }
 .sk-bad { color: var(--sk-bad); }
-.sk-good { color: #7fd6a6; }
+.sk-good { color: #b8ff4a; }
 .sk-err { margin: 0; color: var(--sk-bad); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
-.sk-btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 0 16px; border: 1px solid var(--sk-line); background: rgba(141, 124, 180, .12); color: inherit; font: 700 12px "JetBrains Mono", ui-monospace, monospace; letter-spacing: .12em; cursor: pointer; text-align: center; }
+.sk-btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 0 16px; border: 1px solid var(--sk-line); background: rgba(124, 92, 255, .12); color: inherit; font: 700 12px "JetBrains Mono", ui-monospace, monospace; letter-spacing: .12em; cursor: pointer; text-align: center; }
 .sk-nc .sk-btn { border-radius: 10px; }
-.sk-btn.primary { background: linear-gradient(135deg, #8d7cb4, #ad9bd2); border-color: transparent; color: #fff; }
+.sk-btn.primary { background: linear-gradient(135deg, #7c5cff, #a48bff); border-color: transparent; color: #fff; }
 .sk-btn.ghost { background: none; }
 .sk-btn.small { min-height: 34px; padding: 0 12px; font-size: 10px; }
 .sk-btn:disabled { opacity: .5; cursor: not-allowed; }
 .sk-btn:not(:disabled):hover { border-color: var(--sk-hi); }
 .sk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.sk-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--sk-line); background: rgba(8, 11, 16, .4); }
+.sk-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--sk-line); background: rgba(3, 2, 10, .4); }
 .sk-list li span { display: grid; min-width: 0; }
 .sk-list li span b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .sk-list li small { color: var(--sk-dim); font: 500 10px "JetBrains Mono", ui-monospace, monospace; }
 .sk-list li strong { font: 600 12px "JetBrains Mono", ui-monospace, monospace; white-space: nowrap; }
 .sk-list li em { font: 600 10px "JetBrains Mono", ui-monospace, monospace; color: var(--sk-dim); font-style: normal; letter-spacing: .12em; }
-.sk-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(8, 11, 16, .82); backdrop-filter: blur(10px); }
-.sk-dialog { width: min(420px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; display: grid; gap: 12px; padding: 22px; border: 1px solid var(--sk-line); background: #0d0a1f; color: #e7ebf0; text-align: center; }
+.sk-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(3, 2, 10, .82); backdrop-filter: blur(10px); }
+.sk-dialog { width: min(420px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; display: grid; gap: 12px; padding: 22px; border: 1px solid var(--sk-line); background: #0d0a1f; color: #f2efff; text-align: center; }
 .sk-nc .sk-dialog { border-radius: 18px; }
-.sk-dialog h2 { margin: 0; font: 400 34px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.sk-dialog h2 { margin: 0; font: 400 34px/1 "Instrument Serif", Georgia, serif; }
 .sk-dialog p { margin: 0; color: var(--sk-dim); font-size: 13px; line-height: 1.6; }
 .sk-radar { justify-self: center; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--sk-line); color: var(--sk-hi); animation: sk-pulse 1.8s ease-in-out infinite; }
-@keyframes sk-pulse { 50% { box-shadow: 0 0 0 12px rgba(141, 124, 180, .08); } }
+@keyframes sk-pulse { 50% { box-shadow: 0 0 0 12px rgba(124, 92, 255, .08); } }
 @media (prefers-reduced-motion: reduce) { .sk-radar { animation: none; } }
 .sk-facts { margin: 0; display: grid; gap: 6px; text-align: left; }
 .sk-facts div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--sk-line); }
 .sk-facts dt { color: var(--sk-dim); font: 600 10px "JetBrains Mono", ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
 .sk-facts dd { margin: 0; font: 500 12px "JetBrains Mono", ui-monospace, monospace; overflow-wrap: anywhere; }
-.sk-result { display: grid; gap: 8px; margin-top: 4px; padding: 12px; border: 1px solid rgba(150, 160, 175, .25); background: rgba(141, 124, 180, .06); text-align: left; }
+.sk-result { display: grid; gap: 8px; margin-top: 4px; padding: 12px; border: 1px solid rgba(164, 139, 255, .25); background: rgba(124, 92, 255, .06); text-align: left; }
 .sk-result p { margin: 0; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 @media (max-width: 420px) { .sk-facts div { grid-template-columns: 1fr; gap: 2px; } }
 /* the staked flow on one screen: three steps, the wallet and its balance, quick amounts, the share link */
@@ -51,8 +51,8 @@
 .sk-steps li { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 7px 8px; border: 1px solid var(--sk-line); color: var(--sk-dim); font: 600 9.5px/1.2 "JetBrains Mono", ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; }
 .sk-steps li span { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
 .sk-steps li b { display: grid; place-items: center; flex: none; width: 18px; height: 18px; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; }
-.sk-steps li.on { border-color: var(--sk-hi); color: inherit; background: rgba(141, 124, 180, .14); }
-.sk-steps li.done { color: #7fd6a6; }
+.sk-steps li.on { border-color: var(--sk-hi); color: inherit; background: rgba(124, 92, 255, .14); }
+.sk-steps li.done { color: #b8ff4a; }
 .sk-nc .sk-steps li { border-radius: 8px; }
 .sk-wallet { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 10px; border: 1px dashed var(--sk-line); color: var(--sk-dim); font-size: 12px; }
 .sk-wallet b { color: inherit; font-family: "JetBrains Mono", ui-monospace, monospace; }
@@ -65,5 +65,5 @@
 .sk-nc .sk-chips button { border-radius: 8px; }
 .sk-list li.sk-invited { border-color: var(--sk-hi); box-shadow: inset 3px 0 0 var(--sk-hi); }
 .sk-share { display: flex; gap: 6px; width: 100%; }
-.sk-share input { flex: 1; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--sk-line); background: rgba(8, 11, 16, .55); color: inherit; font: 500 11px "JetBrains Mono", ui-monospace, monospace; }
+.sk-share input { flex: 1; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--sk-line); background: rgba(3, 2, 10, .55); color: inherit; font: 500 11px "JetBrains Mono", ui-monospace, monospace; }
 a.sk-btn { text-decoration: none; }

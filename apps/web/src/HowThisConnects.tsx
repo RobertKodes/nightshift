@@ -17,5 +17,5 @@ export function HowThisConnects({ current }: { current: "services" | "games" | "
 }
 
 export function UtilityLinks() {
-  return <nav className="clarity-utilities" aria-label="Help and connections"><Link to="/mcp">Connect</Link><Link to="/proof">Proof</Link><Link to="/security">Security</Link><Link to="/how-it-works">How it works</Link></nav>;
+  return <nav className="clarity-utilities" aria-label="Help and connections"><Link to="/start" className="clarity-start-here">Start here</Link><Link to="/mcp">Connect</Link><Link to="/proof">Proof</Link><Link to="/security">Security</Link><Link to="/how-it-works">How it works</Link></nav>;
 }

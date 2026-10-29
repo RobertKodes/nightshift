@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "../session";
-import { PreviewLink } from "../site/PreviewLink";
 import { SectionIcon } from "../site/SectionIcon";
 import { useReducedMotion } from "../site/StationView";
 import { BAYS, useDeckData, type Bay } from "./data";
 import { DeckView } from "./DeckView";
 import { DeckDetails } from "./Details";
+import "../site/site.css";
 import "./deck.css";
+import "./inroom.css";
 
 /** Hidden preview only. Every scene interaction has an equivalent live-list button. */
 export function ShipDeckPage() {
@@ -22,13 +23,13 @@ export function ShipDeckPage() {
   }, [entries, bay, query, mine]);
   const open = useCallback((key: string) => { const entry = entries.find((e) => e.key === key); if (entry) { setBay(entry.bay); setSelected(key); } }, [entries]);
   const changeBay = (next: number) => { setBay(Math.max(0, Math.min(3, next)) as Bay); setSelected(null); setQuery(""); };
-  useEffect(() => { document.title = "Operations deck | NIGHTSHIFT Preview"; document.querySelector<HTMLElement>(".pv-deck h1")?.focus({ preventScroll: true }); }, []);
+  useEffect(() => { document.querySelector<HTMLElement>(".pv-deck h1")?.focus({ preventScroll: true }); }, []);
   useEffect(() => { setLimit(48); }, [bay, query, mine]);
   useEffect(() => { if (!address) setMine(false); }, [address]);
   const failures = [data.ship.state === "unavailable" && "Crew", data.art.state === "unavailable" && "Art records", data.companies.state === "unavailable" && "Companies", data.games.state === "unavailable" && "Games", address && data.crew.state === "unavailable" && "Wallet crew"].filter(Boolean);
   const available = [data.ship, data.companies, data.games].some((source) => source.state === "ready");
   return <main id="pv-main" className="pv-deck">
-    <header className="pv-deck-heading"><p className="pv-kicker"><PreviewLink href="/new/frogs">FROGS</PreviewLink> / OPERATIONS DECK</p><h1 tabIndex={-1}>The crew at work.</h1><p>Missions, company tasks, live games and the Night Watch.</p></header>
+    <header className="pv-deck-heading"><p className="pv-kicker"><a href="/frogs">FROGS</a> / THE SHIP</p><h1 tabIndex={-1}>The crew at work.</h1><p>Missions, company tasks, live games and the Night Watch.</p></header>
     <div className="pv-deck-tools"><div className="pv-deck-mode" role="group" aria-label="Deck view"><button type="button" className="pv-button" aria-pressed={!list} disabled={unavailable} onClick={() => setList(false)}>3D deck</button><button type="button" className="pv-button" aria-pressed={list || unavailable} onClick={() => setList(true)}>Live list</button></div>
       {address ? <button type="button" className="pv-button" aria-pressed={mine} onClick={() => setMine((value) => !value)}>My crew only</button> : <button type="button" className="pv-button" disabled={busy} onClick={() => void signIn()}>Connect wallet</button>}
       {!list && !unavailable && !reduced && <button type="button" className="pv-button" aria-pressed={paused} onClick={() => setPaused((value) => !value)}>{paused ? "Resume motion" : "Pause motion"}</button>}

@@ -247,7 +247,7 @@ function DealCard({ d, onBuy }: { d: Deal; onBuy: () => void }) {
     <p className="pv-dl-meta">Liquidity {usd(d.liquidityUsd)} · 24h volume {usd(d.volume24hUsd)} · Seller {short(d.seller)}, {d.sellerTrades} {d.sellerTrades === 1 ? "trade" : "trades"}</p>
     <footer>
       <nav><a href={`https://etherscan.io/token/${d.token.address}`} target="_blank" rel="noreferrer">Contract</a>{d.token.chart && <a href={d.token.chart} target="_blank" rel="noreferrer">Chart</a>}</nav>
-      <button type="button" className="pv-button pv-primary" disabled={d.status !== "open"} onClick={onBuy}>Buy<SectionIcon id="arrow" /></button>
+      <button type="button" className="nx-btn nx-btn-acc" disabled={d.status !== "open"} onClick={onBuy}>Buy<SectionIcon id="arrow" /></button>
     </footer>
   </article>;
 }
@@ -292,7 +292,7 @@ function BuyDialog({ desk, d, onClose, onDone, setMe }: { desk: Desk; d: Deal; o
     <header><h2 id="pv-dl-buy-h">Buy {sym(d)}</h2><button type="button" className="pv-icon-button" aria-label="Close" onClick={() => dialog.current?.close()}><SectionIcon id="close" /></button></header>
     <p className="pv-dl-sub">{d.token.name ?? short(d.token.address)} · deal #{d.id} · {small(d.each ?? 0)} {d.coin.symbol} each</p>
     <label className="pv-dl-field">Amount of {sym(d)}<input value={amount} onChange={(e) => setAmount(e.target.value.replace(",", "."))} inputMode="decimal" /></label>
-    <div className="pv-dl-quick">{[25, 50, 100].map((p) => <button key={p} type="button" className="pv-button" onClick={() => setAmount(String(p === 100 ? rest : Math.max(min, (rest * p) / 100)))}>{p === 100 ? "All" : `${p}%`}</button>)}</div>
+    <div className="pv-dl-quick">{[25, 50, 100].map((p) => <button key={p} type="button" className="nx-btn" onClick={() => setAmount(String(p === 100 ? rest : Math.max(min, (rest * p) / 100)))}>{p === 100 ? "All" : `${p}%`}</button>)}</div>
     <dl className="pv-dl-sum">
       <div><dt>Price</dt><dd>{cost !== null ? `${small(cost)} ${d.coin.symbol}` : "—"}</dd></div>
       <div><dt>Fee</dt><dd>{desk.feeBps / 100}% · {desk.holderFeeBps / 100}% for holders</dd></div>
@@ -301,7 +301,7 @@ function BuyDialog({ desk, d, onClose, onDone, setMe }: { desk: Desk; d: Deal; o
     {d.vsMarketPct !== null && d.vsMarketPct > 0 && <p className="pv-dl-warn">This deal costs {d.vsMarketPct}% more than the market price.</p>}
     {d.verdict?.verdict === "avoid" && <p className="pv-dl-warn">Token Verdict says avoid: {d.verdict.summary}</p>}
     {msg && <p className={msg.ok ? "pv-dl-ok" : "pv-dl-err"} role="alert">{msg.text}{msg.tx && <> <a href={`https://etherscan.io/tx/${msg.tx}`} target="_blank" rel="noreferrer">View on Etherscan</a></>}</p>}
-    <button type="button" className="pv-button pv-primary pv-dl-go" disabled={!!step || !!bad || !desk.open} onClick={() => void buy()}>{step || bad || (desk.open ? `Buy ${num(n)} ${sym(d)}` : "Opens when the contract is live")}</button>
+    <button type="button" className="nx-btn nx-btn-acc pv-dl-go" disabled={!!step || !!bad || !desk.open} onClick={() => void buy()}>{step || bad || (desk.open ? `Buy ${num(n)} ${sym(d)}` : "Opens when the contract is live")}</button>
     {!!buys.length && <section className="pv-dl-buys"><h3>Recent buys</h3><ul>{buys.map((b) => <li key={b.tx}><span>{num(amountOf(b.amount, dec))} {sym(d)}</span><span>{short(b.recipient)}{b.holder ? " · holder" : ""}</span><a href={`https://etherscan.io/tx/${b.tx}`} target="_blank" rel="noreferrer">tx</a></li>)}</ul></section>}
   </dialog>;
 }
@@ -361,7 +361,7 @@ function SellForm({ desk, onDone, setMe }: { desk: Desk | null; onDone: () => vo
     </fieldset>
     <p className="pv-dl-total">{Number.isFinite(total) && total > 0 ? <>If it all sells you receive <b>{small(total)} {f.coin}</b>.</> : "Fill in the amount and the price to see what you receive."}</p>
     {msg && <p className={msg.ok ? "pv-dl-ok" : "pv-dl-err"} role="alert">{msg.text}{msg.tx && <> <a href={`https://etherscan.io/tx/${msg.tx}`} target="_blank" rel="noreferrer">View on Etherscan</a></>}</p>}
-    <button type="button" className="pv-button pv-primary pv-dl-go" disabled={!!step || !desk?.open} onClick={() => void sell()}>{step || (desk?.open ? "Approve and open the deal" : "Opens when the contract is live")}</button>
+    <button type="button" className="nx-btn nx-btn-acc pv-dl-go" disabled={!!step || !desk?.open} onClick={() => void sell()}>{step || (desk?.open ? "Approve and open the deal" : "Opens when the contract is live")}</button>
   </section>;
 }
 
@@ -384,15 +384,15 @@ function MyDeals({ desk, me, deals, onDone }: { desk: Desk; me: string; deals: D
   if (!live.length && owed === 0n) return null;
   return <section className="pv-dl-mine" aria-labelledby="pv-dl-mine-h">
     <h2 id="pv-dl-mine-h">Your deals</h2>
-    {owed > 0n && <p className="pv-dl-sub">{formatEther(owed)} ETH from your sales is waiting for you. <button type="button" className="pv-button" disabled={!!step} onClick={() => void run("Claim your ETH…", { address: desk.address!, abi: DESK, functionName: "claimOwed" })}>Claim</button></p>}
+    {owed > 0n && <p className="pv-dl-sub">{formatEther(owed)} ETH from your sales is waiting for you. <button type="button" className="nx-btn" disabled={!!step} onClick={() => void run("Claim your ETH…", { address: desk.address!, abi: DESK, functionName: "claimOwed" })}>Claim</button></p>}
     <ul>{live.map((d) => {
       const dec = d.token.decimals ?? 18, coinDec = d.coin.decimals;
       const repriced = prices[d.id] ? (parseUnits(prices[d.id]!, coinDec) * 10n ** 18n) / 10n ** BigInt(dec) : 0n;
       return <li key={d.id}>
         <div><b>#{d.id} · {num(amountOf(d.left, dec))} {sym(d)} left</b><span>{small(d.each ?? 0)} {d.coin.symbol} each · {left(d.expiry)}</span></div>
         <input aria-label={`New price for deal ${d.id}`} placeholder={`New price (${d.coin.symbol})`} inputMode="decimal" value={prices[d.id] ?? ""} onChange={(e) => setPrices((v) => ({ ...v, [d.id]: e.target.value.replace(",", ".") }))} />
-        <button type="button" className="pv-button" disabled={!!step || !(repriced > 0n)} onClick={() => void run(`Change the price of deal #${d.id}…`, { address: desk.address!, abi: DESK, functionName: "update", args: [BigInt(d.id), repriced, BigInt(d.minBuy), BigInt(Math.max(d.expiry, Math.floor(Date.now() / 1000) + 86_400))] })}>Change price</button>
-        <button type="button" className="pv-button" disabled={!!step} onClick={() => void run(`Cancel deal #${d.id} and take back ${num(amountOf(d.left, dec))} ${sym(d)}…`, { address: desk.address!, abi: DESK, functionName: "cancel", args: [BigInt(d.id)] })}>Cancel and take back</button>
+        <button type="button" className="nx-btn" disabled={!!step || !(repriced > 0n)} onClick={() => void run(`Change the price of deal #${d.id}…`, { address: desk.address!, abi: DESK, functionName: "update", args: [BigInt(d.id), repriced, BigInt(d.minBuy), BigInt(Math.max(d.expiry, Math.floor(Date.now() / 1000) + 86_400))] })}>Change price</button>
+        <button type="button" className="nx-btn" disabled={!!step} onClick={() => void run(`Cancel deal #${d.id} and take back ${num(amountOf(d.left, dec))} ${sym(d)}…`, { address: desk.address!, abi: DESK, functionName: "cancel", args: [BigInt(d.id)] })}>Cancel and take back</button>
       </li>;
     })}</ul>
     {step && <p className="pv-dl-sub">{step}</p>}

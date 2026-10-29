@@ -4,11 +4,11 @@
  * accent (lime), the font and the radius come from its theme options in walletkit.ts.
  */
 :root:root {
-  --apkt-tokens-theme-overlay: rgba(8, 11, 16, .74);
+  --apkt-tokens-theme-overlay: rgba(3, 2, 10, .74);
   --apkt-tokens-theme-backgroundPrimary: #0d0a1f;
-  --apkt-tokens-theme-backgroundInvert: #e7ebf0;
-  --apkt-tokens-theme-textPrimary: #e7ebf0;
-  --apkt-tokens-theme-textSecondary: #a2acb9;
+  --apkt-tokens-theme-backgroundInvert: #f2efff;
+  --apkt-tokens-theme-textPrimary: #f2efff;
+  --apkt-tokens-theme-textSecondary: #a9a3c4;
   --apkt-tokens-theme-textTertiary: #cfc9e6;
   --apkt-tokens-theme-textInvert: #0d0a1f;
   --apkt-tokens-theme-borderPrimary: #2c2550;
@@ -17,11 +17,11 @@
   --apkt-tokens-theme-foregroundPrimary: #15112b;
   --apkt-tokens-theme-foregroundSecondary: #1d1738;
   --apkt-tokens-theme-foregroundTertiary: #2c2550;
-  --apkt-tokens-theme-iconDefault: #a2acb9;
-  --apkt-tokens-theme-iconInverse: #e7ebf0;
+  --apkt-tokens-theme-iconDefault: #a9a3c4;
+  --apkt-tokens-theme-iconInverse: #f2efff;
 }
 
 /* Above the modal inside an app's browser (walletkit.ts inAppTip): the other ways in. */
-.nsw-tip { position: fixed; z-index: 2147483001; top: max(10px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(420px, calc(100% - 20px)); box-sizing: border-box; display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #3d3470; border-radius: 12px; background: #0d0a1f; box-shadow: 0 14px 40px rgba(0, 0, 0, .55); color: #cfc9e6; font: 400 12.5px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.nsw-tip { position: fixed; z-index: 2147483001; top: max(10px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(420px, calc(100% - 20px)); box-sizing: border-box; display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #3d3470; border-radius: 12px; background: #0d0a1f; box-shadow: 0 14px 40px rgba(0, 0, 0, .55); color: #cfc9e6; font: 400 12.5px/1.45 "Space Grotesk", Inter, system-ui, sans-serif; }
 .nsw-tip p { margin: 0; flex: 1; }
-.nsw-tip button { flex: none; min-height: 36px; padding: 0 10px; border: 1px solid #7fd6a6; border-radius: 8px; background: transparent; color: #7fd6a6; font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; cursor: pointer; }
+.nsw-tip button { flex: none; min-height: 36px; padding: 0 10px; border: 1px solid #b8ff4a; border-radius: 8px; background: transparent; color: #b8ff4a; font: 600 12px/1 "Space Grotesk", Inter, system-ui, sans-serif; cursor: pointer; }

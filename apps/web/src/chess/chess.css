@@ -1,5 +1,5 @@
 /* NIGHT CHESS: an obsidian table in NIGHTSHIFT's after-hours arcade. */
-.nc { --uv:#8d7cb4; --uv-hi:#ad9bd2; --moon:#ddd8e8; --dim:#b3abc9; --edge:rgba(150, 160, 175,.25); --glass:rgba(12,8,25,.76); --serif:-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace; position:relative; isolation:isolate; width:100%; min-height:100vh; min-height:100dvh; overflow-x:clip; color:var(--moon); background:#080b10; font:400 14px/1.6 Inter,system-ui,sans-serif; }
+.nc { --uv:#7c5cff; --uv-hi:#a48bff; --moon:#e9e2ff; --dim:#b3abc9; --edge:rgba(164,139,255,.25); --glass:rgba(12,8,25,.76); --serif:"Instrument Serif",Georgia,serif; --mono:"JetBrains Mono",ui-monospace,monospace; position:relative; isolation:isolate; width:100%; min-height:100vh; min-height:100dvh; overflow-x:clip; color:var(--moon); background:#03020a; font:400 14px/1.6 Inter,system-ui,sans-serif; }
 .nc *, .nc *::before, .nc *::after { box-sizing:border-box; }
 .nc a { color:inherit; text-decoration:none; }
 .nc button, .nc input, .nc select { font:inherit; }
@@ -7,9 +7,9 @@
 .nc button:disabled { cursor:not-allowed; opacity:.48; }
 .nc :is(a,button,input,select):focus-visible { outline:2px solid var(--moon); outline-offset:4px; }
 .nc .icon { flex:none; vertical-align:middle; }
-.nc-backdrop { position:absolute; inset:0; z-index:-1; pointer-events:none; background:radial-gradient(ellipse at 20% 22%,rgba(83,46,164,.2),transparent 40%),radial-gradient(ellipse at 85% 70%,rgba(141, 124, 180,.07),transparent 45%); }
+.nc-backdrop { position:absolute; inset:0; z-index:-1; pointer-events:none; background:radial-gradient(ellipse at 20% 22%,rgba(83,46,164,.2),transparent 40%),radial-gradient(ellipse at 85% 70%,rgba(124,92,255,.07),transparent 45%); }
 .nc-backdrop::after { content:""; position:absolute; inset:0; background:radial-gradient(1px 1px at 18% 24%,#a48bff80 50%,transparent 100%) 0 0/379px 331px,radial-gradient(1px 1px at 65% 73%,#e9e2ff50 50%,transparent 100%) 0 0/541px 489px; opacity:.4; }
-.nc-top { position:relative; z-index:4; height:82px; padding:0 clamp(18px,3.4vw,56px); display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:16px; align-items:center; border-bottom:1px solid var(--edge); background:rgba(8, 11, 16,.8); backdrop-filter:blur(16px); }
+.nc-top { position:relative; z-index:4; height:82px; padding:0 clamp(18px,3.4vw,56px); display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:16px; align-items:center; border-bottom:1px solid var(--edge); background:rgba(3,2,10,.8); backdrop-filter:blur(16px); }
 .nc-back { display:inline-flex; align-items:center; gap:10px; justify-self:start; font:500 10px var(--mono); letter-spacing:.15em; color:var(--dim)!important; }
 .nc-back .icon { transform:rotate(180deg); }
 .nc-brand { display:flex; justify-content:center; }
@@ -20,17 +20,17 @@
 .nc-wordmark small { display:block; margin-top:7px; color:var(--dim); font:500 7px var(--mono); letter-spacing:.24em; }
 .nc-account { justify-self:end; min-width:0; }
 .nc-wallet { display:flex; align-items:center; gap:8px; color:var(--dim); font:10px var(--mono); }
-.nc-btn { display:inline-flex; justify-content:center; align-items:center; gap:10px; min-height:46px; padding:12px 18px; border:1px solid var(--uv-hi); background:linear-gradient(175deg,#4a3f63,#2a2339); box-shadow:inset 0 1px #ffffff15,0 12px 32px -16px #8d7cb4; color:#fff; font:500 10px/1.5 var(--mono)!important; letter-spacing:.13em; transition:box-shadow .2s,background .2s; }
-.nc-btn:hover:not(:disabled) { background:linear-gradient(175deg,#8d7cb4,#332b46); box-shadow:0 10px 36px -12px #8d7cb4; }
-.nc-btn.ghost { background:rgba(141, 124, 180,.035); border-color:var(--edge); color:var(--dim); box-shadow:none; }
-.nc-btn.ghost:hover:not(:disabled) { color:var(--moon); background:rgba(141, 124, 180,.12); border-color:var(--uv-hi); }
+.nc-btn { display:inline-flex; justify-content:center; align-items:center; gap:10px; min-height:46px; padding:12px 18px; border:1px solid var(--uv-hi); background:linear-gradient(175deg,#7856f8,#4a2bd2); box-shadow:inset 0 1px #ffffff15,0 12px 32px -16px #7c5cff; color:#fff; font:500 10px/1.5 var(--mono)!important; letter-spacing:.13em; transition:box-shadow .2s,background .2s; }
+.nc-btn:hover:not(:disabled) { background:linear-gradient(175deg,#8c70ff,#5938e5); box-shadow:0 10px 36px -12px #7c5cff; }
+.nc-btn.ghost { background:rgba(124,92,255,.035); border-color:var(--edge); color:var(--dim); box-shadow:none; }
+.nc-btn.ghost:hover:not(:disabled) { color:var(--moon); background:rgba(124,92,255,.12); border-color:var(--uv-hi); }
 .nc-btn.small { min-height:36px; padding:8px 12px; font-size:9px!important; }
 .nc-btn.primary { position:relative; overflow:hidden; min-height:56px; width:100%; font-size:12px!important; }
 .nc-btn.primary>span { flex:1; }
 .nc-btn.primary::after { content:""; position:absolute; inset:0; background:linear-gradient(110deg,transparent 20%,#ffffff20 50%,transparent 80%); transform:translateX(-100%); transition:transform .6s; pointer-events:none; }
 .nc-btn.primary:hover::after { transform:translateX(100%); }
 .nc-kicker,.nc-section-label { display:flex; align-items:center; gap:9px; font:500 9px/1.6 var(--mono); letter-spacing:.15em; color:var(--dim); }
-.nc-live { display:inline-block; flex:none; width:5px; height:5px; border-radius:50%; background:#7fd6a6; box-shadow:0 0 10px #b8ff4a50; }
+.nc-live { display:inline-block; flex:none; width:5px; height:5px; border-radius:50%; background:#b8ff4a; box-shadow:0 0 10px #b8ff4a50; }
 .nc-lobby { width:min(1320px,100%); margin:auto; display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:clamp(30px,5vw,76px); padding:48px 32px 70px; align-items:start; }
 .nc-stage { min-width:0; padding-top:8px; }
 .nc-stage>.nc-kicker { color:var(--uv-hi); }
@@ -87,7 +87,7 @@
 .nc-leaderboard li { display:grid; grid-template-columns:34px minmax(0,1fr) auto; gap:12px; align-items:center; min-height:46px; padding:9px 10px; border:1px solid transparent; border-bottom-color:#a48bff13; font-size:11px; }
 .nc-leaderboard .ns-rank { position:relative; display:grid; place-items:center; width:32px; height:34px; color:var(--dim); font:500 10px var(--mono); font-variant-numeric:tabular-nums; }
 .nc-leaderboard li:is(.ns-place-1,.ns-place-2,.ns-place-3) { position:relative; isolation:isolate; overflow:hidden; min-height:56px; margin:6px 0; border-color:rgba(var(--podium-rgb),.28); background:linear-gradient(110deg,rgba(var(--podium-rgb),.085),rgba(var(--podium-rgb),.015) 75%); box-shadow:inset 0 1px rgba(var(--podium-rgb),.05),0 4px 22px -17px rgba(var(--podium-rgb),.4); }
-.nc-leaderboard li.ns-place-1 { --podium:#d9ad66; --podium-rgb:255,196,107; min-height:66px; border-color:rgba(var(--podium-rgb),.4); }
+.nc-leaderboard li.ns-place-1 { --podium:#ffc46b; --podium-rgb:255,196,107; min-height:66px; border-color:rgba(var(--podium-rgb),.4); }
 .nc-leaderboard li.ns-place-2 { --podium:#d8dce8; --podium-rgb:216,220,232; }
 .nc-leaderboard li.ns-place-3 { --podium:#d08a5a; --podium-rgb:208,138,90; }
 .nc-leaderboard .ns-medal { color:var(--podium); filter:drop-shadow(0 0 7px rgba(var(--podium-rgb),.2)); }
@@ -124,7 +124,7 @@
 .nc-board-wrap { position:relative; border-inline:1px solid #a48bff14; background:radial-gradient(ellipse at 50% 60%,#351f6140,transparent 65%); }
 .nc-table .nc-board { aspect-ratio:1.17; max-height:min(65vw,calc(100dvh - 302px)); min-height:310px; }
 .nc-player { display:flex; align-items:center; gap:13px; padding:12px 16px; min-height:84px; border:1px solid var(--edge); background:linear-gradient(90deg,#17102560,#0a0614b0); transition:border-color .2s,box-shadow .2s; }
-.nc-player.running { border-color:#a48bff80; background:linear-gradient(90deg,#7c5cff14,#0c0819); box-shadow:inset 2px 0 var(--uv-hi),0 0 26px -16px #8d7cb4; }
+.nc-player.running { border-color:#a48bff80; background:linear-gradient(90deg,#7c5cff14,#0c0819); box-shadow:inset 2px 0 var(--uv-hi),0 0 26px -16px #7c5cff; }
 .nc-avatar { display:grid; place-items:center; width:43px; height:43px; border:1px solid #c4b4ff50; border-radius:50%; flex:none; background:radial-gradient(at 40% 20%,#e9e2ff25,#e9e2ff04); color:var(--moon); }
 .nc-avatar.b { color:var(--uv-hi); background:radial-gradient(at 40% 20%,#7c5cff30,#120a20); border-color:#7c5cff60; }
 .nc-player-info { flex:1; min-width:0; }
@@ -138,10 +138,10 @@
 .nc-clock-dot { width:5px; height:5px; border-radius:50%; background:transparent; }
 .running .nc-clock { color:#f5f0ff; text-shadow:0 0 22px #a48bff60; }
 .running .nc-clock-dot { background:var(--uv-hi); box-shadow:0 0 10px var(--uv); }
-.nc-player.low .nc-clock { color:#e09aa6; }
-.nc-player.low.running .nc-clock-dot { background:#e07a86; box-shadow:0 0 10px #e07a86; animation:nc-blink 1s infinite; }
+.nc-player.low .nc-clock { color:#ff8aa5; }
+.nc-player.low.running .nc-clock-dot { background:#ff6b91; box-shadow:0 0 10px #ff6b91; animation:nc-blink 1s infinite; }
 .nc-turn { padding:10px 0 4px; text-align:center; color:var(--dim); font:9px/1.5 var(--mono); letter-spacing:.03em; }
-.nc-turn.check { color:#e09aa6; }
+.nc-turn.check { color:#ff8aa5; }
 .nc-game-side { grid-column:2; grid-row:2; display:flex; flex-direction:column; gap:16px; min-width:0; }
 .nc-scoresheet { border:1px solid var(--edge); background:var(--glass); flex:1; min-height:270px; max-height:560px; display:flex; flex-direction:column; }
 .nc-scoresheet>.nc-section-label { padding:17px; margin:0; border-bottom:1px solid var(--edge); }
@@ -152,7 +152,7 @@
 .nc-moves>div:nth-child(even) { background:#7c5cff07; }
 .nc-moves>div>span { color:var(--dim); font-size:9px; }
 .nc-moves b { font-weight:400; padding:5px 4px; }
-.nc-moves b.last { color:#ddd8e8; background:#7c5cff30; box-shadow:inset 1px 0 #ad9bd2; }
+.nc-moves b.last { color:#e9e2ff; background:#7c5cff30; box-shadow:inset 1px 0 #a48bff; }
 .nc-game-actions { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
 .nc-game-actions .nc-btn { min-height:48px; padding:10px; font-size:8px!important; gap:7px; }
 .nc-board-help { display:flex; gap:9px; align-items:flex-start; color:var(--dim); font-size:10px; line-height:1.8; margin:0; }
@@ -161,7 +161,7 @@
 .nc-accessible-board { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:10px; align-items:center; font:9px var(--mono); color:var(--dim); padding:12px; border-top:1px solid #a48bff15; }
 .nc-accessible-board select { background:#100a1e; color:var(--moon); border:1px solid var(--edge); padding:10px; min-height:38px; font-size:10px; }
 .nc-accessible-board span { font-size:8px; }
-.nc-error { display:flex; align-items:center; gap:10px; padding:10px 12px; border-left:1px solid #e09aa6; color:#ffb3c5; background:#ff478a0b; font-size:11px; overflow-wrap:anywhere; }
+.nc-error { display:flex; align-items:center; gap:10px; padding:10px 12px; border-left:1px solid #ff8aa5; color:#ffb3c5; background:#ff478a0b; font-size:11px; overflow-wrap:anywhere; }
 .nc-error>span { flex:1; }
 .nc-error>button { border:0; background:none; color:inherit; padding:4px; }
 
@@ -192,10 +192,10 @@
 .nc-versus>em { font:italic 36px var(--serif); color:var(--uv-hi); }
 .nc-countdown { display:block; font:400 80px/1 var(--mono); color:var(--moon); text-shadow:0 0 50px #7c5cff90; animation:nc-count .7s ease both; }
 .nc-result { background:radial-gradient(ellipse at 50% 25%,#3a1b6550,transparent),#03020ade; }
-.nc-result.won::before { content:""; position:absolute; inset:0; pointer-events:none; background:radial-gradient(1px 1px at 20% 20%,#ddd8e8 70%,transparent) 0 0/69px 85px,radial-gradient(1px 1px at 70% 60%,#ad9bd2 70%,transparent) 0 0/101px 73px; opacity:.3; animation:nc-stars 8s linear infinite; }
+.nc-result.won::before { content:""; position:absolute; inset:0; pointer-events:none; background:radial-gradient(1px 1px at 20% 20%,#e9e2ff 70%,transparent) 0 0/69px 85px,radial-gradient(1px 1px at 70% 60%,#a48bff 70%,transparent) 0 0/101px 73px; opacity:.3; animation:nc-stars 8s linear infinite; }
 .nc-result .nc-dialog { gap:14px; }
 .nc-result .nc-dialog>h2 { font:400 clamp(38px,4.3vw,64px)/1 var(--serif); letter-spacing:.04em; }
-.nc-result-icon { display:grid; place-items:center; color:var(--uv-hi); width:58px; height:58px; border:1px solid var(--edge); border-radius:50%; box-shadow:0 0 32px -12px #8d7cb4; }
+.nc-result-icon { display:grid; place-items:center; color:var(--uv-hi); width:58px; height:58px; border:1px solid var(--edge); border-radius:50%; box-shadow:0 0 32px -12px #7c5cff; }
 .won .nc-result-icon { color:var(--moon); border-color:var(--uv-hi); }
 .nc-result-score { width:100%; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:12px; padding:14px 0; border-block:1px solid var(--edge); }
 .nc-result-score>span { font-size:12px; overflow-wrap:anywhere; }
@@ -215,8 +215,8 @@
 @keyframes nc-stars { to { background-position:0 85px,0 73px; } }
 
 /* The Game Room card shares Pinball's frame and button treatment. */
-.nc-promo .nc-promo-art { display:grid; place-items:center; min-height:340px; color:#ad9bd2; background:radial-gradient(ellipse at 50% 35%,#7c5cff40,transparent 65%),repeating-conic-gradient(#34234c 0 25%,#10091d 0 50%) 50% 50%/84px 84px; }
-.nc-promo-art>.icon { position:relative; z-index:1; width:130px; height:130px; stroke-width:.65; color:#ddd8e8; filter:drop-shadow(0 14px 18px #080b10) drop-shadow(0 0 24px #8d7cb4); }
+.nc-promo .nc-promo-art { display:grid; place-items:center; min-height:340px; color:#a48bff; background:radial-gradient(ellipse at 50% 35%,#7c5cff40,transparent 65%),repeating-conic-gradient(#34234c 0 25%,#10091d 0 50%) 50% 50%/84px 84px; }
+.nc-promo-art>.icon { position:relative; z-index:1; width:130px; height:130px; stroke-width:.65; color:#e9e2ff; filter:drop-shadow(0 14px 18px #03020a) drop-shadow(0 0 24px #7c5cff); }
 .nc-promo .nc-wordmark b { font-size:58px; }
 .nc-promo .nc-wordmark small { font-size:9px; margin-top:12px; }
 .nc-promo .nc-wordmark>.icon { width:40px; height:40px; }
@@ -303,17 +303,17 @@
 }
 @media(max-width:350px) { .nc-clock { font-size:28px; min-width:99px; } .nc-player-info>b { font-size:11px; } .nc-avatar { display:none; } .nc-panel { padding:16px; } .nc-controls button>small { font-size:5px; } }
 /* NIGHT FROGS crew chrome. Portrait viewports intentionally exclude the NFT's chest traits. */
-.nc { --acid:#7fd6a6; --gold:#d9ad66; --glass:rgba(13,10,31,.78); }
+.nc { --acid:#b8ff4a; --gold:#ffc46b; --glass:rgba(13,10,31,.78); }
 .nc-wordmark b { font:700 21px/1.1 var(--mono); letter-spacing:-.065em; }
 .nc-wordmark em { font-style:normal; font-weight:700; }
 .nc-wordmark small { font-size:8px; letter-spacing:.13em; text-transform:none; }
 .nc-wordmark small strong { color:var(--moon); font-weight:600; }
 .nc-wordmark>.icon { color:var(--acid); }
-.nc-frog-portrait { position:relative; display:inline-block; flex:none; width:56px; height:56px; overflow:hidden; isolation:isolate; border:1px solid #a48bff60; border-radius:12px; background:#0d0a1f; box-shadow:inset 0 0 0 2px #080b10; }
+.nc-frog-portrait { position:relative; display:inline-block; flex:none; width:56px; height:56px; overflow:hidden; isolation:isolate; border:1px solid #a48bff60; border-radius:12px; background:#0d0a1f; box-shadow:inset 0 0 0 2px #03020a; }
 .nc-frog-portrait img { display:block; width:100%; height:100%; object-fit:cover; transform:scale(1.75) translateY(1%); }
 .nc-crew { display:flex; align-items:center; gap:16px; position:relative; padding:14px 17px; margin:0 0 22px; border:1px solid var(--edge); background:linear-gradient(110deg,#7c5cff15,#0d0a1fc9); box-shadow:inset 0 1px #e9e2ff08; }
 .nc-crew-faces { display:flex; align-items:center; padding-left:2px; flex:none; }
-.nc-crew-faces .nc-frog-portrait { width:59px; height:59px; transform:rotate(-7deg); box-shadow:0 4px 15px #080b10; }
+.nc-crew-faces .nc-frog-portrait { width:59px; height:59px; transform:rotate(-7deg); box-shadow:0 4px 15px #03020a; }
 .nc-crew-faces .nc-frog-portrait+.nc-frog-portrait { margin-left:-16px; }
 .nc-crew-faces .nc-frog-portrait:nth-child(2) { width:73px; height:73px; z-index:1; transform:rotate(0); border-color:var(--gold); }
 .nc-crew-faces .nc-frog-portrait:nth-child(3) { transform:rotate(7deg); }
@@ -339,7 +339,7 @@
 @media(max-width:700px) { .nc-wordmark { gap:7px; } .nc-wordmark b { font-size:17px; } .nc-wordmark small { font-size:6px; margin-top:5px; } .nc-wordmark>.icon { width:25px; height:25px; } .nc-crew { padding:12px; gap:15px; } .nc-crew b { font-size:8px; } .nc-crew small { font-size:8px; } .nc-avatar { width:43px; height:43px; } .nc-player-info>b { font-size:11px; gap:6px; } .nc-player-info>b>small { font-size:5px; } .nc-versus .nc-frog-portrait { width:58px; height:58px; } }
 @media(max-width:370px) { .nc-crew>.icon { display:none; } .nc-crew-faces .nc-frog-portrait { width:46px; height:46px; } .nc-crew-faces .nc-frog-portrait:nth-child(2) { width:59px; height:59px; } .nc-player { gap:8px; padding-inline:9px; } .nc-player-info>b { font-size:9px; } .nc-clock { min-width:100px; font-size:29px; } }
 @media(prefers-reduced-motion:reduce) { .nc *, .nc *::before, .nc *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
-.nc-away { color:#d9ad66; font-style:normal; font-variant-numeric:tabular-nums; }
+.nc-away { color:#ffc46b; font-style:normal; font-variant-numeric:tabular-nums; }
 /* The lobby, game first: the real board and the Play card side by side (stacked on phones), both in the first screen. */
 .nc-lobby { grid-template-columns:minmax(0,1.15fr) minmax(340px,1fr); gap:clamp(22px,3.4vw,46px); padding:26px 32px 70px; }
 .nc-stage { padding-top:0; }
