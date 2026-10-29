@@ -113,6 +113,7 @@ import { safeFetch } from "./net.js";
 import { IMD_TOKEN, completeContracts, followLaunch, followOpen, holderStatus, holdsCached, launchState, patchLaunch, saveVerification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { writeSettings } from "./settings.js";
+import { liveRecruiterNow } from "./recruiter/recruiter.js";
 import { Profiles } from "./tg.js";
 import { GameBot } from "./tg-bot.js";
 
@@ -561,17 +562,29 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
   async #command(cmd: string, args: string[], ctx?: CommandContext): Promise<Reply> {
     if (cmd === "unmute" || cmd === "mute") return this.#muteCommand(cmd, args, ctx);
     // the owner's private stats: agents, the website, the crews, sales and the recruiter, last 24 hours
-    if (cmd === "stats") return { text: liveOwnerStats()?.report() ?? "The stats are starting: try again in a minute." };
+    if (cmd === "stats") { const o = liveOwnerStats(); return o ? { text: o.report(), buttons: o.reportButtons } : { text: "The stats are starting: try again in a minute." }; }
+    // the recruiter's invitations: state, the last ones sent and their replies, with switches
+    if (cmd === "rc" || cmd === "invites" || cmd === "invitations") {
+      const r = liveRecruiterNow();
+      if (!r) return { text: "The recruiter is starting: try again in a minute.", buttons: [[{ text: "← Control room", data: "/menu" }]] };
+      const p = await r.ownerCommand(args);
+      return { text: p.html, buttons: p.buttons };
+    }
     // IDM radio into the group's live stream: the stream key is taken in a private chat only, and that message is deleted
     if (cmd === "idmradio" || cmd === "imdradio") {
       if (args[0] === "key" && ctx?.private && ctx.messageId) void tgCall(config.telegramToken, "deleteMessage", { chat_id: ctx.chat, message_id: ctx.messageId });
       return { text: (await this.#radio().command(args, { owner: true, private: ctx?.private === true })) ?? "" };
     }
-    if (cmd === "notify") return { text: liveOwnerStats()?.notify(args) ?? "The notifications are starting: try again in a minute." };
+    if (cmd === "notify") {
+      const o = liveOwnerStats();
+      if (!o) return { text: "The notifications are starting: try again in a minute." };
+      const text = o.notify(args), pick = (l: string, label: string) => ({ text: `${o.level === l ? "● " : ""}${label}`, data: `/notify ${l}` });
+      return { text: `${text}\n\n<b>all</b>: money, errors, invitations, new agents and a 30-minute digest\n<b>money</b>: money and errors only\n<b>off</b>: only the 09:00 and 21:00 report`, buttons: [[pick("all", "All"), pick("money", "Money only"), pick("off", "Off")], [{ text: "← Control room", data: "/menu" }]] };
+    }
     if (cmd === "announce") return { text: liveAgentEconomy()?.command(args) ?? "The announcements are starting: try again in a minute." };
     if (cmd === "swarm") return { text: await swarmCommand(args) };
     if (cmd === "acp") return { text: await acpCommand(args, ctx) };
-    if (cmd === "partner" || cmd === "partners") return livePartners().command(args);
+    if (cmd === "partner" || cmd === "partners") { const r = await livePartners().command(args); return { ...r, buttons: [...(r.buttons ?? []), [{ text: "← Control room", data: "/menu" }, { text: "🔄 Refresh", data: "/partners" }]] }; }
     if (cmd === "gate") return this.#gateCommand(args);
     if (cmd === "reserve") return { text: liveAgentReserve()?.command(args) ?? "The reserve is starting: try again in a minute." };
     // sent by an operator inside the private holders' group: that group becomes the Watch Room
@@ -592,15 +605,29 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
     const all = [...this.store.companies.values()];
     const find = (s?: string) => all.find((c) => c.slug === s || c.id === s);
     const menu: Button[][] = [
-      [{ text: "📊 Status", data: "/status" }, { text: "🏢 Companies", data: "/companies" }],
-      [{ text: "🛒 Market", data: "/market" }, { text: "🪙 Token", data: "/token" }],
-      [{ text: "📰 Report", data: "/report" }, { text: "🌐 Open site", url: config.publicUrl }],
+      [{ text: "📊 Stats", data: "/stats" }, { text: "📣 Invitations", data: "/rc" }],
+      [{ text: "🤝 Partners", data: "/partners" }, { text: "🔔 Alerts", data: "/notify" }],
+      [{ text: "🏢 Companies", data: "/companies" }, { text: "🪙 Token", data: "/token" }],
+      [{ text: "🛒 Market", data: "/market" }, { text: "🌐 Open site", url: config.publicUrl }],
       [{ text: "🛑 Emergency stop", data: "/stop" }],
     ];
     const back: Button[][] = [[{ text: "← Menu", data: "/menu" }, { text: "🔄 Refresh", data: `/${cmd}` }]];
     const money = (n: number) => `$${n.toFixed(2)}`;
     if (cmd === "start" || cmd === "menu" || cmd === "help") {
-      return { text: `🌙 <b>NIGHTSHIFT control room</b>\n<i>Autonomous AI companies that build with the IMD swarm.</i>\n\nMode: <b>${config.mode === "live" ? "🟢 LIVE" : "🧪 SIMULATION"}</b>\n\n/status · /companies · /market · /token · /report\n/pause &lt;slug&gt; · /resume &lt;slug&gt; · /stop`, buttons: menu };
+      const o = liveOwnerStats(), site = o?.site, rc = liveRecruiterNow()?.dashboard();
+      const siteLine = !site?.at ? "checking…" : site.down ? `🔴 not answering since ${new Date(site.since).toISOString().slice(11, 16)} UTC` : `🟢 up (checked ${new Date(site.at).toISOString().slice(11, 16)} UTC)`;
+      const rcLine = rc ? `${rc.state}, ${rc.firstContacts.auto ? "automatic" : "asks you first"} · ${rc.firstContacts.today} of ${rc.firstContacts.cap} today` : "starting";
+      return {
+        text: [
+          "🌙 <b>NIGHTSHIFT control room</b>", "",
+          `Mode: <b>${config.mode === "live" ? "🟢 LIVE" : "🧪 SIMULATION"}</b>`,
+          `Site: ${siteLine}`,
+          `Invitations: ${esc(rcLine)}`,
+          `Alerts: <b>${o?.level ?? "all"}</b>`,
+          "", "<i>Tap a button. Commands: /stats · /rc · /partners · /notify · /stop</i>",
+        ].join("\n"),
+        buttons: menu,
+      };
     }
     if (cmd === "status") {
       const h = await this.reads.health().catch(() => null);

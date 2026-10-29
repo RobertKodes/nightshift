@@ -50,7 +50,7 @@ describe("owner stats", () => {
     expect(r).toMatch(/directories and scanners: rokmcp-collector 1/);
     expect(r).toContain("from: t.co 1");
     expect(r).toContain("<b>1 paid by customers</b>");
-    expect(r).toContain("20 invitations waiting for you");
+    expect(r).toContain("0 invitations sent today, 20 waiting for you");
   });
 
   it("pings first real sessions and first tools once across restarts, never probes", async () => {

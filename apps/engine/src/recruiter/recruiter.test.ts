@@ -1,9 +1,9 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DAY, HOUR, MIN } from "./clock.js";
-import { type Channels, type Highlight, Recruiter, type Settings } from "./recruiter.js";
+import { type Channels, type GithubAdapter, type Highlight, Recruiter, type Settings } from "./recruiter.js";
 import { recruiterRoutes } from "./routes.js";
 import { allowedLink, clean, linksIn, redact, siteLink } from "./safety.js";
 
@@ -45,15 +45,16 @@ function bluesky() {
   return { adapter: { post }, post, sent };
 }
 
-function make(o: { file?: string; clock: { t: number }; fetch?: ReturnType<typeof fakeNet>["fn"]; channels?: Channels; highlights?: () => Highlight[]; settings?: Partial<Settings>; notify?: (text: string) => unknown; attribution?: () => Record<string, unknown> }) {
+function make(o: { file?: string; clock: { t: number }; fetch?: ReturnType<typeof fakeNet>["fn"]; channels?: Channels; highlights?: () => Highlight[]; settings?: Partial<Settings>; notify?: (text: string) => unknown; attribution?: () => Record<string, unknown>; card?: boolean }) {
   const logs: string[] = [];
   const file = o.file ?? tmpFile();
   const notify = vi.fn(o.notify ?? (() => true));
+  const card = vi.fn((_html: string, _buttons: unknown[][], _urgent?: boolean) => true);
   const r = new Recruiter({
-    file, now: () => o.clock.t, fetch: o.fetch ?? fakeNet(o.clock).fn, channels: o.channels ?? {}, notifyOwner: notify,
+    file, now: () => o.clock.t, fetch: o.fetch ?? fakeNet(o.clock).fn, channels: o.channels ?? {}, notifyOwner: notify, ...(o.card ? { ownerCard: card } : {}),
     highlights: o.highlights ?? (() => []), attribution: (o.attribution ?? (() => ({}))) as never, settings: { minPostGapMinutes: 0, ...o.settings }, log: (l) => logs.push(l),
   });
-  return { r, logs, notify, file };
+  return { r, logs, notify, card, file };
 }
 /** Moves the fake clock and ticks. */
 async function at(x: { r: Recruiter }, clock: { t: number }, t: number) { clock.t = t; await x.r.tick(t); }
@@ -485,5 +486,142 @@ describe("routes", () => {
     expect(out.body).toHaveProperty("schedule");
     await recruiterRoutes(req("POST"), {} as never, "/api/admin/recruiter/outbox/abcdef123456/approve", ctx() as never);
     expect(out.code).toBe(400);
+  });
+});
+
+/** The bot account on GitHub, faked: per-repo facts, issues opened, a refusal on demand. */
+function github(o: { repos?: Record<string, { issues?: boolean; archived?: boolean; stars?: number } | null>; refuse?: () => boolean; issue?: () => { open: boolean; comments: number } } = {}) {
+  const opened: { repo: string; title: string; body: string }[] = [], closed: string[] = [];
+  let token = "set";
+  const adapter: GithubAdapter = {
+    ready: () => Boolean(token),
+    repo: vi.fn(async (full: string) => { const r = o.repos?.[full]; return r === null ? null : { issues: r?.issues ?? true, archived: r?.archived ?? false, stars: r?.stars ?? 3 }; }),
+    open: vi.fn(async (full: string, title: string, body: string) => {
+      if (o.refuse?.()) throw Object.assign(new Error("GitHub issue: 403 You have exceeded a secondary rate limit"), { stop: true });
+      opened.push({ repo: full, title, body });
+      return { id: `${full}#${opened.length}`, url: `https://github.com/${full}/issues/${opened.length}` };
+    }),
+    issue: vi.fn(async () => o.issue?.() ?? { open: true, comments: 0 }),
+    close: vi.fn(async (full: string, n: number) => { closed.push(`${full}#${n}`); return true; }),
+  };
+  return { adapter, opened, closed, setToken: (t: string) => { token = t; } };
+}
+const AGENT: Repo = { full_name: "solo/pay-agent", description: "An x402 agent that sells on-chain data per call", topics: ["x402", "ai-agent"] };
+
+describe("github invitations", () => {
+  it("opens one issue per organization on its own repo without approval: agents first, 3 a day, 2 hours apart", async () => {
+    const clock = { t: T0 }, g = github();
+    const repos: Repo[] = [...["one", "two", "three", "four"].map((o) => ({ ...HOOKS, full_name: `${o}/v4-hook` })), AGENT];
+    const x = make({ clock, fetch: fakeNet(clock, { repos }).fn, channels: { github: g.adapter }, settings: { autoInvite: true }, card: true });
+    await at(x, clock, T0);
+    expect(x.r.dashboard().queue.every((i) => i.status === "queued" && i.channel === "github")).toBe(true);
+    expect(g.opened.map((i) => i.repo)).toEqual(["solo/pay-agent"]);
+    await at(x, clock, T0 + HOUR);
+    expect(g.opened).toHaveLength(1);
+    await at(x, clock, T0 + 2 * HOUR);
+    await at(x, clock, T0 + 4 * HOUR);
+    await at(x, clock, T0 + 6 * HOUR);
+    expect(g.opened).toHaveLength(3);
+    expect(x.r.dashboard().queue.find((i) => i.status === "queued")?.blocked).toBe("waiting: today's invitation cap is reached");
+    await at(x, clock, T0 + DAY);
+    expect(g.opened).toHaveLength(4);
+    expect(new Set(g.opened.map((i) => i.repo.split("/")[0])).size).toBe(4);
+    expect(g.opened[0]!.title).toContain("(bot)");
+    expect(g.opened[0]!.body).toContain("NIGHTSHIFT's automated assistant");
+    const [html, buttons] = x.card.mock.calls[0]!;
+    expect(html).toContain("Invitation sent on GitHub");
+    expect(JSON.stringify(buttons)).toContain("https://github.com/solo/pay-agent/issues/1");
+    expect(x.r.dashboard().sent.some((i) => i.url === "https://github.com/solo/pay-agent/issues/1")).toBe(true);
+  });
+
+  it("never invites big organizations, huge repos, archived repos or repos without issues", async () => {
+    const clock = { t: T0 };
+    const g = github({ repos: { "quiet/v4-hook": { issues: false }, "old/v4-hook": { archived: true }, "grown/v4-hook": { stars: 9000 } } });
+    const repos: Repo[] = [{ ...HOOKS, full_name: "Uniswap/v4-periphery" }, { ...HOOKS, full_name: "famous/v4-hook", stargazers_count: 50_000 }, ...["quiet", "old", "grown"].map((o) => ({ ...HOOKS, full_name: `${o}/v4-hook` }))];
+    const x = make({ clock, fetch: fakeNet(clock, { repos }).fn, channels: { github: g.adapter }, settings: { autoInvite: true, firstContactsPerDay: 5, minInviteGapMinutes: 30 } });
+    for (let h = 0; h < 4; h++) await at(x, clock, T0 + h * HOUR);
+    expect(g.opened).toHaveLength(0);
+    const d = x.r.dashboard();
+    expect(d.prospects.find((p) => p.org === "uniswap")?.reasons.join(" ")).toContain("big organization");
+    expect(d.prospects.find((p) => p.org === "famous")?.reasons.join(" ")).toContain("too big");
+    const notes = d.runs.flatMap((r) => r.notes).join("\n");
+    for (const why of ["issues turned off", "archived", "9000 stars"]) expect(notes).toContain(why);
+  });
+
+  it("turns GitHub off at the first refusal and tells the owner, urgently", async () => {
+    const clock = { t: T0 }, g = github({ refuse: () => true });
+    const x = make({ clock, fetch: fakeNet(clock, { repos: [AGENT, { ...HOOKS, full_name: "two/v4-hook" }] }).fn, channels: { github: g.adapter }, settings: { autoInvite: true }, card: true });
+    await at(x, clock, T0);
+    for (let h = 1; h < 10; h++) await at(x, clock, T0 + h * HOUR);
+    expect(g.adapter.open).toHaveBeenCalledTimes(1);
+    expect(x.r.dashboard().channels.find((c) => c.name === "github")?.enabled).toBe(false);
+    const urgent = x.card.mock.calls.find((c) => c[2] === true);
+    expect(urgent?.[0]).toContain("GitHub refused the bot account");
+    expect(JSON.stringify(urgent?.[1])).toContain("/rc github on");
+  });
+
+  it("waits for the token instead of the owner, and starts within a minute of it being set", async () => {
+    const clock = { t: T0 }, g = github();
+    g.setToken("");
+    const x = make({ clock, fetch: fakeNet(clock, { repos: [AGENT] }).fn, channels: { github: g.adapter }, settings: { autoInvite: true } });
+    await at(x, clock, T0);
+    expect(x.r.dashboard().queue[0]?.blocked).toContain("no GitHub token yet");
+    g.setToken("set");
+    await at(x, clock, T0 + MIN);
+    expect(g.opened).toHaveLength(1);
+  });
+
+  it("tells the owner about a reply, never opens a second issue, and takes a closed issue as a no", async () => {
+    const clock = { t: T0 };
+    let state = { open: true, comments: 0 };
+    const g = github({ issue: () => state });
+    const x = make({ clock, fetch: fakeNet(clock, { repos: [AGENT] }).fn, channels: { github: g.adapter }, settings: { autoInvite: true }, card: true });
+    await at(x, clock, T0);
+    expect(g.opened).toHaveLength(1);
+    state = { open: true, comments: 1 };
+    await at(x, clock, T0 + HOUR + MIN);
+    expect(x.card.mock.calls.some(([h]) => h.includes("answered your invitation"))).toBe(true);
+    expect(x.r.dashboard().prospects.find((p) => p.org === "solo")?.status).toBe("responded");
+    await at(x, clock, T0 + 2 * HOUR + 2 * MIN);
+    expect(g.adapter.open).toHaveBeenCalledTimes(1);
+    state = { open: false, comments: 1 };
+    await at(x, clock, T0 + 3 * HOUR + 3 * MIN);
+    expect(x.card.mock.calls.some(([h]) => h.includes("closed the invitation"))).toBe(true);
+    expect(x.r.dashboard().discovery.optOuts).toContain("solo");
+  });
+
+  it("with automatic on, old drafts go out where they can and the rest are closed, so nothing waits for the owner", async () => {
+    const clock = { t: T0 }, file = tmpFile(), g = github();
+    const launch = { id: "0f3c2b1a-1111-2222-3333-444455556666", launchNumber: 2504, kind: "custom_token", status: "live", chainId: 1, createdAt: new Date(T0 - DAY).toISOString(), artifacts: [] };
+    const net = fakeNet(clock, { repos: [AGENT], launches: [launch] });
+    const before = make({ clock, file, fetch: net.fn });
+    await at(before, clock, T0);
+    expect(before.r.dashboard().queue.map((i) => i.status)).toEqual(["awaiting_approval", "awaiting_approval"]);
+    // a state file from before automatic invitations existed has no switch saved: the engine's setting applies
+    const saved = JSON.parse(readFileSync(file, "utf8"));
+    delete saved.settings.autoInvite;
+    writeFileSync(file, JSON.stringify(saved));
+    const x = make({ clock, file, fetch: net.fn, channels: { github: g.adapter }, settings: { autoInvite: true } });
+    await at(x, clock, T0 + MIN);
+    expect(g.opened.map((i) => i.repo)).toEqual(["solo/pay-agent"]);
+    expect(x.r.dashboard().queue).toHaveLength(0);
+    expect(x.r.digest()).not.toContain("Waiting for you");
+  });
+
+  it("is driven from the owner's chat: pause, automatic off, queue, close, never again", async () => {
+    const clock = { t: T0 }, g = github();
+    const x = make({ clock, fetch: fakeNet(clock, { repos: [AGENT, { ...HOOKS, full_name: "two/v4-hook" }] }).fn, channels: { github: g.adapter }, settings: { autoInvite: true } });
+    await at(x, clock, T0);
+    const sentId = x.r.dashboard().sent[0]!.id;
+    expect((await x.r.ownerCommand([])).html).toContain("automatic: <b>on</b>");
+    expect((await x.r.ownerCommand(["pause"])).html).toContain("paused");
+    expect((await x.r.ownerCommand(["auto", "off"])).html).toContain("automatic: <b>off</b>");
+    const q = await x.r.ownerCommand(["queue"]);
+    expect(q.html).toContain("two/v4-hook");
+    expect(JSON.stringify(q.buttons)).toContain("/rc skip ");
+    expect((await x.r.ownerCommand(["close", sentId])).html).toContain("Closed on GitHub");
+    expect(g.closed).toEqual(["solo/pay-agent#1"]);
+    expect((await x.r.ownerCommand(["never", "two"])).html).toContain("never be contacted again");
+    expect(x.r.dashboard().queue).toHaveLength(0);
   });
 });

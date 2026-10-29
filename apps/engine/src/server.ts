@@ -22,8 +22,8 @@ import { liveRoutes } from "./live/routes.js";
 import { startLiveSources } from "./live/sources.js";
 import { crewHighlights, liveWatchtower } from "./crews/live.js";
 import { watchtowerRoutes } from "./watchtower/index.js";
-import { Recruiter } from "./recruiter/recruiter.js";
-import { blueskyChannel, telegramChannel } from "./recruiter/adapters.js";
+import { Recruiter, setLiveRecruiter } from "./recruiter/recruiter.js";
+import { blueskyChannel, githubChannel, telegramChannel } from "./recruiter/adapters.js";
 import { recruiterRoutes } from "./recruiter/routes.js";
 import { chats } from "./community.js";
 import { isAdmin as adminReq } from "./admin.js";
@@ -46,7 +46,7 @@ import { handleMcp } from "./mcp.js";
 import { clientIp, keyAllowed } from "./auth.js";
 import { MAX_TICKS } from "./pinball/engine.js";
 import { ANNOUNCED, checkSetup, deleteOldBackups, isAdmin, oldBackups, pendingChanges, rotateAdminToken, setupState } from "./admin.js";
-import { writeSettings } from "./settings.js";
+import { readSettings, writeSettings } from "./settings.js";
 import { buybacks, checkLaunch, completeContracts, holderStatus, launchBody, launchState, patchLaunch, recordBuyback, recordLaunch, saveVerification, tokenOn, verification } from "./token.js";
 import { verifyShift } from "./shift-verify.js";
 import { DEV_WALLET, FIRST_BUYER } from "./shift-launch.js";
@@ -416,17 +416,28 @@ let recruiter: Recruiter | null = null;
 function liveRecruiter(engine: Engine): Recruiter {
   if (recruiter) return recruiter;
   const community = chats()[0];
-  return (recruiter = new Recruiter({
+  recruiter = new Recruiter({
     file: join(config.dataDir, "recruiter.json"),
     channels: {
       ...(config.telegramToken && community ? { telegram: telegramChannel(config.telegramToken, community) } : {}),
       ...(config.blueskyHandle && config.blueskyAppPassword ? { bluesky: blueskyChannel(config.blueskyHandle, config.blueskyAppPassword) } : {}),
+      // the bot account's token from the environment, or as saved in /setup (applies without a restart)
+      github: githubChannel(() => config.recruiterGithubToken || savedGithubToken()),
     },
     notifyOwner: (text) => engine.alert(text, `recruiter-${Date.now()}`),
+    ownerCard: (html, buttons, urgent) => liveOwnerStats()?.card(html, buttons, urgent ? "error" : "activity"),
     highlights: () => crewHighlights(),
     attribution: (refs) => { const t = liveUsage(config.dataDir).tagCounts(); return Object.fromEntries(refs.map((r) => [r, { visits: t[r] ?? 0 }])); },
-    settings: { paused: true, postsPerPlatformPerDay: 1 },
-  }));
+    settings: { paused: true, postsPerPlatformPerDay: 1, autoInvite: true },
+  });
+  setLiveRecruiter(recruiter);
+  return recruiter;
+}
+let ghToken: { at: number; v: string } | null = null;
+/** The recruiter bot's token as saved in /setup, read at most once a minute. */
+function savedGithubToken(): string {
+  if (!ghToken || Date.now() - ghToken.at > 60_000) ghToken = { at: Date.now(), v: String(readSettings().RECRUITER_GITHUB_TOKEN ?? "").trim() };
+  return ghToken.v;
 }
 /** Everything the token page shows, in one read: market, supply, burns, frogs. */
 async function tokenOverview(): Promise<unknown> {
@@ -487,14 +498,18 @@ export function serve(engine: Engine) {
           .map((x) => ({ usd: Number(BigInt(x.usdc)) / 1e6, what: c.products.find((p) => p.id === x.productId)?.name ?? c.name, wallet: `${x.payer.slice(0, 6)}…${x.payer.slice(-4)}` })));
       },
       recruiter: () => {
-        const d = liveRecruiter(engine).dashboard() as unknown as { state: string; prospects: unknown[]; queue: { status: string }[]; sent: { sent?: { utc?: string } | null }[] };
+        const d = liveRecruiter(engine).dashboard() as unknown as { state: string; prospects: unknown[]; queue: { status: string; kind: string }[]; sent: { kind: string; sent?: { utc?: string } | null }[]; firstContacts: { route: string } };
         const today = new Date().toISOString().slice(0, 10);
-        return { state: d.state, prospects: d.prospects.length, waiting: d.queue.filter((q) => q.status === "awaiting_approval").length, sentToday: d.sent.filter((x) => x.sent?.utc?.startsWith(today)).length };
+        return {
+          state: d.state, prospects: d.prospects.length, route: d.firstContacts.route,
+          waiting: d.queue.filter((q) => q.status === "awaiting_approval").length, queued: d.queue.filter((q) => q.status === "queued" && q.kind !== "post").length,
+          sentToday: d.sent.filter((x) => x.kind !== "post" && x.sent?.utc?.startsWith(today)).length,
+        };
       },
     },
     // Private admin chats only, including errors and payment notifications.
-    send: async (text) => {
-      const dms = config.telegramToken ? await Promise.all(config.telegramAdmins.filter((x) => Number(x) > 0).map((id) => telegram(config.telegramToken, id, text).catch(() => false))) : [];
+    send: async (text, buttons) => {
+      const dms = config.telegramToken ? await Promise.all(config.telegramAdmins.filter((x) => Number(x) > 0).map((id) => telegram(config.telegramToken, id, text, buttons).catch(() => false))) : [];
       return dms.length > 0 && dms.every(Boolean);
     },
   });
@@ -509,6 +524,13 @@ export function serve(engine: Engine) {
   setInterval(() => void pub.tick().catch((e) => console.error("public watch", (e as Error).message)), 10 * 60_000).unref();
   onCrewEvent((e) => stats.onCrewEvent(e));
   setInterval(() => void stats.tick().catch((e) => console.error("owner stats", (e as Error).message)), 60_000).unref();
+  // the site as visitors reach it (through Cloudflare): every 5 minutes, the owner hears when it stops answering
+  if (config.mode === "live" && /^https:\/\//.test(config.publicUrl)) {
+    const check = () => fetch(`${config.publicUrl}/api/health`, { signal: AbortSignal.timeout(20_000), headers: { "user-agent": "nightshift-sitecheck" } })
+      .then((r) => stats.siteCheck(r.ok, `HTTP ${r.status}`), (e: unknown) => stats.siteCheck(false, (e as Error)?.name === "TimeoutError" ? "no answer in 20 s" : "no connection"));
+    setTimeout(() => void check(), 60_000).unref();
+    setInterval(() => void check(), 5 * 60_000).unref();
+  }
   const server = createServer(async (req, res) => {
     let url: URL;
     // a request line the URL parser refuses (GET //[) would throw outside the catch below and stop the whole server

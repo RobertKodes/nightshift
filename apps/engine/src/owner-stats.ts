@@ -15,7 +15,7 @@ export type StatsSources = {
   operators(): { name: string; status: string; createdAt: number; activatedAt: number | null }[];
   /** Outside customers' payments in the window (company products and house services). */
   sales(sinceMs: number): { usd: number; what: string; wallet: string }[];
-  recruiter(): { state: string; prospects: number; waiting: number; sentToday: number } | null;
+  recruiter(): { state: string; prospects: number; waiting: number; sentToday: number; queued?: number; route?: string } | null;
 };
 
 const short = (s: string) => `${s.slice(0, 6)}…${s.slice(-4)}`;
@@ -64,7 +64,7 @@ export function ownerReport(s: StatsSources, now = Date.now()): string {
     `🧭 <b>Outside crews</b>: ${ops.filter((o) => o.status === "active").length} active, ${ops.filter((o) => o.createdAt > since).length} registered today`,
   ];
   if (day.since > since) lines.push(`Rolling counts available since ${new Date(day.since).toISOString().slice(0, 16).replace("T", " ")} UTC.`);
-  if (rc) lines.push(`📣 <b>Recruiter</b>: ${esc(rc.state)}, ${rc.prospects} prospects, ${rc.waiting} invitations waiting for you, ${rc.sentToday} sent today`);
+  if (rc) lines.push(`📣 <b>Recruiter</b>: ${esc(rc.state)}, ${rc.prospects} prospects, ${rc.sentToday} invitations sent today${rc.queued ? `, ${rc.queued} queued` : ""}${rc.waiting ? `, ${rc.waiting} waiting for you` : ""}${rc.route ? `\n   ${esc(rc.route)}` : ""}`);
   lines.push("", "Send /stats any time for this report.");
   return lines.join("\n");
 }
@@ -78,6 +78,10 @@ export function notificationLevel(file: string): NotifyLevel {
   } catch { return "all"; }
 }
 type Kind = "money" | "error" | "activity";
+/** A button under a message in the owner's chat: a link, or a bot command as data. */
+export type OwnerButton = { text: string; url?: string; data?: string };
+/** Under the report: one tap to refresh it or open the controls. */
+const REPORT_BUTTONS: OwnerButton[][] = [[{ text: "🔄 Refresh", data: "/stats" }, { text: "📣 Invitations", data: "/rc" }], [{ text: "☰ Control room", data: "/menu" }]];
 export type PaymentAttempt = { service: string; payer: string; nonce: string; reason: string };
 export type SettledPayment = Omit<PaymentAttempt, "reason"> & { usd: number; holderPrice: boolean; tx: string; sim?: boolean };
 type Digest = {
@@ -93,7 +97,7 @@ type State = {
   seenClients: string[]; seenCalls: string[]; seenOperators: string[];
   payments: Record<string, { settled?: boolean; refused?: boolean }>;
   sentAt: number[]; lastReport: string | null; level: NotifyLevel; digest: Digest;
-  outbox: { text: string; kind: Kind | "report" }[];
+  outbox: { text: string; kind: Kind | "report"; buttons?: OwnerButton[][] }[];
   reserveBuys: string[];
 };
 const emptyDigest = (since: number): Digest => ({ since, agents: {}, probes: { sessions: 0, calls: 0 }, unattributed: 0, views: 0, from: {}, pages: {}, jobs: {}, payments: { settled: 0, refused: 0, usd: 0, classes: {} }, news: [], spilled: 0 });
@@ -104,7 +108,7 @@ export class OwnerStats {
   #sending: Promise<void> | null = null;
   #ticking: Promise<void> | null = null;
   #unsubscribe: () => void;
-  constructor(private readonly o: { file: string | null; sources: StatsSources; send(text: string): Promise<boolean>; now?: () => number }) {
+  constructor(private readonly o: { file: string | null; sources: StatsSources; send(text: string, buttons?: OwnerButton[][]): Promise<boolean>; now?: () => number }) {
     const st: State = { seenClients: [], seenCalls: [], seenOperators: [], payments: {}, sentAt: [], lastReport: null, level: "all", digest: emptyDigest(this.#now()), outbox: [], reserveBuys: [] };
     if (o.file && existsSync(o.file)) try { Object.assign(st, JSON.parse(readFileSync(o.file, "utf8"))); } catch { /* start over */ }
     if (!["all", "money", "off"].includes(st.level)) st.level = "all";
@@ -128,14 +132,15 @@ export class OwnerStats {
     return `🔔 Notifications: <b>${level}</b>. ${level === "all" ? "Money, errors, new agents and a digest every 30 minutes." : level === "money" ? "Money and errors only." : "Only the 09:00 and 21:00 Bucharest report."}`;
   }
 
-  #enqueue(text: string, kind: Kind | "report"): void {
+  #enqueue(text: string, kind: Kind | "report", buttons?: OwnerButton[][]): void {
     if (!this.#allows(kind)) return;
     let chunk = "";
     for (const line of text.split("\n")) {
       if (chunk.length + line.length > 3800) { this.#st.outbox.push({ text: chunk, kind }); chunk = ""; }
       chunk += `${chunk ? "\n" : ""}${line}`;
     }
-    if (chunk) this.#st.outbox.push({ text: chunk, kind });
+    // the buttons go under the last part of a long message
+    if (chunk) this.#st.outbox.push({ text: chunk, kind, ...(buttons?.length ? { buttons } : {}) });
     this.#save();
     void this.#flush();
   }
@@ -147,7 +152,7 @@ export class OwnerStats {
   async #drain(): Promise<void> {
     while (this.#st.outbox.length) {
       const m = this.#st.outbox[0]!;
-      if (this.#allows(m.kind) && !(await this.o.send(m.text).catch(() => false))) break;
+      if (this.#allows(m.kind) && !(await this.o.send(m.text, m.buttons).catch(() => false))) break;
       // /notify may have removed this message while Telegram was answering.
       if (this.#st.outbox[0] === m) this.#st.outbox.shift();
       this.#save();
@@ -231,6 +236,12 @@ export class OwnerStats {
       if (e.status === "failed") this.#enqueue(text, "error"); else this.#activity(text);
     }
   }
+  /** A card of our own HTML (its parts escaped by the caller) with buttons, at this notification level. */
+  card(html: string, buttons: OwnerButton[][], kind: Kind = "activity"): boolean {
+    if (!this.#allows(kind)) return false;
+    this.#enqueue(html, kind, buttons);
+    return true;
+  }
   /** Existing engine alerts use the same private destination and notification level. */
   async alert(text: string, kind: "sale" | "launch" | "alert"): Promise<boolean> {
     const category = kind === "sale" ? "money" : kind === "alert" ? "error" : "activity";
@@ -270,15 +281,33 @@ export class OwnerStats {
     const slot = reportSlot(now);
     if (slot && this.#st.lastReport !== slot) {
       this.#st.lastReport = slot;
-      this.#enqueue(ownerReport(this.o.sources, now), "report");
+      this.#enqueue(ownerReport(this.o.sources, now), "report", REPORT_BUTTONS);
     }
     this.#save();
     await this.#flush();
   }
 
   report(): string { return ownerReport(this.o.sources, this.#now()); }
+
+  #site = { fails: 0, down: false, since: 0, at: 0 };
+  /** The site's own check through Cloudflare: two failures in a row tell the owner, and so does the recovery. */
+  siteCheck(ok: boolean, detail: string): void {
+    const now = this.#now(), s = this.#site;
+    s.at = now;
+    if (ok) {
+      if (s.down) this.card(`✅ <b>getnightshift.tech answers again</b>\nIt was down for about ${Math.max(1, Math.round((now - s.since) / 60_000))} min.`, [], "error");
+      s.fails = 0; s.down = false; s.since = 0;
+      return;
+    }
+    if (++s.fails < 2 || s.down) return;
+    s.down = true; s.since = now;
+    this.card(`⚠️ <b>getnightshift.tech is not answering</b>\nTwo checks in a row failed (${esc(detail)}). Visitors may see a Cloudflare error page.`, [[{ text: "🌐 Open the site", url: "https://getnightshift.tech" }]], "error");
+  }
+  get site(): { down: boolean; since: number; at: number } { return { down: this.#site.down, since: this.#site.since, at: this.#site.at }; }
   /** The report now, to the owner's private chat. */
-  sendReport(): Promise<boolean> { return this.o.send(this.report()); }
+  sendReport(): Promise<boolean> { return this.o.send(this.report(), REPORT_BUTTONS); }
+  /** The buttons that go under /stats. */
+  get reportButtons(): OwnerButton[][] { return REPORT_BUTTONS; }
 }
 
 let current: OwnerStats | null = null;

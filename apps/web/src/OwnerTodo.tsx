@@ -79,7 +79,8 @@ function Partners({ token }: { token: string }) {
  * Everything the owner still has to do, at the top of /setup: each one a button, done when its check turns green.
  * Opening Token Deals saves its address and restarts; the holder price is one transaction from the dev wallet.
  */
-export function OwnerTodo({ call, token, guardOn, saveSettings, onToken }: { call: Call; token: string; guardOn: boolean; saveSettings: (patch: Record<string, string>) => Promise<void>; onToken: (t: string) => void }) {
+export function OwnerTodo({ call, token, guardOn, ghSet, saveSettings, saveQuiet, onToken }: { call: Call; token: string; guardOn: boolean; ghSet: boolean; saveSettings: (patch: Record<string, string>) => Promise<void>; saveQuiet: (patch: Record<string, string>) => Promise<void>; onToken: (t: string) => void }) {
+  const [gh, setGh] = useState("");
   const [desk, setDesk] = useState<{ open: boolean; address: string | null; passSigner: string } | null>(null);
   const [signer, setSigner] = useState<string | null>(null), [players, setPlayers] = useState(0);
   const [backups, setBackups] = useState<{ name: string; bytes: number }[] | null>(null);
@@ -156,6 +157,21 @@ export function OwnerTodo({ call, token, guardOn, saveSettings, onToken }: { cal
             <li>Group → Edit → Administrators → the bot: it needs <b>Delete messages</b>, <b>Ban users</b> and <b>Invite users via link</b> (that one lets it approve join requests).</li>
             <li>Group → Edit → Permissions → turn off <b>Add members</b> for everyone.</li>
           </ul>
+        </li>
+        <li className={`todo-item${ghSet ? " ok" : ""}`}>
+          <div className="todo-h"><b>{ghSet ? "✅ The invitation bot is on GitHub" : "Give the invitation bot its own GitHub account"}</b><span className="faint">it opens one issue per invitation on a builder's own repo: at most 3 a day, 2 hours apart, one per organization, never big projects. Replies come to your Telegram; control it there with /rc</span></div>
+          {!ghSet && <>
+            <ul className="swarm-plan">
+              <li>In a private browser window, make a new GitHub account just for the bot (for example <b>nightshift-bot</b>) with its own email. GitHub allows one machine account per person. Turn on two-step login for it.</li>
+              <li>On its profile, write: <i>Automated assistant for getnightshift.tech</i>, so people see it is a bot.</li>
+              <li>Signed in as the bot, open <a href="https://github.com/settings/tokens/new?scopes=public_repo&description=NIGHTSHIFT%20invitations" target="_blank" rel="noreferrer">new classic token</a>: keep only <b>public_repo</b> ticked, pick 90 days, then <b>Generate token</b> and copy it.</li>
+              <li>Paste it here and save. It works within a minute, with no restart.</li>
+            </ul>
+            <div className="todo-actions">
+              <input className="field" type="password" autoComplete="off" placeholder="ghp_…" value={gh} onChange={(e) => setGh(e.target.value.trim())} />
+              <button className="btn primary" disabled={!!step || !/^(ghp_|github_pat_)\w{20,}$/.test(gh)} onClick={() => void run("Saving the bot's token…", async () => { await saveQuiet({ RECRUITER_GITHUB_TOKEN: gh }); setGh(""); })}>Save</button>
+            </div>
+          </>}
         </li>
         <li className="todo-item">
           <div className="todo-h"><b>Only you can do these</b><span className="faint">outside this server</span></div>

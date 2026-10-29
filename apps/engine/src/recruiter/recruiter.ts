@@ -7,7 +7,7 @@ import { DAY, HOUR, MIN, fmtLocal, local, localToUtc, nextDay, stamp, utcDay } f
 import { type Candidate, DEFAULT_QUERIES, type Fetch, imdLaunches, searchGithub } from "./discover.js";
 import { type Fit, qualify } from "./qualify.js";
 import { type SitePath, allowedLink, clean, isAddress, isSitePath, linksOk, redact } from "./safety.js";
-import { followUp, invitation, post } from "./templates.js";
+import { followUp, invitation, issueTitle, post } from "./templates.js";
 
 /**
  * NIGHTSHIFT's recruitment operator. It runs inside the engine and keeps going on its own:
@@ -17,13 +17,19 @@ import { followUp, invitation, post } from "./templates.js";
  *
  * It cannot pay, reach a shell or the treasury, or open any URL of its choosing: it reads two
  * public hosts, writes links only from the allowlist in safety.ts, and talks only through the
- * channel adapters it was given. First-contact invitations need the owner's approval and a channel
- * that welcomes suggestions (none by default). GitHub is read-only.
+ * channel adapters it was given. A first-contact invitation goes out through a channel that welcomes
+ * suggestions, or (with autoInvite) as one issue on the prospect's own GitHub repo, opened by the
+ * project's bot account: a few a day, spaced out, one per organization, never to big organizations,
+ * archived repos or repos without issues, and the channel turns off at GitHub's first refusal.
  */
 
-export type ChannelName = "telegram" | "bluesky";
-export const CHANNELS: readonly ChannelName[] = ["telegram", "bluesky"];
+export type ChannelName = "telegram" | "bluesky" | "github";
+export const CHANNELS: readonly ChannelName[] = ["telegram", "bluesky", "github"];
+/** Our own channels: the only ones that carry posts. */
+const POST_CHANNELS: readonly ChannelName[] = ["telegram", "bluesky"];
 export type LinkButton = { text: string; url: string };
+/** A button in the owner's private chat: a link, or a bot command as data. */
+export type OwnerButton = { text: string; url?: string; data?: string };
 /** The engine's Telegram chat. Text is plain: send it without an HTML parse mode, or escape it. */
 export type TelegramAdapter = { send(text: string, buttons?: LinkButton[][]): Promise<{ id: string }>; welcomesSuggestions?: boolean };
 /** The project's Bluesky account. `link` is the same link the text carries (for a card). */
@@ -33,7 +39,22 @@ export type BlueskyAdapter = { post(text: string, link?: string): Promise<{ id: 
  * marks a published collaboration channel or public discussion that explicitly welcomes
  * suggestions: the only place a first-contact invitation may go.
  */
-export type Channels = { telegram?: TelegramAdapter; bluesky?: BlueskyAdapter };
+/**
+ * The project's GitHub bot account: one issue per invitation, on the prospect's own repo. `ready` is
+ * false until a token is set. An error with `stop` means GitHub refused the account itself (token,
+ * rate or abuse limits): the channel turns off until the owner turns it back on.
+ */
+export type GithubAdapter = {
+  readonly welcomesSuggestions?: false;
+  ready(): boolean;
+  repo(fullName: string): Promise<{ issues: boolean; archived: boolean; stars: number } | null>;
+  open(fullName: string, title: string, body: string): Promise<{ id: string; url: string }>;
+  issue(fullName: string, number: number): Promise<{ open: boolean; comments: number } | null>;
+  close(fullName: string, number: number): Promise<boolean>;
+};
+export type Channels = { telegram?: TelegramAdapter; bluesky?: BlueskyAdapter; github?: GithubAdapter };
+/** Organizations too big for a cold invitation, whatever a repo's stars say. */
+const BIG_ORGS = new Set(["uniswap", "openzeppelin", "ethereum", "coinbase", "base", "base-org", "foundry-rs", "paradigmxyz", "smartcontractkit", "aave", "consensys", "metamask", "safe-global", "modelcontextprotocol", "anthropics", "openai", "microsoft", "google", "vercel", "cloudflare", "identity-md", "identity-md-launches"]);
 
 /** An adapter throws this when it cannot tell whether the message went out: the item is never resent. */
 export class SendUnknown extends Error { readonly unknown = true; }
@@ -50,6 +71,12 @@ export type Settings = {
   stopped: boolean;
   /** Run every cycle without sending or drafting anything. */
   dryRun: boolean;
+  /** Invitations go out without the owner's approval wherever a channel can carry them. */
+  autoInvite: boolean;
+  /** GitHub flags bursts: invitations on GitHub are at least this far apart. */
+  minInviteGapMinutes: number;
+  /** A repo with this many stars or more is too big for a cold invitation. */
+  maxStars: number;
   /** The owner's on/off switch per channel. */
   channels: Record<ChannelName, boolean>;
   discoverEveryHours: number;
@@ -73,8 +100,8 @@ export type Settings = {
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  paused: false, stopped: false, dryRun: false,
-  channels: { telegram: true, bluesky: true },
+  paused: false, stopped: false, dryRun: false, autoInvite: false, minInviteGapMinutes: 120, maxStars: 2000,
+  channels: { telegram: true, bluesky: true, github: true },
   discoverEveryHours: 6, highlightsEveryMinutes: 60, attributionEveryMinutes: 60,
   postsPerPlatformPerDay: 2, minPostGapMinutes: 60, firstContactsPerDay: 3, orgCooldownDays: 30,
   minScore: 55, maxPendingDrafts: 20, maxOpportunities: 500, digestHour: 9,
@@ -104,6 +131,8 @@ export type OutboxItem = {
   counted: boolean;
   blocked: string | null; lastError: string | null; note: string | null; remoteId: string | null;
   createdAt: number; updatedAt: number; sentAt: number | null;
+  /** GitHub only: the issue page, the comments seen so far, and whether it is closed. */
+  url?: string | null; replies?: number; closed?: boolean;
 };
 
 export type Run = {
@@ -141,6 +170,8 @@ export type RecruiterOptions = {
   fetch?: Fetch;
   channels: Channels;
   notifyOwner: (text: string) => unknown;
+  /** A card in the owner's private chat: our own HTML (names escaped here) with buttons. Falls back to notifyOwner. */
+  ownerCard?: (html: string, buttons: OwnerButton[][], urgent?: boolean) => unknown;
   highlights: () => Highlight[] | Promise<Highlight[]>;
   attribution: Attribution;
   settings?: Partial<Settings>;
@@ -155,6 +186,9 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.min(Math.floor(v), 1e9) : 0);
 const clamp = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
 const PROVIDER_MS = 30_000;
+/** Text for the owner's HTML cards. */
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+const CREW_NAME: Record<Fit, string> = { watchtower: "Watchtower", buildcheck: "Build & Check", research: "Research Desk", operator: "agent builder" };
 
 /** Runs `call`, failing with `late()` if it has not answered in `ms`: a hung provider never blocks the recruiter. */
 function within<T>(call: () => T | Promise<T>, ms: number, late: () => Error): Promise<T> {
@@ -181,6 +215,9 @@ function resolve(over: Partial<Settings> = {}): Settings {
   s.digestHour = Math.floor(clamp(s.digestHour, 0, 23, 9));
   s.modelBudgetUsd = clamp(s.modelBudgetUsd, 0, 1000, 0);
   s.sendTimeoutMs = clamp(s.sendTimeoutMs, 1000, 300_000, 60_000);
+  s.minInviteGapMinutes = clamp(s.minInviteGapMinutes, 30, 1440, 120);
+  s.maxStars = clamp(s.maxStars, 50, 100_000, 2000);
+  s.autoInvite = s.autoInvite === true;
   s.githubToken = typeof s.githubToken === "string" ? s.githubToken.trim() : "";
   s.githubQueries = (Array.isArray(s.githubQueries) ? s.githubQueries : DEFAULT_QUERIES).filter((q) => typeof q === "string" && q.trim()).map((q) => q.slice(0, 200)).slice(0, 10);
   s.paused = s.paused === true; s.stopped = s.stopped === true; s.dryRun = s.dryRun === true;
@@ -190,8 +227,8 @@ function resolve(over: Partial<Settings> = {}): Settings {
 function blank(): State {
   return {
     v: 1, settings: {}, discover: { lastAt: 0, githubBackoffUntil: 0, githubStrikes: 0 }, highlightsAt: 0, attributionAt: 0, digestDay: "",
-    opportunities: [], outbox: [], runs: [], counters: {}, contacted: {}, optOuts: [], posted: { telegram: [], bluesky: [] }, funnel: {},
-    breakers: { telegram: { failures: 0, openUntil: 0 }, bluesky: { failures: 0, openUntil: 0 } }, costs: { modelUsd: 0 },
+    opportunities: [], outbox: [], runs: [], counters: {}, contacted: {}, optOuts: [], posted: { telegram: [], bluesky: [], github: [] }, funnel: {},
+    breakers: { telegram: { failures: 0, openUntil: 0 }, bluesky: { failures: 0, openUntil: 0 }, github: { failures: 0, openUntil: 0 } }, costs: { modelUsd: 0 },
   };
 }
 
@@ -222,6 +259,7 @@ export class Recruiter {
   readonly #fetch: Fetch;
   readonly #channels: Channels;
   readonly #notify: (text: string) => unknown;
+  readonly #card: ((html: string, buttons: OwnerButton[][], urgent?: boolean) => unknown) | null;
   readonly #highlights: () => Highlight[] | Promise<Highlight[]>;
   readonly #attribution: Attribution;
   readonly #out: (line: string) => void;
@@ -235,6 +273,7 @@ export class Recruiter {
     this.#fetch = o.fetch ?? (async (url, init) => { const r = await safeFetch(url, init); if (!r) throw new Error("the address was refused"); return r; });
     this.#channels = { ...o.channels };
     this.#notify = o.notifyOwner;
+    this.#card = o.ownerCard ?? null;
     this.#highlights = o.highlights;
     this.#attribution = o.attribution;
     this.#out = o.log ?? ((line) => console.log(line));
@@ -248,6 +287,7 @@ export class Recruiter {
     const p = state.settings;
     if (typeof p.paused === "boolean") this.#s.paused = p.paused;
     if (typeof p.stopped === "boolean") this.#s.stopped = p.stopped;
+    if (typeof p.autoInvite === "boolean") this.#s.autoInvite = p.autoInvite;
     for (const c of CHANNELS) if (typeof p.channels?.[c] === "boolean") this.#s.channels[c] = p.channels[c];
     if (corrupt) this.#s.paused = true;
     // a send that was in flight when the engine stopped is never repeated: the owner reconciles it
@@ -272,6 +312,8 @@ export class Recruiter {
       await this.#maybeDigest(now);
       const s = this.#s;
       if (s.paused || s.stopped) return;
+      // with automatic on, drafts left waiting for approval are queued (or closed) at once, not at the next search
+      if (!s.dryRun) this.#promote(now);
       const discover = now >= this.#st.discover.lastAt + s.discoverEveryHours * HOUR;
       const highlights = now >= this.#st.highlightsAt + s.highlightsEveryMinutes * MIN;
       const attribution = now >= this.#st.attributionAt + s.attributionEveryMinutes * MIN;
@@ -305,14 +347,14 @@ export class Recruiter {
 
   async #cycle(now: number, o: { trigger: Run["trigger"]; dryRun: boolean; discover: boolean; highlights: boolean; attribution: boolean }): Promise<Run> {
     const run: Run = { at: now, trigger: o.trigger, dryRun: o.dryRun, discovered: 0, qualified: 0, drafted: 0, highlights: 0, sent: 0, failed: 0, wouldSend: [], notes: [] };
-    if (!o.dryRun) this.#expire(now);
+    if (!o.dryRun) { this.#expire(now); this.#promote(now); }
     if (o.discover) { await this.#discover(now, run); this.#qualifyAll(now, run); }
     if (!this.#s.stopped) {
       this.#prepareContacts(now, run, o.dryRun);
       if (o.highlights) await this.#preparePosts(now, run, o.dryRun);
       await this.#distribute(now, run, o.dryRun);
     }
-    if (o.attribution) await this.#refreshFunnel(now, run);
+    if (o.attribution) { await this.#refreshFunnel(now, run); if (!o.dryRun) await this.#watchReplies(now, run); }
     this.#prune();
     if (o.trigger === "manual" || o.discover || run.drafted || run.sent || run.failed || run.wouldSend.length || run.notes.length) {
       this.#st.runs.push(run);
@@ -358,11 +400,11 @@ export class Recruiter {
   }
 
   #qualifyAll(now: number, run: Run): void {
-    const channel = this.#suggestionChannel();
     for (const o of this.#st.opportunities) {
       if (o.status !== "new" && o.status !== "qualified" && o.status !== "rejected") continue;
       if (this.#st.optOuts.includes(o.org)) { o.status = "opted_out"; continue; }
-      const q = qualify(o, now, { channel, minScore: this.#s.minScore });
+      const ch = this.#contactChannel(o);
+      const q = qualify(o, now, { channel: ch === "github" ? "their own GitHub issues" : ch, minScore: this.#s.minScore });
       if (q.qualified && o.status !== "qualified") run.qualified++;
       Object.assign(o, { score: q.score, reasons: q.reasons, crew: q.crew, status: q.qualified ? "qualified" : "rejected" });
     }
@@ -370,29 +412,43 @@ export class Recruiter {
 
   // ------------------------------------------------------------------ prepare
 
-  /** Invitations for qualified prospects (one open draft per organization), and the one follow-up for those who answered. */
+  /**
+   * Invitations for qualified prospects (one open draft per organization), agent builders first, and the
+   * one follow-up for those who answered. With autoInvite a draft is queued at once where a channel can
+   * carry it, and a prospect nothing can reach is not drafted at all: nothing waits for the owner.
+   */
   #prepareContacts(now: number, run: Run, dryRun: boolean): void {
     const st = this.#st, s = this.#s;
     const open = st.outbox.filter((i) => i.kind === "first_contact" && OPEN.includes(i.status));
     const busyOrgs = new Set(open.map((i) => i.org));
     let pending = open.length;
-    const ready = st.opportunities.filter((o) => o.status === "qualified" && o.crew).sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt);
+    // with autoInvite the queue only holds a couple of days of invitations, so better prospects found later are not stuck behind it
+    const cap = s.autoInvite ? Math.min(s.maxPendingDrafts, Math.max(1, s.firstContactsPerDay * 2)) : s.maxPendingDrafts;
+    const ready = st.opportunities.filter((o) => o.status === "qualified" && o.crew)
+      .sort((a, b) => Number(b.crew === "operator") - Number(a.crew === "operator") || b.score - a.score || b.updatedAt - a.updatedAt);
     for (const o of ready) {
-      if (pending >= s.maxPendingDrafts) break;
+      if (pending >= cap) break;
       if (busyOrgs.has(o.org) || st.optOuts.includes(o.org)) continue;
       const last = st.contacted[o.org];
       if (last && now - last < s.orgCooldownDays * DAY) continue;
       if (st.outbox.some((i) => i.kind === "first_contact" && i.subject === o.id)) continue;
+      const big = this.#tooBig(o);
+      if (big) { o.status = "rejected"; o.reasons = [...o.reasons, big]; o.updatedAt = now; continue; }
+      const ch = this.#contactChannel(o);
+      if (s.autoInvite && !ch) continue;
       let m: { text: string; link: string };
       try { m = invitation({ source: o.source, name: o.name, crew: o.crew!, ref: o.ref, address: o.address }); } catch (e) { this.#note(run, `no invitation for ${o.id}: ${msg(e)}`); continue; }
       busyOrgs.add(o.org); pending++;
       if (dryRun) { run.notes.push(`would draft an invitation for ${o.name}`); continue; }
-      if (this.#add({ kind: "first_contact", channel: this.#suggestionChannel() ?? "none", subject: o.id, org: o.org, ref: o.ref, ...m, status: "awaiting_approval", approved: false }, now)) {
+      const auto = s.autoInvite && ch !== null;
+      if (this.#add({ kind: "first_contact", channel: ch ?? "none", subject: o.id, org: o.org, ref: o.ref, ...m, status: auto ? "queued" : "awaiting_approval", approved: auto }, now)) {
         o.status = "drafted"; o.updatedAt = now; run.drafted++;
       }
     }
     for (const o of st.opportunities) {
       if (o.status !== "responded" || !o.crew || o.followUpDrafted || st.optOuts.includes(o.org)) continue;
+      // an answer on a GitHub issue is the owner's to reply to, in that issue: no second issue is ever opened
+      if (st.outbox.some((i) => i.kind === "first_contact" && i.subject === o.id && i.channel === "github")) continue;
       let m: { text: string; link: string };
       try { m = followUp({ crew: o.crew, ref: o.ref, address: o.address }); } catch (e) { this.#note(run, `no follow-up for ${o.id}: ${msg(e)}`); continue; }
       if (dryRun) { run.notes.push(`would draft a follow-up for ${o.name}`); continue; }
@@ -412,7 +468,7 @@ export class Recruiter {
     run.highlights = hs.length;
     if (!hs.length) return;
     const day = utcDay(now);
-    for (const ch of CHANNELS) {
+    for (const ch of POST_CHANNELS) {
       const posted = (this.#st.posted[ch] ??= []);
       let today = this.#st.outbox.filter((i) => i.kind === "post" && i.channel === ch && i.day === day && i.status !== "skipped" && i.status !== "cancelled").length;
       for (const h of hs) {
@@ -457,7 +513,39 @@ export class Recruiter {
     return CHANNELS.reduce((sum, c) => sum + this.#peek(day, c).firstContacts, 0);
   }
   #channelOf(it: OutboxItem): ChannelName | null {
-    return it.kind === "post" ? (it.channel === "none" ? null : it.channel) : this.#suggestionChannel();
+    if (it.kind === "post") return it.channel === "none" ? null : it.channel;
+    // a GitHub invitation is one issue on the prospect's own repo; a follow-up never opens another
+    if (it.channel === "github") return it.kind === "first_contact" ? "github" : null;
+    return this.#suggestionChannel();
+  }
+  /** Where an invitation to this prospect can go: its own GitHub repo (bot account set up and on), else a channel that welcomes suggestions. */
+  #contactChannel(o: Opportunity): ChannelName | null {
+    if (o.source === "github" && this.#channels.github && this.#s.channels.github) return "github";
+    return this.#suggestionChannel();
+  }
+  /** The GitHub channel needs its token; the others need only their adapter. */
+  #hasCredentials(ch: ChannelName): boolean {
+    return ch === "github" ? this.#channels.github?.ready() === true : Boolean(this.#channels[ch]);
+  }
+  /** Why this prospect is too big for a cold invitation, or null. */
+  #tooBig(o: Opportunity): string | null {
+    if (o.source !== "github") return null;
+    if (BIG_ORGS.has(o.org)) return `skipped: ${o.org} is a big organization (no cold invitations)`;
+    if (o.stars >= this.#s.maxStars) return `skipped: ${o.stars} stars is too big for a cold invitation`;
+    return null;
+  }
+  /** With autoInvite, drafts already waiting for approval go out where a channel can carry them; those nothing can reach are closed. */
+  #promote(now: number): void {
+    if (!this.#s.autoInvite) return;
+    for (const it of this.#st.outbox) {
+      if (it.kind !== "first_contact" || it.status !== "awaiting_approval") continue;
+      const o = this.#opp(it.subject);
+      const big = o ? this.#tooBig(o) : null;
+      const ch = o && !big ? this.#contactChannel(o) : null;
+      if (ch) { it.channel = ch; it.key = keyOf(ch, it.kind, it.subject, it.day); it.status = "queued"; it.approved = true; }
+      else { it.status = "cancelled"; it.note = big ?? "no way to reach them: not a GitHub repo and no channel welcomes suggestions"; }
+      it.updatedAt = now;
+    }
   }
 
   /** Why a queued item cannot go out now, or null when it can. */
@@ -468,8 +556,8 @@ export class Recruiter {
     if (it.kind !== "post" && !it.approved) return "waiting: owner approval";
     if (it.org && st.optOuts.includes(it.org)) return "blocked: opted out";
     const ch = this.#channelOf(it);
-    if (!ch) return it.kind === "post" ? "blocked: no channel" : "blocked: no channel that welcomes suggestions";
-    if (!this.#channels[ch]) return "blocked: no credentials";
+    if (!ch) return it.kind === "post" ? "blocked: no channel" : it.channel === "github" ? "blocked: answer them in the GitHub issue yourself" : "blocked: no channel that welcomes suggestions";
+    if (!this.#hasCredentials(ch)) return ch === "github" ? "blocked: no GitHub token yet (add the bot account's token in /setup)" : "blocked: no credentials";
     if (!s.channels[ch]) return "blocked: channel turned off by the owner";
     const br = st.breakers[ch];
     if (br && br.openUntil > now) return `blocked: ${ch} failed 3 times in a row, resting until ${fmtLocal(br.openUntil)} Bucharest`;
@@ -485,6 +573,10 @@ export class Recruiter {
       if (this.#firstToday(day) >= s.firstContactsPerDay) return "waiting: today's invitation cap is reached";
       const last = it.org ? st.contacted[it.org] : undefined;
       if (last && now - last < s.orgCooldownDays * DAY) return `blocked: this organization had a first contact in the last ${s.orgCooldownDays} days`;
+      if (ch === "github") {
+        const lastInvite = Math.max(0, ...st.outbox.filter((x) => x.kind === "first_contact" && x.channel === "github" && x.counted).map((x) => x.sentAt ?? x.updatedAt));
+        if (lastInvite && now - lastInvite < s.minInviteGapMinutes * MIN) return `waiting: GitHub invitations are ${s.minInviteGapMinutes} minutes apart (next after ${fmtLocal(lastInvite + s.minInviteGapMinutes * MIN)} Bucharest)`;
+      }
     }
     if (it.kind === "follow_up") {
       if (this.#opp(it.subject)?.status !== "responded") return "blocked: a follow-up goes only to a prospect marked responded";
@@ -525,8 +617,34 @@ export class Recruiter {
       if (this.#s.paused || this.#s.stopped || it.status !== "queued") continue;
       const why = this.#blocked(it, now);
       if (why) { it.blocked = why; continue; }
-      await this.#send(it, this.#channelOf(it)!, now, run);
+      const ch = this.#channelOf(it)!;
+      if (ch === "github" && !(await this.#githubCheck(it, now, run))) continue;
+      await this.#send(it, ch, now, run);
     }
+  }
+
+  /** Read before an issue is opened: the repo must exist, be live, take issues and not be too big. */
+  async #githubCheck(it: OutboxItem, now: number, run: Run): Promise<boolean> {
+    const o = this.#opp(it.subject);
+    if (!o || o.source !== "github") { it.status = "cancelled"; it.note = "not a GitHub repo"; it.updatedAt = now; return false; }
+    let info: Awaited<ReturnType<GithubAdapter["repo"]>>;
+    try { info = await within(() => this.#channels.github!.repo(o.name), PROVIDER_MS, () => new Error("GitHub gave no answer in 30 s")); } catch (e) {
+      it.blocked = `waiting: could not read the repository (${clean(msg(e), 120)})`; it.nextAttemptAt = now + 30 * MIN; it.updatedAt = now;
+      return false;
+    }
+    const why = !info ? "the repository is gone or private" : info.archived ? "the repository is archived" : !info.issues ? "the repository has issues turned off"
+      : info.stars >= this.#s.maxStars ? `${info.stars} stars is too big for a cold invitation` : null;
+    if (!why) return true;
+    it.status = "skipped"; it.note = `not sent: ${why}`; it.updatedAt = now;
+    this.#note(run, `${o.name} skipped: ${why}`);
+    return false;
+  }
+
+  /** One issue on the prospect's own repo, titled for the crew it fits. */
+  #openIssue(it: OutboxItem): Promise<{ id: string; url: string }> {
+    const o = this.#opp(it.subject);
+    if (!o?.crew) return Promise.reject(new Error("the prospect is gone"));
+    return this.#channels.github!.open(o.name, issueTitle(o.crew), it.text);
   }
 
   async #send(it: OutboxItem, ch: ChannelName, now: number, run: Run): Promise<void> {
@@ -542,17 +660,34 @@ export class Recruiter {
     if (!this.#save()) { it.status = before.status; it.attempts = before.attempts; this.#note(run, `${it.id} not sent: the state could not be saved`); return; }
     const br = (this.#st.breakers[ch] ??= { failures: 0, openUntil: 0 });
     try {
-      const r = await this.#withTimeout(() => (ch === "telegram" ? this.#channels.telegram!.send(it.text) : this.#channels.bluesky!.post(it.text, it.link)));
+      const r = await this.#withTimeout(() => (ch === "telegram" ? this.#channels.telegram!.send(it.text) : ch === "bluesky" ? this.#channels.bluesky!.post(it.text, it.link) : this.#openIssue(it)));
       it.status = "sent"; it.sentAt = now; it.remoteId = clean(String((r as { id?: unknown } | undefined)?.id ?? ""), 200) || null;
       br.failures = 0;
       const o = it.kind === "post" ? undefined : this.#opp(it.subject);
       if (o && it.kind === "first_contact") { o.status = "contacted"; o.contactedAt = now; o.updatedAt = now; }
       run.sent++;
       this.#log(`sent ${it.kind} ${it.id} on ${ch}`);
+      if (ch === "github") {
+        const url = String((r as { url?: unknown }).url ?? ""), id = String((r as { id?: unknown }).id ?? "");
+        // clean() drops "#": the issue reference is checked as it is instead
+        it.remoteId = /^[\w.-]+\/[\w.-]+#\d+$/.test(id) ? id : null;
+        it.url = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+$/.test(url) ? url : null;
+        it.replies = 0;
+        await this.#tellCard(`📣 <b>Invitation sent on GitHub</b>\n<b>${esc(o?.name ?? "")}</b> · ${esc(CREW_NAME[o?.crew ?? "operator"])} · score ${o?.score ?? 0}\n<i>${esc(o?.reasons[0] ?? "")}</i>\nToday: ${this.#firstToday(utcDay(now))} of ${this.#s.firstContactsPerDay}`, [
+          ...(it.url ? [[{ text: "🔗 Open the issue", url: it.url }]] : []),
+          [{ text: "✖️ Close it", data: `/rc close ${it.id}` }, { text: "🚫 Never again", data: `/rc never ${it.org ?? ""}` }],
+        ]);
+      }
     } catch (e) {
       it.lastError = this.#redact(clean(msg(e), 300));
       br.failures++;
-      if ((e as { unknown?: unknown })?.unknown === true) {
+      if ((e as { stop?: unknown })?.stop === true) {
+        // GitHub refused the account itself: no more tries on this channel until the owner looks
+        it.status = "failed"; run.failed++; br.failures = 0;
+        this.#s.channels[ch] = false;
+        this.#note(run, `${ch} refused the account: the channel is off`);
+        await this.#tellCard(`⚠️ <b>GitHub refused the bot account</b>, so GitHub invitations are off.\n${esc(it.lastError)}\nCheck the account and its token, then turn them back on.`, [[{ text: "▶️ Turn GitHub back on", data: "/rc github on" }], [{ text: "📣 Invitations", data: "/rc" }]], true);
+      } else if ((e as { unknown?: unknown })?.unknown === true) {
         it.status = "unknown";
         it.note = "The channel gave no clear answer, so it may have gone out. It is never resent: check the channel, then skip it.";
       } else if (it.attempts >= 3) { it.status = "failed"; run.failed++; }
@@ -595,6 +730,36 @@ export class Recruiter {
     const t: FunnelCounts = { visits: 0, freeResults: 0, firstPaid: 0, repeat: 0 };
     for (const f of Object.values(this.#st.funnel)) { t.visits += f.visits; t.freeResults += f.freeResults; t.firstPaid += f.firstPaid; t.repeat += f.repeat; }
     return t;
+  }
+
+  /**
+   * GitHub invitations from the last 30 days: a new comment tells the owner (they answer in the issue),
+   * and an issue they closed is their "no": that organization is never contacted again.
+   */
+  async #watchReplies(now: number, run: Run): Promise<void> {
+    const gh = this.#channels.github;
+    if (!gh?.ready()) return;
+    const live = this.#st.outbox.filter((i) => i.channel === "github" && i.kind === "first_contact" && i.status === "sent" && !i.closed && i.remoteId && now - (i.sentAt ?? 0) < 30 * DAY).slice(-20);
+    for (const it of live) {
+      const m = /^([\w.-]+\/[\w.-]+)#(\d+)$/.exec(it.remoteId!);
+      if (!m) continue;
+      let s: Awaited<ReturnType<GithubAdapter["issue"]>>;
+      try { s = await within(() => gh.issue(m[1]!, Number(m[2])), PROVIDER_MS, () => new Error("no answer in 30 s")); } catch (e) { this.#note(run, `GitHub replies: ${msg(e)}`); return; }
+      if (!s) continue;
+      const name = esc(this.#opp(it.subject)?.name ?? m[1]!);
+      const open = it.url ? [[{ text: "🔗 Open the issue", url: it.url }]] : [];
+      if (s.comments > (it.replies ?? 0)) {
+        it.replies = s.comments; it.updatedAt = now;
+        const o = this.#opp(it.subject);
+        if (o && o.status === "contacted") { o.status = "responded"; o.respondedAt = now; o.updatedAt = now; }
+        await this.#tellCard(`💬 <b>${name} answered your invitation</b> on GitHub (${s.comments} comment${s.comments === 1 ? "" : "s"}). Reply to them in the issue.`, [...open, [{ text: "🚫 Never again", data: `/rc never ${it.org ?? ""}` }]]);
+      }
+      if (!s.open) {
+        it.closed = true; it.note = "closed on GitHub"; it.updatedAt = now;
+        if (it.org) this.optOut(it.org);
+        await this.#tellCard(`🔕 <b>${name}</b> closed the invitation, so they are never contacted again.`, open);
+      }
+    }
   }
 
   // ------------------------------------------------------------------ housekeeping
@@ -649,6 +814,11 @@ export class Recruiter {
   async #tell(text: string): Promise<void> {
     try { await within(() => this.#notify(this.#redact(text)), PROVIDER_MS, () => new Error("no answer in 30 s")); } catch (e) { this.#log(`owner alert failed: ${msg(e)}`); }
   }
+  /** A card with buttons when the engine gave a way to send one, else the same words as a plain alert. */
+  async #tellCard(html: string, buttons: OwnerButton[][], urgent = false): Promise<void> {
+    if (!this.#card) return this.#tell(html.replace(/<[^>]+>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&amp;/g, "&"));
+    try { await within(() => this.#card!(this.#redact(html), buttons, urgent), PROVIDER_MS, () => new Error("no answer in 30 s")); } catch (e) { this.#log(`owner card failed: ${msg(e)}`); }
+  }
 
   // ------------------------------------------------------------------ the owner's digest
 
@@ -669,7 +839,7 @@ export class Recruiter {
     if (now < at || now >= at + 3 * HOUR) return;
     this.#st.digestDay = l.day;
     this.#save();
-    await this.#tell(this.digest(now));
+    await this.#tellCard(esc(this.digest(now)), [[{ text: "📣 Invitations", data: "/rc" }]]);
     this.#log("daily digest sent");
   }
 
@@ -690,17 +860,26 @@ export class Recruiter {
       `State: ${s.stopped ? "STOPPED" : s.paused ? "paused" : "running"}${s.dryRun ? " · dry run, nothing is sent" : ""}`,
       `Last 24 h: ${found.length} found, ${good.length} qualified, ${sent.filter((i) => i.kind === "post").length} posts and ${sent.filter((i) => i.kind !== "post").length} invitations sent, ${failed.length} failed`,
       ...(top.length ? [`Best new: ${top.join(", ")}`] : []),
-      `Waiting for you: ${waiting} draft${waiting === 1 ? "" : "s"} to approve${unknown ? `, ${unknown} send${unknown === 1 ? "" : "s"} with an unknown result to check` : ""}`,
-      `Channels: ${CHANNELS.map((c) => `${c} ${this.#channelStatus(c, now)}`).join(" · ")}`,
-      `Invitations: ${suggestion ? `through ${suggestion}, after your approval` : "no channel that welcomes suggestions, so none go out"}`,
+      ...(waiting || unknown || !s.autoInvite ? [`Waiting for you: ${waiting} draft${waiting === 1 ? "" : "s"} to approve${unknown ? `, ${unknown} send${unknown === 1 ? "" : "s"} with an unknown result to check` : ""}`] : []),
+      `Channels: ${CHANNELS.filter((c) => this.#channels[c]).map((c) => `${c} ${this.#channelStatus(c, now)}`).join(" · ") || "none"}`,
+      `Invitations: ${this.#inviteRoute(now)}`,
       `Funnel: ${f.visits} visits · ${f.freeResults} free results · ${f.firstPaid} first paid · ${f.repeat} repeat`,
       `Model spend: $${st.costs.modelUsd.toFixed(2)} (budget $${s.modelBudgetUsd})`,
       `Next discovery: ${fmtLocal(Math.max(now, st.discover.lastAt + s.discoverEveryHours * HOUR))} Bucharest`,
     ].join("\n");
   }
 
+  /** How invitations go out now, in one plain line. */
+  #inviteRoute(now: number): string {
+    const s = this.#s, suggestion = this.#suggestionChannel();
+    const gh = this.#channels.github ? this.#channelStatus("github", now) : null;
+    if (s.autoInvite && gh) return gh === "ready" ? `automatic, as GitHub issues (${this.#firstToday(utcDay(now))} of ${s.firstContactsPerDay} today, ${s.minInviteGapMinutes} min apart)` : `automatic as GitHub issues, but GitHub is ${gh}`;
+    if (suggestion) return `through ${suggestion}${s.autoInvite ? ", automatic" : ", after your approval"}`;
+    return "no channel that welcomes suggestions, so none go out";
+  }
+
   #channelStatus(c: ChannelName, now: number): string {
-    if (!this.#channels[c]) return "blocked: no credentials";
+    if (!this.#hasCredentials(c)) return c === "github" && this.#channels.github ? "waiting for the bot account's token (/setup)" : "blocked: no credentials";
     if (!this.#s.channels[c]) return "off";
     const br = this.#st.breakers[c];
     if (br && br.openUntil > now) return `resting until ${fmtLocal(br.openUntil)}`;
@@ -784,13 +963,102 @@ export class Recruiter {
     return { ok: true, cancelled };
   }
 
+  /** Invitations without the owner's approval (where a channel can carry them), or back to approval. */
+  setAuto(on: boolean): void {
+    this.#s.autoInvite = on === true;
+    this.#log(`automatic invitations turned ${this.#s.autoInvite ? "on" : "off"} by the owner`);
+    this.#save();
+  }
+
+  /** Closes a GitHub invitation we opened (the bot account is its author). */
+  async closeInvite(id: string): Promise<{ ok: boolean; error?: string }> {
+    const it = this.#st.outbox.find((i) => i.id === id);
+    const m = it?.remoteId ? /^([\w.-]+\/[\w.-]+)#(\d+)$/.exec(it.remoteId) : null;
+    if (!it || it.channel !== "github" || it.status !== "sent" || !m) return { ok: false, error: "No such GitHub invitation." };
+    if (it.closed) return { ok: true };
+    const gh = this.#channels.github;
+    if (!gh?.ready()) return { ok: false, error: "The GitHub token is not set." };
+    const ok = await within(() => gh.close(m[1]!, Number(m[2])), PROVIDER_MS, () => new Error("no answer")).catch(() => false);
+    if (!ok) return { ok: false, error: "GitHub did not close it. Try again, or close it on GitHub." };
+    it.closed = true; it.note = "closed by the owner"; it.updatedAt = this.#clock();
+    this.#log(`invitation ${id} closed by the owner`);
+    this.#save();
+    return { ok: true };
+  }
+
+  /** The owner's Telegram panel: state, today's invitations and the last ones sent, with switches. */
+  ownerPanel(note = ""): { html: string; buttons: OwnerButton[][] } {
+    const now = this.#clock(), s = this.#s, st = this.#st;
+    const queued = st.outbox.filter((i) => i.kind === "first_contact" && i.status === "queued");
+    const next = queued.map((i) => this.#blocked(i, now)).find(Boolean) ?? (queued.length ? "going out now" : "nothing queued: the next search finds more");
+    const sent = st.outbox.filter((i) => i.kind === "first_contact" && (i.status === "sent" || i.status === "unknown")).sort((a, b) => (b.sentAt ?? b.updatedAt) - (a.sentAt ?? a.updatedAt)).slice(0, 5);
+    const line = (i: OutboxItem) => {
+      const name = esc(this.#opp(i.subject)?.name ?? i.org ?? "?");
+      const state = i.status === "unknown" ? "unknown result: check it" : i.closed ? "closed" : i.replies ? `💬 ${i.replies} repl${i.replies === 1 ? "y" : "ies"}` : "no reply yet";
+      return `• ${i.url ? `<a href="${esc(i.url)}">${name}</a>` : name} · ${state}`;
+    };
+    const qualified = st.opportunities.filter((o) => o.status === "qualified"), agents = qualified.filter((o) => o.crew === "operator").length;
+    const html = [
+      ...(note ? [note, ""] : []),
+      "📣 <b>Invitations</b>",
+      `State: <b>${s.stopped ? "STOPPED" : s.paused ? "paused" : "running"}</b> · automatic: <b>${s.autoInvite ? "on" : "off"}</b>`,
+      `Route: ${esc(this.#inviteRoute(now))}`,
+      `Today: ${this.#firstToday(utcDay(now))} of ${s.firstContactsPerDay} · queued: ${queued.length}`,
+      `Next: ${esc(next)}`,
+      `Prospects ready: ${qualified.length} (${agents} agent builders first)`,
+      ...(sent.length ? ["", "<b>Last sent</b>", ...sent.map(line)] : []),
+    ].join("\n");
+    const buttons: OwnerButton[][] = [
+      [s.paused || s.stopped ? { text: "▶️ Resume", data: "/rc resume" } : { text: "⏸ Pause", data: "/rc pause" }, { text: s.autoInvite ? "✋ Ask me first" : "🤖 Automatic", data: `/rc auto ${s.autoInvite ? "off" : "on"}` }],
+      [...(this.#channels.github ? [{ text: s.channels.github ? "GitHub: turn off" : "GitHub: turn on", data: `/rc github ${s.channels.github ? "off" : "on"}` }] : []), { text: "📋 Queue", data: "/rc queue" }],
+      [{ text: "← Menu", data: "/menu" }, { text: "🔄 Refresh", data: "/rc" }],
+    ];
+    return { html, buttons };
+  }
+
+  /** The queue in the owner's chat: what goes out next and why it waits, each with Skip. */
+  ownerQueue(): { html: string; buttons: OwnerButton[][] } {
+    const now = this.#clock();
+    const open = this.#st.outbox.filter((i) => i.kind !== "post" && OPEN.includes(i.status)).sort((a, b) => a.createdAt - b.createdAt).slice(0, 8);
+    const name = (i: OutboxItem) => this.#opp(i.subject)?.name ?? i.org ?? "?";
+    const html = ["📋 <b>Invitation queue</b>", "", ...(open.length ? open.map((i) => `• <b>${esc(name(i))}</b> · ${esc(i.status === "awaiting_approval" ? "waiting for your approval" : this.#blocked(i, now) ?? "going out now")}`) : ["Empty: the next search finds more."])].join("\n");
+    const buttons: OwnerButton[][] = [
+      ...open.map((i) => [
+        ...(i.status === "awaiting_approval" ? [{ text: `✅ ${name(i).slice(0, 24)}`, data: `/rc approve ${i.id}` }] : []),
+        { text: `⏭ Skip ${name(i).slice(0, 24)}`, data: `/rc skip ${i.id}` },
+      ]),
+      [{ text: "← Invitations", data: "/rc" }],
+    ];
+    return { html, buttons };
+  }
+
+  /** /rc in the owner's private chat. */
+  async ownerCommand(args: string[]): Promise<{ html: string; buttons: OwnerButton[][] }> {
+    const [what = "", arg = ""] = args.map((a) => a.trim());
+    const done = (r: { ok: boolean; error?: string }, ok: string) => (r.ok ? `✅ ${ok}` : `⚠️ ${esc(r.error ?? "That did not work.")}`);
+    switch (what.toLowerCase()) {
+      case "": case "panel": return this.ownerPanel();
+      case "queue": return this.ownerQueue();
+      case "pause": this.setPaused(true); return this.ownerPanel("⏸ Paused: nothing goes out.");
+      case "resume": this.setPaused(false); return this.ownerPanel("▶️ Running.");
+      case "auto": this.setAuto(arg !== "off"); return this.ownerPanel(this.#s.autoInvite ? "🤖 Invitations go out on their own, within the limits." : "✋ Every invitation now waits for your approval.");
+      case "github": { const r = this.setChannel("github", arg !== "off"); return this.ownerPanel(done(r, `GitHub invitations ${arg !== "off" ? "on" : "off"}.`)); }
+      case "approve": return { ...this.ownerQueue(), html: `${done(this.approve(arg), "Approved: it goes out within the limits.")}\n\n${this.ownerQueue().html}` };
+      case "skip": return { ...this.ownerQueue(), html: `${done(this.skip(arg), "Skipped.")}\n\n${this.ownerQueue().html}` };
+      case "close": return this.ownerPanel(done(await this.closeInvite(arg), "Closed on GitHub."));
+      case "never": { const r = this.optOut(arg); return this.ownerPanel(done(r, `${esc(arg)} will never be contacted again.`)); }
+      default: return this.ownerPanel("Use the buttons, or /rc pause · resume · auto on|off · github on|off · queue.");
+    }
+  }
+
   // ------------------------------------------------------------------ the owner's view
 
   dashboard() {
     const now = this.#clock(), st = this.#st, s = this.#s, day = utcDay(now);
     const suggestion = this.#suggestionChannel();
     const view = (i: OutboxItem) => ({
-      id: i.id, kind: i.kind, channel: i.kind === "post" ? i.channel : (i.status === "sent" || i.status === "unknown" ? i.channel : suggestion ?? "none"),
+      id: i.id, kind: i.kind, channel: i.kind === "post" || i.channel === "github" ? i.channel : (i.status === "sent" || i.status === "unknown" ? i.channel : suggestion ?? "none"),
+      url: i.url ?? null, replies: i.replies ?? null, closed: i.closed === true,
       subject: i.subject, org: i.org, status: i.status, approved: i.approved,
       blocked: i.status === "awaiting_approval" ? `waiting: owner approval${suggestion ? "" : "; then blocked: no channel that welcomes suggestions"}` : i.status === "queued" ? this.#blocked(i, now) : null,
       text: i.text, link: i.link, attempts: i.attempts, lastError: i.lastError, note: i.note, remoteId: i.remoteId,
@@ -804,11 +1072,15 @@ export class Recruiter {
       state: s.stopped ? "stopped" : s.paused ? "paused" : "running",
       settings: { ...this.#publicSettings(), githubToken: s.githubToken ? "set" : "not set" },
       channels: CHANNELS.map((c) => ({
-        name: c, configured: Boolean(this.#channels[c]), enabled: s.channels[c], welcomesSuggestions: this.#channels[c]?.welcomesSuggestions === true,
+        name: c, configured: this.#hasCredentials(c), enabled: s.channels[c], welcomesSuggestions: this.#channels[c]?.welcomesSuggestions === true,
         status: this.#channelStatus(c, now), postsToday: this.#peek(day, c).posts, postCap: s.postsPerPlatformPerDay,
         breaker: { failures: st.breakers[c]?.failures ?? 0, openUntil: st.breakers[c]?.openUntil ? stamp(st.breakers[c]!.openUntil) : null },
       })),
-      firstContacts: { today: this.#firstToday(day), cap: s.firstContactsPerDay, channel: suggestion, blocked: suggestion ? null : "no channel that welcomes suggestions: invitations wait for the owner" },
+      firstContacts: {
+        today: this.#firstToday(day), cap: s.firstContactsPerDay, auto: s.autoInvite, route: this.#inviteRoute(now),
+        channel: s.autoInvite && this.#channels.github && s.channels.github ? "github" : suggestion,
+        blocked: suggestion || (s.autoInvite && this.#channels.github && s.channels.github) ? null : "no channel that welcomes suggestions: invitations wait for the owner",
+      },
       queue: st.outbox.filter((i) => OPEN.includes(i.status)).sort((a, b) => a.createdAt - b.createdAt).map(view),
       reconcile: st.outbox.filter((i) => i.status === "unknown").map(view),
       prospects: [...st.opportunities].sort((a, b) => b.discoveredAt - a.discoveredAt || b.score - a.score).slice(0, 50).map((o) => ({
@@ -834,6 +1106,11 @@ export class Recruiter {
     };
   }
 }
+
+let running: Recruiter | null = null;
+/** The running recruiter, for the owner's /rc in Telegram. */
+export const setLiveRecruiter = (r: Recruiter | null) => { running = r; };
+export const liveRecruiterNow = () => running;
 
 /** A highlight as the provider gave it, checked: a plain id, real words, a page on the allowlist. */
 function validHighlight(h: unknown): { id: string; text: string; path: SitePath; address: string | null; ref: string } | null {

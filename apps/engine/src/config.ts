@@ -136,6 +136,8 @@ export const config = {
   blueskyHandle: (env.BLUESKY_HANDLE ?? "nightshifttech.bsky.social").replace(/^@/, ""),
   /** The project account's app password (Bluesky → Settings → Privacy and security → App passwords). */
   blueskyAppPassword: env.BLUESKY_APP_PASSWORD ?? "",
+  /** The recruiter bot account on GitHub (a classic token, public_repo scope): invitations as issues. */
+  recruiterGithubToken: env.RECRUITER_GITHUB_TOKEN ?? "",
   /** One promo a day (after 15:00 UTC), and at most BLUESKY_DAILY_MAX posts, BLUESKY_GAP_MINUTES apart. */
   blueskyPromo: (env.BLUESKY_PROMO ?? "1") === "1",
   blueskyDailyMax: num(env.BLUESKY_DAILY_MAX, 10),

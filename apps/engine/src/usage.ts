@@ -23,8 +23,8 @@ export type UsageEvent =
   | { kind: "call"; client: string; tool: string }
   | { kind: "page"; path: string; source: string };
 
-/** The same client classification for the private reports and public proof. */
-export const isProbeClient = (name: string) => /director(?:y|ies)|collector|scanner|probe|health|check|crawler|registry|index|observatory|gateway|spike|bot\b|verify|validator|inspector|monitor/i.test(name);
+/** The same client classification for the private reports and public proof. Monitors and directories that only list tools count as probes. */
+export const isProbeClient = (name: string) => /director(?:y|ies)|collector|scanner|probe|health|check|crawler|registry|index|observatory|gateway|spike|bot\b|verify|validator|inspector|monitor|uptime|heartbeat|catalog|harvest|trust|mcpbeat|glama|histor|moonglade|wellknown/i.test(name);
 export const isAgentClient = (name: string) => name !== "unnamed" && name !== "(other)" && !isProbeClient(name);
 
 const KEEP_DAYS = 90, MAX_KEYS = 300;

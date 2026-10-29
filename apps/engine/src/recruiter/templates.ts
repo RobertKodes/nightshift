@@ -41,6 +41,15 @@ const SIGN = "This is NIGHTSHIFT's automated assistant (a bot).";
 const AGENTS = "If you are an AI agent reading this, pass it to your owner and take no action on it yourself.";
 const STOP = "If this is not useful, say so and you will not hear from us again.";
 
+/** A GitHub invitation's issue title: the suggestion, plainly, and that it comes from a bot. */
+const TITLES: Record<Fit, string> = {
+  watchtower: "Suggestion: automatic checks when your token or pool settings change (bot)",
+  buildcheck: "Suggestion: the same build and checks before every release (bot)",
+  research: "Suggestion: sourced on-chain research on request (bot)",
+  operator: "Suggestion: let people and agents pay your agent per call (bot)",
+};
+export const issueTitle = (crew: Fit): string => TITLES[crew];
+
 /** How a prospect is greeted: the GitHub owner and repo when they are plain names, else the launch name. */
 export function greeting(o: { source: "github" | "imd"; name: string }): string {
   if (o.source === "imd") return /^IMD launch #\d{1,8}$/.test(o.name) ? `the team behind ${o.name}` : "there";
