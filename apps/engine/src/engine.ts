@@ -71,6 +71,7 @@ import { type ChatFacts, answerOwner, asksToday, remember } from "./ceo-chat.js"
 import { V4, findPool } from "./v4.js";
 import { DEV_WALLET, FIRST_BUYER, IMD_BURN_EXECUTOR } from "./shift-launch.js";
 import { forgive, judge, muteMinutes, strike, track } from "./moderation.js";
+import { DOOR_NOTE, type Person, QUIET, QUIET_HOURS, impostor, screen, whoIs } from "./gatekeeper.js";
 import { liveStats } from "./live.js";
 import { type Facts, allowed, answer, spend, worthAsking } from "./assistant.js";
 import { type KeeperRun, keeperAccount, keeperGasAlert, markGasAlert, runKeeper, sampleKeeper } from "./keeper.js";
@@ -105,7 +106,7 @@ import { followOrders } from "./orders.js";
 import { houseNow, houseOn, housePost, houseStatus, houseTick } from "./house.js";
 import { type Anim, burnTotals, buyCard, chats, marketSnapshot, publicCommand, sendCard, startCommunity, toCommunity, welcome } from "./community.js";
 import { liveDex, liveSniper } from "./sniper-live.js";
-import { type Button, type CommandContext, type GroupMessage, type Reply, esc, telegram, telegramCommands, tgCall } from "./social.js";
+import { type Button, type CommandContext, type GroupMessage, type Reply, type TgFrom, esc, telegram, telegramCommands, tgCall } from "./social.js";
 import { Connect } from "./connect.js";
 import type { Http } from "./channels.js";
 import { safeFetch } from "./net.js";
@@ -315,6 +316,9 @@ export class Engine {
         // Raids are off: a shared X post is not reposted to the community.
         adminText: async () => null,
         joined: (chat, names) => { const w = welcome(names); void sendCard(chat, "welcome", w.text, w.buttons); },
+        // the group's door: join requests screened, impostors banned on arrival, new members quiet for a day
+        arrived: (chat, people, username) => this.#arrived(chat, people, username),
+        door: (r) => this.#door(r),
         // /start nw_<code>: a Night Watcher holder entering the Watch Room; any other code links company alerts
         link: async (chat, code) => (code.startsWith("nw_") ? roomLink(chat, code) : code.startsWith("wt_") ? linkWatchAlerts(chat, code) : this.#linkAlerts(chat, code)),
         // the games: /games /live /profile /challenge and "@bot chess", each a link to the website
@@ -568,6 +572,7 @@ ${pick(["The night shift has a new grandmaster.", "Clean. Quiet. Final.", "Someb
     if (cmd === "swarm") return { text: await swarmCommand(args) };
     if (cmd === "acp") return { text: await acpCommand(args, ctx) };
     if (cmd === "partner" || cmd === "partners") return livePartners().command(args);
+    if (cmd === "gate") return this.#gateCommand(args);
     if (cmd === "reserve") return { text: liveAgentReserve()?.command(args) ?? "The reserve is starting: try again in a minute." };
     // sent by an operator inside the private holders' group: that group becomes the Watch Room
     if (cmd === "watchroom") {
@@ -911,27 +916,85 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
     return { text: cmd === "unmute" ? `🔊 ${esc(who)} can talk again. Their strikes are cleared.` : `🔇 ${esc(who)} muted ${results[0] ?? ""}.` };
   }
 
-  readonly #groupAdmins = new Map<string, { at: number; ids: Set<string> }>();
+  readonly #groupAdmins = new Map<string, { at: number; people: Person[] }>();
+  /** The group's admins with their names (the guard skips them, the door checks copies of them), read every 10 minutes. */
+  async #adminsOf(chat: string): Promise<Person[]> {
+    const a = this.#groupAdmins.get(chat);
+    if (a && Date.now() - a.at < 600_000) return a.people;
+    const r = await tgCall<{ user: Person }[]>(config.telegramToken, "getChatAdministrators", { chat_id: chat });
+    const people = (r ?? []).map((x) => x.user);
+    this.#groupAdmins.set(chat, { at: Date.now(), people });
+    return people;
+  }
+  /** Whether a chat is one of our public groups (by id, or by @username before its id is known). */
+  #ourChat(chat: string, username?: string): boolean {
+    const ours = chats().map((c) => c.toLowerCase());
+    return ours.includes(chat) || Boolean(username && ours.includes(`@${username.toLowerCase()}`));
+  }
+  /** Our own addresses and Telegram links, which the scam rules never count against anyone. */
+  #ourMarks(): { ourAddresses: string[]; ourTelegram: string[] } {
+    const l = launchState();
+    return {
+      ourAddresses: [config.token.address, ...Object.values(l?.contracts ?? {}), DEV_WALLET, FIRST_BUYER, IMD_TOKEN, IMD_BURN_EXECUTOR, config.nft.address, V4.router, V4.poolManager].filter(Boolean).map((x) => String(x).toLowerCase()),
+      ourTelegram: ["t.me/getnightshift", ...[config.telegramUrl, ...chats()].filter(Boolean).map((x) => x.toLowerCase().replace(/^https?:\/\//, "").replace(/^@/, "t.me/"))],
+    };
+  }
+
+  /** A join request: impostors and scam bios out, brand names held for an admin, everyone else in with the one rule, in private. */
+  async #door(r: { chat: string; chatUsername?: string; from: TgFrom; userChatId: number; bio: string }): Promise<void> {
+    if (!config.moderation || !config.telegramToken || !this.#ourChat(r.chat, r.chatUsername)) return;
+    const token = config.telegramToken, who = whoIs(r.from);
+    const v = screen(r.from, r.bio, await this.#adminsOf(r.chat), this.#ourMarks());
+    if (v.action === "approve") {
+      if (await tgCall(token, "approveChatJoinRequest", { chat_id: r.chat, user_id: r.from.id })) void tgCall(token, "sendMessage", { chat_id: r.userChatId, text: DOOR_NOTE, parse_mode: "HTML", disable_web_page_preview: true });
+      return;
+    }
+    if (v.action === "decline") {
+      await tgCall(token, "declineChatJoinRequest", { chat_id: r.chat, user_id: r.from.id });
+      void this.alert(`🛡 Door: turned away ${who}: ${v.reason}${r.bio ? `\nBio: “${r.bio.slice(0, 160)}”` : ""}`, `door-${r.from.id}`);
+      return;
+    }
+    // held: an admin decides with one tap
+    const text = `🛡 <b>Door</b>: ${esc(who)} asks to join (${esc(v.reason)}).${r.bio ? `\nBio: “${esc(r.bio.slice(0, 160))}”` : ""}`;
+    await Promise.all(config.telegramAdmins.filter((id) => Number(id) > 0).map((id) => telegram(token, id, text, [[{ text: "✅ Let in", data: `/gate approve ${r.chat} ${r.from.id}` }, { text: "❌ Turn away", data: `/gate decline ${r.chat} ${r.from.id}` }]])));
+  }
+
+  /** New members: an impostor is banned on the spot (returned, so nobody welcomes them); everyone else writes text only for a day. */
+  async #arrived(chat: string, people: TgFrom[], username?: string): Promise<number[]> {
+    if (!config.moderation || !config.telegramToken || !this.#ourChat(chat, username)) return [];
+    const token = config.telegramToken, admins = await this.#adminsOf(chat), banned: number[] = [];
+    for (const p of people) {
+      if (admins.some((a) => a.id === p.id)) continue;
+      const fake = impostor(p, admins);
+      if (fake) {
+        await tgCall(token, "banChatMember", { chat_id: chat, user_id: p.id, revoke_messages: true });
+        void this.alert(`🛡 Door: banned ${whoIs(p)} on arrival, an impostor: ${fake}`, `door-${p.id}`);
+        banned.push(p.id);
+        continue;
+      }
+      await tgCall(token, "restrictChatMember", { chat_id: chat, user_id: p.id, permissions: QUIET, use_independent_chat_permissions: true, until_date: Math.floor(Date.now() / 1000) + QUIET_HOURS * 3600 });
+    }
+    return banned;
+  }
+
+  /** /gate approve|decline <chat> <user>: the buttons on a held join request. */
+  async #gateCommand(args: string[]): Promise<Reply> {
+    const [what, chat, user] = args;
+    if ((what !== "approve" && what !== "decline") || !chat || !/^\d+$/.test(user ?? "")) return { text: "Use the buttons on a held join request." };
+    const ok = await tgCall(config.telegramToken, what === "approve" ? "approveChatJoinRequest" : "declineChatJoinRequest", { chat_id: chat, user_id: Number(user) });
+    if (ok && what === "approve") void tgCall(config.telegramToken, "sendMessage", { chat_id: Number(user), text: DOOR_NOTE, parse_mode: "HTML", disable_web_page_preview: true });
+    return { text: ok ? (what === "approve" ? "✅ Let in, and told the one rule." : "❌ Turned away.") : "⚠️ Telegram refused: the request was already handled or has expired." };
+  }
+
   /** Scams, spam and FUD in the public group: removed, the sender warned or muted, the admins told. */
   async #guard(m: GroupMessage): Promise<boolean> {
     this.#learn(m.name, m.user);
     if (!config.moderation || !config.telegramToken) return false;
-    const ours = chats().map((c) => c.toLowerCase());
-    if (!ours.includes(m.chat) && !(m.chatUsername && ours.includes(`@${m.chatUsername.toLowerCase()}`))) return false;
-    // Group admins are never touched (the list is read from Telegram every 10 minutes).
-    let a = this.#groupAdmins.get(m.chat);
-    if (!a || Date.now() - a.at > 600_000) {
-      const r = await tgCall<{ user: { id: number } }[]>(config.telegramToken, "getChatAdministrators", { chat_id: m.chat });
-      a = { at: Date.now(), ids: new Set((r ?? []).map((x) => String(x.user.id))) };
-      this.#groupAdmins.set(m.chat, a);
-    }
-    if (a.ids.has(m.user)) return false;
-    const l = launchState();
-    const known = [config.token.address, ...Object.values(l?.contracts ?? {}), DEV_WALLET, FIRST_BUYER, IMD_TOKEN, IMD_BURN_EXECUTOR, config.nft.address, V4.router, V4.poolManager]
-      .filter(Boolean).map((x) => String(x).toLowerCase());
-    const tgs = ["t.me/getnightshift", ...[config.telegramUrl, ...chats()].filter(Boolean).map((x) => x.toLowerCase().replace(/^https?:\/\//, "").replace(/^@/, "t.me/"))];
+    if (!this.#ourChat(m.chat, m.chatUsername)) return false;
+    // Group admins are never touched.
+    if ((await this.#adminsOf(m.chat)).some((a) => String(a.id) === m.user)) return false;
     const t = track(m.user, m.text);
-    const v = judge(m.text, { ourAddresses: known, ourTelegram: tgs });
+    const v = judge(m.text, this.#ourMarks());
     const level = v?.level ?? (t.flood ? "flood" : t.repeat ? "spam" : null);
     if (!level) return false;
     const reason = v?.reason ?? (t.flood ? "flooding the chat" : "the same message again and again");

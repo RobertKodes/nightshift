@@ -57,3 +57,15 @@ describe("ACP private owner commands", () => {
     expect(fetch).toHaveBeenLastCalledWith(expect.stringContaining("sendMessage"), expect.objectContaining({ body: expect.stringContaining("ACP command failed. Try /acp status.") }));
   });
 });
+
+describe("the group's door", () => {
+  it("hands join requests to the door and never welcomes someone banned on arrival", async () => {
+    const door = vi.fn(async () => {}), joined = vi.fn(), arrived = vi.fn(async () => [7]);
+    const h: BotHandlers = { open: vi.fn(async () => null), admin: vi.fn(async () => ({ text: "" })), door, joined, arrived };
+    await handleUpdate("TEST", ["1"], h, { update_id: 1, chat_join_request: { chat: { id: -100, type: "supergroup", username: "getnightshift" }, from: { id: 7, first_name: "Admin" }, user_chat_id: 7, bio: "dm me" } });
+    expect(door).toHaveBeenCalledWith({ chat: "-100", chatUsername: "getnightshift", from: { id: 7, first_name: "Admin" }, userChatId: 7, bio: "dm me" });
+    await handleUpdate("TEST", ["1"], h, { update_id: 2, message: { message_id: 5, chat: { id: -100, type: "supergroup" }, from: { id: 8, first_name: "Maria" }, new_chat_members: [{ id: 7, first_name: "Admin" }, { id: 8, first_name: "Maria" }] } });
+    expect(arrived).toHaveBeenCalledWith("-100", [{ id: 7, first_name: "Admin" }, { id: 8, first_name: "Maria" }], undefined);
+    expect(joined).toHaveBeenCalledWith("-100", ["Maria"]);
+  });
+});

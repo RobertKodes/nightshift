@@ -115,6 +115,10 @@ export type BotHandlers = {
   adminText?: (text: string) => Promise<Reply | null>;
   /** People joined a chat the bot is in. */
   joined?: (chat: string, names: string[]) => void;
+  /** The same people, before the welcome: impostors out, everyone else quiet for their first day. */
+  arrived?: (chat: string, people: TgFrom[], chatUsername?: string) => Promise<number[]>;
+  /** A join request to a group that approves new members: approve, decline or hold for an admin. */
+  door?: (r: { chat: string; chatUsername?: string; from: TgFrom; userChatId: number; bio: string }) => Promise<void>;
   /** Every group message from a non-admin, before anything else: true when it was removed. */
   guard?: (m: GroupMessage) => Promise<boolean>;
   /** A question in a private chat with the bot, from anyone who is not an operator. */
@@ -136,7 +140,9 @@ export type GroupMessage = { chat: string; chatUsername?: string; messageId: num
 /** One update from Telegram, as far as the bot reads it. */
 export type Update = {
   update_id: number;
-  message?: { message_id: number; chat: { id: number; type: string; username?: string }; from?: TgFrom; text?: string; caption?: string; new_chat_members?: { first_name: string; is_bot?: boolean }[]; reply_to_message?: { from?: TgFrom } };
+  message?: { message_id: number; chat: { id: number; type: string; username?: string }; from?: TgFrom; text?: string; caption?: string; new_chat_members?: (TgFrom & { first_name: string })[]; reply_to_message?: { from?: TgFrom } };
+  /** Someone asked to join a group that approves new members (the bot may write to them for 5 minutes). */
+  chat_join_request?: { chat: { id: number; type: string; username?: string }; from: TgFrom; user_chat_id: number; bio?: string };
   callback_query?: { id: string; from: TgFrom; data?: string; message?: { chat: { id: number; type?: string }; message_id: number } };
   inline_query?: { id: string; from: TgFrom; query: string; chat_type?: string };
 };
@@ -208,7 +214,7 @@ export function telegramCommands(token: string, admins: string[], h: BotHandlers
   void tg(token, "setMyDescription", { description: "NIGHTSHIFT: autonomous AI companies built by the IMD swarm. Buy alerts, price and the official links." });
   void tg(token, "setMyShortDescription", { short_description: "NIGHTSHIFT · buys, price, official links" });
   let offset = 0;
-  const kinds = JSON.stringify(h.inline ? ["message", "callback_query", "inline_query"] : ["message", "callback_query"]);
+  const kinds = JSON.stringify([...(h.inline ? ["message", "callback_query", "inline_query"] : ["message", "callback_query"]), ...(h.door ? ["chat_join_request"] : [])]);
   const loop = async (): Promise<void> => {
     try {
       const r = await send(`https://api.telegram.org/bot${token}/getUpdates?timeout=25&offset=${offset}&allowed_updates=${encodeURIComponent(kinds)}`, { method: "GET", signal: AbortSignal.timeout(35000) });
@@ -235,6 +241,8 @@ const botName = (token: string): Promise<string> => (ownName ??= tgCall<{ userna
 export async function handleUpdate(token: string, admins: string[], h: BotHandlers, u: Update): Promise<void> {
   const iq = u.inline_query;
   if (iq) { if (h.inline && !iq.from.is_bot) await h.inline({ id: iq.id, from: iq.from, query: iq.query ?? "", chatType: iq.chat_type }).catch(() => {}); return; }
+  const jr = u.chat_join_request;
+  if (jr) { if (h.door) await h.door({ chat: String(jr.chat.id), chatUsername: jr.chat.username, from: jr.from, userChatId: jr.user_chat_id, bio: jr.bio ?? "" }).catch(() => {}); return; }
   const q = u.callback_query;
   const m = u.message;
   const from = String(q?.from.id ?? m?.from?.id ?? "");
@@ -249,7 +257,9 @@ export async function handleUpdate(token: string, admins: string[], h: BotHandle
     if (!isAdmin && h.guard) { if (await h.guard(gm).catch(() => false)) return; }
     else if (isAdmin && h.ask && !gm.text.startsWith("/")) void h.ask(gm).catch(() => {});
   }
-  const people = (m?.new_chat_members ?? []).filter((x) => !x.is_bot).map((x) => x.first_name);
+  const arrivals = (m?.new_chat_members ?? []).filter((x) => !x.is_bot && !admins.includes(String(x.id)));
+  const banned = arrivals.length && h.arrived ? await h.arrived(chat, arrivals, m?.chat.username).catch(() => []) : [];
+  const people = (m?.new_chat_members ?? []).filter((x) => !x.is_bot && !banned.includes(x.id)).map((x) => x.first_name);
   if (people.length && h.joined) { h.joined(chat, people); return; }
   if (!text.startsWith("/")) {
     if (isAdmin && m?.chat.type === "private" && h.adminText) { const rep = await h.adminText(text).catch(() => null); if (rep) await telegram(token, chat, rep.text, rep.buttons); }

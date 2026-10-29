@@ -230,7 +230,7 @@ export function SetupPage() {
 
       <section className="card">
         <div className="card-h"><h3>Your to-do</h3><span className="faint" style={{ fontSize: 12 }}>each one a button; done turns green</span></div>
-        <OwnerTodo call={call} token={token} saveSettings={(patch) => save({ ...form, ...patch }, true)} onToken={(t) => { keep(t); setToken(t); }} />
+        <OwnerTodo call={call} token={token} guardOn={s.running.MODERATION === "1"} saveSettings={(patch) => save({ ...form, ...patch }, true)} onToken={(t) => { keep(t); setToken(t); }} />
       </section>
 
       <section className="card">

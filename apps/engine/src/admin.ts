@@ -60,6 +60,7 @@ export async function setupState(engine: Engine) {
     SIM_SHIFT_MINUTES: String(config.simShiftMinutes), SIM_JOB_SECONDS: String(config.simJobSeconds),
     TELEGRAM_BOT_TOKEN: config.telegramToken ? "set" : "", TELEGRAM_CHAT_ID: config.telegramChat, TELEGRAM_ADMIN_IDS: config.telegramAdmins.join(","),
     TOKEN_ADDRESS: config.token.address, TOKEN_SYMBOL: config.token.symbol, TOKEN_HOLDER_MIN: String(config.token.holderMin), TOKEN_BUY_URL: config.token.buyUrl,
+    MODERATION: config.moderation ? "1" : "0",
     GUMROAD_CLIENT_ID: config.gumroad.clientId,
     HOUSE_GAMES: config.houseGames ? "1" : "0", HOUSE_GAMES_MAX_REAL: String(config.houseGamesMaxReal),
     WEEKLY_PRIZES: config.weeklyPrizes ? "1" : "0", PRIZE_HOURS: config.prizeHours.join(","),

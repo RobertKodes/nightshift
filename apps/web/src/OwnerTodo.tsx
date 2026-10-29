@@ -79,7 +79,7 @@ function Partners({ token }: { token: string }) {
  * Everything the owner still has to do, at the top of /setup: each one a button, done when its check turns green.
  * Opening Token Deals saves its address and restarts; the holder price is one transaction from the dev wallet.
  */
-export function OwnerTodo({ call, token, saveSettings, onToken }: { call: Call; token: string; saveSettings: (patch: Record<string, string>) => Promise<void>; onToken: (t: string) => void }) {
+export function OwnerTodo({ call, token, guardOn, saveSettings, onToken }: { call: Call; token: string; guardOn: boolean; saveSettings: (patch: Record<string, string>) => Promise<void>; onToken: (t: string) => void }) {
   const [desk, setDesk] = useState<{ open: boolean; address: string | null; passSigner: string } | null>(null);
   const [signer, setSigner] = useState<string | null>(null), [players, setPlayers] = useState(0);
   const [backups, setBackups] = useState<{ name: string; bytes: number }[] | null>(null);
@@ -144,6 +144,18 @@ export function OwnerTodo({ call, token, saveSettings, onToken }: { call: Call; 
           <div className="todo-h"><b>{backups && !backups.length ? "✅ No old index copies left" : "Free up server space"}</b><span className="faint">{backups?.length ? `${backups.map((b) => b.name).join(" and ")}: ${mb(space)}, left from the Bazaar index fix` : "the copies left from the Bazaar index fix"}</span></div>
           {!!backups?.length && (sure === "backups" ? <div className="todo-actions"><button className="btn danger" disabled={!!step} onClick={() => void clean()}>Yes, delete {mb(space)}</button><button className="btn ghost" onClick={() => setSure(null)}>Cancel</button></div>
             : <div className="todo-actions"><button className="btn" onClick={() => setSure("backups")}>Delete the old copies</button></div>)}
+        </li>
+        <li className={`todo-item${guardOn ? " ok" : ""}`}>
+          <div className="todo-h"><b>{guardOn ? "✅ The group guard and door are on" : "Turn on the group guard and door"}</b><span className="faint">deletes scam messages, turns impostors away at the door, keeps new members to text only for a day and tells each one in private that admins never DM first</span></div>
+          {!guardOn && <div className="todo-actions"><button className="btn primary" disabled={!!step || players > 0} onClick={() => void run("Turning the guard on and restarting…", () => saveSettings({ MODERATION: "1" }))}>Turn on the guard</button><span className="faint">Restarts the engine (about 20 seconds).</span></div>}
+          <p className="faint todo-sub">Then, in the Telegram app (bots are not allowed to change these):</p>
+          <ul className="swarm-plan">
+            <li>Group → Edit → Group type → turn on <b>Approve new members</b>. Every joiner then passes the bot's door first; doubtful ones come to you with Let in / Turn away buttons.</li>
+            <li>Group → Edit → Members → turn on <b>Hide members</b>. Scammers then can't copy the member list to DM people.</li>
+            <li>Group → Edit → Administrators → turn on <b>Aggressive anti-spam</b>, if Telegram shows it for the group.</li>
+            <li>Group → Edit → Administrators → the bot: it needs <b>Delete messages</b>, <b>Ban users</b> and <b>Invite users via link</b> (that one lets it approve join requests).</li>
+            <li>Group → Edit → Permissions → turn off <b>Add members</b> for everyone.</li>
+          </ul>
         </li>
         <li className="todo-item">
           <div className="todo-h"><b>Only you can do these</b><span className="faint">outside this server</span></div>

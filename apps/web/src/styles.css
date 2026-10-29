@@ -535,3 +535,4 @@ html[data-lite] .arc .arc-stage::before { filter: none; opacity: .6; }
 .todo-msg { margin: 10px 0 0; font-size: 13px; }
 .todo-msg.bad { color: var(--bad); }
 @media (max-width: 640px) { .todo-app, .todo-form { grid-template-columns: 1fr; } }
+.todo-sub { margin: 12px 0 6px; font-size: 12.5px; }
