@@ -22,7 +22,7 @@ export function ShipDeckPage() {
     return entries.filter((e) => (!mine || e.mine) && (term ? `${e.title} ${e.activity} ${e.key} ${BAYS[e.bay].name}`.toLowerCase().includes(term) : e.bay === bay)).sort((a, b) => Number(b.mine) - Number(a.mine) || a.title.localeCompare(b.title, undefined, { numeric: true }));
   }, [entries, bay, query, mine]);
   const open = useCallback((key: string) => { const entry = entries.find((e) => e.key === key); if (entry) { setBay(entry.bay); setSelected(key); } }, [entries]);
-  const changeBay = (next: number) => { setBay(Math.max(0, Math.min(3, next)) as Bay); setSelected(null); setQuery(""); };
+  const changeBay = (next: number) => { setBay(Math.max(0, Math.min(BAYS.length - 1, next)) as Bay); setSelected(null); setQuery(""); };
   useEffect(() => { document.querySelector<HTMLElement>(".pv-deck h1")?.focus({ preventScroll: true }); }, []);
   useEffect(() => { setLimit(48); }, [bay, query, mine]);
   useEffect(() => { if (!address) setMine(false); }, [address]);
@@ -35,9 +35,9 @@ export function ShipDeckPage() {
       {!list && !unavailable && !reduced && <button type="button" className="pv-button" aria-pressed={paused} onClick={() => setPaused((value) => !value)}>{paused ? "Resume motion" : "Pause motion"}</button>}
     </div>
     <nav className="pv-chips pv-deck-chips" aria-label="Choose a bay">{BAYS.map((item, index) => <button key={item.id} type="button" aria-current={bay === index ? "step" : undefined} onClick={() => changeBay(index)}>{item.name}</button>)}</nav>
-    {!list && !unavailable && <DeckView bay={bay} entries={sceneEntries} selected={selected} paused={paused} reduced={reduced} onPick={open} onUnavailable={() => setUnavailable(true)} />}
+    {!list && !unavailable && <DeckView bay={bay} entries={sceneEntries} extra={data.extra} selected={selected} paused={paused} reduced={reduced} onPick={open} onBay={setBay} onUnavailable={() => setUnavailable(true)} />}
     {unavailable && <p className="pv-deck-note" role="status">3D is unavailable on this device. The live list shows the same crew and activity.</p>}
-    <div className="pv-deck-tour"><button type="button" className="pv-button" disabled={bay === 0} onClick={() => changeBay(bay - 1)}>Back</button><p aria-live="polite">{bay + 1} of {BAYS.length}<span>{BAYS[bay].name}</span></p><button type="button" className="pv-button" disabled={bay === 3} onClick={() => changeBay(bay + 1)}>Next<SectionIcon id="arrow" /></button></div>
+    <div className="pv-deck-tour"><button type="button" className="pv-button" disabled={bay === 0} onClick={() => changeBay(bay - 1)}>Back</button><p aria-live="polite">{bay + 1} of {BAYS.length}<span>{BAYS[bay].name}</span></p><button type="button" className="pv-button" disabled={bay === BAYS.length - 1} onClick={() => changeBay(bay + 1)}>Next<SectionIcon id="arrow" /></button></div>
     <div className="pv-deck-status" role="status">{data.ship.state === "ready" && <span>Snapshot {new Date(data.ship.data.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>}{failures.length > 0 && <span>{failures.join(", ")} unavailable; retrying.</span>}{!available && !failures.length && <span>Reading live station data...</span>}</div>
     <section className="pv-deck-directory" aria-labelledby="pv-deck-list-title"><div className="pv-deck-list-head"><h2 id="pv-deck-list-title">{query ? "Search results" : BAYS[bay].name}</h2><label><span className="pv-sr">Search all bays, crew and activity</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a Frog, watcher, company or game" /></label></div>
       <p className="pv-deck-note">{BAYS[bay].line} {available && `${rows.length.toLocaleString()} records.`} {address && "Your crew are marked in violet."}</p>

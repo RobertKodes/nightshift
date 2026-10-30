@@ -3,11 +3,19 @@ import { GeometryBatch } from "../station3d/geometry";
 import { createMissionPatch } from "../station3d/patch";
 import { BAYS, type Entry } from "./data";
 import { BAY_W, HALF_D, LAYOUTS, ROOM_H, bayX, type Seat } from "./layout";
+import { cables, crate, plant, poolTexture } from "./props";
+import { painted, rug as rugMaterial } from "./surfaces";
+import { ROOM_GLOW, toon } from "./toon";
+
+/** This module builds the back row: the four original rooms behind the window wall. */
+const BACK = LAYOUTS.slice(0, 4);
 
 const WIN = { x: 4.7, y0: .95, y1: 2.95 }, DOOR = { z: .9, h: 2.4 }, MONO = "ui-monospace, Consolas, monospace", SANS = "system-ui, 'Segoe UI', sans-serif";
 const CODES = ["MSN", "OPS", "REC", "WCH"], ACCENT = ["#e0a54a", "#6f9cff", "#a68bff", "#5fd0c4"];
 const LED = ["#39ff88", "#39ff88", "#ffb347", "#4fa8ff", "#4fa8ff", "#ff5a4f"];
-const DARK = "#2a3038", DARKER = "#1a1f26", STEEL = "#3b444e", GLASS_BLACK = "#0d1116";
+const DARK = "#a39bc8", DARKER = "#7d76a3", STEEL = "#c4bce6", GLASS_BLACK = "#3a3550", DESK_TOP = "#d4cdf2";
+/** Screen glass tints per room, so each room reads in its own colour from above. */
+const SCREEN_TINT = [new THREE.Color(1.5, 1.15, 2.2), new THREE.Color(.8, 1.9, 2.4), new THREE.Color(2.3, 1.0, 1.7), new THREE.Color(.8, 2.1, 1.9)];
 
 type Canvas = { canvas: HTMLCanvasElement; map: THREE.CanvasTexture; c: CanvasRenderingContext2D | null };
 function canvasTexture(width: number, height: number): Canvas {
@@ -50,24 +58,10 @@ function panels(batch: GeometryBatch, axis: "x" | "z", plane: number, facing: nu
   }
 }
 
-function floorTexture() {
-  const { map, c } = canvasTexture(512, 512), random = seeded(7);
-  if (c) {
-    c.fillStyle = "#2b3139"; c.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 3200; i++) { const v = 36 + random() * 18 | 0; c.fillStyle = `rgba(${v},${v + 4},${v + 9},.55)`; c.fillRect(random() * 512, random() * 512, 2, 2); }
-    for (const [x, y] of [[0, 0], [256, 0], [0, 256], [256, 256]] as const) {
-      const g = c.createLinearGradient(x, y, x + 256, y + 256); g.addColorStop(0, "rgba(255,255,255,.035)"); g.addColorStop(1, "rgba(0,0,0,.05)"); c.fillStyle = g; c.fillRect(x + 3, y + 3, 250, 250);
-      c.fillStyle = "#4a525c"; for (const [bx, by] of [[14, 14], [242, 14], [14, 242], [242, 242]] as const) { c.beginPath(); c.arc(x + bx, y + by, 3.2, 0, Math.PI * 2); c.fill(); }
-    }
-    c.fillStyle = "#12161b"; for (const p of [0, 256, 509]) { c.fillRect(p, 0, 3, 512); c.fillRect(0, p, 512, 3); }
-  }
-  map.wrapS = map.wrapT = THREE.RepeatWrapping; map.repeat.set(BAY_W / 2, HALF_D);
-  return map;
-}
 
 /** One office chair, seat centred on the origin, facing +z. */
 function chairGeometry() {
-  const batch = new GeometryBatch(), fabric = "#2d3a4b", frame = "#8e979f";
+  const batch = new GeometryBatch(), fabric = "#d8d0f4", frame = "#8a84b0";
   for (let k = 0; k < 5; k++) { const g = new THREE.BoxGeometry(.05, .035, .3); g.translate(0, 0, .15); batch.add(g, 0, .045, 0, k / 5 * Math.PI * 2, frame); }
   batch.add(new THREE.CylinderGeometry(.032, .032, .3, 10), 0, .2, 0, 0, frame);
   batch.add(new THREE.BoxGeometry(.5, .07, .48), 0, .365, 0, 0, fabric);
@@ -80,20 +74,29 @@ function chairGeometry() {
 
 export type Interior = ReturnType<typeof createInterior>;
 /** The whole deck: shell, furniture, practical lights and the live screens, batched by material. */
-export function createInterior() {
+export function createInterior(onTexture: () => void = () => {}) {
   const random = seeded(19), group = new THREE.Group();
-  const shell = new THREE.MeshStandardMaterial({ color: "#e4e1d8", roughness: .62, metalness: .02, vertexColors: true });
-  const graphite = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: .5, metalness: .45, vertexColors: true });
-  const metal = new THREE.MeshStandardMaterial({ color: "#c2cad1", roughness: .28, metalness: .95 });
-  const gold = new THREE.MeshStandardMaterial({ color: "#c9984b", roughness: .34, metalness: .92 });
-  const fabric = new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: .78, metalness: .12, vertexColors: true });
-  const floor = new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: .42, metalness: .35 });
-  const warm = new THREE.MeshBasicMaterial({ color: new THREE.Color("#ffe2bc").multiplyScalar(2.4) });
+  // cel-shaded, as the NIGHTSHIFT art: dark armoured panels, violet light, glowing trim
+  // painted surfaces from the concept art's palette, mapped by world position
+  const shell = painted("wall", 2.4, { color: "#e2dcf6", vertexColors: true }, onTexture);
+  const graphite = painted("wall", 2.4, { color: "#ffffff", vertexColors: true }, onTexture);
+  const desks = painted("console", 1.5, { color: "#ffffff", vertexColors: true }, onTexture);
+  const racks = painted("rack", 1.2, { color: "#ffffff", vertexColors: true }, onTexture);
+  const metal = toon({ color: "#6e6699" });
+  const gold = toon({ color: "#e0a84e", emissive: "#2a1800" });
+  const fabric = painted("fabric", 1, { color: "#ffffff", vertexColors: true }, onTexture);
+  // the plate floor is painted dark; lift it toward the concept's lit lavender deck
+  const floor = painted("floor", 4, {}, onTexture); floor.color.setRGB(2.2, 2.0, 2.8);
+  const props = toon({ vertexColors: true });
+  const warm = new THREE.MeshBasicMaterial({ color: new THREE.Color("#8d6dff").multiplyScalar(2.8) });
+  /** Glowing edges on desks and consoles in the room colour. */
+  const accent = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.6, 2.6, 2.6) });
   const amber = new THREE.MeshBasicMaterial({ color: new THREE.Color("#ffb14a").multiplyScalar(2.2) });
   const leds = new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(2.2, 2.2, 2.2) }), blink = leds.clone();
-  const glass = new THREE.MeshStandardMaterial({ color: "#9fb8d0", roughness: .04, metalness: 0, transparent: true, opacity: .07, depthWrite: false });
+  // the panoramic windows show the night side of the Earth (the texture arrives with the outside view)
+  const glass = new THREE.MeshBasicMaterial({ color: new THREE.Color("#0a1430") });
   // walls and ceiling never cast shadows (the key light comes from above them); furniture does
-  const B = { shell: new GeometryBatch(), graphite: new GeometryBatch(), furniture: new GeometryBatch(), desks: new GeometryBatch(), metal: new GeometryBatch(), gold: new GeometryBatch(), fabric: new GeometryBatch(), floor: new GeometryBatch(), warm: new GeometryBatch(), amber: new GeometryBatch(), leds: new GeometryBatch(), blink: new GeometryBatch(), glass: new GeometryBatch() };
+  const B = { shell: new GeometryBatch(), graphite: new GeometryBatch(), furniture: new GeometryBatch(), desks: new GeometryBatch(), metal: new GeometryBatch(), gold: new GeometryBatch(), fabric: new GeometryBatch(), floor: new GeometryBatch(), warm: new GeometryBatch(), accent: new GeometryBatch(), amber: new GeometryBatch(), leds: new GeometryBatch(), blink: new GeometryBatch(), glass: new GeometryBatch(), props: new GeometryBatch() };
   const screens: { atlas: Canvas; wall: Canvas }[] = [], holograms: THREE.Group[] = [], patches: ReturnType<typeof createMissionPatch>[] = [];
   const tables: (Canvas | undefined)[] = [], pinballs: (Canvas | undefined)[] = [], radar = { time: { value: 0 } };
   const chairSeats: Seat[] = [], chairBays: number[] = [];
@@ -145,7 +148,7 @@ export function createInterior() {
     }
   }
 
-  LAYOUTS.forEach((layout, bay) => {
+  BACK.forEach((layout, bay) => {
     const X = bayX(bay);
     // floor, ceiling panels, the three light troughs and the ribs
     B.floor.add(new THREE.BoxGeometry(BAY_W, .1, 2 * HALF_D), X, -.05, 0);
@@ -175,14 +178,15 @@ export function createInterior() {
     B.graphite.add(new THREE.BoxGeometry(2.1, DOOR.h + .1, .12), X, (DOOR.h + .1) / 2, HALF_D - .2, 0, STEEL); B.amber.add(new THREE.BoxGeometry(.03, DOOR.h - .3, .02), X, DOOR.h / 2, HALF_D - .27);
     // base light strips along the walls, handrails on the rear halves
     for (const s of [-1, 1]) {
-      for (const z of [-1, 1]) B.warm.add(new THREE.BoxGeometry(.02, .025, HALF_D - DOOR.z - .3), X + s * (BAY_W / 2 - .21), .06, z * (HALF_D + DOOR.z) / 2);
+      for (const z of [-1, 1]) B.warm.add(new THREE.BoxGeometry(.07, .03, HALF_D - DOOR.z - .3), X + s * (BAY_W / 2 - .21), .06, z * (HALF_D + DOOR.z) / 2);
       rail(X + s * (BAY_W / 2 - .32), s, 1.3, 4.7);
     }
-    B.warm.add(new THREE.BoxGeometry(BAY_W - .5, .025, .02), X, .06, -HALF_D + .21);
+    B.warm.add(new THREE.BoxGeometry(BAY_W - .5, .03, .07), X, .06, -HALF_D + .21);
+    for (const s of [-1, 1]) B.warm.add(new THREE.BoxGeometry(BAY_W / 2 - 1.5, .03, .07), X + s * (BAY_W / 4 + .55), .06, HALF_D - .21);
     // the left wall's live roster and the equipment racks (each room has its own wall pieces)
     const wall = canvasTexture(1024, 576), display = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.575), new THREE.MeshBasicMaterial({ map: wall.map, color: new THREE.Color(1.45, 1.45, 1.45) }));
-    display.position.set(X - BAY_W / 2 + .27, 1.85, -3.0); display.rotation.y = Math.PI / 2; group.add(display);
-    B.graphite.add(new THREE.BoxGeometry(.1, 1.75, 3.0), X - BAY_W / 2 + .2, 1.85, -3.0, 0, GLASS_BLACK);
+    display.position.set(X - BAY_W / 2 + .27, .95, -3.0); display.rotation.y = Math.PI / 2; display.scale.setScalar(.62); group.add(display);
+    B.graphite.add(new THREE.BoxGeometry(.1, 1.12, 1.9), X - BAY_W / 2 + .2, .95, -3.0, 0, GLASS_BLACK);
     if (bay < 2) ledRack(X + BAY_W / 2 - .15, -3.0, -1, -4.4, -1.6, .1, 2.6);
     ledRack(X - BAY_W / 2 + .15, 2.6, 1, 1.6, 3.6, .1, 1.0);
     if (bay !== 1) ledRack(X + BAY_W / 2 - .15, 3.0, -1, 1.8, 4.2, .1, 1.0);
@@ -211,29 +215,39 @@ export function createInterior() {
         for (let k = 0; k < 10; k++) local(random() > .6 ? B.blink : B.leds, s, X, .035, .012, .022, -w / 2 + .14 + k * (w - .28) / 9, .775, .36 + (k % 2) * .05, LED[random() * LED.length | 0]);
         local(B.desks, s, X, w - .08, .56, .06, 0, 1.0, .86, GLASS_BLACK, .55); local(B.desks, s, X, w - .3, .12, .3, 0, .8, .95, STEEL);
         screen(s.screen, w - .2, .48, 0, 1.015, .83, s, .55);
+        local(B.accent, s, X, w + .08, .025, .05, 0, .77, .26, ROOM_GLOW[bay]); local(B.accent, s, X, w - .1, .03, .04, 0, 1.3, .98, ROOM_GLOW[bay], .55);
       } else if (s.kind === "desk") {
-        local(B.desks, s, X, 1.6, .045, .8, 0, .74, .64, "#f1eee8"); for (const k of [-1, 1]) local(B.desks, s, X, .05, .72, .76, k * .77, .36, .64, DARK);
+        local(B.desks, s, X, 1.6, .045, .8, 0, .74, .64, DESK_TOP); for (const k of [-1, 1]) local(B.desks, s, X, .05, .72, .76, k * .77, .36, .64, DARK);
         local(B.desks, s, X, 1.5, .42, .03, 0, .46, 1.0, DARK); local(B.desks, s, X, .46, .016, .15, 0, .772, .42, DARKER);
         for (const k of [-1, 1]) { local(B.desks, s, X, .72, .44, .035, k * .39, 1.1, .94, GLASS_BLACK, 0, -k * .2); local(B.desks, s, X, .05, .3, .05, k * .39, .9, .98, STEEL); }
         screen(s.screen, .68, .4, -.39, 1.1, .92, s, 0, .2); screen(6 + (s.screen % 2), .68, .4, .39, 1.1, .92, s, 0, -.2);
+        local(B.accent, s, X, 1.58, .025, .05, 0, .77, .25, ROOM_GLOW[bay]); for (const k of [-1, 1]) local(B.accent, s, X, .7, .025, .04, k * .39, 1.33, .95, ROOM_GLOW[bay], 0, -k * .2);
       } else if (s.kind === "captain") {
         local(B.desks, s, X, .16, .5, .5, .56, .25, -.35, DARK); local(B.desks, s, X, .3, .04, .42, .56, .52, -.3, STEEL, -.3);
         for (let k = 0; k < 4; k++) local(B.leds, s, X, .03, .012, .03, .5 + (k % 2) * .1, .55, -.4 + (k >> 1) * .12, LED[k]!, -.3);
       }
     }
     furnish(bay, X);
-    if (monitors) group.add(parts.mesh(new THREE.MeshBasicMaterial({ map: atlas.map, color: new THREE.Color(1.35, 1.35, 1.35) })));
+    if (monitors) group.add(parts.mesh(new THREE.MeshBasicMaterial({ map: atlas.map, color: SCREEN_TINT[bay]! })));
     screens.push({ atlas, wall });
   });
 
   function furnish(bay: number, X: number) {
+    // set dressing: potted plants in the corners, a few crates, cable runs to the wall consoles
+    const PLANTS: [number, number][][] = [[[-5.3, -4.45], [-5.3, 4.45], [5.3, 4.45]], [[-5.3, -4.45], [-5.3, 4.45]], [[-5.25, -1.55], [-5.3, 4.45], [5.3, 4.45]], [[-5.3, -4.45], [-5.3, 4.45], [5.3, 4.45]]];
+    PLANTS[bay]!.forEach(([x, z], k) => plant(B.props, X + x, z, 1, bay * 3 + k));
+    if (bay === 0) { crate(B.props, X + 5.25, 0, 1.15, .6, .5, .2, "#4a3d6e"); crate(B.props, X + 5.2, .5, 1.1, .45, .35, -.15, "#5a4a2a"); cables(B.props, [[X - 5.7, -.2], [X - 4.5, -.2]]); cables(B.props, [[X + 5.7, -.2], [X + 4.5, -.2]]); }
+    if (bay === 1) { cables(B.props, [[X - 5.7, -1.45], [X - 4.4, -1.45]]); cables(B.props, [[X + 5.7, 1.0], [X + 4.7, 1.0], [X + 4.7, 2.6]], 2); }
+    if (bay === 2) crate(B.props, X + 5.2, 0, -.6, .55, .45, .3, "#3a5a4a");
+    if (bay === 3) { cables(B.props, [[X + 5.7, -1.6], [X + 4.9, -1.6], [X + 4.9, -2.0]]); cables(B.props, [[X - 5.7, -1.8], [X - 4.9, -1.8], [X - 4.9, -2.4]], 2); }
     if (bay === 0) {
       // the mission table: a lit pedestal under a slowly turning globe and the missions' orbits
       B.desks.add(new THREE.CylinderGeometry(.82, .6, .86, 40), X, .43, -.2, 0, DARK);
       const ring = new THREE.TorusGeometry(.86, .035, 8, 48); ring.rotateX(Math.PI / 2); B.metal.add(ring, X, .87, -.2);
-      B.leds.add(new THREE.CylinderGeometry(.8, .8, .02, 40), X, .875, -.2, 0, "#1b4a66");
-      const holo = new THREE.Group(); holo.position.set(X, 1.42, -.2);
-      holo.add(new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(.4, 20, 12)), new THREE.LineBasicMaterial({ color: new THREE.Color("#5fd0ff").multiplyScalar(1.6), transparent: true, opacity: .45, blending: THREE.AdditiveBlending, depthWrite: false })));
+      B.leds.add(new THREE.CylinderGeometry(.8, .8, .02, 40), X, .875, -.2, 0, "#3a2a8a");
+      const holo = new THREE.Group(); holo.position.set(X, 1.55, -.2); holo.userData.noClip = true;
+      holo.add(new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(.62, 22, 14)), new THREE.LineBasicMaterial({ color: new THREE.Color("#9d80ff").multiplyScalar(1.1), transparent: true, opacity: .45, blending: THREE.AdditiveBlending, depthWrite: false })));
+      holo.add(new THREE.Mesh(new THREE.SphereGeometry(.56, 24, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color("#5a38e8"), transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false })));
       for (let i = 0; i < 3; i++) {
         const curve = new THREE.EllipseCurve(0, 0, .58 + i * .07, .5 + i * .05), orbit = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(curve.getPoints(64).map((p) => new THREE.Vector3(p.x, 0, p.y))), new THREE.LineBasicMaterial({ color: new THREE.Color("#ffc46b").multiplyScalar(1.4), transparent: true, opacity: .6, blending: THREE.AdditiveBlending, depthWrite: false }));
         orbit.rotation.set(.3 + i * .35, i * 1.1, .2 - i * .2);
@@ -243,8 +257,8 @@ export function createInterior() {
       const beam = new THREE.Mesh(new THREE.CylinderGeometry(.5, .72, .5, 32, 1, true), new THREE.ShaderMaterial({
         transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
         vertexShader: "varying float h; void main(){ h = uv.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-        fragmentShader: "varying float h; void main(){ gl_FragColor = vec4(vec3(.25,.7,1.0) * (1.0 - h) * .35, 1.0); }",
-      })); beam.position.y = -.3; holo.add(beam);
+        fragmentShader: "varying float h; void main(){ gl_FragColor = vec4(vec3(.45,.28,1.0) * (1.0 - h) * .28, 1.0); }",
+      })); beam.position.y = -.42; holo.add(beam);
       group.add(holo); holograms.push(holo);
       const patch = createMissionPatch(); patch.mesh.position.set(X - 5.35, 1.95, -HALF_D + .21); patch.mesh.scale.setScalar(.6); patch.mesh.castShadow = false; group.add(patch.mesh); patches.push(patch);
     } else if (bay === 1) {
@@ -262,8 +276,8 @@ export function createInterior() {
       const glow = new THREE.TorusGeometry(.72, .008, 6, 64); glow.rotateX(Math.PI / 2); B.leds.add(glow, tx, .768, tz, 0, "#8f7bff");
       const board = canvasTexture(512, 512), top = new THREE.Mesh(new THREE.PlaneGeometry(.92, .92), new THREE.MeshBasicMaterial({ map: board.map, color: new THREE.Color(1.3, 1.3, 1.3) }));
       top.rotation.x = -Math.PI / 2; top.position.set(tx, .768, tz); group.add(top); tables[bay] = board;
-      B.fabric.add(new THREE.BoxGeometry(.8, .3, 2.3), X - 5.25, .17, -3.15, 0, "#33404f"); B.fabric.add(new THREE.BoxGeometry(.72, .1, 2.1), X - 5.2, .36, -3.15, 0, "#3f4f62");
-      B.fabric.add(new THREE.BoxGeometry(.2, .62, 2.3), X - 5.62, .62, -3.15, 0, "#33404f"); for (const s of [-1, 1]) B.fabric.add(new THREE.BoxGeometry(.8, .52, .16), X - 5.25, .32, -3.15 + s * 1.2, 0, "#2b3644");
+      B.fabric.add(new THREE.BoxGeometry(.8, .3, 2.3), X - 5.25, .17, -3.15, 0, "#c8bfe8"); B.fabric.add(new THREE.BoxGeometry(.72, .1, 2.1), X - 5.2, .36, -3.15, 0, "#e2dcf6");
+      B.fabric.add(new THREE.BoxGeometry(.2, .62, 2.3), X - 5.62, .62, -3.15, 0, "#c8bfe8"); for (const s of [-1, 1]) B.fabric.add(new THREE.BoxGeometry(.8, .52, .16), X - 5.25, .32, -3.15 + s * 1.2, 0, "#b0a6d8");
       B.desks.add(new THREE.BoxGeometry(1.1, .2, .7), X + 5.25, .86, -2.6, 0, DARK); B.desks.add(new THREE.BoxGeometry(.14, .92, .66), X + 5.75, 1.3, -2.6, 0, DARK);
       for (const [x, z] of [[-.45, -.28], [-.45, .28], [.45, -.28], [.45, .28]] as const) B.desks.add(new THREE.BoxGeometry(.06, .76, .06), X + 5.25 + x, .38, -2.6 + z, 0, STEEL);
       const pin = canvasTexture(512, 1024); pinballs[bay] = pin;
@@ -287,17 +301,33 @@ export function createInterior() {
             for (int i = 0; i < 5; i++) { float fi = float(i); vec2 b = vec2(cos(fi * 2.4 + 1.0), sin(fi * 2.4 + 1.0)) * (.25 + fract(fi * .37) * .6); float bs = mod(atan(b.y, b.x) - time * 1.3, 6.2831853); c += vec3(.5,1.6,1.2) * smoothstep(.05, .0, length(p - b)) * exp(-bs * 1.4); }
             gl_FragColor = vec4(c * 1.6, 1.0); }`,
       }));
-      scope.position.set(X + BAY_W / 2 - .28, 1.85, -2.6); scope.rotation.y = -Math.PI / 2; group.add(scope);
-      const bezel = new THREE.TorusGeometry(.86, .05, 8, 64); bezel.rotateY(Math.PI / 2); B.metal.add(bezel, X + BAY_W / 2 - .26, 1.85, -2.6);
-      B.graphite.add(new THREE.BoxGeometry(.12, 2.0, 2.0), X + BAY_W / 2 - .2, 1.85, -2.6, 0, GLASS_BLACK);
+      scope.position.set(X + BAY_W / 2 - .28, .92, -2.6); scope.rotation.y = -Math.PI / 2; scope.scale.setScalar(.72); group.add(scope);
+      const bezel = new THREE.TorusGeometry(.62, .045, 8, 64); bezel.rotateY(Math.PI / 2); B.metal.add(bezel, X + BAY_W / 2 - .26, .92, -2.6);
+      B.graphite.add(new THREE.BoxGeometry(.12, 1.42, 1.5), X + BAY_W / 2 - .2, .92, -2.6, 0, GLASS_BLACK);
     }
   }
 
-  const materials = { shell, graphite, furniture: graphite, desks: graphite, metal, gold, fabric, floor, warm, amber, leds, blink, glass } as const;
+  const materials = { shell, graphite, furniture: racks, desks, metal, gold, fabric, floor, warm, accent, amber, leds, blink, glass, props } as const;
   for (const [name, batch] of Object.entries(B) as [keyof typeof B, GeometryBatch][]) {
     const mesh = batch.mesh(materials[name]); mesh.receiveShadow = name !== "glass" && name !== "warm";
     mesh.castShadow = name === "furniture" || name === "desks" || name === "fabric"; group.add(mesh);
   }
+  // soft light pools on the floor under each room's lit furniture, in the room's colour
+  const pool = poolTexture(), POOLS: [number, number, number, number][][] = [
+    [[0, -.2, 2.1, .8], [-1.7, -3.0, 1.0, .5], [1.7, -3.0, 1.0, .5], [-3.6, -.2, .9, .45], [3.6, -.2, .9, .45]],
+    [[-3.4, -2.0, 1.0, .6], [0, -2.0, 1.0, .6], [3.4, -2.0, 1.0, .6], [-3.4, -.9, 1.0, .6], [0, -.9, 1.0, .6], [3.4, -.9, 1.0, .6], [5.4, -3.0, 1.1, .4],
+      [-3.8, 2.75, 1.0, .6], [-1.4, 2.75, 1.0, .6], [1.4, 2.75, 1.0, .6], [3.8, 2.75, 1.0, .6]],
+    [[-.5, -1.4, 1.9, .8], [5.2, -2.6, 1.2, .8], [-5.0, -3.15, 1.2, .35]],
+    [[-2.2, -1.2, 1.6, .7], [5.3, -2.6, 1.3, .7], [1.3, -3.3, 1.0, .5], [-4.0, -3.0, .9, .45], [4.0, -2.6, .9, .45]],
+  ];
+  BACK.forEach((_, bay) => {
+    const batch = new GeometryBatch();
+    for (const [x, z, r, k] of POOLS[bay]!) batch.add(new THREE.PlaneGeometry(2 * r, 2 * r).rotateX(-Math.PI / 2), bayX(bay) + x, .012 + k * .001, z, 0, new THREE.Color(k, k, k));
+    const mesh = batch.mesh(new THREE.MeshBasicMaterial({ map: pool, color: new THREE.Color(ROOM_GLOW[bay]).multiplyScalar(.5), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    mesh.renderOrder = -1; group.add(mesh);
+  });
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(1.95, 48).rotateX(-Math.PI / 2), rugMaterial(onTexture));
+  rug.position.set(bayX(2) - .5, .008, -1.4); rug.receiveShadow = true; group.add(rug);
   const chairs = new THREE.InstancedMesh(chairGeometry(), fabric, chairSeats.length); chairs.castShadow = chairs.receiveShadow = true; group.add(chairs);
   const matrix = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), at = new THREE.Vector3(), scale = new THREE.Vector3();
   /** Rolls a chair: 0 = tucked under its frog, 1 = pushed back. */
@@ -315,8 +345,8 @@ export function createInterior() {
     if (c) {
       for (let region = 0; region < 8; region++) {
         const x = (region % 2) * 512, y = (region >> 1) * 256, entry = region < 6 ? visible[region] ?? undefined : undefined, seed = hash(entry?.key ?? `${bay}:${region}`);
-        const g = c.createLinearGradient(0, y, 0, y + 256); g.addColorStop(0, "#081422"); g.addColorStop(1, "#050b14"); c.fillStyle = g; c.fillRect(x, y, 512, 256);
-        c.fillStyle = "#0f2135"; c.fillRect(x, y, 512, 36); c.fillStyle = ACCENT[bay]!; c.fillRect(x, y, 6, 36);
+        const g = c.createLinearGradient(0, y, 0, y + 256); g.addColorStop(0, "#1d4a6e"); g.addColorStop(1, "#11304d"); c.fillStyle = g; c.fillRect(x, y, 512, 256);
+        c.fillStyle = "#24577f"; c.fillRect(x, y, 512, 36); c.fillStyle = ACCENT[bay]!; c.fillRect(x, y, 6, 36);
         c.font = `500 17px ${MONO}`; c.textBaseline = "middle"; c.fillStyle = "#8fb0cc"; c.textAlign = "left";
         c.fillText(region < 6 ? `${CODES[bay]}-${String(region + 1).padStart(2, "0")}` : region === 6 ? `${CODES[bay]} / SYSTEMS` : `${CODES[bay]} / LOG`, x + 18, y + 18);
         const live = region >= 6 || !!entry; c.textAlign = "right"; c.fillStyle = live ? "#5fe3a1" : "#6c7c8c"; c.fillText(live ? "LIVE" : "STANDBY", x + 494, y + 18);
@@ -384,6 +414,11 @@ export function createInterior() {
   let clock = 0;
   return {
     group, chair, draw, ready: Promise.all(patches.map((p) => p.ready)),
+    /** The night-side Earth in the panoramic windows: a crop of the Black Marble map, city lights up. */
+    windows(map: THREE.Texture) {
+      const view = map.clone(); view.repeat.set(.16, .09); view.offset.set(.47, .66); view.needsUpdate = true;
+      glass.map = view; glass.color.setRGB(1.5, 1.5, 1.7); glass.needsUpdate = true;
+    },
     update(dt: number, time: number) {
       radar.time.value = time; clock += dt;
       for (const holo of holograms) {

@@ -1,6 +1,8 @@
-import type { Interior } from "./interior";
 import type { DeckActor, DeckCrew } from "./crew";
-import { LAYOUTS, bayX, route, type Act, type Seat, type Spot, type XZ } from "./layout";
+import { LAYOUTS, route, type Act, type Seat, type Spot, type XZ } from "./layout";
+
+/** Whatever rolls a seat's chair in or out (each room builds its own chairs). */
+export type Chairs = { chair(seat: Seat, out: number): void };
 
 type Mode = "seated" | "rising" | "sitting" | "walking" | "turning" | "acting";
 type Goal = { kind: "visit" | "home" | "seat"; spot: Spot | null };
@@ -18,7 +20,7 @@ const between = (a: number, b: number) => a + Math.random() * (b - a);
 const CLIPS: Record<Act, [string, string]> = { look: ["Idle", "Idle"], use: ["Interact", "Idle"], point: ["Interact", "Idle"], cheer: ["Cheer", "Idle"], talk: ["Interact", "Idle"] };
 
 /** Each room's crew: who sits, who stands, who gets up and wanders, and where everyone walks. */
-export function createBrains(crew: DeckCrew, interior: Interior, actors: DeckActor[][]) {
+export function createBrains(crew: DeckCrew, interior: Chairs, actors: DeckActor[][]) {
   const minds = actors.map((room, bay) => room.map((actor, slot): Mind => {
     const layout = LAYOUTS[bay]!, seat = layout.seats[slot] ?? null, home = seat ? null : layout.homes[slot - layout.seats.length] ?? null;
     return { actor, bay, seat, home, mode: seat ? "seated" : "acting", goal: null, path: [], x: 0, z: 0, y: 0, heading: 0, transit: 0, next: 0, wait: 0, working: false, cheering: false, restless: !seat && slot === room.length - 1, active: false, reserved: null };
@@ -38,7 +40,8 @@ export function createBrains(crew: DeckCrew, interior: Interior, actors: DeckAct
     place(mind);
   }
   function seatedClip(mind: Mind) { return mind.cheering && Math.random() < .5 ? "Seat_Cheer" : mind.working && Math.random() < .75 ? Math.random() < .6 ? "Seat_Work" : "Seat_Type" : "Sit_Chair_Idle"; }
-  function place(mind: Mind) { mind.actor.root.position.set(bayX(mind.bay) + mind.x, mind.y, mind.z); mind.actor.root.rotation.y = mind.heading; }
+  // actors live in their room's frame (the room group places and turns it on the deck)
+  function place(mind: Mind) { mind.actor.root.position.set(mind.x, mind.y, mind.z); mind.actor.root.rotation.y = mind.heading; }
   const away = (bay: number) => minds[bay]!.filter((m) => m.active && (m.mode === "walking" || m.mode === "rising" || m.mode === "turning" || (m.mode === "acting" && m.goal?.kind === "visit"))).length;
 
   /** Sends a frog to a free place in its room, out of its chair first if it sits. */

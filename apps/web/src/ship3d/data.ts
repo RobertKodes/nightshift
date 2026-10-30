@@ -3,12 +3,23 @@ import { finite, record, type ReadState } from "../publicRead";
 import type { Crew, Mission, ShipStatic, Snapshot } from "../ship/types";
 
 export const BAYS = [
-  { id: "missions", name: "Mission bay", line: "Active Frog missions and launch operations." },
+  { id: "missions", name: "Mission bay", line: "The Frogs who dispatch the missions." },
   { id: "companies", name: "Company floor", line: "Company tasks and the crew on duty." },
   { id: "games", name: "Games room", line: "Live tables and the off-duty crew." },
-  { id: "watch", name: "Watch room", line: "Night Watchers and station support." },
+  { id: "watch", name: "Watch room", line: "Night Watchers, the bridge lookouts and the radar." },
+  { id: "crews", name: "Crew bay", line: "The house crews' stations, their latest jobs, and the wardroom." },
+  { id: "swarm", name: "Swarm uplink", line: "The link to the IMD swarm: agents online and the desk's orders." },
+  { id: "engine", name: "Engine room", line: "The $SHIFT reactor: staked, burned and the last burn." },
+  { id: "hangar", name: "Hangar", line: "Frogs launching on missions, and the forge crew." },
 ] as const;
-export type Bay = 0 | 1 | 2 | 3;
+export type Bay = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+/** Live numbers the new rooms show besides their crew: house crews and their jobs, the swarm, the reactor. */
+export type CrewJob = { at: number; crew: string; kind: string; status: string; summary: string };
+export type DeckExtra = {
+  crews: { id: string; name: string }[]; jobs: CrewJob[];
+  swarm: { agentsOnline: number | null; orders: number; delivered: number; running: number } | null;
+  token: { staked: number; stakedPct: number; burnedShift: number; lastBurn: { at: number; imd: number } | null } | null;
+};
 export type Company = { id: string; slug: string; name: string; mine?: boolean; working: { title: string; status?: string; activity?: string } | null };
 export type LiveGame = { id: string; game: string; watch: string; players: { name: string }[]; house?: boolean; viewers?: number; stake?: { currency: string; amount: number } };
 export type Entry = {
@@ -27,6 +38,12 @@ export const isArt = (v: unknown): v is ShipStatic => record(v) && Array.isArray
   && Array.isArray(v.counts) && v.counts.every((r) => Array.isArray(r) && r.every(finite)) && Array.isArray(v.rarities) && v.rarities.every((r) => typeof r === "string");
 export const isCompanies = (v: unknown): v is Company[] => Array.isArray(v) && v.every((c) => record(c) && typeof c.id === "string" && typeof c.slug === "string" && typeof c.name === "string" && (c.working == null || (record(c.working) && typeof c.working.title === "string" && (c.working.status == null || typeof c.working.status === "string"))));
 export const isGames = (v: unknown): v is { games: LiveGame[] } => record(v) && Array.isArray(v.games) && v.games.every((g) => record(g) && typeof g.id === "string" && typeof g.game === "string" && typeof g.watch === "string" && /^\/(?:games\/|arena(?:[/?]|$))/.test(g.watch) && Array.isArray(g.players) && g.players.every((p) => record(p) && typeof p.name === "string"));
+const isCrews = (v: unknown): v is { crews: { id: string; name: string }[] } => record(v) && Array.isArray(v.crews) && v.crews.every((c) => record(c) && typeof c.id === "string" && typeof c.name === "string");
+const isJobs = (v: unknown): v is { events: CrewJob[] } => record(v) && Array.isArray(v.events) && v.events.every((e) => record(e) && finite(e.at) && typeof e.crew === "string" && typeof e.kind === "string" && typeof e.status === "string" && typeof e.summary === "string");
+type Swarm = { swarm: { agentsOnline: number | null }; desk: { orders: number; delivered: number; running: number } };
+const isSwarm = (v: unknown): v is Swarm => record(v) && record(v.swarm) && (v.swarm.agentsOnline === null || finite(v.swarm.agentsOnline)) && record(v.desk) && finite(v.desk.orders) && finite(v.desk.delivered) && finite(v.desk.running);
+type Token = { staked: number; stakedPct: number; burnedShift: number; lastBurn: { at: number; imd: number } | null };
+const isToken = (v: unknown): v is Token => record(v) && finite(v.staked) && finite(v.stakedPct) && finite(v.burnedShift) && (v.lastBurn == null || (record(v.lastBurn) && finite(v.lastBurn.at) && finite(v.lastBurn.imd)));
 export const isCrew = (v: unknown): v is Crew => record(v) && typeof v.wallet === "string" && Array.isArray(v.frogs) && v.frogs.every(finite) && Array.isArray(v.watchers) && v.watchers.every(finite);
 
 /** Match the original ship's cadence, with aborts, timeouts and no polling in a hidden tab. */
@@ -57,8 +74,16 @@ export function useDeckData(wallet: string | null) {
   const ship = useDeckRead("/api/ship", isSnapshot, 15_000), art = useDeckRead("/api/ship/art", isArt, 3_600_000);
   const companies = useDeckRead("/api/companies", isCompanies, 60_000, wallet ?? ""), games = useDeckRead("/api/games/live", isGames, 30_000);
   const crew = useDeckRead(wallet ? `/api/ship/crew?wallet=${encodeURIComponent(wallet)}` : null, isCrew, 60_000);
+  const crews = useDeckRead("/api/crews", isCrews, 3_600_000), jobs = useDeckRead("/api/crews/activity", isJobs, 60_000);
+  const swarm = useDeckRead("/api/v1/swarm/stats", isSwarm, 60_000), token = useDeckRead("/api/token/overview", isToken, 60_000);
   const entries = useMemo(() => buildEntries(ship.state === "ready" ? ship.data : null, art.state === "ready" ? art.data : null, companies.state === "ready" ? companies.data : [], games.state === "ready" ? games.data.games : [], crew.state === "ready" && crew.data.wallet.toLowerCase() === wallet?.toLowerCase() ? crew.data : null, wallet), [ship, art, companies, games, crew, wallet]);
-  return { ship, art, companies, games, crew, entries };
+  const extra = useMemo<DeckExtra>(() => ({
+    crews: crews.state === "ready" ? crews.data.crews.map((c) => ({ id: c.id, name: c.name })) : [],
+    jobs: jobs.state === "ready" ? jobs.data.events : [],
+    swarm: swarm.state === "ready" ? { agentsOnline: swarm.data.swarm.agentsOnline, orders: swarm.data.desk.orders, delivered: swarm.data.desk.delivered, running: swarm.data.desk.running } : null,
+    token: token.state === "ready" ? { staked: token.data.staked, stakedPct: token.data.stakedPct, burnedShift: token.data.burnedShift, lastBurn: token.data.lastBurn ? { at: token.data.lastBurn.at, imd: token.data.lastBurn.imd } : null } : null,
+  }), [crews, jobs, swarm, token]);
+  return { ship, art, companies, games, crew, entries, extra };
 }
 
 /** Console operators are representations of work, never an invented NFT/company ownership link. */
@@ -70,8 +95,9 @@ export function buildEntries(ship: Snapshot | null, art: ShipStatic | null, comp
   for (const frog of ship?.frogs ?? []) {
     if (frog.dead) continue;
     const row = art?.frogs[frog.id - 1], rule = row ? art?.rules[row[10]!] : undefined;
-    const active = frog.mission && !frog.mission.done;
-    const bay: Bay = active || rule?.station === "missions" ? 0 : rule?.station === "offices" ? 1 : rule?.station === "breakroom" ? 2 : 3;
+    const active = frog.mission && !frog.mission.done, station = rule?.station, seated = frog.o >= 0 && ship?.imdSeat?.[frog.o] === true;
+    // every Frog works where its art rule stations it; one on an open mission waits in the hangar, and an office Frog whose holder has an IMD swarm seat works the uplink
+    const bay: Bay = active ? 7 : station === "missions" ? 0 : station === "offices" ? (seated ? 5 : 1) : station === "breakroom" ? 2 : station === "quarters" ? 4 : station === "engine" ? 6 : station === "forge" ? 7 : 3;
     entries.push({ key: `frog:${frog.id}`, kind: "frog", bay, frog, title: `NIGHT FROG #${frog.id}`, activity: frog.mission ? `${frog.mission.title}${frog.mission.done ? " (complete)" : ""}` : rule?.why ?? "Station duty", mine: ownedFrogs.has(frog.id) || mine(owner(frog.o)), owner: owner(frog.o), art: `/api/forge/nf/${frog.id}.svg`, rule: rule?.why, traits: row ? traits(row.slice(3, 10)) : [], rank: row?.[0], rarity: row ? art?.rarities[row[1]!] : undefined, points: row?.[2] });
   }
   for (const watcher of ship?.watchers ?? []) entries.push({ key: `watcher:${watcher.n}`, kind: "watcher", bay: 3, watcher, title: watcher.n === 0 ? "The Captain" : `Night Watcher #${watcher.n}`, activity: watcher.watch.paired ? watcher.watch.online ? "Paired / online on watch" : "Paired / offline" : "Watch seat not paired", mine: ownedWatchers.has(watcher.n) || mine(owner(watcher.o)), owner: owner(watcher.o), art: `/api/forge/frog/${watcher.n}.svg`, traits: traits(watcher.traits), points: watcher.points });

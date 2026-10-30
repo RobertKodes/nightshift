@@ -1,11 +1,13 @@
 import * as THREE from "three";
 import { clone as cloneSkinned } from "three/addons/utils/SkeletonUtils.js";
 import { load } from "../lastspawn/assets";
+import { toon } from "./toon";
 
 /** Natural frog greens; each crew member keeps one by its record. */
-const SKINS = ["#4f8a3a", "#5a9441", "#3f7a45", "#4a8752", "#618f3c", "#3d7040", "#6a9a48", "#517d3a"];
+export const SKINS = ["#3d6b30", "#427234", "#376334", "#3d6b3d", "#476e30", "#335e33", "#4b7439", "#3f6631"];
 /** Department vests: mission navy, company graphite, games plum, watch teal. */
-const VESTS = ["#1f2a3d", "#272b31", "#2c2539", "#1c2d30"];
+/** Hoodies per room: deep violets, each room a shade of its own. */
+export const VESTS = ["#2e2356", "#262a52", "#3a2350", "#1f2e4c", "#3a2a45", "#1f3346", "#40262f", "#2a3a2c"];
 const UPPER = /^(spine|chest|head|upperarm|lowerarm|wrist|hand|elbowik)/i;
 
 /** A clip's tracks frozen at their first key, so a seated body holds still while the arms move. */
@@ -15,7 +17,8 @@ function held(track: THREE.KeyframeTrack) {
 }
 
 function skinMaterial(color: THREE.ColorRepresentation) {
-  const skin = new THREE.MeshPhysicalMaterial({ color, roughness: .46, metalness: 0, clearcoat: .45, clearcoatRoughness: .32 });
+  // cel-shaded like the NIGHT FROGS art; the region mask still darkens the back and lightens the belly
+  const skin = toon({ color });
   skin.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute vec4 color; varying vec3 vRegions;")
       .replace("#include <color_vertex>", "#include <color_vertex>\nvRegions = color.rgb;");
@@ -25,11 +28,12 @@ function skinMaterial(color: THREE.ColorRepresentation) {
         region = mix(region, diffuse * .55 + vec3(.02, .02, 0.), smoothstep(.25, .8, vRegions.b) * (1.0 - vRegions.g));
         vec4 diffuseColor = vec4(region, opacity);`);
   };
-  skin.customProgramCacheKey = () => "deck-frog-skin-v2";
+  skin.customProgramCacheKey = () => "deck-frog-skin-toon-v1";
   return skin;
 }
 
-export type DeckActor = { root: THREE.Object3D; hips: THREE.Object3D; mixer: THREE.AnimationMixer; action: THREE.AnimationAction | null; clip: string; skin: number };
+/** A frog the deck can animate. A proxy has no mesh: it carries the brain's pose and wanted clip, and is drawn as an instanced low-poly frog or lent a skinned one up close. */
+export type DeckActor = { root: THREE.Object3D; hips: THREE.Object3D; mixer: THREE.AnimationMixer | null; action: THREE.AnimationAction | null; clip: string; skin: number; proxy?: boolean; speed?: number; department?: number };
 /** The LASTSPAWN frog and its clips in restrained realistic materials, in its department's crew vest, plus seated work clips. */
 export async function createDeckCrew() {
   const base = await load("frog");
@@ -39,17 +43,18 @@ export async function createDeckCrew() {
     clips.push(new THREE.AnimationClip(name, upper.duration, [...legs.tracks.filter((t) => !UPPER.test(t.name)).map(held), ...upper.tracks.filter((t) => UPPER.test(t.name))]));
   };
   seated("Seat_Work", "Interact"); seated("Seat_Type", "Use_Item"); seated("Seat_Cheer", "Cheer");
-  const skins = SKINS.map((color) => ({ masked: skinMaterial(color), plain: new THREE.MeshPhysicalMaterial({ color, roughness: .46, clearcoat: .45, clearcoatRoughness: .32 }) }));
+  const skins = SKINS.map((color) => ({ masked: skinMaterial(color), plain: toon({ color }) }));
   const eyes = {
-    frog_eye: new THREE.MeshPhysicalMaterial({ color: "#efe6c8", roughness: .12, clearcoat: 1, clearcoatRoughness: .05 }),
-    frog_iris: new THREE.MeshPhysicalMaterial({ color: "#b8863a", roughness: .2, clearcoat: 1, clearcoatRoughness: .05 }),
-    frog_pupil: new THREE.MeshPhysicalMaterial({ color: "#020304", roughness: .1, clearcoat: 1, clearcoatRoughness: .02 }),
+    frog_eye: toon({ color: "#e6dcbf" }),
+    frog_iris: toon({ color: "#c08f40" }),
+    frog_pupil: toon({ color: "#020304" }),
   };
-  const vests = VESTS.map((color) => new THREE.MeshStandardMaterial({ color, roughness: .62, metalness: .25, side: THREE.DoubleSide }));
+  const vests = VESTS.map((color) => toon({ color, side: THREE.DoubleSide }));
   const actors: DeckActor[] = [];
 
   function dress(actor: DeckActor, skin: number) {
     actor.skin = skin = ((skin % SKINS.length) + SKINS.length) % SKINS.length;
+    if (actor.proxy) return;
     actor.root.traverse((object) => {
       const mesh = object as THREE.Mesh; if (!mesh.isMesh) return;
       const name = mesh.userData.material as string;
@@ -67,14 +72,27 @@ export async function createDeckCrew() {
         if (object.name.startsWith("Gear_shell_vest")) mesh.material = vests[department % vests.length]!;
       });
       const hips = root.getObjectByName("hips") ?? root;
-      const actor: DeckActor = { root, hips, mixer: new THREE.AnimationMixer(root), action: null, clip: "", skin };
+      const actor: DeckActor = { root, hips, mixer: new THREE.AnimationMixer(root), action: null, clip: "", skin, department };
       dress(actor, skin); actors.push(actor);
       return actor;
     },
     dress,
+    /** Puts a frog in a room's hoodie. */
+    wear(actor: DeckActor, department: number) {
+      if (actor.proxy || actor.department === department) return;
+      actor.department = department;
+      actor.root.traverse((object) => { if (object.name.startsWith("Gear_shell_vest") && (object as THREE.Mesh).isMesh) (object as THREE.Mesh).material = vests[department % vests.length]!; });
+    },
+    /** A mesh-less stand-in for one crew slot, posed by its brain. */
+    proxy(skin: number, department: number): DeckActor {
+      const root = new THREE.Object3D(), hips = new THREE.Object3D(); hips.position.y = .95; root.add(hips);
+      return { root, hips, mixer: null, action: null, clip: "Idle", skin, proxy: true, speed: 1, department };
+    },
     /** Cross-fades to a clip; a fade of 0 cuts. */
     play(actor: DeckActor, name: string, fade = .3, speed = 1) {
+      if (actor.proxy) { actor.clip = name; actor.speed = speed; return; }
       if (actor.clip === name) { actor.action?.setEffectiveTimeScale(speed); return; }
+      if (!actor.mixer) return;
       const clip = named(name) ?? named("Idle"); if (!clip) return;
       const next = actor.mixer.clipAction(clip);
       next.reset(); next.setEffectiveTimeScale(speed); next.setEffectiveWeight(1); next.time = Math.random() * clip.duration; next.play();
@@ -84,7 +102,7 @@ export async function createDeckCrew() {
     dispose() {
       const skeletons = new Set<THREE.Skeleton>();
       for (const actor of actors) {
-        actor.mixer.stopAllAction(); actor.mixer.uncacheRoot(actor.root);
+        actor.mixer?.stopAllAction(); actor.mixer?.uncacheRoot(actor.root);
         actor.root.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) skeletons.add((o as THREE.SkinnedMesh).skeleton); });
         actor.root.removeFromParent();
       }
