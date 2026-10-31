@@ -1,6 +1,8 @@
 # Unslop preview
 
-Visual and copy pass on the Nightshift site, adapted from [unslop](https://github.com/heydamir/unslop) by Damir Sokolovsky ([@heydamir](https://x.com/heydamir)), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The method was followed (audit, a direction taken from the product, then spacing, color, icons, copy, type, layout, details, visuals, and motion). This note is the attribution. The station's own code stays under the Nightshift license.
+Visual and copy pass on the Nightshift site, adapted from [unslop](https://github.com/heydamir/unslop) by Damir Sokolovsky ([@heydamir](https://x.com/heydamir)), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). This note is the attribution. The station's own code stays under the Nightshift license.
+
+The second pass is a new identity, the Night Gazette: warm paper, Fraunces for headlines, Instrument Sans for the interface, and one copper crescent. The night stays in the station paintings and the frog art. The pages still say what Nightshift is, who it is for, what it costs, and what to do next.
 
 The preview also answers how to use the station, using only prices and rules already in the app:
 

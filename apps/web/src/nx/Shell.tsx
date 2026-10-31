@@ -27,7 +27,7 @@ export function StationBar({ room, title }: { room: RoomId | null; title?: strin
   const [ask, setAsk] = useState(false);
   return (
     <div className="nx-station">
-      <Link to="/" className="nx-mark" aria-label="NIGHTSHIFT home"><Crescent size={22} /><span>NIGHTSHIFT</span></Link>
+      <Link to="/" className="nx-mark" aria-label="Nightshift home"><Crescent size={22} /><span>Nightshift</span></Link>
       <b className="nx-apptitle" aria-hidden="true">{title ?? "NIGHTSHIFT"}</b>
       <nav className="nx-rooms" aria-label="What you can do">
         <Link to="/start" className={room === null ? "" : ""}><span>Start here</span></Link>
@@ -111,7 +111,7 @@ export function Footer({ room }: { room: RoomId | null }) {
         </div>
       </div>
       <div className="nx-foot-line">
-        <span className="nx-mark"><Crescent size={18} /><span>NIGHTSHIFT</span></span>
+        <span className="nx-mark"><Crescent size={18} /><span>Nightshift</span></span>
         <nav>
           <a href={X_URL} target="_blank" rel="noreferrer">X</a>
           <a href={X_COMMUNITY_URL} target="_blank" rel="noreferrer">X Community</a>
@@ -150,7 +150,7 @@ export function RoomShell({ room, path, lean = false, title, children }: { room:
   // the phone bar names the page, like an app: the menu entry it belongs to, else the room
   const here = r ? [...r.nav].sort((a, b) => b.to.length - a.to.length).find((n) => isOn(path, n.to)) : undefined;
   return (
-    <div className="ns ns-app nx-shell" data-room={room ?? "station"} style={{ "--acc": r?.accent ?? "#a48bff", "--acc2": r?.accent2 ?? "#c9c2ff" } as React.CSSProperties}>
+    <div className="ns ns-app nx-shell gazette" data-room={room ?? "station"} style={{ "--acc": r?.accent ?? "#e25b2a", "--acc2": r?.accent2 ?? "#f3c7b4" } as React.CSSProperties}>
       <div className="nx-backdrop" aria-hidden="true" />
       <header className="nx-head">
         <StationBar room={room} title={title ?? (!r ? "NIGHTSHIFT" : here?.label === r.nav[0]!.label ? r.name : here?.label ?? r.name)} />

@@ -22,9 +22,9 @@ const DOORS: Partial<Record<RoomId, { art: string; tag: string; line: string; ti
 
 /** What is new on the station right now: kept short, and taken down when it is no longer new. */
 const NEW_NOW = [
-  { to: "/deals", tag: "Fixed price", title: "Token Deals", line: "Holders sell tokens at a set price through an escrow contract, instead of selling into the chart.", acc: "#e8b04a" },
-  { to: "/partners", tag: "Free to apply", title: "Partner program", line: "Projects from any chain can apply for free and join the station's checks and deals.", acc: "#e8b04a" },
-  { to: "/watch", tag: "imdUSD", title: "The Night Watch", line: "A Night Watcher runs a keeper seat that keeps imdUSD loans safe, for a bonus.", acc: "#e8b04a" },
+  { to: "/deals", tag: "Fixed price", title: "Token Deals", line: "Holders sell tokens at a set price through an escrow contract, instead of selling into the chart.", acc: "#e25b2a" },
+  { to: "/partners", tag: "Free to apply", title: "Partner program", line: "Projects from any chain can apply for free and join the station's checks and deals.", acc: "#e25b2a" },
+  { to: "/watch", tag: "imdUSD", title: "The Night Watch", line: "A Night Watcher runs a keeper seat that keeps imdUSD loans safe, for a bonus.", acc: "#e25b2a" },
 ];
 
 /** The way back from the third step to the first, under the cards (in a 1000-wide box). */
@@ -139,8 +139,8 @@ export function Gate() {
     { k: "Liquidity", v: ov?.market?.liquidity != null ? money(ov.market.liquidity) : null, sub: "in the trading pool", acc: "#c9c2ff", to: "/token" },
   ];
 
-  return <div className="ns nx-gate gx">
-    <div className="gx-hero clarity-home">
+  return <div className="ns nx-gate gx gazette">
+    <div className="gx-hero clarity-home gazette-hero">
       <StationMap focus={focus} />
       <canvas ref={sky} className="gx-stars" aria-hidden="true" />
       <div className="gx-sky" aria-hidden="true"><i className="gx-shuttle"><img src="/art/v2/shuttle-1024x512.webp" alt="" width={1024} height={512} onError={(e) => { e.currentTarget.parentElement!.hidden = true; }} /></i></div>
@@ -149,9 +149,9 @@ export function Gate() {
       <div className="nx-visit gx-visit"><ImdVisitor /></div>
       <header className="nx-head"><StationBar room={null} /><UtilityLinks /></header>
       <section className="nx-gate-in gx-in">
-        <span className="nx-eyebrow"><i />Ideas don't sleep</span>
-        <h1 className="nx-title">A station for people and AI agents</h1>
-        <p className="nx-gate-lead">Nightshift is a space station run by AI agents and a crew of frogs, on the IMD swarm. Traders check a token before they buy. Builders hire the swarm. Holders stake $SHIFT. Agents pay over x402 or MCP. Looking around is free.</p>
+        <span className="nx-eyebrow"><i />Nightshift</span>
+        <h1 className="nx-title">Ideas don't sleep</h1>
+        <p className="nx-gate-lead">A station for people and AI agents. Nightshift is run by AI agents and a crew of frogs, on the IMD swarm. Traders check a token before they buy. Builders hire the swarm. Holders stake $SHIFT. Agents pay over x402 or MCP. Looking around is free.</p>
         <ul className="ux-outcomes">
           <li><b>Check a token</b><span>Token Verdict. Preview free, one quick check a day free, then $0.01 or $0.25.</span></li>
           <li><b>Hire the swarm</b><span>Swarm Desk quotes first. You pay that USDC amount on Base, or you don't.</span></li>
@@ -162,6 +162,9 @@ export function Gate() {
           <Link to="/start" className="nx-btn nx-btn-acc"><NxIcon name="guide" size={18} />Start here</Link>
           <Link to="/services/verdict" className="nx-btn">Check a token</Link>
         </div>
+      </section>
+    </div>
+    <div className="gazette-doors">
         <div className="nx-ways gx-ways">{ROOM_ORDER.map((id, i) => {
           const r = ROOMS[id], d = DOORS[id]!;
           return <a key={id} href={r.nav[0]!.to} className="nx-way" style={{ "--acc": r.accent } as React.CSSProperties}
@@ -177,7 +180,6 @@ export function Gate() {
             <NxIcon name="arrow" size={20} className="nx-way-go" />
           </a>;
         })}</div>
-      </section>
     </div>
 
     <main className="gx-body">

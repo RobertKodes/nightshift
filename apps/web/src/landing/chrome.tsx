@@ -10,7 +10,7 @@ import { FrogSprite } from "./visitor";
 export function Crescent({ size = 30 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className="crescent">
-      <path d="M21.5 3.2A13 13 0 1 0 28.8 22 10.6 10.6 0 1 1 21.5 3.2Z" fill="#eef0f5" />
+      <path d="M21.5 3.2A13 13 0 1 0 28.8 22 10.6 10.6 0 1 1 21.5 3.2Z" fill="#e25b2a" />
     </svg>
   );
 }
