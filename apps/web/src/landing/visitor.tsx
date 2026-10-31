@@ -11,7 +11,7 @@ export function FrogSprite({ frame, className = "" }: { frame: number; className
 }
 
 const SAYS = [
-  "Visiting from imd.fun 👋",
+  "Visiting from imd.fun",
   "Nice ship. Is the swarm in there?",
   "I checked: your company is still building.",
   "Back at the desk they said you never sleep.",

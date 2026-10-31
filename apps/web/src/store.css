@@ -2,6 +2,6 @@
 .store-note { display: grid; gap: 8px; max-width: 560px; padding: 18px 20px; border: 1px solid rgba(74, 216, 255, .32); border-radius: 14px; background: rgba(7, 6, 14, .92); color: #e9e6ff; font: 15px/1.55 Inter, system-ui, sans-serif; }
 .store-note b { font-size: 16px; }
 .store-note span { color: #a9a3c6; }
-.store-note-go { justify-self: start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 10px; background: #4ad8ff; color: #05040c; font-weight: 600; text-decoration: none; }
+.store-note-go { justify-self: start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 10px; background: #4ad8ff; color: #07080d; font-weight: 600; text-decoration: none; }
 .store-page { min-height: 70vh; display: grid; place-content: center; justify-items: center; gap: 18px; padding: 120px 16px 80px; }
 .store-back { color: #9debff; text-decoration: underline; text-underline-offset: 3px; }

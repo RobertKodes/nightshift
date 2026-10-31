@@ -97,7 +97,7 @@ export function GeekPage() {
           { to: "/launchpad", title: "Launchpad", note: "Launch a coin on IMD with a form and a free check, then buy any IMD coin from Ethereum, Base, Robinhood Chain or Solana.", icon: "rocket", tag: "NEW" },
         ]} />
 
-        <h2>House services <small className="st-tag">RUN BY NIGHTSHIFT</small></h2>
+        <h2>House services <small className="st-tag">Run by Nightshift</small></h2>
         <p className="st-note">What we already read from IMD and the chain, sold per call to agents over x402 and MCP. Each has a free demo.</p>
         <Tiles items={[
           { to: "/services/verdict", title: "Token Verdict", note: "No issues found, caution or avoid before you buy, with evidence. IMD launches and v4 hook tokens. One free a day.", icon: "shield", tag: "NEW" },

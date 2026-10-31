@@ -23,7 +23,7 @@
 .ms-tokbtn i { font: 400 11.5px Inter, sans-serif; font-style: normal; color: var(--s-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ms-tokbtn em { font-style: normal; color: var(--s-faint); font-size: 11px; }
 .ms-logo { flex: none; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--s-bg2); }
-.ms-letter { display: grid; place-items: center; font: 600 13px Inter, sans-serif; color: #cdbfff; background: var(--s-acc-bg); }
+.ms-letter { display: grid; place-items: center; font: 600 13px Inter, sans-serif; color: #e8b04a; background: var(--s-acc-bg); }
 
 .ms-flip { justify-self: center; position: relative; z-index: 1; width: 36px; height: 36px; margin: -18px 0; border-radius: 10px; border: 1px solid var(--s-line2); background: var(--s-bg); color: var(--s-dim); font-size: 16px; cursor: pointer; }
 .ms-flip:hover { color: var(--s-text); border-color: var(--s-acc); }
@@ -106,7 +106,7 @@
 .ms-chains button { padding: 6px 11px; border-radius: 999px; border: 1px solid var(--s-line2); background: none; color: var(--s-dim); font: 500 12.5px Inter, sans-serif; cursor: pointer; }
 .ms-chains button.on { color: var(--s-text); border-color: var(--s-acc); background: var(--s-acc-bg); }
 .ms-chains button:disabled { opacity: .5; cursor: not-allowed; }
-.ms-chains small { margin-left: 5px; font: 600 10px Inter, sans-serif; letter-spacing: .04em; text-transform: uppercase; color: var(--s-warn); }
+.ms-chains small { margin-left: 5px; font: 600 10px Inter, sans-serif; letter-spacing: .04em; text-transform: none; color: var(--s-warn); }
 .ms-sheet .ms-search { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--s-line2); background: var(--s-bg2); color: var(--s-text); font: 400 14px Inter, sans-serif; outline: 0; }
 .ms-sheet .ms-search:focus { border-color: var(--s-acc); }
 .ms-list { display: grid; align-content: start; gap: 2px; min-height: 140px; overflow-y: auto; }
@@ -117,7 +117,7 @@
 .ms-tok-n b { font: 600 14.5px Inter, sans-serif; }
 .ms-tok-n i { font: 400 12px Inter, sans-serif; font-style: normal; color: var(--s-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-tok-a { display: grid; justify-items: end; font: 500 12px var(--mono); color: var(--s-faint); }
-.ms-pin { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--s-acc-bg); color: #cdbfff; font: 600 9.5px Inter, sans-serif; font-style: normal; letter-spacing: .06em; vertical-align: 2px; }
+.ms-pin { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--s-acc-bg); color: #e8b04a; font: 600 9.5px Inter, sans-serif; font-style: normal; letter-spacing: .06em; vertical-align: 2px; }
 .ms-unv { font: 500 11px Inter, sans-serif; font-style: normal; color: var(--s-warn); }
 .ms-liq { font: 500 11px Inter, sans-serif; font-style: normal; color: var(--s-dim, #9a93b8); margin-left: 6px; }
 

@@ -1,7 +1,7 @@
 /* Partners live in the station's $SHIFT room: night palette, Space Grotesk, mono data. */
 .pt {
-  --surface: rgba(14, 11, 32, .78); --raised: #1b1440; --edge: rgba(164, 139, 255, .22);
-  --ink: #f2efff; --muted: #a9a3c4; --brand: #a48bff; --accent: #a48bff;
+  --surface: rgba(14, 11, 32, .78); --raised: #1b1440; --edge: rgba(232, 176, 74, .22);
+  --ink: #eef0f5; --muted: #a3a9b8; --brand: #e8b04a; --accent: #e8b04a;
   --pv-font: "Space Grotesk", Inter, system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
 }
 .pt .pv-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -17,14 +17,14 @@
 .pv-pt-partner-head div { display: grid; min-width: 0; }
 .pv-pt-partner-head b { font-size: .9rem; }
 .pv-pt-partner-head span { font: .66rem var(--mono); color: var(--muted); }
-.pv-pt-partner-head em { margin-left: auto; font: 600 .56rem var(--mono); font-style: normal; letter-spacing: .1em; color: #6fdcab; border: 1px solid #6fdcab55; padding: 3px 6px; border-radius: 3px; }
+.pv-pt-partner-head em { margin-left: auto; font: 600 .56rem var(--mono); font-style: normal; letter-spacing: 0.01em; color: #6fdcab; border: 1px solid #6fdcab55; padding: 3px 6px; border-radius: 3px; }
 .pv-pt-partner p { color: var(--muted); font-size: .78rem; line-height: 1.5; }
 .pv-pt-partner code { font: .66rem var(--mono); color: var(--muted); }
 .pv-pt-partner nav { display: flex; flex-wrap: wrap; gap: 12px; font-size: .74rem; }
 .pv-pt-partner nav a { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
 .pv-pt-form { display: grid; gap: 16px; padding: 18px; border: 1px solid var(--edge); border-radius: 5px; background: #0c1016; }
 .pv-pt-form fieldset { margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-.pv-pt-form legend { padding: 0 0 8px; font: 600 .66rem var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.pv-pt-form legend { padding: 0 0 8px; font: 600 .66rem var(--mono); letter-spacing: 0.01em; text-transform: none; color: var(--muted); }
 .pv-pt-form label { display: grid; gap: 6px; font-size: .76rem; color: var(--muted); }
 .pv-pt-form .pv-pt-wide { grid-column: 1 / -1; }
 .pv-pt-form :is(input, select, textarea) { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--edge); border-radius: 4px; background: var(--surface); color: var(--ink); font: 16px/1.4 var(--pv-font); }
@@ -32,7 +32,7 @@
 .pv-pt-form small { justify-self: end; font: .62rem var(--mono); }
 .pv-pt-wants { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px; }
 .pv-pt-form .pv-pt-check { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border: 1px solid var(--edge); border-radius: 4px; background: var(--surface); color: var(--ink); cursor: pointer; }
-.pv-pt-form .pv-pt-check input { width: 18px; min-height: 18px; height: 18px; accent-color: #ad9bd2; }
+.pv-pt-form .pv-pt-check input { width: 18px; min-height: 18px; height: 18px; accent-color: #e8b04a; }
 .pv-pt-note { grid-column: 1 / -1; color: var(--muted); font-size: .78rem; }
 .pv-pt-post { grid-column: 1 / -1; margin: 0; padding: 12px; white-space: pre-wrap; border: 1px dashed var(--edge); border-radius: 4px; background: var(--surface); font: .8rem/1.5 var(--pv-font); color: var(--ink); }
 .pv-pt-actions { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -52,21 +52,21 @@
 /* The Forge-style hero card: the partner pass, in the colour of the chain the visitor picks. */
 .pt .fg-show { align-content: center; }
 .pt-pass { width: min(100%, 470px); }
-.pt-pass-in { position: relative; display: grid; gap: 18px; padding: 22px 22px 18px; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--tc) 70%, transparent); background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 12%, #0b0d14) 0%, #07080d 60%); box-shadow: 0 0 0 1px #000 inset, 0 0 48px color-mix(in srgb, var(--tc) 32%, transparent), 0 30px 70px #000c; overflow: hidden; }
+.pt-pass-in { position: relative; display: grid; gap: 18px; padding: 22px 22px 18px; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--tc) 70%, transparent); background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 12%, #0b0d14) 0%, #07080d 60%); box-shadow: 0 0 0 1px #000 inset, 0 30px 70px #000c; overflow: hidden; }
 .pt-pass-in::before { content: ""; position: absolute; inset: 8px; border: 1px solid color-mix(in srgb, var(--tc) 28%, transparent); border-radius: 12px; pointer-events: none; }
 .pt-pass-in::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 3px, #ffffff05 3px 4px); pointer-events: none; }
-.pt-pass header, .pt-pass footer { position: relative; display: flex; justify-content: space-between; gap: 10px; font: 600 10.5px var(--mono); letter-spacing: .16em; color: color-mix(in srgb, var(--tc) 80%, #fff); }
-.pt-pass footer span:first-child::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--tc); box-shadow: 0 0 10px var(--tc); }
+.pt-pass header, .pt-pass footer { position: relative; display: flex; justify-content: space-between; gap: 10px; font: 600 10.5px var(--mono); letter-spacing: 0.01em; color: color-mix(in srgb, var(--tc) 80%, #fff); }
+.pt-pass footer span:first-child::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--tc); box-shadow: none; }
 .pt-pass footer span:last-child { color: #6fdcab; border: 1px solid #6fdcab66; padding: 2px 7px; border-radius: 4px; }
 .pt-pass-name { position: relative; display: flex; align-items: center; gap: 14px; }
-.pt-pass-name i { width: 58px; height: 58px; border-radius: 14px; display: grid; place-items: center; font: 700 1.5rem var(--mono); font-style: normal; color: var(--tc); background: #10141c; border: 1px dashed color-mix(in srgb, var(--tc) 60%, transparent); }
+.pt-pass-name i { width: 58px; height: 58px; border-radius: 14px; display: grid; place-items: center; font: 500 1.5rem var(--mono); font-style: normal; color: var(--tc); background: #10141c; border: 1px dashed color-mix(in srgb, var(--tc) 60%, transparent); }
 .pt-pass-name div { display: grid; gap: 2px; }
 .pt-pass-name b { font-size: 1.55rem; letter-spacing: -.02em; }
 .pt-pass-name span { font: .76rem var(--mono); color: var(--muted); }
-.pt-pass-name em { margin-left: auto; font: 600 .62rem var(--mono); font-style: normal; letter-spacing: .12em; color: #6fdcab; border: 1px solid #6fdcab66; padding: 4px 7px; border-radius: 4px; }
+.pt-pass-name em { margin-left: auto; font: 600 .62rem var(--mono); font-style: normal; letter-spacing: 0.01em; color: #6fdcab; border: 1px solid #6fdcab66; padding: 4px 7px; border-radius: 4px; }
 .pt-pass ul { position: relative; list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .pt-pass li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 8px; background: #0b0e14; font-size: .84rem; }
-.pt-pass li::before { content: "✓"; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 700 .68rem var(--mono); color: #07080d; background: var(--tc); flex-shrink: 0; }
+.pt-pass li::before { content: "✓"; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 500 .68rem var(--mono); color: #07080d; background: var(--tc); flex-shrink: 0; }
 .pt .pt-pills { grid-template-columns: repeat(5, minmax(0, 1fr)); width: min(100%, 470px); }
 .pt .pt-pills b { color: var(--tc); }
 .pt .fg-steps.pt-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -87,4 +87,4 @@
 @media (max-width: 980px) { .pt .fg-show { order: 2; } .pt .fg-hero-in { order: 1; } }
 
 /* the docking bay behind the hero */
-.pt .fg-hero::before { background: radial-gradient(48% 62% at 74% 46%, color-mix(in srgb, var(--tc) 18%, transparent), transparent 70%), linear-gradient(90deg, #03020a 0%, rgba(3, 2, 10, .82) 38%, rgba(3, 2, 10, .45) 100%), linear-gradient(180deg, rgba(3, 2, 10, .2), #03020a 96%), url(/art/v2/room-partners-1600x900.webp) 70% 40% / cover; }
+.pt .fg-hero::before { background: radial-gradient(48% 62% at 74% 46%, color-mix(in srgb, var(--tc) 18%, transparent), transparent 70%), linear-gradient(90deg, #0b0d14 0%, rgba(3, 2, 10, .82) 38%, rgba(3, 2, 10, .45) 100%), linear-gradient(180deg, rgba(3, 2, 10, .2), #0b0d14 96%), url(/art/v2/room-partners-1600x900.webp) 70% 40% / cover; }

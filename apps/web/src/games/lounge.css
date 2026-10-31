@@ -1,58 +1,58 @@
 /* The Game Room lounge (/games, and on the NIGHT CHESS and Space Pinball pages) and the waiting banner on every page. Reuses the live list rows (live.css). */
-.lg { display: grid; gap: 14px; padding: 22px; border: 1px solid rgba(164, 139, 255, .22); background: linear-gradient(180deg, rgba(124, 92, 255, .07), rgba(10, 8, 22, .55)); color: var(--ink, #f2efff); }
+.lg { display: grid; gap: 14px; padding: 22px; border: 1px solid rgba(232, 176, 74, .22); background: linear-gradient(180deg, rgba(232, 176, 74, .07), rgba(10, 8, 22, .55)); color: var(--ink, #eef0f5); }
 .ns-app .docs .lg { margin: 28px 0 8px; border-radius: 14px; }
 .lg-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
 .lg-head > div { display: grid; gap: 4px; }
-.lg-head b { font: 600 13px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .18em; }
-.lg-head span { color: var(--dim, #a9a3c4); font: 400 13px/1.4 Inter, system-ui, sans-serif; }
-.lg-state { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid rgba(164, 139, 255, .3); color: var(--dim, #a9a3c4); font: 600 10px/1 var(--mono, "JetBrains Mono", monospace) !important; letter-spacing: .12em !important; }
+.lg-head b { font: 600 13px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: 0.01em; }
+.lg-head span { color: var(--dim, #a3a9b8); font: 400 13px/1.4 Inter, system-ui, sans-serif; }
+.lg-state { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid rgba(232, 176, 74, .3); color: var(--dim, #a3a9b8); font: 600 10px/1 var(--mono, "JetBrains Mono", monospace) !important; letter-spacing: 0.01em !important; }
 .lg-state i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .5; }
-.lg-state.on { border-color: rgba(184, 255, 74, .5); color: var(--acid, #b8ff4a); }
-.lg-state.on i { opacity: 1; box-shadow: 0 0 10px currentColor; animation: lg-pulse 1.6s ease-in-out infinite; }
-.lg-label { display: flex; justify-content: space-between; padding-top: 6px; border-top: 1px solid rgba(164, 139, 255, .14); color: var(--faint, #6c6688); font: 600 10px/1.8 var(--mono, "JetBrains Mono", monospace); letter-spacing: .16em; }
+.lg-state.on { border-color: rgba(76, 195, 138, .5); color: var(--acid, #4cc38a); }
+.lg-state.on i { opacity: 1; box-shadow: none; animation: lg-pulse 1.6s ease-in-out infinite; }
+.lg-label { display: flex; justify-content: space-between; padding-top: 6px; border-top: 1px solid rgba(232, 176, 74, .14); color: var(--faint, #7a8296); font: 600 10px/1.8 var(--mono, "JetBrains Mono", monospace); letter-spacing: 0.01em; }
 .lg-create { display: grid; gap: 10px; }
 .lg-tabs, .lg-tcs { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 6px; }
 @media (max-width: 560px) { .lg-tabs.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.lg-tabs button, .lg-tcs button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 10px; border: 1px solid rgba(164, 139, 255, .25); background: rgba(255, 255, 255, .02); color: var(--dim, #a9a3c4); font: 600 11px var(--mono, "JetBrains Mono", monospace); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.lg-tabs button, .lg-tcs button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 10px; border: 1px solid rgba(232, 176, 74, .25); background: rgba(255, 255, 255, .02); color: var(--dim, #a3a9b8); font: 600 11px var(--mono, "JetBrains Mono", monospace); letter-spacing: 0.01em; text-transform: none; cursor: pointer; }
 .lg-tcs button { flex-direction: column; gap: 4px; min-height: 58px; }
-.lg-tcs button b { color: var(--ink, #f2efff); font: 500 20px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: -.04em; }
-.lg-tcs button small { font: 600 9px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .1em; color: var(--faint, #6c6688); }
-.lg-tcs button small.on, .nc-waiting.on { color: var(--acid, #b8ff4a); }
-.lg-tabs button.on, .lg-tcs button.on { border-color: rgba(164, 139, 255, .7); background: rgba(124, 92, 255, .16); color: var(--ink, #f2efff); box-shadow: inset 0 -2px var(--uv-hi, #a48bff); }
+.lg-tcs button b { color: var(--ink, #eef0f5); font: 500 20px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: -0.03em; }
+.lg-tcs button small { font: 600 9px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: 0.01em; color: var(--faint, #7a8296); }
+.lg-tcs button small.on, .nc-waiting.on { color: var(--acid, #4cc38a); }
+.lg-tabs button.on, .lg-tcs button.on { border-color: rgba(232, 176, 74, .7); background: rgba(232, 176, 74, .16); color: var(--ink, #eef0f5); box-shadow: inset 0 -2px var(--uv-hi, #e8b04a); }
 .lg-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
-.lg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border: 1px solid #a48bff; background: linear-gradient(180deg, #6d4dff, #4a2fd6); color: #fff !important; font: 600 10.5px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .12em; text-decoration: none; white-space: nowrap; cursor: pointer; }
+.lg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border: 1px solid #e8b04a; background: linear-gradient(180deg, #e8b04a, #c4922e); color: #fff !important; font: 600 10.5px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: 0.01em; text-decoration: none; white-space: nowrap; cursor: pointer; }
 .lg-btn.big { min-height: 50px; font-size: 11.5px; }
-.lg-btn.ghost { border-color: rgba(164, 139, 255, .45); background: rgba(124, 92, 255, .08); }
+.lg-btn.ghost { border-color: rgba(232, 176, 74, .45); background: rgba(232, 176, 74, .08); }
 .lg-btn:disabled { opacity: .5; cursor: not-allowed; }
-.lg-btn:hover:not(:disabled) { box-shadow: 0 8px 30px -10px rgba(124, 92, 255, .8); }
-.lg-btn:focus-visible, .lg-tabs button:focus-visible, .lg-tcs button:focus-visible, .lg-x:focus-visible { outline: 2px solid var(--uv-hi, #a48bff); outline-offset: 2px; }
-.lg-note { margin: 0; color: var(--faint, #6c6688); font: 400 12.5px/1.5 Inter, system-ui, sans-serif; }
+.lg-btn:hover:not(:disabled) { box-shadow: 0 8px 30px -10px rgba(232, 176, 74, .8); }
+.lg-btn:focus-visible, .lg-tabs button:focus-visible, .lg-tcs button:focus-visible, .lg-x:focus-visible { outline: 2px solid var(--uv-hi, #e8b04a); outline-offset: 2px; }
+.lg-note { margin: 0; color: var(--faint, #7a8296); font: 400 12.5px/1.5 Inter, system-ui, sans-serif; }
 .lg-err { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 10px 12px; border: 1px solid rgba(255, 99, 132, .45); background: rgba(255, 99, 132, .08); color: #ffb3c1; font: 500 13px/1.5 Inter, system-ui, sans-serif; }
 .lg-err .icon { flex: none; margin-top: 2px; }
-.lg-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid rgba(164, 139, 255, .16); background: rgba(255, 255, 255, .02); }
-.lg-row.mine { border-color: rgba(184, 255, 74, .45); background: rgba(184, 255, 74, .04); }
+.lg-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid rgba(232, 176, 74, .16); background: rgba(255, 255, 255, .02); }
+.lg-row.mine { border-color: rgba(76, 195, 138, .45); background: rgba(76, 195, 138, .04); }
 .lg-row.away { opacity: .7; }
 .lg-who { display: grid; gap: 3px; min-width: 0; }
-.lg-who b { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; color: var(--ink, #f2efff); font: 600 14.5px/1.35 Inter, system-ui, sans-serif; }
-.lg-who b small { color: var(--dim, #a9a3c4); font: 500 11px var(--mono, "JetBrains Mono", monospace); }
-.lg-since { color: var(--dim, #a9a3c4); font: 500 11px/1.4 var(--mono, "JetBrains Mono", monospace); font-variant-numeric: tabular-nums; }
+.lg-who b { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; color: var(--ink, #eef0f5); font: 600 14.5px/1.35 Inter, system-ui, sans-serif; }
+.lg-who b small { color: var(--dim, #a3a9b8); font: 500 11px var(--mono, "JetBrains Mono", monospace); }
+.lg-since { color: var(--dim, #a3a9b8); font: 500 11px/1.4 var(--mono, "JetBrains Mono", monospace); font-variant-numeric: tabular-nums; }
 .lg-mine { display: inline-flex; align-items: center; gap: 10px; }
-.lg-mine em { color: var(--acid, #b8ff4a); font: 600 10px/1 var(--mono, "JetBrains Mono", monospace); font-style: normal; letter-spacing: .14em; }
-.nc-waiting { display: block; color: var(--dim); font: 600 7px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.lg-mine em { color: var(--acid, #4cc38a); font: 600 10px/1 var(--mono, "JetBrains Mono", monospace); font-style: normal; letter-spacing: 0.01em; }
+.nc-waiting { display: block; color: var(--dim); font: 600 7px var(--mono); letter-spacing: 0.01em; text-transform: none; }
 
 /* the banner: above the app tabs on a phone, bottom right on a desktop */
-.lg-banner { position: fixed; z-index: 58; isolation: isolate; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--tabs-h, 0px) + env(safe-area-inset-bottom, 0px) + 12px); display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border: 1px solid rgba(164, 139, 255, .55); background: #0e0a20; box-shadow: 0 18px 50px -18px rgba(0, 0, 0, .8), 0 0 0 1px rgba(0, 0, 0, .4); color: var(--ink, #f2efff); }
-.lg-banner.joined { border-color: rgba(184, 255, 74, .7); background: #10180a; animation: lg-in .3s ease-out; }
+.lg-banner { position: fixed; z-index: 58; isolation: isolate; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--tabs-h, 0px) + env(safe-area-inset-bottom, 0px) + 12px); display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 14px; border: 1px solid rgba(232, 176, 74, .55); background: #0e0a20; box-shadow: 0 18px 50px -18px rgba(0, 0, 0, .8), 0 0 0 1px rgba(0, 0, 0, .4); color: var(--ink, #eef0f5); }
+.lg-banner.joined { border-color: rgba(76, 195, 138, .7); background: #10180a; animation: lg-in .3s ease-out; }
 .lg-banner.closed { border-color: rgba(255, 196, 107, .6); }
-.lg-banner > .icon { flex: none; color: var(--acid, #b8ff4a); }
+.lg-banner > .icon { flex: none; color: var(--acid, #4cc38a); }
 .lg-banner.closed > .icon { color: #ffc46b; }
 .lg-banner p { flex: 1; min-width: 0; margin: 0; font: 500 13px/1.4 Inter, system-ui, sans-serif; }
-.lg-banner p b { display: block; color: var(--uv-hi, #a48bff); font: 600 9.5px/1.6 var(--mono, "JetBrains Mono", monospace); letter-spacing: .16em; }
-.lg-banner.joined p b { color: var(--acid, #b8ff4a); }
+.lg-banner p b { display: block; color: var(--uv-hi, #e8b04a); font: 600 9.5px/1.6 var(--mono, "JetBrains Mono", monospace); letter-spacing: 0.01em; }
+.lg-banner.joined p b { color: var(--acid, #4cc38a); }
 .lg-clock { font-family: var(--mono, "JetBrains Mono", monospace); font-variant-numeric: tabular-nums; }
 .lg-banner .lg-btn { min-height: 38px; padding: 0 12px; }
-.lg-x { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border: 0; background: none; color: var(--dim, #a9a3c4); cursor: pointer; }
-.lg-pulse { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--acid, #b8ff4a); box-shadow: 0 0 12px var(--acid, #b8ff4a); animation: lg-pulse 1.6s ease-in-out infinite; }
+.lg-x { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border: 0; background: none; color: var(--dim, #a3a9b8); cursor: pointer; }
+.lg-pulse { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--acid, #4cc38a); box-shadow: none; animation: lg-pulse 1.6s ease-in-out infinite; }
 @keyframes lg-pulse { 50% { opacity: .35; } }
 @keyframes lg-in { from { transform: translateY(12px); opacity: 0; } }
 @media (min-width: 900px) { .lg-banner { left: auto; width: min(520px, calc(100vw - 32px)); bottom: 20px; } }
@@ -76,9 +76,9 @@ html[data-lite] .lg-banner { box-shadow: none; }
 html[data-lite] .lg-btn:hover:not(:disabled) { box-shadow: none; }
 
 /* the player's one name for every game */
-.lg-me { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid rgba(164, 139, 255, .14); }
-.lg-me-label { color: var(--faint, #6c6688); font: 600 10px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .16em; }
-.lg-me-name { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border: 1px solid rgba(164, 139, 255, .3); background: rgba(124, 92, 255, .08); color: var(--ink, #f2efff); font: 600 14px Inter, system-ui, sans-serif; cursor: pointer; }
+.lg-me { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid rgba(232, 176, 74, .14); }
+.lg-me-label { color: var(--faint, #7a8296); font: 600 10px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: 0.01em; }
+.lg-me-name { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border: 1px solid rgba(232, 176, 74, .3); background: rgba(232, 176, 74, .08); color: var(--ink, #eef0f5); font: 600 14px Inter, system-ui, sans-serif; cursor: pointer; }
 .lg-me-form { display: flex; gap: 6px; flex: 1 1 240px; }
-.lg-me-form input { flex: 1; min-width: 0; min-height: 38px; padding: 0 12px; border: 1px solid rgba(164, 139, 255, .35); background: rgba(124, 92, 255, .08); color: var(--ink, #f2efff); font: 600 15px Inter, system-ui, sans-serif; }
-.lg-me-note { flex-basis: 100%; color: var(--dim, #a9a3c4); font: 400 12px/1.4 Inter, system-ui, sans-serif; }
+.lg-me-form input { flex: 1; min-width: 0; min-height: 38px; padding: 0 12px; border: 1px solid rgba(232, 176, 74, .35); background: rgba(232, 176, 74, .08); color: var(--ink, #eef0f5); font: 600 15px Inter, system-ui, sans-serif; }
+.lg-me-note { flex-basis: 100%; color: var(--dim, #a3a9b8); font: 400 12px/1.4 Inter, system-ui, sans-serif; }

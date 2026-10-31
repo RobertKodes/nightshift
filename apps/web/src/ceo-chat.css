@@ -6,7 +6,7 @@
 .cc-brain .nx-ic { color: var(--acc); flex: none; }
 
 .cc-todo { display: grid; gap: 6px; padding: 10px 12px; background: var(--nx-panel); box-shadow: inset 0 0 0 1px var(--nx-line); border-left: 3px solid var(--acc); }
-.cc-todo > b { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--acc); }
+.cc-todo > b { font-size: 12px; letter-spacing: .06em; text-transform: none; color: var(--acc); }
 .cc-check { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; line-height: 1.45; color: var(--nx-ink); cursor: pointer; }
 .cc-check input { margin-top: 3px; accent-color: var(--acc); flex: none; }
 .cc-you.is-done .cc-check { color: var(--nx-faint); text-decoration: line-through; }
@@ -24,7 +24,7 @@
 .cc-card > b { font-size: 14px; }
 .cc-card p { font-size: 13px; line-height: 1.5; }
 .cc-card .nx-btn { justify-self: start; }
-.cc-tag { font: 600 11px var(--nx-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--acc); }
+.cc-tag { font: 600 11px var(--nx-mono); letter-spacing: .05em; text-transform: none; color: var(--acc); }
 .cc-brief { color: var(--nx-dim); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .cc-post { white-space: pre-wrap; padding: 8px 10px; background: var(--nx-panel); box-shadow: inset 0 0 0 1px var(--nx-line); border-radius: 6px; font-size: 13.5px !important; }
 .cc-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

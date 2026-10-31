@@ -233,7 +233,7 @@ export function Lounge({ game, create = false, onSeat }: { game?: Game; create?:
   const createFor = create ? pick : game;
   return <section className="lg" aria-labelledby={`lg-title-${game ?? "all"}`}>
     <PlayingAs signedIn={!!address} />
-    <div className="lg-head"><div><b id={`lg-title-${game ?? "all"}`}>THE LOUNGE</b><span>{l === null ? "Connecting…" : `${waiting} waiting for a rival · ${live.length} live`}</span></div><span className={`lg-state ${open.length ? "on" : ""}`}><i />{open.length ? `${open.length} OPEN ${open.length === 1 ? "TABLE" : "TABLES"}` : "NO ONE WAITING"}</span></div>
+    <div className="lg-head"><div><b id={`lg-title-${game ?? "all"}`}>The lounge</b><span>{l === null ? "Connecting to the tables… You can still start a free game above." : `${waiting} waiting for a rival · ${live.length} live`}</span></div><span className={`lg-state ${open.length ? "on" : ""}`}><i />{open.length ? `${open.length} open ${open.length === 1 ? "table" : "tables"}` : "No one waiting. Start a game above."}</span></div>
 
     {create && <div className="lg-create">
       {!game && <div className="lg-tabs four" role="group" aria-label="Game">{(["chess", "pool", "poker", "pinball"] as const).map((k) => <button type="button" key={k} aria-pressed={pick === k} className={pick === k ? "on" : ""} onClick={() => setPick(k)}><Icon name={GAME_ICON[k]} size={15} />{k === "chess" ? "Night Chess" : k === "pool" ? "Night Pool" : k === "poker" ? "Night Poker" : "Space Pinball"}</button>)}</div>}

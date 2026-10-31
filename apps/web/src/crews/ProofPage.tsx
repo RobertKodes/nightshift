@@ -69,7 +69,7 @@ function Body({ d }: { d: ProofView }) {
             <tbody>{latest.map((p, i) => <tr key={`${p.at}-${i}`}><td className="dim">{day(p.at)} · {when(p.at)}</td><td style={{ whiteSpace: "normal", minWidth: 200 }}>{serviceLabel(p.what)}</td><td className="cr-num">{price(p.usd)}</td><td className="mono">{p.wallet}</td><td>{p.tx ? <a href={p.tx} target="_blank" rel="noreferrer">Basescan ↗</a> : <span className="dim">no tx recorded</span>}</td></tr>)}</tbody>
           </table>
         </div>
-      ) : <p className="st-empty">No customer payment yet. Internal, owner, company-to-company and test payments are never listed here.</p>}
+      ) : <p className="st-empty">No customer payment yet. When someone pays for a house check in USDC on Base, the receipt shows up here. Internal, owner, and test payments are left out on purpose.</p>}
 
       <h2>Crew jobs</h2>
       {crews.length ? (

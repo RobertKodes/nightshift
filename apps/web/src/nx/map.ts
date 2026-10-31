@@ -8,7 +8,7 @@ export type Room = {
 
 export const ROOMS: Record<RoomId, Room> = {
   geek: {
-    id: "geek", name: "AI tools", short: "AI tools", deck: "DOOR 01", accent: "#4ad8ff", accent2: "#9debff",
+    id: "geek", name: "AI tools", short: "AI tools", deck: "Check and hire", accent: "#e8b04a", accent2: "#f3d7a1",
     tagline: "Check a token, test an API, find research, or hire the IMD swarm.", emblem: "/art/v2/door-tools-768.webp", art: "/art/station/room-geek-1600x900.webp",
     nav: [{ to: "/services", label: "AI tools", icon: "build" }, { to: "/watchtower", label: "Token monitor", icon: "security" }, { to: "/mind", label: "Research", icon: "agent" }],
     more: [
@@ -21,24 +21,24 @@ export const ROOMS: Record<RoomId, Room> = {
     cta: { to: "/mcp", label: "Connect an AI agent", icon: "agent" },
   },
   breakroom: {
-    id: "breakroom", name: "Play", short: "Play", deck: "DOOR 02", accent: "#ff5ca8", accent2: "#ff9ccb",
+    id: "breakroom", name: "Play", short: "Play", deck: "Play", accent: "#e8b04a", accent2: "#f3d7a1",
     tagline: "Pinball, chess, pool and poker. No wallet needed to start.", emblem: "/art/v2/door-play-768.webp", art: "/art/station/room-breakroom-1600x900.webp",
     nav: [{ to: "/games", label: "Play", icon: "play" }, { to: "/games/live", label: "Watch games", icon: "live" }, { to: "/arena", label: "AI / Arena", icon: "arena" }],
     more: [{ to: "/league", label: "Paper trading league", icon: "league" }],
   },
   info: {
-    id: "info", name: "$SHIFT", short: "$SHIFT", deck: "DOOR 03", accent: "#c9c2ff", accent2: "#e7e3ff",
+    id: "info", name: "$SHIFT", short: "$SHIFT", deck: "Hold and earn", accent: "#e8b04a", accent2: "#f3d7a1",
     tagline: "Benefits, swap, staking and funded rewards.", emblem: "/art/v2/door-shift-768.webp", art: "/art/station/room-info-1600x900.webp",
     nav: [{ to: "/token", label: "$SHIFT", icon: "token" }, { to: "/swap", label: "Swap", icon: "swap" }, { to: "/stake", label: "Stake SHIFT", icon: "stake" }, { to: "/frogs", label: "Frogs", icon: "frogs" }],
     more: [{ to: "/deals", label: "Token Deals", icon: "market" }, { to: "/partners", label: "Partners", icon: "crew" }, { to: "/ship", label: "The Ship", icon: "frogs" }, { to: "/tokenomics", label: "Tokenomics", icon: "tokenomics" }, { to: "/whitepaper", label: "Whitepaper", icon: "story" }, { to: "/watch", label: "Run a keeper", icon: "security" }],
   },
   economy: {
-    id: "economy", name: "Activity & receipts", short: "Proof", deck: "PROOF", accent: "#ffc861", accent2: "#ffe0a1",
+    id: "economy", name: "Activity & receipts", short: "Proof", deck: "Receipts", accent: "#e8b04a", accent2: "#f3d7a1",
     tagline: "Payments and receipts", emblem: "/art/station/room-economy-door-768.webp", art: "/art/station/room-economy-1600x900.webp",
     nav: [{ to: "/proof", label: "Proof", icon: "pulse" }],
   },
   command: {
-    id: "command", name: "Frogs", short: "Frogs", deck: "FROGS", accent: "#b8ff4a", accent2: "#d9ff9c",
+    id: "command", name: "Frogs", short: "Frogs", deck: "Frogs", accent: "#e8b04a", accent2: "#f3d7a1",
     tagline: "Missions, upgrades and earned hours", emblem: "/art/station/room-command-door-768.webp", art: "/art/station/room-command-1600x900.webp",
     nav: [{ to: "/frogs", label: "Frogs", icon: "frogs" }, { to: "/command", label: "Missions", icon: "missions" }, { to: "/forge", label: "Upgrade Frogs", icon: "forge" }],
   },

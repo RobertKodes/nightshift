@@ -2,6 +2,7 @@ import { usePublicRead } from "./publicRead";
 import { isSwarmStats } from "./swarmStats";
 import { useEffect, useRef, useState } from "react";
 import type { Address } from "viem";
+import { BeforeSign } from "./nx/brief";
 import { paidRequest, signService, swarmQuote, swarmTerms, walletAccount, walletError, type PaidReply, type SignedRequest, type SwarmQuote } from "./paidServices";
 import { chooseWallet, type Eip1193 } from "./wallet";
 
@@ -51,8 +52,8 @@ export function SwarmPay() {
       {kind === "logo" && <><label className="svc-paid-input">Logo name<input aria-label="Logo name" value={name} onChange={(e) => setName(e.target.value)} disabled={locked} minLength={1} maxLength={80} required /></label><label className="svc-paid-input">Style<input aria-label="Logo style" value={style} onChange={(e) => setStyle(e.target.value)} disabled={locked} minLength={3} maxLength={300} required /></label></>}
       <button className="st-cta ghost" disabled={locked || !stats?.desk.enabled} type="submit">{busy ? "Please wait…" : "Get a free checked quote"}</button>
     </form>
-    {quote && <div><p>Exact quote: <b>${quote.priceUsd.toFixed(2)} USDC</b> · expires {new Date(quote.expiresAt).toLocaleTimeString()} · no holder discount.</p><p className="st-note">{quote.whatYouGet} {quote.eta}</p><button className="st-cta" disabled={busy || Boolean(result)} onClick={() => void pay()}>{signed ? "Retry same payment" : `Pay $${quote.priceUsd.toFixed(2)} USDC with your wallet`}</button></div>}
-    <div role="status" aria-live="polite">{message && <p>{message}</p>}{error && <p className="svc-err">{error}{signed ? " Retry uses the same signed payment." : ""}</p>}</div>
+    {quote && <div><p>Exact quote: <b>${quote.priceUsd.toFixed(2)} USDC</b> · expires {new Date(quote.expiresAt).toLocaleTimeString()} · no holder discount.</p><p className="st-note">{quote.whatYouGet} {quote.eta}</p><BeforeSign kind="usdc" /><button className="st-cta" disabled={busy || Boolean(result)} onClick={() => void pay()}>{signed ? "Retry same payment" : `Pay $${quote.priceUsd.toFixed(2)} USDC with your wallet`}</button></div>}
+    <div role="status" aria-live="polite">{message && <p>{message}</p>}{error && <p className="svc-err">{error} {signed ? "Retry uses the same signed payment." : "Nothing was paid. Fix the note above and ask for a new quote."}</p>}</div>
     {result && <div><p>Order ID: <code>{String(result.orderId ?? "unavailable")}</code></p>{typeof result.orderToken === "string" && <p>Keep this private order token: <code>{result.orderToken}</code></p>}{status && <a className="st-cta ghost" href={status} target="_blank" rel="noreferrer">Open private status and results</a>}{result.refundOwed === true && <p>The desk records a refund owed for this order.</p>}</div>}
   </section>;
 }

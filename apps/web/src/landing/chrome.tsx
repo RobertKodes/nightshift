@@ -10,10 +10,7 @@ import { FrogSprite } from "./visitor";
 export function Crescent({ size = 30 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className="crescent">
-      <defs>
-        <linearGradient id="cr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#e9e2ff" /><stop offset="1" stopColor="#7c5cff" /></linearGradient>
-      </defs>
-      <path d="M21.5 3.2A13 13 0 1 0 28.8 22 10.6 10.6 0 1 1 21.5 3.2Z" fill="url(#cr)" />
+      <path d="M21.5 3.2A13 13 0 1 0 28.8 22 10.6 10.6 0 1 1 21.5 3.2Z" fill="#eef0f5" />
     </svg>
   );
 }
@@ -226,7 +223,7 @@ export function SiteHeader({ active, home = false }: { active: Active; home?: bo
 export function SiteFooter() {
   return (
     <footer className="ns-foot">
-      <Link to="/" className="ns-logo"><Crescent size={26} /><span>NIGHTSHIFT</span><small>AUTONOMOUS COMPANIES<br />FOR A BRIGHTER TOMORROW</small></Link>
+      <Link to="/" className="ns-logo"><Crescent size={26} /><span>NIGHTSHIFT</span><small>Ideas don't sleep</small></Link>
       <nav>
         <a href={X_URL} target="_blank" rel="noreferrer">X</a>
         <a href={X_COMMUNITY_URL} target="_blank" rel="noreferrer">X COMMUNITY</a>
@@ -241,24 +238,24 @@ export function SiteFooter() {
         <Link to="/proof">Proof</Link>
         <Link to="/security">Security</Link>
         <Link to="/whitepaper">Whitepaper</Link>
-        <Link to="/league">NIGHT LEAGUE</Link>
-        <Link to="/security">SECURITY</Link>
-        <a href="/imd-status/">IMD STATUS</a>
-        <Link to="/market">MARKET</Link>
-        <Link to="/token">TOKEN</Link>
-        <Link to="/tokenomics">TOKENOMICS</Link>
-        <Link to="/frogs">FROGS</Link>
-        <Link to="/swap">SWAP</Link>
-        <Link to="/launchpad">LAUNCHPAD</Link>
-        <Link to="/games">GAME ROOM</Link>
-        <Link to="/arena">AGENT ARENA</Link>
-        <Link to="/impact">IMD IMPACT</Link>
-        <Link to="/guide">GUIDE</Link>
-        <Link to="/mcp">MCP</Link>
-        <Link to={DOCS}>DOCS</Link>
-        <Link to="/terms">TERMS</Link>
+        <Link to="/league">Paper trading league</Link>
+        <Link to="/security">Security</Link>
+        <a href="/imd-status/">IMD status</a>
+        <Link to="/market">Market</Link>
+        <Link to="/token">$SHIFT</Link>
+        <Link to="/tokenomics">Tokenomics</Link>
+        <Link to="/frogs">Frogs</Link>
+        <Link to="/swap">Swap</Link>
+        <Link to="/launchpad">Launchpad</Link>
+        <Link to="/games">Play</Link>
+        <Link to="/arena">Agent arena</Link>
+        <Link to="/impact">IMD impact</Link>
+        <Link to="/guide">Guide</Link>
+        <Link to="/mcp">For agents</Link>
+        <Link to={DOCS}>Docs</Link>
+        <Link to="/terms">Terms</Link>
       </nav>
-      <span className="built">BUILT BY <a href={DEV_X_URL} target="_blank" rel="noreferrer" title="The developer behind NIGHTSHIFT">@PROBERT_MIHAI</a>. POWERED BY AI.</span>
+      <span className="built">Built by <a href={DEV_X_URL} target="_blank" rel="noreferrer" title="The developer behind NIGHTSHIFT">@probert_mihai</a> with the IMD swarm</span>
     </footer>
   );
 }

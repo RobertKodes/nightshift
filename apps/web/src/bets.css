@@ -1,37 +1,37 @@
 /* LIVE BETS: the spectators' betting panel under NIGHT CHESS (.bt-nc), Space Pinball (.bt-arc) and arena (.bt-ar) watch views. */
-.bt { --sk-line: rgba(164, 139, 255, .25); --sk-dim: #b3abc9; --sk-hi: #a48bff; --sk-bad: #ff8fa3; --bt-win: #7cf0c4;
-  display: grid; gap: 9px; padding: 12px 13px; border: 1px solid var(--sk-line); background: rgba(124, 92, 255, .05); color: inherit; min-width: 0; text-align: left; }
+.bt { --sk-line: rgba(232, 176, 74, .25); --sk-dim: #b3abc9; --sk-hi: #e8b04a; --sk-bad: #ff8fa3; --bt-win: #7cf0c4;
+  display: grid; gap: 9px; padding: 12px 13px; border: 1px solid var(--sk-line); background: rgba(232, 176, 74, .05); color: inherit; min-width: 0; text-align: left; }
 .bt-nc, .bt-ar { border-radius: 14px; }
 .bt-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .bt-head .sk-kicker { margin-right: auto; color: var(--sk-hi); }
-.bt-state { display: inline-flex; align-items: center; gap: 6px; font: 600 9px/1 "JetBrains Mono", ui-monospace, monospace; letter-spacing: .16em; color: var(--sk-dim); padding: 5px 8px; border: 1px solid var(--sk-line); }
+.bt-state { display: inline-flex; align-items: center; gap: 6px; font: 600 9px/1 "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0.01em; color: var(--sk-dim); padding: 5px 8px; border: 1px solid var(--sk-line); }
 .bt-nc .bt-state, .bt-ar .bt-state { border-radius: 999px; }
 .bt-state.on { color: var(--bt-win); border-color: rgba(124, 240, 196, .35); }
-.bt-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bt-win); box-shadow: 0 0 8px var(--bt-win); animation: bt-blink 1.6s ease-in-out infinite; }
+.bt-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bt-win); box-shadow: none; animation: bt-blink 1.6s ease-in-out infinite; }
 @keyframes bt-blink { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .bt-dot { animation: none; } }
 .bt-tokens { display: inline-flex; border: 1px solid var(--sk-line); }
 .bt-nc .bt-tokens, .bt-ar .bt-tokens { border-radius: 999px; overflow: hidden; }
-.bt-tokens button { min-height: 28px; padding: 0 10px; border: 0; background: none; color: var(--sk-dim); font: 600 10px "JetBrains Mono", ui-monospace, monospace; letter-spacing: .08em; cursor: pointer; }
-.bt-tokens button.on { background: rgba(124, 92, 255, .22); color: #fff; }
+.bt-tokens button { min-height: 28px; padding: 0 10px; border: 0; background: none; color: var(--sk-dim); font: 600 10px "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0.01em; cursor: pointer; }
+.bt-tokens button.on { background: rgba(232, 176, 74, .22); color: #fff; }
 .bt-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .bt-side { display: grid; gap: 2px; align-content: start; min-width: 0; padding: 9px 10px; border: 1px solid var(--sk-line); background: rgba(3, 2, 10, .45); color: inherit; text-align: left; font: inherit; cursor: pointer; }
 .bt-nc .bt-side, .bt-ar .bt-side { border-radius: 10px; }
 .bt-side:disabled { cursor: default; }
 .bt-side:not(:disabled):hover { border-color: var(--sk-hi); }
-.bt-side.picked { border-color: var(--sk-hi); background: rgba(124, 92, 255, .16); box-shadow: inset 0 0 0 1px var(--sk-hi); }
+.bt-side.picked { border-color: var(--sk-hi); background: rgba(232, 176, 74, .16); box-shadow: inset 0 0 0 1px var(--sk-hi); }
 .bt-side.won { border-color: rgba(124, 240, 196, .5); }
-.bt-side small { font: 600 8px/1.4 "JetBrains Mono", ui-monospace, monospace; letter-spacing: .16em; color: var(--sk-dim); }
+.bt-side small { font: 600 8px/1.4 "JetBrains Mono", ui-monospace, monospace; letter-spacing: 0.01em; color: var(--sk-dim); }
 .bt-side b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .bt-side span { font: 600 12px "JetBrains Mono", ui-monospace, monospace; }
 .bt-side em { font: 500 10px "JetBrains Mono", ui-monospace, monospace; font-style: normal; color: var(--sk-hi); }
 .bt-side i { font: 500 10px "JetBrains Mono", ui-monospace, monospace; font-style: normal; color: var(--bt-win); }
 .bt-bar { height: 3px; background: rgba(255, 79, 216, .45); overflow: hidden; }
-.bt-bar span { display: block; height: 100%; background: linear-gradient(90deg, #7c5cff, #a48bff); transition: width .4s; }
+.bt-bar span { display: block; height: 100%; background: linear-gradient(90deg, #e8b04a, #e8b04a); transition: width .4s; }
 .bt-lock { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--sk-dim); font-size: 11px; line-height: 1.5; }
 .bt-amounts { display: flex; gap: 6px; flex-wrap: wrap; }
 .bt-amounts button { min-height: 34px; padding: 0 11px; border: 1px solid var(--sk-line); background: rgba(3, 2, 10, .45); color: inherit; font: 600 11px "JetBrains Mono", ui-monospace, monospace; cursor: pointer; }
-.bt-amounts button.on { border-color: var(--sk-hi); color: #fff; background: rgba(124, 92, 255, .18); }
+.bt-amounts button.on { border-color: var(--sk-hi); color: #fff; background: rgba(232, 176, 74, .18); }
 .bt-amounts label { flex: 1 1 110px; display: flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border: 1px solid var(--sk-line); background: rgba(3, 2, 10, .55); }
 .bt-nc .bt-amounts button, .bt-nc .bt-amounts label, .bt-ar .bt-amounts button, .bt-ar .bt-amounts label { border-radius: 8px; }
 .bt-amounts label:focus-within { border-color: var(--sk-hi); }
@@ -41,7 +41,7 @@
 .bt-go span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bt-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; max-height: 120px; overflow-y: auto; }
 .bt-feed li { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font: 500 10px "JetBrains Mono", ui-monospace, monospace; color: var(--sk-dim); }
-.bt-feed li b { color: inherit; color: #f2efff; }
+.bt-feed li b { color: inherit; color: #eef0f5; }
 .bt-feed li span:nth-of-type(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bt-feed li em { font-style: normal; color: var(--sk-hi); }
 .bt-soon .bt-side { cursor: default; opacity: .7; }

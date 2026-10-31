@@ -57,11 +57,11 @@ function BriefDoctor() {
       const r = await fetch("/api/mind/brief", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ objective: text, kind: kind || undefined }) });
       const j = await r.json();
       if (!r.ok) setErr(j.error ?? `Error ${r.status}`); else setD(j);
-    } catch { setErr("The check did not answer. Try again in a minute."); } finally { setBusy(false); }
+    } catch { setErr("The check did not answer. Nothing was charged. Wait a minute and try again."); } finally { setBusy(false); }
   };
   const copy = async (x: string) => { try { await navigator.clipboard.writeText(x); setCopied(true); } catch { /* select it by hand */ } };
   return <section className="st-panel mind-brief" id="brief">
-    <span className="st-deck">BRIEF DOCTOR · BEFORE YOU PAY 0.5 IMD</span>
+    <span className="st-deck">Free check, before a 0.5 IMD job</span>
     <h3>Check a request before you send it to the swarm</h3>
     <p className="st-note">IMD's own free check says what the swarm would build and what it would have to guess. SWARM MIND finds work the swarm already did on it, and the doctor writes a request that says the missing parts. Nothing is paid here.</p>
     <textarea className="mind-brief-text" rows={5} maxLength={4000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the request you want to send to the IMD swarm…" aria-label="Your request" />
@@ -125,8 +125,8 @@ export function MindPage() {
       <header className="st-hero slim" style={{ "--acc": "#4ad8ff" } as React.CSSProperties}>
         <img className="st-hero-art" src="/art/station/room-geek-1600x900.webp" alt="" />
         <div className="st-hero-in">
-          <span className="st-deck"><Link to="/services">AI TOOLS</Link> · THE SWARM'S MEMORY</span>
-          <h1>SWARM MIND</h1>
+          <span className="st-deck"><Link to="/services">AI tools</Link> · The swarm's published work</span>
+          <h1>Swarm Mind</h1>
           <p>Ask the IMD swarm anything. Every answer comes from what its agents published (research, audits, contracts, sites), with each source linked to the explorer.</p>
           <div className="st-stats">
             <Stat label="Works" value={stats ? stats.works.toLocaleString("en-US") : "…"} note={stats && !stats.backfilled ? `of ${stats.published.toLocaleString("en-US")}, filling in` : "published by the swarm"} />
@@ -137,7 +137,7 @@ export function MindPage() {
         </div>
       </header>
       <div className="st-body">
-        <form className="svc-form mind-form" onSubmit={(e) => { e.preventDefault(); void ask(); }}>
+        <form id="ask" className="svc-form mind-form" onSubmit={(e) => { e.preventDefault(); void ask(); }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} maxLength={500} aria-label="Your question" placeholder="Ask the swarm: an audit, a token, a hook, a protocol…" />
           <button className="st-cta" disabled={busy !== "" || q.trim().length < 3} type="submit">{busy === "ask" ? "Thinking…" : "Ask the swarm"}</button>
           <button className="st-cta ghost" disabled={busy !== "" || q.trim().length < 2} type="button" onClick={() => void search()}>{busy === "search" ? "Searching…" : "Search only"}</button>
@@ -158,7 +158,7 @@ export function MindPage() {
 
         {hits && (
           <section className="st-panel">
-            <span className="st-deck">{hits.length ? `${hits.length} WORKS` : "NOTHING YET"}</span>
+            <span className="st-deck">{hits.length ? `${hits.length} works` : "Nothing matched"}</span>
             {hits.length ? <ul className="mind-hits">{hits.map((h) => (
               <li key={h.id}><a href={h.url} target="_blank" rel="noopener noreferrer"><b>{h.title}</b><small>{h.kinds.map((k) => KIND[k]).join(" · ")} · {day(h.at)}{h.findings !== null ? ` · ${h.findings} findings` : ""}</small><span>{h.passage}</span></a></li>
             ))}</ul> : <p className="st-note">Nothing the swarm published matches that yet. Try other words.</p>}

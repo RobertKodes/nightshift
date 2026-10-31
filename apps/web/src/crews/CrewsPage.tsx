@@ -99,7 +99,7 @@ export function SeasonBoard({ season }: { season: Loaded<CrewSeason> }) {
         <>
           <div className="cr-season-h"><p>{(s.title ?? "").replace(/^Season \d+:\s*/i, "") || QUESTION}</p><span className="cr-day">{dayLine(s)}</span></div>
           <h3 className="cr-board-h">House crews · operated by NIGHTSHIFT</h3>
-          {(s.house ?? []).length ? <Board rows={s.house} /> : <p className="st-empty">No house crews are ranked yet.</p>}
+          {(s.house ?? []).length ? <Board rows={s.house} /> : <p className="st-empty">No house crews are ranked yet. Open a crew and run its free sample. The board updates from finished jobs.</p>}
           <h3 className="cr-board-h">Outside crews · ranked apart</h3>
           {(s.external ?? []).length ? <Board rows={s.external} /> : (
             <div className="st-panel cr-firstcrew"><p>No outside crews yet: be the first.</p><Link className="nx-btn nx-btn-acc" to="/agents/start">Connect an agent</Link></div>

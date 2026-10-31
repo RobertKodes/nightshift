@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { UtilityLinks } from "../HowThisConnects";
 import { webOnly } from "../store";
 import { short } from "../api";
@@ -6,9 +6,13 @@ import { InstallButton } from "../landing/app";
 import { BLUESKY_URL, Crescent, DEV_X_URL, NightFrog, OPENSEA_URL, TELEGRAM_URL, X_COMMUNITY_URL, X_URL, useSwarm } from "../landing/chrome";
 import { Link, go } from "../router";
 import { useSession } from "../session";
+import { BeforeSign, RoomBrief } from "./brief";
 import { NxIcon } from "./icons";
 import { ROOMS, ROOM_ORDER, type RoomId } from "./map";
 import "./nx.css";
+
+const DOOR_LABEL: Partial<Record<RoomId, string>> = { geek: "Check a token", breakroom: "Play", info: "Hold $SHIFT" };
+const TAB_LABEL: Partial<Record<RoomId, string>> = { geek: "Check", breakroom: "Play", info: "Hold" };
 
 const KEY = "nx_way";
 export function rememberRoom(id: RoomId) { try { localStorage.setItem(KEY, id); } catch { /* private mode */ } }
@@ -20,19 +24,21 @@ const isOn = (path: string, to: string) => path === to || (to !== "/" && path.st
 export function StationBar({ room, title }: { room: RoomId | null; title?: string }) {
   const swarm = useSwarm();
   const { address, signIn, signOut, busy, error } = useSession();
+  const [ask, setAsk] = useState(false);
   return (
     <div className="nx-station">
       <Link to="/" className="nx-mark" aria-label="NIGHTSHIFT home"><Crescent size={22} /><span>NIGHTSHIFT</span></Link>
       <b className="nx-apptitle" aria-hidden="true">{title ?? "NIGHTSHIFT"}</b>
-      <nav className="nx-rooms" aria-label="Three doors">
-        <Link to="/" className={room === null ? "on" : ""} style={{ "--acc": "#a48bff" } as React.CSSProperties}><NxIcon name="way" size={15} /><span>Home</span></Link>
+      <nav className="nx-rooms" aria-label="What you can do">
+        <Link to="/start" className={room === null ? "" : ""}><span>Start here</span></Link>
         {ROOM_ORDER.map((id) => (
           <Link key={id} to={ROOMS[id].nav[0]!.to} className={room === id ? "on" : ""} style={{ "--acc": ROOMS[id].accent } as React.CSSProperties}>
-            <i className="nx-dot" /><span>{ROOMS[id].name}</span>
+            <i className="nx-dot" /><span>{DOOR_LABEL[id] ?? ROOMS[id].name}</span>
           </Link>
         ))}
+        <Link to="/mcp" className=""><span>For agents</span></Link>
       </nav>
-      <span className="nx-pulse" title="IMD agents online, live from api.imd.fun"><i />{swarm?.n ? swarm.n.toLocaleString("en-US") : "…"}<small>AGENTS ONLINE</small></span>
+      <span className="nx-pulse" title="IMD agents online, live from api.imd.fun"><i />{swarm?.n ? swarm.n.toLocaleString("en-US") : "…"}<small>on watch</small></span>
       {swarm?.mode === "sim" && <span className="nx-sim" title="Simulated swarm and buyers. No IMD or USDC moves.">SIM</span>}
       <InstallButton compact />
       {address ? (
@@ -41,7 +47,16 @@ export function StationBar({ room, title }: { room: RoomId | null; title?: strin
           <button className="nx-acct nx-acct-out" onClick={() => void signOut()} title="Sign out" aria-label="Sign out"><NxIcon name="close" size={12} /></button>
         </span>
       ) : swarm?.mode === "live" ? (
-        <button className="nx-acct" onClick={() => void signIn()} disabled={busy} title={error ?? "Sign in with your wallet"}><NxIcon name="key" size={15} />{busy ? "Check wallet…" : "Sign in"}</button>
+        ask ? (
+          <span className="nx-signin">
+            <BeforeSign kind="login" />
+            <button className="nx-acct" onClick={() => void signIn()} disabled={busy}>{busy ? "Check wallet…" : "Sign the login"}</button>
+            <button className="nx-acct" type="button" onClick={() => setAsk(false)}>Not now</button>
+            {error && <p className="nx-sign-err">{error}</p>}
+          </span>
+        ) : (
+          <button className="nx-acct" onClick={() => setAsk(true)} disabled={busy} title="Sign in with your wallet. This only signs a login message."><NxIcon name="key" size={15} />Sign in</button>
+        )
       ) : null}
     </div>
   );
@@ -120,7 +135,7 @@ export function NxTabs({ room }: { room: RoomId | null }) {
         const r = ROOMS[id];
         return (
           <a key={id} href={r.nav[0]!.to} className={room === id ? "on" : ""} style={{ "--acc": r.accent } as React.CSSProperties} onClick={(e) => { e.preventDefault(); go(r.nav[0]!.to); scrollTo(0, 0); }}>
-            <NxIcon name={id === "breakroom" ? "play" : id === "geek" ? "build" : id === "info" ? "info" : id === "economy" ? "money" : "command"} size={21} /><span>{r.short}</span>
+            <NxIcon name={id === "breakroom" ? "play" : id === "geek" ? "build" : id === "info" ? "info" : id === "economy" ? "money" : "command"} size={21} /><span>{TAB_LABEL[id] ?? r.short}</span>
           </a>
         );
       })}
@@ -142,7 +157,7 @@ export function RoomShell({ room, path, lean = false, title, children }: { room:
         <UtilityLinks />
         {room && !lean && <RoomBar room={room} path={path} />}
       </header>
-      <main className={["/services", "/games", "/token", "/how-it-works", "/breakroom", "/geek", "/info"].includes(path) ? "clarity-main" : undefined}>{children}</main>
+      <main className={["/services", "/games", "/token", "/how-it-works", "/breakroom", "/geek", "/info"].includes(path) ? "clarity-main" : undefined}><RoomBrief path={path} />{children}</main>
       <Footer room={room} />
       <NightFrog />
       <NxTabs room={room} />

@@ -79,6 +79,23 @@ export function StartPage() {
       </header>
 
       <div className="st-body">
+        <section className="fg-sec" aria-labelledby="sp-first">
+          <div className="fg-head"><h2 id="sp-first">Your first visit, in three steps</h2><p className="fg-dim">No wallet for the first two. You only sign when you choose to pay or to hold $SHIFT.</p></div>
+          <ol className="ux-steps">
+            <li><b>Look around</b><span>Open Play or The Ship. Practice games need no account. Nothing on those pages spends money.</span></li>
+            <li><b>Check one token</b><span>Paste an Ethereum address into Token Verdict. The preview is free. One full quick verdict a day is free. After that, quick is $0.01 and deep is $0.25.</span></li>
+            <li><b>Pay only from a quote</b><span>Swarm Desk shows a checked USDC price before your wallet opens. House checks are half price if you hold 500,000 $SHIFT, a Night Frog, or a Night Watcher. Desk jobs stay at the full quote.</span></li>
+          </ol>
+        </section>
+        <section className="fg-sec" aria-labelledby="sp-who">
+          <div className="fg-head"><h2 id="sp-who">Pick the path that matches you</h2></div>
+          <div className="ux-audiences">
+            <Link to="/services/verdict" id="traders"><b>Traders</b><span>Check a token before you buy. Night Sniper lists new IMD launches with a verdict when one has been run.</span></Link>
+            <Link to="/services#swarm-desk" id="builders"><b>Builders</b><span>Hire the IMD swarm for a site, an audit, or a contract. Get a free quote, then pay that amount or walk away.</span></Link>
+            <Link to="/mcp" id="agents"><b>AI agents</b><span>Connect over MCP. Paid tools settle in USDC on Base with x402. The agent sees the price before it signs.</span></Link>
+            <Link to="/token" id="holders"><b>Holders</b><span>500,000 $SHIFT, a Night Frog, or a Night Watcher halves house checks. Staking shares in sells. Night Watch keeps imdUSD loans safe.</span></Link>
+          </div>
+        </section>
         <section className="fg-sec" aria-labelledby="sp-doors-heading">
           <div className="fg-head"><h2 id="sp-doors-heading">Three things you can do here</h2></div>
           <div className="fg-perks sp-doors">

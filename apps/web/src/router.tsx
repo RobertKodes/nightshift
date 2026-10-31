@@ -17,9 +17,9 @@ export function useRoute(): string {
   return path;
 }
 
-export function Link(props: { to: string; className?: string; style?: React.CSSProperties; "aria-label"?: string; children: React.ReactNode }) {
+export function Link(props: { to: string; id?: string; className?: string; style?: React.CSSProperties; "aria-label"?: string; children: React.ReactNode }) {
   return (
-    <a href={props.to} className={props.className} style={props.style} aria-label={props["aria-label"]} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(props.to); }}>
+    <a id={props.id} href={props.to} className={props.className} style={props.style} aria-label={props["aria-label"]} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(props.to); }}>
       {props.children}
     </a>
   );

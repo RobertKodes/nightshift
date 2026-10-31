@@ -1,7 +1,7 @@
 /* Every rule is scoped to the hidden preview. System type, graphite and one brand accent. */
 .pv {
   --space: #080b10; --surface: #11161d; --raised: #1a202a; --edge: #303741;
-  --ink: #e7ebf0; --muted: #a2acb9; --brand: #ad9bd2; --accent: #ad9bd2;
+  --ink: #e7ebf0; --muted: #a2acb9; --brand: #e8b04a; --accent: #e8b04a;
   --text: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
   --radius: 5px; --button-radius: 4px;
@@ -74,7 +74,7 @@
 .pv .pv-station[data-ready="true"] .pv-map { opacity: 0; visibility: hidden; pointer-events: none; }
 .pv .pv-intro { position: absolute; z-index: 2; left: 16px; right: 16px; top: calc(var(--header) + 14px); padding-bottom: 10px; }
 .pv .pv-intro-copy { background: #080b10e8; }
-.pv .pv-kicker { font: .59rem/1.5 var(--mono); letter-spacing: .1em; color: var(--muted); }
+.pv .pv-kicker { font: .59rem/1.5 var(--mono); letter-spacing: 0.01em; color: var(--muted); }
 .pv .pv-intro h1 { font-size: clamp(1.4rem, 6.2vw, 2rem); margin-top: 5px; }
 .pv .pv-intro-copy > p:last-of-type { margin-top: 7px; color: var(--muted); font-size: .77rem; }
 .pv .pv-quick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-top: 12px; }

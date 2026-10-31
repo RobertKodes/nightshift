@@ -47,7 +47,7 @@ function Hero({ title, line, deck, children }: { title: string; line: string; de
     <header className="st-hero slim" style={{ "--acc": "#4ad8ff" } as React.CSSProperties}>
       <img className="st-hero-art" src="/art/station/room-geek-1600x900.webp" alt="" />
       <div className="st-hero-in">
-        <span className="st-deck"><Link to="/services">AI TOOLS</Link> · {deck}</span>
+        <span className="st-deck"><Link to="/services">AI tools</Link> · {deck}</span>
         <h1>{title}</h1>
         <p>{line}</p>
         <span className="svc-runby"><i />Run by NIGHTSHIFT</span>
@@ -105,7 +105,7 @@ export function ServicesPage() {
   const index = read.state === "ready" ? read.data : null;
   const offers = (ids: string[]) => read.state === "loading" ? <p className="clarity-loading">Loading prices…</p> : read.state === "unavailable" ? <p className="clarity-unavailable">Prices unavailable. Free previews and samples are linked above.</p> : !index?.offers.some((o) => ids.includes(o.id)) ? <p className="clarity-empty">No offers listed for this group.</p> : <PaidOffers index={index} ids={ids} />;
   return <div className="st-room">
-    <Hero title="AI tools" deck="CHOOSE AN OUTCOME" line="Check a token, test an API, find research, or hire the IMD swarm.">
+    <Hero title="AI tools" deck="Choose an outcome" line="Check a token, test an API, find research, or hire the IMD swarm.">
       <div className="clarity-start"><Link to="/mcp">Connect an AI agent →</Link><Link to="/agents/start">Register an agent →</Link><Link to="/how-it-works">How it works →</Link></div>
     </Hero>
     <div className="st-body">
@@ -148,16 +148,16 @@ export function VerdictPage() {
       const d = await r.json();
       if (!r.ok) { setErr(d.error ?? `Error ${r.status}`); return; }
       if (kind === "demo") { setV(d); setPv(null); } else { setPv(d); setV(null); }
-    } catch { setErr("The service did not answer. Try again in a minute."); } finally { setBusy(""); }
+    } catch { setErr("The service did not answer. Wait a minute and try again, or run the free preview."); } finally { setBusy(""); }
   };
   useEffect(() => { if (isAddr(asked)) void run("preview", asked); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="st-room">
-      <Hero title="Token Verdict" deck="BEFORE YOU BUY" line="No issues found, caution or avoid for an Ethereum token, with every reason tied to its evidence. Made for IMD launches and Uniswap v4 hook tokens, where nobody else looks.">
+      <Hero title="Token Verdict" deck="Before you buy" line="No issues found, caution, or avoid, for an Ethereum token, with every reason tied to its evidence. Made for IMD launches and Uniswap v4 hook tokens.">
         <div className="st-stats"><Stat label="Quick" value="$0.01" note="the verdict" /><Stat label="Deep" value="$0.25" note="+ hook inspection, IMD checks, memo" /><Stat label="Free" value="1 a day" note="per IP, below" /></div>
       </Hero>
       <div className="st-body">
-        <h2>Try it free</h2>
+        <h2 id="try">Try it free</h2>
         <form className="svc-form" onSubmit={(e) => { e.preventDefault(); void run("demo"); }}>
           <input value={token} onChange={(e) => setToken(e.target.value)} spellCheck={false} aria-label="Token address" placeholder="0x… token on Ethereum" />
           <button className="st-cta" disabled={busy !== ""} type="submit">{busy === "demo" ? "Checking…" : "Run my free verdict"}</button>
@@ -222,7 +222,7 @@ export function HookPage() {
         <div className="st-stats"><Stat label="Inspection" value="$0.05" /><Stat label="Explained" value="$0.50" note="+ memo and source lines" /><Stat label="Bits" value="free" note="decoded below" /></div>
       </Hero>
       <div className="st-body">
-        <h2>Decode a hook's bits, free</h2>
+        <h2 id="try">Decode a hook's bits, free</h2>
         <form className="svc-form" onSubmit={(e) => { e.preventDefault(); void decode(); }}>
           <input value={hook} onChange={(e) => setHook(e.target.value)} spellCheck={false} aria-label="Hook address" placeholder="0x… v4 hook" />
           <button className="st-cta" type="submit">Decode</button>

@@ -17,7 +17,7 @@ type Err = Error & { status?: number; code?: string };
 
 function Prices({ crews }: { crews: CrewProfile[] }) {
   const rows = crews.flatMap((c) => (c.pricing ?? []).map((r) => ({ c, r })));
-  if (!rows.length) return <p className="st-empty">No paid call is open yet: the crews are in preview.</p>;
+  if (!rows.length) return <p className="st-empty">No paid call is open yet. Run a free sample on a crew page. A paid call appears here once that crew has a price.</p>;
   return (
     <div className="st-table-wrap">
       <table className="st-table">

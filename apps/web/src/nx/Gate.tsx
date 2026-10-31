@@ -14,17 +14,17 @@ type Overview = { market: { priceUsd: number; mcap: number; liquidity?: number }
   burnReserveEth?: number | null; burnAtEth?: number | null; lastBurn?: { at: number; tx: string; imd: number | null } | null };
 
 /** The three doors in plain words: what you can do there, and whether it costs anything. */
-const DOORS: Partial<Record<RoomId, { art: string; tag: string; line: string }>> = {
-  geek: { art: "/art/v2/door-tools-768.webp", tag: "Free previews", line: "Paste any token and an AI checks it for warning signs before you buy. Research and paid work when you need more." },
-  breakroom: { art: "/art/v2/door-play-768.webp", tag: "Free to play", line: "Pinball, chess, pool and poker against people or our frogs. Practice is free; no wallet needed." },
-  info: { art: "/art/v2/door-shift-768.webp", tag: "Own a piece", line: "The station's token. Hold it for perks, stake it for a share of every sell, and watch the burns." },
+const DOORS: Partial<Record<RoomId, { art: string; tag: string; line: string; title: string }>> = {
+  geek: { art: "/art/v2/door-tools-768.webp", tag: "Free to try", title: "Check a token", line: "Paste an address. The preview is free, one quick verdict a day is free, then $0.01 or $0.25." },
+  breakroom: { art: "/art/v2/door-play-768.webp", tag: "Free to play", title: "Play", line: "Pinball, chess, pool and poker. No wallet. Staked games are a separate choice." },
+  info: { art: "/art/v2/door-shift-768.webp", tag: "Hold and stake", title: "Hold $SHIFT", line: "500,000 $SHIFT, a Night Frog, or a Night Watcher cuts house checks in half. Staking shares in sells." },
 };
 
 /** What is new on the station right now: kept short, and taken down when it is no longer new. */
 const NEW_NOW = [
-  { to: "/deals", tag: "OPENING SOON", title: "Token Deals", line: "Holders sell tokens at a fixed price through an escrow contract, instead of dumping on the chart.", acc: "#c9c2ff" },
-  { to: "/partners", tag: "OPEN TO PROJECTS", title: "Partner program", line: "Projects from any chain can apply for free and join the station's crew.", acc: "#4ad8ff" },
-  { to: "/watch", tag: "WITH imdUSD", title: "The Night Watch", line: "Forge a Night Watcher and run a keeper seat that keeps imdUSD loans safe for a bonus.", acc: "#b8ff4a" },
+  { to: "/deals", tag: "Fixed price", title: "Token Deals", line: "Holders sell tokens at a set price through an escrow contract, instead of selling into the chart.", acc: "#e8b04a" },
+  { to: "/partners", tag: "Free to apply", title: "Partner program", line: "Projects from any chain can apply for free and join the station's checks and deals.", acc: "#e8b04a" },
+  { to: "/watch", tag: "imdUSD", title: "The Night Watch", line: "A Night Watcher runs a keeper seat that keeps imdUSD loans safe, for a bonus.", acc: "#e8b04a" },
 ];
 
 /** The way back from the third step to the first, under the cards (in a 1000-wide box). */
@@ -46,7 +46,7 @@ function useStars(ref: React.RefObject<HTMLCanvasElement | null>) {
     const c = ref.current;
     if (!c) return;
     const ctx = c.getContext("2d")!;
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const still = true;
     let w = 0, h = 0, raf = 0, px = 0, py = 0;
     const stars = Array.from({ length: 220 }, () => ({ x: Math.random(), y: Math.random(), z: Math.random() ** 2, t: Math.random() * 6.28 }));
     const size = () => { const d = Math.min(devicePixelRatio || 1, 2); w = c.clientWidth; h = c.clientHeight; c.width = w * d; c.height = h * d; ctx.setTransform(d, 0, 0, d, 0, 0); };
@@ -57,7 +57,7 @@ function useStars(ref: React.RefObject<HTMLCanvasElement | null>) {
         if (s.x < 0) s.x += 1;
         const x = (s.x * w + px * s.z * 18 + w) % w, y = s.y * h + py * s.z * 12;
         const a = 0.25 + s.z * 0.75 * (0.7 + 0.3 * Math.sin(t / 900 + s.t));
-        ctx.fillStyle = s.z > 0.82 ? `rgba(201,194,255,${a})` : `rgba(242,239,255,${a * 0.8})`;
+        ctx.fillStyle = `rgba(238,240,245,${a * 0.85})`;
         ctx.fillRect(x, y, 0.6 + s.z * 1.4, 0.6 + s.z * 1.4);
       }
       if (!still) raf = requestAnimationFrame(draw);
@@ -69,26 +69,6 @@ function useStars(ref: React.RefObject<HTMLCanvasElement | null>) {
     document.addEventListener("visibilitychange", vis);
     return () => { cancelAnimationFrame(raf); removeEventListener("resize", size); removeEventListener("pointermove", move); document.removeEventListener("visibilitychange", vis); };
   }, [ref]);
-}
-
-/** Text that decodes into place, letter by letter, once; plain text for anyone who prefers less motion. */
-function Decode({ text, delay = 0 }: { text: string; delay?: number }) {
-  const [out, setOut] = useState(text);
-  useEffect(() => {
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const glyphs = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789<>/#";
-    const start = performance.now() + delay, dur = 900;
-    let raf = 0;
-    const tick = (t: number) => {
-      const done = Math.max(0, Math.min(1, (t - start) / dur));
-      const fixed = Math.floor(done * text.length);
-      setOut(text.split("").map((ch, i) => (ch === " " || i < fixed ? ch : glyphs[Math.floor(Math.random() * glyphs.length)]!)).join(""));
-      if (done < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [text, delay]);
-  return <span aria-hidden="true">{out}</span>;
 }
 
 /** The keeper runs at every odd UTC hour (its burn lands within about an hour of it). */
@@ -123,7 +103,7 @@ export function Gate() {
   const [live, setLive] = useState<number | null>(null);
   const dock = useDock();
   const enter = (id: RoomId) => { rememberRoom(id); dock.start(id, () => { go(ROOMS[id].nav[0]!.to); scrollTo(0, 0); }); };
-  useEffect(() => { document.title = "NIGHTSHIFT · AI tools, games and $SHIFT"; }, []);
+  useEffect(() => { document.title = "NIGHTSHIFT · Ideas don't sleep"; }, []);
   useEffect(() => {
     // the numbers move: read again every minute while the page is open
     const read = () => {
@@ -169,9 +149,19 @@ export function Gate() {
       <div className="nx-visit gx-visit"><ImdVisitor /></div>
       <header className="nx-head"><StationBar room={null} /><UtilityLinks /></header>
       <section className="nx-gate-in gx-in">
-        <span className="nx-eyebrow"><i />NIGHTSHIFT · BUILT WITH IMD</span>
-        <h1 className="nx-title" aria-label="What brings you to the night shift?"><Decode text="What brings you" /><br /><Decode text="to the night shift?" delay={260} /></h1>
-        <p className="nx-gate-lead">NIGHTSHIFT is a space station run by AI agents and a crew of frogs. Play games, let an AI check a token for you, or own a piece of the station with $SHIFT. Looking around is free: no account, no wallet.</p>
+        <span className="nx-eyebrow"><i />Ideas don't sleep</span>
+        <h1 className="nx-title">A station for people and AI agents</h1>
+        <p className="nx-gate-lead">Nightshift is a space station run by AI agents and a crew of frogs, on the IMD swarm. Traders check a token before they buy. Builders hire the swarm. Holders stake $SHIFT. Agents pay over x402 or MCP. Looking around is free.</p>
+        <ul className="ux-outcomes">
+          <li><b>Check a token</b><span>Token Verdict. Preview free, one quick check a day free, then $0.01 or $0.25.</span></li>
+          <li><b>Hire the swarm</b><span>Swarm Desk quotes first. You pay that USDC amount on Base, or you don't.</span></li>
+          <li><b>Hold $SHIFT</b><span>500,000 in wallet plus stake, a Night Frog, or a Night Watcher halves house checks.</span></li>
+          <li><b>Keep imdUSD safe</b><span>Night Watch. Forging a Watcher burns 10 Night Frogs and costs 2 IMD.</span></li>
+        </ul>
+        <div className="ux-actions">
+          <Link to="/start" className="nx-btn nx-btn-acc"><NxIcon name="guide" size={18} />Start here</Link>
+          <Link to="/services/verdict" className="nx-btn">Check a token</Link>
+        </div>
         <div className="nx-ways gx-ways">{ROOM_ORDER.map((id, i) => {
           const r = ROOMS[id], d = DOORS[id]!;
           return <a key={id} href={r.nav[0]!.to} className="nx-way" style={{ "--acc": r.accent } as React.CSSProperties}
@@ -180,17 +170,13 @@ export function Gate() {
             <span className="nx-way-art"><img src={d.art} alt="" width={768} height={768} /></span>
             <span className="nx-way-tx">
               <span className="nx-way-who"><kbd>{i + 1}</kbd>{d.tag}</span>
-              <b>{r.name}</b>
+              <b>{d.title}</b>
               <span className="nx-way-line">{d.line}</span>
               <span className="nx-way-stat" aria-live="polite">{stat[id] || " "}</span>
             </span>
             <NxIcon name="arrow" size={20} className="nx-way-go" />
           </a>;
         })}</div>
-        <div className="gx-new">
-          <Link to="/start" className="nx-btn nx-btn-acc"><NxIcon name="guide" size={18} />New to crypto? Start here</Link>
-          <span>Five minutes, plain words, no wallet needed to read.</span>
-        </div>
       </section>
     </div>
 

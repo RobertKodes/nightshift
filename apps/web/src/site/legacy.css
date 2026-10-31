@@ -9,7 +9,7 @@
   /* the old base (styles.css, landing.css) */
   --bg: transparent; --bg-2: #0e1319; --card: #11161d; --card-2: #151b23; --glass: #11161df2;
   --line: #262d36; --line-2: #39414c; --text: #e7ebf0; --dim: #a2acb9; --faint: #7b8592;
-  --moon: var(--acc); --moon-dim: #ad9bd21f; --sky: #8fb7c8; --uv: #8d7cb4; --uv-hi: var(--acc); --uv-soft: #ad9bd21a; --acid: #6fdcab;
+  --moon: var(--acc); --moon-dim: #e8b04a1f; --sky: #8fb7c8; --uv: #8d7cb4; --uv-hi: var(--acc); --uv-soft: #e8b04a1a; --acid: #6fdcab;
   --warn: #e0a54a; --bad: #e07a86; --good: #6fdcab; --radius: 4px;
   --serif: var(--pv-font); --sans: var(--pv-font);
   /* the station shell (nx.css) */
@@ -24,7 +24,7 @@
 
 /* the trail: the section and its pages, where the old room bar was */
 .pv .pv-trail { position: sticky; top: var(--header); z-index: 30; display: flex; align-items: center; gap: 4px; min-height: 46px; padding: 0 max(12px, env(safe-area-inset-left, 0px)); background: #0b0f14f2; border-bottom: 1px solid var(--edge); }
-.pv .pv-trail-home { flex-shrink: 0; display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px 0 0; margin-right: 4px; border-right: 1px solid var(--edge); font: 600 .7rem var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acc); }
+.pv .pv-trail-home { flex-shrink: 0; display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px 0 0; margin-right: 4px; border-right: 1px solid var(--edge); font: 600 .7rem var(--mono); letter-spacing: .06em; text-transform: none; color: var(--acc); }
 .pv .pv-trail > div { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
 .pv .pv-trail > div::-webkit-scrollbar { display: none; }
 .pv .pv-trail a:not(.pv-trail-home) { flex-shrink: 0; display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; font-size: .74rem; color: var(--muted); white-space: nowrap; border-bottom: 2px solid transparent; }
@@ -40,7 +40,7 @@
 .pv .pv-legacy :is(h1, h2, h3, em, span, b, strong, a) { -webkit-text-fill-color: currentColor; }
 .pv .pv-legacy :is(h1, h2, h3) :is(em, i, span) { color: inherit; font-style: normal; background: none; }
 .pv .pv-legacy a { color: inherit; }
-.pv .pv-legacy p a, .pv .pv-legacy li > a:not([class]) { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #ad9bd266; }
+.pv .pv-legacy p a, .pv .pv-legacy li > a:not([class]) { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #e8b04a66; }
 
 /* controls: flat, rounded, graphite; the accent only on the primary action */
 .pv .pv-legacy :is(button, [class*="btn"], [class*="button"], [class*="cta"]) { clip-path: none !important; border-radius: 4px; }
@@ -52,7 +52,7 @@
 .pv .pv-legacy .nx-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
 @media (hover: hover) { .pv .pv-legacy :is(.nx-btn, .btn):hover { background: #1d2430; border-color: #4a5260; } }
 .pv .pv-legacy :is(input, select, textarea) { background: #0c1117; color: var(--ink); border: 1px solid var(--edge); border-radius: 4px; }
-.pv .pv-legacy :is(input, select, textarea):focus { outline: 2px solid #ad9bd255; outline-offset: 1px; border-color: #716581; }
+.pv .pv-legacy :is(input, select, textarea):focus { outline: 2px solid #e8b04a55; outline-offset: 1px; border-color: #716581; }
 
 /* panels and cards: one surface, one edge, no cut corners or glow */
 .pv .pv-legacy :is([class*="panel"], [class*="card"], [class*="tile"], [class*="box"]):not(input, select, textarea) { clip-path: none !important; }
@@ -75,7 +75,7 @@
 .pv .pv-legacy .st-hero-in { max-width: 880px; gap: 10px; }
 .pv .pv-legacy .st-hero h1 { font: 600 clamp(1.8rem, 5vw, 3rem)/1.08 var(--pv-font); letter-spacing: -.03em; animation: none; }
 .pv .pv-legacy .st-hero p { font-size: .95rem; color: var(--muted); max-width: 640px; }
-.pv .pv-legacy :is(.st-kicker, .st-eyebrow, [class*="kicker"], [class*="eyebrow"]) { font: 600 .66rem var(--mono); letter-spacing: .14em; color: var(--acc); text-transform: uppercase; }
+.pv .pv-legacy :is(.st-kicker, .st-eyebrow, [class*="kicker"], [class*="eyebrow"]) { font: 600 .66rem var(--mono); letter-spacing: 0.01em; color: var(--acc); text-transform: none; }
 
 /* type set in the old stylesheets by name */
 .pv .pv-legacy :is(.clarity-box, .clarity-page, .clarity-utilities a, .nx-dock-tx b) { font-family: var(--pv-font); }

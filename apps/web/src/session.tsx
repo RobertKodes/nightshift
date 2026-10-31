@@ -54,7 +54,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       const r = await api.verify(addr, nonce, signature);
       setAddress(r.address.toLowerCase());
     } catch (e) {
-      setError((e as Error).message.split("\n")[0] ?? "Sign-in failed");
+      setError(`${(e as Error).message.split("\n")[0] ?? "Sign-in failed"} Nothing was spent. Try again, or pick another wallet.`);
     } finally {
       setBusy(false);
     }

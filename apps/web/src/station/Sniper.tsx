@@ -355,7 +355,7 @@ function LaunchersTab({ feed }: { feed: Feed | null }) {
   const rows = feed?.launchers ?? [];
   return (
     <Group head="Wallets that launch on IMD" foot={`Read from every launch's record on IMD (${feed?.indexed ?? 0} indexed). A serial launcher is worth knowing before you buy.`}>
-      {!rows.length && <div className="ios-cell"><span className="ios-cell-mid"><span className="ios-cell-s">{feed ? "No launchers called yet." : "Loading…"}</span></span></div>}
+      {!rows.length && <div className="ios-cell"><span className="ios-cell-mid"><span className="ios-cell-s">{feed ? "No launcher has been called yet. Open Calls to see new IMD launches as they are checked." : "Loading the launcher list…"}</span></span></div>}
       {rows.map((l) => (
         <Cell key={l.address} lead={<WalletAvatar a={l.address} />} title={short(l.address)} href={`https://etherscan.io/address/${l.address}`}
           sub={`${l.launches} launch${l.launches === 1 ? "" : "es"} · ${l.called} called${l.dumped ? ` · ${l.dumped} dumped` : ""}`}
@@ -390,7 +390,7 @@ function AlertsTab({ feed }: { feed: Feed | null }) {
 }
 
 const TABS: { id: Tab; label: string; glyph: "scope" | "photo" | "people" | "bell" | "dex"; title: string; line: string }[] = [
-  { id: "calls", label: "Calls", glyph: "scope", title: "Sniper", line: "Every IMD launch, checked" },
+  { id: "calls", label: "Calls", glyph: "scope", title: "Night Sniper", line: "New IMD launches, with a verdict when one has been run. Free to read." },
   { id: "dex", label: "Dex", glyph: "dex", title: "Dex", line: "Every IMD token, priced on chain" },
   { id: "nfts", label: "NFTs", glyph: "photo", title: "NFT Launches", line: "Every collection built on IMD" },
   { id: "launchers", label: "Launchers", glyph: "people", title: "Launchers", line: "Who launches, and how it went" },

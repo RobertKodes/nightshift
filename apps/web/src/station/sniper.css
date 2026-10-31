@@ -41,7 +41,7 @@ html.ios-locked { overflow: hidden; }
 
 .ios-main { max-width: 680px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right)) calc(49px + env(safe-area-inset-bottom) + 28px) max(16px, env(safe-area-inset-left)); }
 .ios-hero { padding: 2px 0 6px; }
-.ios-large { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Helvetica Neue", Inter, system-ui, sans-serif; font-size: 34px; line-height: 41px; font-weight: 700; letter-spacing: .37px; }
+.ios-large { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Helvetica Neue", Inter, system-ui, sans-serif; font-size: 34px; line-height: 41px; font-weight: 500; letter-spacing: .37px; }
 .ios-sub { margin: 2px 0 0; color: var(--label2); font-size: 15px; letter-spacing: -.24px; }
 
 /* the track record, one glance */
@@ -65,7 +65,7 @@ html.ios-locked { overflow: hidden; }
 
 /* inset grouped lists */
 .ios-group { margin: 22px 0 0; }
-.ios-head { margin: 0; padding: 0 16px 7px; color: var(--label2); font-size: 13px; font-weight: 400; letter-spacing: -.08px; text-transform: uppercase; }
+.ios-head { margin: 0; padding: 0 16px 7px; color: var(--label2); font-size: 13px; font-weight: 400; letter-spacing: -.08px; text-transform: none; }
 .ios-list { overflow: hidden; border-radius: 10px; background: var(--cell); }
 .ios-foot { margin: 0; padding: 7px 16px 0; color: var(--label2); font-size: 13px; line-height: 18px; letter-spacing: -.08px; }
 .ios-foot.center { padding: 26px 20px 0; text-align: center; }
@@ -140,7 +140,7 @@ html.ios-locked { overflow: hidden; }
 .ios-sheet-head { display: flex; align-items: center; gap: 12px; padding: 4px 16px 2px; }
 .ios-sheet-head .ios-av { width: 48px; height: 48px; font-size: 17px; }
 .ios-sheet-head > div { flex: 1; min-width: 0; }
-.ios-sheet-head h2 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 700; letter-spacing: .35px; overflow-wrap: anywhere; }
+.ios-sheet-head h2 { margin: 0; font-size: 22px; line-height: 28px; font-weight: 500; letter-spacing: .35px; overflow-wrap: anywhere; }
 .ios-sheet-head p { margin: 0; color: var(--label2); font-size: 15px; letter-spacing: -.24px; }
 .ios-close { flex: none; display: grid; place-items: center; width: 30px; height: 30px; padding: 0 0 2px; border: 0; border-radius: 50%; background: var(--fill); color: var(--label2) !important; font-size: 22px; line-height: 1; cursor: pointer; }
 .ios-sheet-body { padding: 0 16px calc(28px + env(safe-area-inset-bottom)); }
