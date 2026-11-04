@@ -20,7 +20,7 @@ export interface ShiftDeps {
   stats: (c: Company) => CompanyStats;
   /** Public URL prefix of a company's buy links, e.g. https://host/buy/acme */
   buyBase: (c: Company) => string;
-  emit: (c: Company, type: "task" | "journal" | "company", payload: unknown) => void;
+  emit: (c: Company, type: "task" | "journal" | "company" | "approval", payload: unknown) => void;
   /** The saver's first rule: look for shipped public work before paying for research. */
   findExisting?: (query: string) => Promise<{ title: string; url: string } | null>;
   now?: () => number;
@@ -278,8 +278,9 @@ async function buy(c: Company, t: Task, d: ShiftDeps, approved: boolean): Promis
   const gate = canSpend(c, costUsd, d.imdUsd(), { approved, now: now(d) });
   if (!gate.allow) {
     if (gate.wait === "approval") {
-      touch(c, t, d, { status: "awaiting_approval", activity: gate.reason });
+      touch(c, t, d, { status: "awaiting_approval", activity: gate.reason, held: { usd: costUsd, imd: fromImd(caps.price), via: "swarm", at: now(d) } });
       note(c, d, "note", `Waiting for your approval: ${t.title} (${gate.reason}; ${fromImd(caps.price)} IMD at $${d.imdUsd().toFixed(2)} per IMD).`);
+      d.emit(c, "approval", { taskId: t.id, title: t.title, why: t.why, reason: gate.reason, costUsd, imd: fromImd(caps.price) });
     } else {
       touch(c, t, d, { status: "failed", error: gate.reason, activity: null });
       dropProduct(c, t);
@@ -423,8 +424,9 @@ async function shopFirst(c: Company, t: Task, brief: string, d: ShiftDeps, appro
   record({ ...base, pick, decision: `Buy "${o.product.name}" from ${o.seller.name} for ${usd(o.product.priceUsdc)} instead of ordering the research from the swarm ($${swarmUsd.toFixed(2)}): it scored ${best.score.toFixed(2)} against the brief.` });
   if (!approved && fromUsdc(o.product.priceUsdc) > c.policy.approvalOverUsd + 1e-9) {
     const reason = `${usd(o.product.priceUsdc)} on the market is over the $${c.policy.approvalOverUsd} you approve by hand`;
-    touch(c, t, d, { status: "awaiting_approval", activity: reason });
+    touch(c, t, d, { status: "awaiting_approval", activity: reason, held: { usd: fromUsdc(o.product.priceUsdc), via: "market", at: now(d) } });
     note(c, d, "note", `Waiting for your approval: buy "${o.product.name}" from ${o.seller.name} on the NIGHTSHIFT market for ${usd(o.product.priceUsdc)} (${reason}), instead of research from the swarm at ~$${swarmUsd.toFixed(2)}.`);
+    d.emit(c, "approval", { taskId: t.id, title: t.title, why: t.why, reason, costUsd: fromUsdc(o.product.priceUsdc), market: { product: o.product.name, company: o.seller.name, swarmUsd } });
     return "waiting";
   }
   return payMarket(c, t, d);

@@ -78,6 +78,8 @@ export interface Task {
   about?: string;
   /** Built in-house by the studio (no swarm order): what it is making and since when. */
   studio?: { format: "planner"; at: number; brief: string };
+  /** Held for the owner: the price they were shown when it started waiting. An approval is for this price. */
+  held?: { usd: number; imd?: number; via: "swarm" | "market"; at: number };
 }
 
 /** Why a product on the market was or was not bought. */

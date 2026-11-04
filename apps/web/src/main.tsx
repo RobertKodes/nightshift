@@ -29,6 +29,7 @@ import { ImpactPage } from "./ImpactPage";
 import { GuidePage } from "./GuidePage";
 import { TermsPage } from "./TermsPage";
 import { PrivacyPage } from "./PrivacyPage";
+import { DeleteAccountPage } from "./DeleteAccountPage";
 import { SecurityPage } from "./SecurityPage";
 import { TokenomicsPage } from "./TokenomicsPage";
 import { GameRoomPage } from "./GameRoomPage";
@@ -120,6 +121,7 @@ function App() {
   if (seg[0] === "mcp") page = <McpPage health={health} />;
   if (seg[0] === "terms") page = <TermsPage health={health} />;
   if (seg[0] === "privacy") page = <PrivacyPage />;
+  if (seg[0] === "delete-account") page = <DeleteAccountPage />;
   if (seg[0] === "security") page = <SecurityPage />;
   if (seg[0] === "setup") page = <SetupPage />;
   if (seg[0] === "market") page = <MarketPage />;

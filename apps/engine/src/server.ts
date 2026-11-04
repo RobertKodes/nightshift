@@ -6,7 +6,7 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import type { Company, Product } from "@nightshift/core";
 import { NameError, saveName, savedName } from "./players.js";
 import { attachLastspawn } from "./lastspawn/index.js";
-import { fromImd, fromUsdc } from "@nightshift/core";
+import { fromImd, fromUsdc, spentTodayUsd } from "@nightshift/core";
 import { type PaymentPayload, USDC, challenge as challenge402, decodeHeader, encodeHeader, requirement, verifyPayment } from "@nightshift/x402";
 import { balances, eth, sales } from "./chain.js";
 import { NoGasError, PaymentRefused, PendingError } from "./checkout.js";
@@ -41,9 +41,14 @@ import { frogPng } from "./frogpng.js";
 import { board as pinBoard, frogImage as pinFrogImage, inMatch as pinInMatch, soloFinish as pinSoloFinish, soloProgress as pinSoloProgress, soloStart as pinSoloStart, finish as pinFinish, get as pinGet, leave as pinLeave, listen as pinListen, progress as pinProgress, queue as pinQueue, stakes as pinStakes } from "./pinball.js";
 import { claimsOf, epochs, markPosted } from "./frogpot.js";
 import { config } from "./config.js";
-import type { Engine } from "./engine.js";
+import type { Engine, EngineEvent } from "./engine.js";
 import { handleMcp } from "./mcp.js";
-import { clientIp, keyAllowed } from "./auth.js";
+import { type Caller, clientIp, keyAllowed } from "./auth.js";
+import { deviceId, deviceView } from "./devices.js";
+import { StreamCount } from "./events.js";
+import { AiReports } from "./reports.js";
+import { forgetName } from "./players.js";
+import { forgetWallet as forgetPushWallet } from "./push.js";
 import { MAX_TICKS } from "./pinball/engine.js";
 import { ANNOUNCED, checkSetup, deleteOldBackups, isAdmin, oldBackups, pendingChanges, rotateAdminToken, setupState } from "./admin.js";
 import { readSettings, writeSettings } from "./settings.js";
@@ -95,9 +100,8 @@ import { catalogItems } from "./services/catalog.js";
 import { backupUrl, productSite } from "./site-backup.js";
 import { unnamedModel } from "./ceo-brain.js";
 
-/** Open live-event streams, per IP and in all. */
-const streams = new Map<string, number>();
-let streamsTotal = 0;
+/** Open live-event streams: per signed-in owner, else per IP, and in all. */
+const streams = new StreamCount();
 
 /** Open solo pinball runs by IP: fresh wallets do not let one IP hold many seeds. As long as pinball.ts keeps a run open. */
 const soloByIp = new Map<string, { id: string; until: number }>();
@@ -115,6 +119,22 @@ function limited(req: IncomingMessage, key: string, max: number, windowMs: numbe
   if (!h || h.reset < now) { hits.set(k, { n: 1, reset: now + windowMs }); return false; }
   h.n += 1;
   return h.n > max;
+}
+
+/** Owners' reports of CEO chat answers. */
+const aiReports = new AiReports(config.dataDir);
+
+/**
+ * A money-out action from the app needs the wallet again: X-Step-Up carries "<nonce>.<signature>" for
+ * a message made for exactly this action. Web sessions are unchanged; `always`: asked of every session.
+ * Returns what to tell the owner when it is missing or wrong, or null when it passes.
+ */
+let stepAuth: Engine["auth"] | null = null;
+async function stepUp(req: IncomingMessage, caller: Caller | null, action: string, always = false): Promise<string | null> {
+  if (!caller || (!caller.app && !always)) return null;
+  const [nonce, sig] = String(req.headers["x-step-up"] ?? "").split(".");
+  if (!nonce || !sig) return "Confirm this with your wallet first.";
+  return (await stepAuth!.checkStep(caller.addr, action, nonce, sig)) ? null : "The wallet's confirmation did not match or has expired. Try again.";
 }
 
 const json = (res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) => {
@@ -163,6 +183,8 @@ async function full(engine: Engine, c: Company) {
       aiUsd: fromUsdc(c.aiSpentUsdc ?? 0n),
     },
     recentSales: m.sales.slice(-20).reverse(),
+    // spent in the last 24 hours against the daily budget, as the shift's own limit counts it
+    todayUsd: Math.round(spentTodayUsd(c, config.imdUsd) * 100) / 100,
     holder: tokenOn() ? { symbol: config.token.symbol, ...(await holderStatus(c.owner)), min: config.token.holderMin } : null,
     platformFeeBps: config.platformTreasury ? config.platformFeeBps : 0,
     series: series(m.visits, m.sales.map((s) => ({ at: s.at, usd: Number(s.usdc) / 1e6 }))),
@@ -194,6 +216,7 @@ async function desk(engine: Engine, owner: string | null) {
       policy: c.policy, site: c.site?.url ?? null, siteBackup: backupUrl(c.site?.cid), alerts: Boolean(c.notify?.telegram),
       products: c.products.map((x) => ({ id: x.id, name: x.name, pitch: x.pitch, kind: x.kind, status: x.status, priceUsd: fromUsdc(x.priceUsdc), priceByOwner: Boolean(x.priceByOwner), sales: x.sales, revenueUsd: fromUsdc(x.revenueUsdc), b2bSales: x.b2bSales ?? 0, packaged: engine.files.has(c, x), ...studioView(c, x) })),
       pnl: { revenueUsd, spentUsd, profitUsd: revenueUsd + soldUsd - spentUsd - boughtUsd },
+      todayUsd: Math.round(spentTodayUsd(c, config.imdUsd) * 100) / 100,
       b2b: {
         bought: { count: b.bought, usd: boughtUsd, items: (c.b2b?.bought ?? []).slice(-6).reverse().map(deskLine) },
         sold: { count: b.sold, usd: soldUsd, items: (c.b2b?.sold ?? []).slice(-6).reverse().map(deskLine) },
@@ -203,7 +226,7 @@ async function desk(engine: Engine, owner: string | null) {
       working: working ? { id: working.id, title: working.title, status: working.status, activity: working.activity } : null,
       waiting: c.tasks.filter((t) => t.status === "awaiting_approval").map((t) => {
         const pick = t.market?.pick;
-        return { id: t.id, cycle: t.cycle, title: t.title, why: t.why, costUsd: pick ? fromUsdc(pick.priceUsdc) : fromImd(t.costImd) * config.imdUsd, ...(pick ? { market: { product: pick.name, company: pick.company, swarmUsd: t.market!.swarmUsd } } : {}) };
+        return { id: t.id, cycle: t.cycle, title: t.title, why: t.why, reason: t.activity, at: t.updatedAt, costUsd: heldUsd(t), ...(t.held?.imd ? { imd: t.held.imd } : {}), ...(pick ? { market: { product: pick.name, company: pick.company, swarmUsd: t.market!.swarmUsd } } : {}) };
       }),
       last: last ? { id: last.id, cycle: last.cycle, title: last.title, status: last.status, at: last.updatedAt } : null,
       connections: engine.connect.desk(c),
@@ -235,6 +258,59 @@ async function books(engine: Engine, c: Company): Promise<string> {
   const cell = (v: string) => `"${(/^[=+\-@\t\r]/.test(v) && !/^-?\d/.test(v) ? `'${v}` : v).replace(/"/g, '""')}"`;
   return rows.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
 }
+
+/** The price a held task was shown to its owner at: what an approval from the phone signs. */
+function heldUsd(t: Company["tasks"][number]): number {
+  if (t.held) return Math.round(t.held.usd * 100) / 100;
+  const pick = t.market?.pick;
+  return Math.round((pick ? fromUsdc(pick.priceUsdc) : fromImd(t.costImd) * config.imdUsd) * 100) / 100;
+}
+
+/**
+ * The books as the app shows them: totals for the period, revenue against spend by day, and the
+ * latest ledger lines. The same entries as books.csv; IMD at today's price.
+ */
+async function booksView(engine: Engine, c: Company, days: number | null) {
+  const mine = `co:${c.id}:`;
+  const DAY_MS = 86400_000;
+  const now = Date.now();
+  const since = days ? now - days * DAY_MS : 0;
+  const all = (await engine.ledger.store.list(mine)).filter((x) => x.at.getTime() >= since);
+  const t = { salesUsd: 0, b2bSoldUsd: 0, b2bBoughtUsd: 0, swarmImd: 0, aiUsd: 0, fundedImd: 0, fundedUsd: 0, withdrawnUsd: 0 };
+  const span = Math.min(days ?? 30, 30);
+  const byDay = Array.from({ length: span }, (_, i) => { const d = new Date(now - (span - 1 - i) * DAY_MS); return { day: d.toISOString().slice(0, 10), revenueUsd: 0, spendUsd: 0 }; });
+  const dayOf = (at: Date) => byDay.find((b) => b.day === at.toISOString().slice(0, 10));
+  const lines: { at: number; kind: string; memo: string; amount: number; asset: string; tx: string | null }[] = [];
+  for (const x of all) for (const y of x.postings) {
+    if (!y.account.startsWith(mine)) continue;
+    const amt = y.asset === "IMD" ? fromImd(y.amount) : fromUsdc(y.amount);
+    const b2b = isB2b(x);
+    const kind = b2b ? (y.amount < 0n ? "b2b_purchase" : "b2b_sale") : x.kind;
+    const day = dayOf(x.at);
+    if (y.asset === "USDC") {
+      if (b2b) { if (amt > 0) { t.b2bSoldUsd += amt; if (day) day.revenueUsd += amt; } else { t.b2bBoughtUsd -= amt; if (day) day.spendUsd -= amt; } }
+      else if (x.kind === "sale" || x.kind === "sale_sim") { t.salesUsd += amt; if (day) day.revenueUsd += amt; }
+      else if (x.kind === "ai") { t.aiUsd -= amt; if (day) day.spendUsd -= amt; }
+      else if (x.kind === "withdrawal") t.withdrawnUsd -= amt;
+      else if (x.kind === "funding") t.fundedUsd += amt;
+    } else if (y.asset === "IMD") {
+      if (x.kind === "imd_order" || x.kind === "imd_reversal") { t.swarmImd -= amt; if (day) day.spendUsd -= amt * config.imdUsd; }
+      else if (x.kind === "funding") t.fundedImd += amt;
+    }
+    lines.push({ at: x.at.getTime(), kind, memo: unnamedModel(x.memo ?? ""), amount: amt, asset: y.asset, tx: (x.ref as { chainTx?: string } | undefined)?.chainTx ?? null });
+  }
+  const swarmUsd = t.swarmImd * config.imdUsd;
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  return {
+    days, imdUsd: config.imdUsd,
+    totals: { salesUsd: r2(t.salesUsd), b2bSoldUsd: r2(t.b2bSoldUsd), swarmImd: Math.round(t.swarmImd * 1000) / 1000, swarmUsd: r2(swarmUsd), b2bBoughtUsd: r2(t.b2bBoughtUsd), aiUsd: r2(t.aiUsd), profitUsd: r2(t.salesUsd + t.b2bSoldUsd - swarmUsd - t.b2bBoughtUsd - t.aiUsd), fundedImd: t.fundedImd, fundedUsd: r2(t.fundedUsd), withdrawnUsd: r2(t.withdrawnUsd) },
+    byDay: byDay.map((b) => ({ ...b, revenueUsd: r2(b.revenueUsd), spendUsd: r2(b.spendUsd) })),
+    lines: lines.slice(-100).reverse(),
+  };
+}
+
+/** The step-up actions the app confirms with the wallet, and the words the wallet shows for each. */
+const STEP_ACTIONS = ["withdraw", "close", "delete", "limits", "erase", "device"] as const;
 
 /** A studio product's facts and the addresses of its listing images. */
 const studioView = (c: Company, p: Product) => p.studio ? { format: p.format, studio: { pages: p.studio.pages, links: p.studio.links, files: p.studio.files.filter((f) => f.endsWith(".pdf")), mb: Math.round(p.studio.bytes / 1e5) / 10, year: p.studio.year, images: p.studio.images.map((n) => `${config.publicUrl}/api/studio/${c.slug}/${p.id}/${n}.png`) } } : {};
@@ -473,6 +549,7 @@ function liveProducts(engine: Engine) {
 }
 
 export function serve(engine: Engine) {
+  stepAuth = engine.auth;
   // the house services (Token Verdict, Hook Inspector, IMD Data Feed), sold by the NIGHTSHIFT Services house company
   useServices(() => liveHouseServices(engine));
   // built now, not on the first request: Watchtower's watches and the recruiter keep their schedules after a restart
@@ -829,9 +906,8 @@ export function serve(engine: Engine) {
             const me = url.searchParams.get("player") ?? undefined;
             if (!pinGet(id, me) || (me && !pinInMatch(id, me))) return json(res, 404, { error: "no such match" });
             // match streams count against the same per-IP and total caps as the live events
-            const ipKey = `pb:${clientIp(req)}`;
-            if ((streams.get(ipKey) ?? 0) >= 4 || streamsTotal >= 2000) return json(res, 429, { error: "too many live connections" });
-            streams.set(ipKey, (streams.get(ipKey) ?? 0) + 1); streamsTotal++;
+            const slot = streams.take(null, `pb:${clientIp(req)}`, 4);
+            if (!slot) return json(res, 429, { error: "too many live connections" });
             res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
             // a reader that does not keep up is dropped, and frames wait for the socket to drain instead of piling up
             let blocked = false;
@@ -842,7 +918,7 @@ export function serve(engine: Engine) {
             };
             const off = pinListen(id, me, send);
             const ping = setInterval(() => { if (!blocked) res.write(": ping\n\n"); }, 20_000);
-            req.on("close", () => { off(); clearInterval(ping); const n = (streams.get(ipKey) ?? 1) - 1; if (n > 0) streams.set(ipKey, n); else streams.delete(ipKey); streamsTotal--; });
+            req.on("close", () => { off(); clearInterval(ping); streams.release(slot); });
             return;
           }
           // the game streams its inputs four times a second: room for two games, not a flood
@@ -947,20 +1023,59 @@ export function serve(engine: Engine) {
         if (limited(req, "nonce", 30, 60_000)) return json(res, 429, { error: "slow down" });
         const address = url.searchParams.get("address");
         if (!address) return json(res, 400, { error: "address required" });
-        const n = engine.auth.nonce();
+        // the app passes its phone key's fingerprint: the sign-in message then vouches for that phone
+        const n = engine.auth.nonce(url.searchParams.get("device") ?? undefined);
         return json(res, 200, { nonce: n.nonce, message: n.message(getAddress(address)) });
       }
       if (p === "/api/auth/verify" && req.method === "POST") {
         // a smart wallet's signature is checked on a node: no flood of checks from one address
         if (limited(req, "verify", 30, 60_000)) return json(res, 429, { error: "slow down" });
         const b = await body(req);
-        const token = await engine.auth.verify(String(b.address), String(b.nonce), String(b.signature) as `0x${string}`);
+        const signed = await engine.auth.verifyFull(String(b.address), String(b.nonce), String(b.signature) as `0x${string}`);
+        const token = signed.token;
+        // the app: the phone key the wallet just vouched for is registered with this one signature
+        if (signed.device) {
+          const d = (b.device ?? {}) as { pubKey?: unknown; fcmToken?: unknown; name?: unknown };
+          const pub = String(d.pubKey ?? "").replace(/\s+/g, "");
+          if (deviceId(pub) !== signed.device) return json(res, 400, { error: "The phone key does not match the one in the signed message. Try signing in again." });
+          const dev = engine.devices.register(getAddress(String(b.address)), { pubKey: pub, fcmToken: d.fcmToken, name: d.name });
+          return json(res, 200, { token, address: getAddress(String(b.address)), device: deviceView(dev) });
+        }
         const secure = config.publicUrl.startsWith("https") ? "; Secure" : "";
         // A browser (it sends Origin on every POST) keeps the session in the HttpOnly cookie only, out of reach of page scripts.
         // Scripts and agents (no Origin) also get it in the body, to send as Bearer.
         return json(res, 200, { ...(req.headers.origin ? {} : { token }), address: getAddress(String(b.address)) }, { "Set-Cookie": `ns_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure}` });
       }
-      if (p === "/api/auth/me") return json(res, 200, { address: owner, requireAuth: config.requireAuth });
+      if (p === "/api/auth/me") return json(res, 200, { address: owner, requireAuth: config.requireAuth, ...(caller?.app ? { app: true } : {}) });
+      // The app keeps itself signed in: a valid session trades itself for a fresh one (the old one stops working).
+      if (p === "/api/auth/refresh" && req.method === "POST") {
+        if (caller?.via !== "session") return json(res, 401, { error: "Sign in with your wallet first." });
+        if (limited(req, `refresh:${caller.addr}`, 10, 3600_000)) return json(res, 429, { error: "slow down" });
+        const token = engine.auth.refresh(req);
+        return token ? json(res, 200, { token }) : json(res, 401, { error: "Sign in with your wallet first." });
+      }
+      // A step-up: the wallet signs one money-out action from the app, in words that name it.
+      if (p === "/api/auth/step" && req.method === "POST") {
+        if (caller?.via !== "session") return json(res, 401, { error: "Sign in with your wallet first." });
+        if (limited(req, `step:${caller.addr}`, 20, 600_000)) return json(res, 429, { error: "slow down" });
+        const b = await body(req);
+        const kind = String(b.action ?? "") as (typeof STEP_ACTIONS)[number];
+        if (!STEP_ACTIONS.includes(kind)) return json(res, 400, { error: "Unknown action." });
+        let words: string, action: string;
+        if (kind === "erase") { words = "delete my NIGHTSHIFT account and what it keeps about this wallet"; action = "erase"; }
+        else if (kind === "device") {
+          const fp = deviceId(String(b.pubKey ?? "").replace(/\s+/g, ""));
+          words = `let a new phone (key ${fp}) approve my companies' spending`; action = `device:${fp}`;
+        } else {
+          const c = engine.get(String(b.companyId ?? ""));
+          if (!c || c.owner !== caller.addr) return json(res, 404, { error: "no such company" });
+          const name = c.name.replace(/[^\p{L}\p{N} .,'&-]/gu, "").slice(0, 60);
+          words = kind === "withdraw" ? `withdraw the revenue of ${name} to my wallet` : kind === "close" ? `stop ${name} and send its funds back to my wallet` : kind === "delete" ? `delete ${name}` : `raise the spending limits of ${name}`;
+          action = `${kind}:${c.id}`;
+        }
+        const n = engine.auth.stepNonce(caller.addr, { action, words });
+        return json(res, 200, { nonce: n.nonce, message: n.message, action });
+      }
       if (p === "/api/auth/logout" && req.method === "POST") { engine.auth.revoke(req); return json(res, 200, { ok: true }, { "Set-Cookie": "ns_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" }); }
       // Sign out everywhere: every session of this wallet issued until now stops working, on every device.
       if (p === "/api/auth/logout-all" && req.method === "POST") {
@@ -979,9 +1094,53 @@ export function serve(engine: Engine) {
         if (req.method === "POST") {
           if (limited(req, "keys", 10, 3600_000) || limited(req, `keys-owner:${owner}`, 10, 3600_000)) return json(res, 429, { error: "Too many new keys; try again in an hour." });
           const b = await body(req);
-          try { return json(res, 201, engine.auth.createKey(owner, String(b.label ?? "MCP"))); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          try { return json(res, 201, engine.auth.createKey(owner, String(b.label ?? "MCP"), { spend: b.spend === true })); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
         }
         if (req.method === "DELETE" && seg[2]) return json(res, engine.auth.revokeKey(owner, seg[2]) ? 200 : 404, { ok: true });
+      }
+
+      // ---- the owner's phones: approval keys, push tokens, what each wants to hear about
+      if (seg[0] === "api" && seg[1] === "devices") {
+        if (caller?.via !== "session") return json(res, caller ? 403 : 401, { error: caller ? "Manage phones signed in with your wallet, not with an API key." : "Sign in with your wallet first." });
+        const me = caller.addr;
+        if (req.method !== "GET" && limited(req, `devices:${me}`, 30, 600_000)) return json(res, 429, { error: "slow down" });
+        if (req.method === "GET" && !seg[2]) return json(res, 200, engine.devices.list(me).map(deviceView));
+        if (req.method === "POST" && !seg[2]) {
+          const b = await body(req);
+          const pub = String(b.pubKey ?? "").replace(/\s+/g, "");
+          const id = deviceId(pub);
+          // a phone already registered updates its push token and settings; a new key needs the wallet's word
+          if (!engine.devices.get(me, id)) {
+            const step = await stepUp(req, caller, `device:${id}`, true);
+            if (step) return json(res, 428, { error: step, stepUp: "device" });
+          }
+          try { return json(res, 200, deviceView(engine.devices.register(me, { pubKey: pub, fcmToken: b.fcmToken, name: b.name, prefs: b.prefs }))); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
+        if (req.method === "POST" && seg[2]) {
+          const b = await body(req);
+          try { const d = engine.devices.update(me, seg[2], { fcmToken: b.fcmToken, prefs: b.prefs, name: b.name }); return d ? json(res, 200, deviceView(d)) : json(res, 404, { error: "no such device" }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
+        if (req.method === "DELETE" && seg[2]) return json(res, engine.devices.remove(me, seg[2]) ? 200 : 404, { ok: true });
+        return json(res, 405, { error: "method" });
+      }
+
+      // ---- deleting the account: what NIGHTSHIFT keeps about this wallet goes; companies must be stopped first
+      if (p === "/api/my/delete-account" && req.method === "POST") {
+        if (caller?.via !== "session") return json(res, caller ? 403 : 401, { error: "Sign in with your wallet to delete your account." });
+        const me = caller.addr;
+        if (limited(req, `erase:${me}`, 3, 600_000)) return json(res, 429, { error: "slow down" });
+        const b = await body(req);
+        if (!caller.app && String(b.confirm ?? "").trim() !== "DELETE") return json(res, 400, { error: 'Type DELETE to confirm.' });
+        const step = await stepUp(req, caller, "erase");
+        if (step) return json(res, 428, { error: step, stepUp: "erase" });
+        const running = [...engine.store.companies.values()].filter((c) => c.owner === me);
+        if (running.length) return json(res, 409, { error: `Stop and delete your ${running.length === 1 ? "company" : `${running.length} companies`} first (${running.slice(0, 3).map((c) => c.name).join(", ")}): stopping sends their funds back to your wallet.` });
+        const removed = { keys: engine.auth.revokeAllKeys(me), devices: engine.devices.removeAll(me), name: forgetName(me), browserAlerts: forgetPushWallet(me), archived: 0 };
+        // deleted companies stay for their buyers' downloads, no longer tied to this wallet
+        for (const c of engine.store.archived.values()) if (c.owner === me) { c.owner = "erased"; removed.archived++; }
+        engine.store.markDirty();
+        engine.auth.revokeAll(me);
+        return json(res, 200, { ok: true, removed }, { "Set-Cookie": "ns_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0" });
       }
 
       // ---- NIGHTSHIFT over MCP (streamable HTTP, stateless)
@@ -998,22 +1157,33 @@ export function serve(engine: Engine) {
 
       // Live events: every task step, journal line and sale, as it happens.
       if (p === "/api/events") {
-        const ipKey = clientIp(req);
-        if ((streams.get(ipKey) ?? 0) >= 6 || streamsTotal >= 2000) return json(res, 429, { error: "too many live connections" });
-        streams.set(ipKey, (streams.get(ipKey) ?? 0) + 1); streamsTotal++; pageOpened();
-        req.on("close", () => { const n = (streams.get(ipKey) ?? 1) - 1; if (n > 0) streams.set(ipKey, n); else streams.delete(ipKey); streamsTotal--; pageClosed(); });
-        res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+        // counted per signed-in owner, so phones behind one carrier IP all get in; anonymous readers per IP
+        const slot = streams.take(owner, clientIp(req));
+        if (!slot) return json(res, 429, { error: "too many live connections" });
+        pageOpened();
+        req.on("close", () => { streams.release(slot); pageClosed(); });
+        res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" });
         res.write(": ok\n\n");
         const only = url.searchParams.get("company");
         const viewer = owner;
         // a reader that does not keep up is dropped, like the game streams: events never pile up in memory
         const send = (data: string) => { if (res.destroyed) return; if (res.writableLength > 256_000) { res.destroy(); return; } res.write(data); };
+        // Other people's companies only say "something changed"; their tasks and log stay private.
+        const shown = (e: EngineEvent) => {
+          const c = engine.store.companies.get(e.companyId);
+          return config.requireAuth && (!viewer || c?.owner !== viewer) ? { type: "company", companyId: e.companyId, payload: null, at: e.at } : e;
+        };
+        const frame = (e: EngineEvent) => `${e.id ? `id: ${e.id}\n` : ""}data: ${JSON.stringify(shown(e), (_k, v) => (typeof v === "bigint" ? v.toString() : v))}\n\n`;
+        // a reader coming back (Last-Event-ID, or ?since=) gets what it missed for its company, or is told to reload
+        const last = String(req.headers["last-event-id"] ?? url.searchParams.get("since") ?? "").trim();
+        if (only && last) {
+          const missed = engine.events.since(only, last);
+          if (missed.reset) send(`event: reset\ndata: {}\n\n`);
+          for (const x of missed.events) send(frame(x.e));
+        }
         const off = engine.on((e) => {
           if (only && e.companyId !== only) return;
-          // Other people's companies only say "something changed"; their tasks and log stay private.
-          const c = engine.store.companies.get(e.companyId);
-          const ev = config.requireAuth && (!viewer || c?.owner !== viewer) ? { type: "company", companyId: e.companyId, payload: null, at: e.at } : e;
-          send(`data: ${JSON.stringify(ev, (_k, v) => (typeof v === "bigint" ? v.toString() : v))}\n\n`);
+          send(frame(e));
         });
         const ping = setInterval(() => send(": ping\n\n"), 20_000);
         req.on("close", () => { off(); clearInterval(ping); });
@@ -1076,6 +1246,16 @@ export function serve(engine: Engine) {
           return res.end();
         }
         if (action === "chat" && req.method === "GET") return json(res, 200, await engine.chatView(c));
+        // older log lines than the 150 the company view carries, page by page
+        if (action === "journal" && req.method === "GET") {
+          const before = Number(url.searchParams.get("before") ?? Infinity), limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") ?? 50) || 50));
+          const older = c.journal.filter((j) => j.at < before);
+          return json(res, 200, { entries: older.slice(-limit), more: older.length > limit });
+        }
+        if (action === "books" && req.method === "GET") {
+          const d = url.searchParams.get("days");
+          return json(res, 200, await booksView(engine, c, d === "all" ? null : Math.max(1, Math.min(365, Number(d ?? 7) || 7))));
+        }
         if (action === "connect") {
           if (await ownerConnectRoutes(req, res, c, seg.slice(4), { json, body, limited, url, connect: engine.connect, owner, find: (x) => engine.get(x) })) return;
           return json(res, 404, { error: "unknown action" });
@@ -1089,7 +1269,13 @@ export function serve(engine: Engine) {
           try { engine.setPrice(c, seg[4], Number((await body(req)).priceUsd)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
           return json(res, 200, { ok: true });
         }
-        if (action === "policy") { engine.setPolicy(c, (await body(req)) as never); return json(res, 200, c.policy); }
+        if (action === "policy") {
+          const b = await body(req);
+          const raises = (["dailyBudgetUsd", "approvalOverUsd", "marketDailyUsd", "marketMaxUsd", "aiDailyUsd"] as const).some((k) => b[k] !== undefined && Number(b[k]) > Number(c.policy[k] ?? 0));
+          if (raises) { const step = await stepUp(req, caller, `limits:${c.id}`); if (step) return json(res, 428, { error: step, stepUp: "limits" }); }
+          engine.setPolicy(c, b as never);
+          return json(res, 200, c.policy);
+        }
         if (action === "alerts" && !seg[4]) {
           if (limited(req, `alerts:${c.id}`, 5, 60_000)) return json(res, 429, { error: "slow down" });
           try { return json(res, 200, await engine.alertLink(c)); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
@@ -1102,6 +1288,15 @@ export function serve(engine: Engine) {
         if (action === "chat" && !seg[4]) {
           if (limited(req, `chat:${c.id}`, 6, 60_000)) return json(res, 429, { error: "Give the CEO a moment: six messages a minute." });
           try { return json(res, 200, { lines: await engine.chat(c, (await body(req)).text) }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
+        // the owner flags a CEO answer (offensive, harmful, wrong): kept for review
+        if (action === "chat" && seg[4] && seg[5] === "report") {
+          if (limited(req, `chat-report:${owner ?? "anon"}`, 20, 3600_000)) return json(res, 429, { error: "slow down" });
+          const line = (c.chat ?? []).find((l) => l.id === seg[4] && l.from === "ceo");
+          if (!line) return json(res, 404, { error: "No such answer from the CEO." });
+          const r = aiReports.add({ owner: owner ?? "", companyId: c.id, lineId: line.id, text: line.text, reason: String((await body(req)).reason ?? "") });
+          void engine.alert(`🚩 A CEO answer was reported in ${c.name}: ${r.reason || "no reason given"}`, `ai-report-${r.id}`);
+          return json(res, 200, { ok: true, id: r.id });
         }
         if (action === "chat" && seg[4] === "act") {
           if (limited(req, `chat-act:${c.id}`, 6, 60_000)) return json(res, 429, { error: "slow down" });
@@ -1122,12 +1317,16 @@ export function serve(engine: Engine) {
           if (config.requireAuth ? !owner || c.owner !== owner : c.owner !== null && c.owner !== owner) return json(res, 403, { error: "Only the company's owner can delete it." });
           const b = await body(req);
           if (String(b.confirm ?? "").trim().toLowerCase() !== c.name.trim().toLowerCase()) return json(res, 400, { error: "Type the company's name to confirm." });
+          const step = await stepUp(req, caller, `delete:${c.id}`);
+          if (step) return json(res, 428, { error: step, stepUp: "delete" });
           try { await engine.archive(c); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
           return json(res, 200, { ok: true });
         }
         if (action === "withdraw") {
           const b = await body(req);
           if (limited(req, `withdraw:${c.id}`, 3, 60_000)) return json(res, 429, { error: "slow down" });
+          const step = await stepUp(req, caller, `withdraw:${c.id}`);
+          if (step) return json(res, 428, { error: step, stepUp: "withdraw" });
           // Live money only ever goes to the company's signed-in owner.
           const to = (config.mode === "live" ? (owner && c.owner === owner ? owner : null) : (owner ?? (typeof b.to === "string" ? b.to : null))) as `0x${string}` | null;
           if (!to || !/^0x[0-9a-fA-F]{40}$/.test(to)) return json(res, 400, { error: config.mode === "live" ? "Only the company's owner, signed in, can withdraw." : "Sign in, or give a destination address." });
@@ -1137,6 +1336,8 @@ export function serve(engine: Engine) {
         if (action === "close" && req.method === "POST") {
           if (limited(req, `close:${c.id}`, 2, 60_000)) return json(res, 429, { error: "slow down" });
           if (!owner || c.owner !== owner) return json(res, 403, { error: "Only the company's owner, signed in, can stop it and take the funds back." });
+          const step = await stepUp(req, caller, `close:${c.id}`);
+          if (step) return json(res, 428, { error: step, stepUp: "close" });
           try { return json(res, 200, { ok: true, ...(await engine.closeOut(c, getAddress(owner))) }); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
         }
         if (action === "social" && !seg[4]) {
@@ -1149,8 +1350,24 @@ export function serve(engine: Engine) {
         if (action === "posts" && seg[4] && seg[5] === "publish") return json(res, 410, { error: "Posts go out from the owner desk's Connections tab now." });
         if (action === "pause") { engine.setStatus(c, "paused"); return json(res, 200, { ok: true }); }
         if (action === "resume") { engine.setStatus(c, "active"); return json(res, 200, { ok: true }); }
-        if (action === "tasks" && seg[4] && seg[5] === "approve") { await engine.approve(c, seg[4]); return json(res, 200, { ok: true }); }
-        if (action === "tasks" && seg[4] && seg[5] === "reject") { engine.reject(c, seg[4]); return json(res, 200, { ok: true }); }
+        if (action === "tasks" && seg[4] && (seg[5] === "approve" || seg[5] === "reject")) {
+          if (limited(req, `decide:${owner ?? "anon"}`, 20, 60_000)) return json(res, 429, { error: "slow down" });
+          const t = c.tasks.find((x) => x.id === seg[4]);
+          // twice, or after a decision elsewhere: says what happened instead of failing blind
+          if (!t || t.status !== "awaiting_approval") return json(res, 409, { error: t ? `Already decided: it is ${t.status.replace(/_/g, " ")} now.` : "Nothing is waiting with that id.", status: t?.status ?? null });
+          if (seg[5] === "reject") { engine.reject(c, t.id); return json(res, 200, { ok: true, status: t.status }); }
+          // From the app, an approval carries the phone key's signature over this company, task and price, made after the owner's fingerprint.
+          if (caller?.app) {
+            if (!req.headers["x-device-sig"]) return json(res, 403, { error: "Approve with this phone's fingerprint: update the NIGHTSHIFT app." });
+            const shown = heldUsd(t);
+            const signed = Number(req.headers["x-device-cost"]);
+            if (!Number.isFinite(signed) || Math.abs(signed - shown) >= 0.005) return json(res, 409, { error: `The price changed since you looked: it is $${shown.toFixed(2)} now. Look again, then approve.`, costUsd: shown });
+            const ok = engine.devices.checkApproval(caller.addr, { deviceId: String(req.headers["x-device-id"] ?? ""), sig: String(req.headers["x-device-sig"] ?? ""), ts: Number(req.headers["x-device-ts"]), companyId: c.id, taskId: t.id, costUsd: shown });
+            if (!ok.ok) return json(res, 403, { error: ok.error });
+          }
+          await engine.approve(c, t.id);
+          return json(res, 200, { ok: true, status: t.status });
+        }
         return json(res, 404, { error: "unknown action" });
       }
       if (seg[0] === "api" && seg[1] === "public" && seg[2] && seg[3] === "shifts" && seg[4]) {

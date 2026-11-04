@@ -63,6 +63,20 @@ describe("the autonomous company", () => {
     expect(t?.status).toBe("building");
   });
 
+  it("tells the owner once, with the price it was held at: what an approval from the phone signs", async () => {
+    const now = { t: 1_000_000 };
+    const events: { type: string; payload: unknown }[] = [];
+    const d = { ...deps(now), emit: (_c: unknown, type: string, payload: unknown) => events.push({ type, payload }) };
+    const c = company({ approvalOverUsd: 1 });
+    const t = await runShift(c, d);
+    const held = events.filter((e) => e.type === "approval");
+    expect(held).toHaveLength(1);
+    expect(held[0]!.payload).toMatchObject({ taskId: t!.id, title: t!.title, costUsd: 3, imd: 0.5 });
+    expect(t!.held).toEqual({ usd: 3, imd: 0.5, via: "swarm", at: now.t });
+    await approve(c, t!.id, d);
+    expect(events.filter((e) => e.type === "approval")).toHaveLength(1);
+  });
+
   it("refuses to break the daily budget", async () => {
     const now = { t: 1_000_000 };
     const c = company({ dailyBudgetUsd: 2 });

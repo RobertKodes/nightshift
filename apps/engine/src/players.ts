@@ -37,5 +37,14 @@ export function saveName(wallet: string, raw: unknown, now = Date.now()): string
   return name;
 }
 
+/** Removes the wallet's name, when its account is deleted. */
+export function forgetName(wallet: string): boolean {
+  const w = wallet.toLowerCase();
+  if (!all()[w]) return false;
+  delete all()[w];
+  writeAtomic(file(), JSON.stringify(all()), { mode: 0o600 });
+  return true;
+}
+
 /** For tests: forget the cache so the next read comes from disk. */
 export function resetPlayers(): void { names = null; }

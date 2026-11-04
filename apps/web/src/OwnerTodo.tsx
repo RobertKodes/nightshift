@@ -79,8 +79,11 @@ function Partners({ token }: { token: string }) {
  * Everything the owner still has to do, at the top of /setup: each one a button, done when its check turns green.
  * Opening Token Deals saves its address and restarts; the holder price is one transaction from the dev wallet.
  */
-export function OwnerTodo({ call, token, guardOn, ghSet, saveSettings, saveQuiet, onToken }: { call: Call; token: string; guardOn: boolean; ghSet: boolean; saveSettings: (patch: Record<string, string>) => Promise<void>; saveQuiet: (patch: Record<string, string>) => Promise<void>; onToken: (t: string) => void }) {
+export function OwnerTodo({ call, token, guardOn, ghSet, fcmSet, appCert, saveSettings, saveQuiet, onToken }: { call: Call; token: string; guardOn: boolean; ghSet: boolean; fcmSet: boolean; appCert: string; saveSettings: (patch: Record<string, string>) => Promise<void>; saveQuiet: (patch: Record<string, string>) => Promise<void>; onToken: (t: string) => void }) {
   const [gh, setGh] = useState("");
+  const [fcm, setFcm] = useState(""), [cert, setCert] = useState("");
+  const fcmOk = (() => { try { const a = JSON.parse(fcm) as { type?: string; project_id?: string; client_email?: string; private_key?: string }; return a.type === "service_account" && !!a.project_id && !!a.client_email && !!a.private_key?.includes("PRIVATE KEY"); } catch { return false; } })();
+  const certOk = cert.split(",").map((x) => x.trim()).filter(Boolean).every((x) => /^([0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}$/.test(x)) && cert.trim().length > 0;
   const [desk, setDesk] = useState<{ open: boolean; address: string | null; passSigner: string } | null>(null);
   const [signer, setSigner] = useState<string | null>(null), [players, setPlayers] = useState(0);
   const [backups, setBackups] = useState<{ name: string; bytes: number }[] | null>(null);
@@ -172,6 +175,26 @@ export function OwnerTodo({ call, token, guardOn, ghSet, saveSettings, saveQuiet
               <button className="btn primary" disabled={!!step || !/^(ghp_|github_pat_)\w{20,}$/.test(gh)} onClick={() => void run("Saving the bot's token…", async () => { await saveQuiet({ RECRUITER_GITHUB_TOKEN: gh }); setGh(""); })}>Save</button>
             </div>
           </>}
+        </li>
+        <li className={`todo-item${fcmSet && appCert ? " ok" : ""}`}>
+          <div className="todo-h"><b>{fcmSet ? "✅ Phone notifications are on" : "Turn on phone notifications for the NIGHTSHIFT app"}</b><span className="faint">the Android app gets approvals, sales and deliveries on the lock screen through Google's Firebase. Telegram alerts keep working beside it</span></div>
+          {!fcmSet && <>
+            <ul className="swarm-plan">
+              <li>Open the <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer">Firebase console</a> with your Google account → <b>Create a project</b> → name it <b>NIGHTSHIFT</b>. Google Analytics: off.</li>
+              <li>In the project: the gear → <b>Project settings</b> → <b>General</b> → <b>Add app</b> → Android. Package name <code>tech.getnightshift.app</code>, nickname NIGHTSHIFT → <b>Register app</b> → download <b>google-services.json</b> and give that file to Claude for the app build (it is not secret).</li>
+              <li>Still in Project settings → <b>Service accounts</b> → <b>Generate new private key</b>. Open the downloaded file in Notepad, copy all of it and paste it below. This one is secret: never send it in a chat.</li>
+            </ul>
+            <div className="todo-actions" style={{ alignItems: "flex-start" }}>
+              <textarea className="field mono" rows={4} autoComplete="off" spellCheck={false} placeholder='{ "type": "service_account", … }' value={fcm} onChange={(e) => setFcm(e.target.value)} style={{ minWidth: 260, flex: 1, fontSize: 12 }} />
+              <button className="btn primary" disabled={!!step || !fcmOk} onClick={() => void run("Saving the Firebase key…", async () => { await saveQuiet({ FCM_SERVICE_ACCOUNT: JSON.stringify(JSON.parse(fcm)) }); setFcm(""); })}>Save</button>
+            </div>
+            {fcm && !fcmOk && <p className="faint todo-sub">That is not a Firebase service-account key yet: it should start with {'{ "type": "service_account"'}.</p>}
+          </>}
+          <p className="faint todo-sub">{appCert ? <>✅ Links to getnightshift.tech open the app when it is installed.</> : <>After the first upload to Play: Play Console → the app → <b>Test and release</b> → <b>App integrity</b> → <b>App signing</b>: copy the <b>SHA-256 certificate fingerprint</b> of the app signing key and paste it here, so links to the site can open the app.</>}</p>
+          {!appCert && <div className="todo-actions">
+            <input className="field mono" autoComplete="off" placeholder="AB:CD:…:EF" value={cert} onChange={(e) => setCert(e.target.value.trim())} style={{ minWidth: 260, flex: 1, fontSize: 12 }} />
+            <button className="btn" disabled={!!step || !certOk || players > 0} onClick={() => void run("Saving and restarting…", () => saveSettings({ ANDROID_CERT_SHA256: cert.toUpperCase() }))}>Save with restart</button>
+          </div>}
         </li>
         <li className="todo-item">
           <div className="todo-h"><b>Only you can do these</b><span className="faint">outside this server</span></div>

@@ -192,7 +192,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return j as T;
 }
 
-export interface ApiKeyView { id: string; label: string; createdAt: number; lastUsedAt: number | null }
+export interface ApiKeyView { id: string; label: string; createdAt: number; lastUsedAt: number | null; spend?: boolean }
 
 export const api = {
   health: () => req<Health>("GET", "/api/health"),
@@ -203,7 +203,8 @@ export const api = {
   logout: () => req("POST", "/api/auth/logout"),
   logoutAll: () => req("POST", "/api/auth/logout-all"),
   keys: () => req<ApiKeyView[]>("GET", "/api/keys"),
-  createKey: (label: string) => req<{ key: string; record: ApiKeyView }>("POST", "/api/keys", { label }),
+  createKey: (label: string, spend = false) => req<{ key: string; record: ApiKeyView }>("POST", "/api/keys", { label, spend }),
+  deleteAccount: (confirm: string) => req<{ ok: boolean }>("POST", "/api/my/delete-account", { confirm }),
   revokeKey: (id: string) => req("DELETE", `/api/keys/${id}`),
   withdraw: (id: string, amountUsd?: number) => req<{ ok: boolean; sentUsd: number; feeUsd: number; txs: string[] }>("POST", `/api/companies/${id}/withdraw`, amountUsd ? { amountUsd } : {}),
   companies: (mine = false) => req<CompanyCard[]>("GET", `/api/companies${mine ? "?mine=1" : ""}`),

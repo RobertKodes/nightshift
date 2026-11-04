@@ -19,3 +19,4 @@ docs/*
 !docs/WHITEPAPER.md
 !docs/CHANGELOG.md
 deploy
+apps/mobile

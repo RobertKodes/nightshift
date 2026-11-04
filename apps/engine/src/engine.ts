@@ -116,6 +116,9 @@ import { writeSettings } from "./settings.js";
 import { liveRecruiterNow } from "./recruiter/recruiter.js";
 import { Profiles } from "./tg.js";
 import { GameBot } from "./tg-bot.js";
+import { type DeviceKind, Devices } from "./devices.js";
+import { EventLog } from "./events.js";
+import { Fcm, type FcmNote } from "./push-fcm.js";
 
 /** A NIGHT FROG market card with the frog's own picture on top; the plain card if the photo can't be sent. */
 async function frogPost(id: number, caption: string, buttons: Button[][], kind: Anim): Promise<boolean> {
@@ -124,7 +127,9 @@ async function frogPost(id: number, caption: string, buttons: Button[][], kind: 
   return sent.some(Boolean) || toCommunity(caption, buttons, kind);
 }
 
-export type EngineEvent = { type: "task" | "journal" | "company" | "sale"; companyId: string; payload: unknown; at: number };
+export type EngineEvent = { type: "task" | "journal" | "company" | "sale" | "approval"; companyId: string; payload: unknown; at: number; id?: string };
+/** A spend held for the owner, as the shift reported it. */
+export type ApprovalEvent = { taskId: string; title: string; why: string; reason: string; costUsd: number; imd?: number; market?: { product: string; company: string; swarmUsd: number } };
 const DAY = 24 * 3600_000;
 
 /** Owner text as plain words: no markup (it reaches the page head, the shop and Telegram), one line. */
@@ -148,6 +153,12 @@ export class Engine {
   readonly #livePlanes = new Map<string, ImdPlane>();
   readonly #inputOwner = new WeakMap<object, string>();
   readonly #listeners = new Set<(e: EngineEvent) => void>();
+  /** The live feed's last events per company, for readers that reconnect. */
+  readonly events = new EventLog<EngineEvent>();
+  /** The owners' phones: their approval keys and push tokens. */
+  readonly devices = new Devices(config.dataDir);
+  /** Notes to those phones over Firebase, once its service account is set in /setup. */
+  readonly fcm = new Fcm();
   readonly #busy = new Set<string>();
   /** The strong model each company pays for itself, over x402 from its own USDC (live on Base, with a CEO model set). */
   #brain: ((c: Company) => Promise<Brain | null>) | null = null;
@@ -1082,11 +1093,13 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
   #emit(companyId: string, type: EngineEvent["type"], payload: unknown): void {
     this.store.markDirty();
     if (type === "journal") this.#ownerAlert(companyId, payload as JournalEntry);
+    if (type === "approval") this.#approvalAlert(companyId, payload as ApprovalEvent);
     if (type === "journal" && config.mode === "live" && (payload as { kind?: string }).kind === "warning") {
       const c = this.store.companies.get(companyId);
       void this.alert(`${c?.name ?? companyId}: ${(payload as { text: string }).text}`, companyId);
     }
-    const e = { type, companyId, payload, at: Date.now() };
+    const e: EngineEvent = { type, companyId, payload, at: Date.now() };
+    e.id = this.events.push(e);
     for (const l of this.#listeners) l(e);
   }
 
@@ -1572,25 +1585,52 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     };
   }
 
-  /** What the owner should hear about, from the company's log: approvals always, the rest at most 20 an hour. */
+  /**
+   * What the owner should hear about from the company's log (sales, deliveries, warnings), on Telegram
+   * when linked and on their phones: at most 20 an hour per company. Approvals come from their own event.
+   */
   #ownerAlert(companyId: string, e: JournalEntry): void {
     const c = this.store.companies.get(companyId);
-    const chat = c?.notify?.telegram;
-    if (!c || !chat || !config.telegramToken) return;
+    const kind: DeviceKind | null = e.kind === "sale" ? "sale" : e.kind === "result" ? "result" : e.kind === "warning" ? "warning" : null;
+    if (!c || !kind) return;
+    const chat = c.notify?.telegram && config.telegramToken ? c.notify.telegram : null;
+    const phones = this.#phones(c, kind);
+    if (!chat && !phones.length) return;
+    const hour = Date.now() - 3600_000;
+    const sent = (this.#alertsSent.get(c.id) ?? []).filter((t) => t > hour);
+    if (sent.length >= 20) return;
+    sent.push(Date.now());
+    this.#alertsSent.set(c.id, sent);
     const text = e.text.replace(/^\[sim\] /, "");
-    const approval = e.kind === "note" && text.startsWith("Waiting for your approval");
-    const icon = approval ? "✋" : e.kind === "sale" ? "💰" : e.kind === "result" ? "✅" : e.kind === "warning" ? "⚠️" : null;
-    if (!icon) return;
-    if (!approval) {
-      const hour = Date.now() - 3600_000;
-      const sent = (this.#alertsSent.get(c.id) ?? []).filter((t) => t > hour);
-      if (sent.length >= 20) return;
-      sent.push(Date.now());
-      this.#alertsSent.set(c.id, sent);
-    }
     const sim = e.text.startsWith("[sim] ") || c.sim ? " · simulation" : "";
-    const where = approval ? `${config.publicUrl}/my` : `${config.publicUrl}/co/${c.id}`;
-    void telegram(config.telegramToken, chat, `${icon} <b>${esc(c.name)}</b>${sim}\n${esc(text)}`, [[{ text: approval ? "Approve or decline" : "Open the company", url: where }]]);
+    const icon = kind === "sale" ? "💰" : kind === "result" ? "✅" : "⚠️";
+    if (chat) void telegram(config.telegramToken, chat, `${icon} <b>${esc(c.name)}</b>${sim}\n${esc(text)}`, [[{ text: "Open the company", url: `${config.publicUrl}/co/${c.id}` }]]);
+    const title = kind === "sale" ? `${c.name} made a sale` : kind === "result" ? `${c.name}: the swarm delivered` : `${c.name} needs a look`;
+    this.#push(phones, { kind, title: `${icon} ${title}${sim}`, body: text, url: `nightshift://company/${c.id}`, companyId: c.id, tag: `${kind}-${c.id}` });
+  }
+
+  /** A spend held for the owner: always told, on Telegram when linked and on every phone that wants approvals. */
+  #approvalAlert(companyId: string, a: ApprovalEvent): void {
+    const c = this.store.companies.get(companyId);
+    if (!c) return;
+    const sim = c.sim ? " · simulation" : "";
+    const what = a.market ? `buy "${a.market.product}" from ${a.market.company}` : a.title;
+    // the reason already names the price: "$7.68 is over the $5 you approve by hand"
+    const reason = a.reason || `$${a.costUsd.toFixed(2)}`;
+    if (c.notify?.telegram && config.telegramToken) void telegram(config.telegramToken, c.notify.telegram, `✋ <b>${esc(c.name)}</b>${sim}\nWaiting for your approval: ${esc(what)} (${esc(reason)}).`, [[{ text: "Approve or decline", url: `${config.publicUrl}/my` }]]);
+    this.#push(this.#phones(c, "approval"), { kind: "approval", title: `✋ ${c.name} needs your approval${sim}`, body: `${what}. ${reason.charAt(0).toUpperCase()}${reason.slice(1)}.`, url: `nightshift://approve/${c.id}/${a.taskId}`, companyId: c.id, taskId: a.taskId, tag: `approval-${a.taskId}` });
+  }
+
+  /** The owner's phones that want this kind of note; a live engine leaves its retired demo companies out. */
+  #phones(c: Company, kind: DeviceKind): string[] {
+    if (!c.owner || !this.fcm.ready || (config.mode === "live" && c.sim)) return [];
+    return this.devices.reach(c.owner, kind).map((d) => d.fcmToken!);
+  }
+
+  #push(tokens: string[], note: FcmNote): void {
+    if (!tokens.length) return;
+    this.fcm.onGone = (t) => this.devices.dropToken(t);
+    void this.fcm.send(tokens, note).catch((e) => console.error("push:", (e as Error).message));
   }
 
   /** A deleted company, by id or slug: for its buyers' downloads and its owner's list. */

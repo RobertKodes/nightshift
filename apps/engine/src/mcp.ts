@@ -32,7 +32,10 @@ const err = (message: string) => ({ ...text({ ok: false, message }), isError: tr
  * NIGHTSHIFT over MCP: run your companies from Claude, Cursor or any MCP client. One stateless
  * server per request, scoped to the wallet behind the API key.
  */
-function build(engine: Engine, owner: string | null) {
+/** What a key without spend rights is told when it tries to move money. */
+const NO_SPEND = "This API key cannot spend or withdraw. Approve it in the NIGHTSHIFT app or on the owner desk, or make a key with spending allowed.";
+
+function build(engine: Engine, owner: string | null, canSpend: boolean) {
   const server = new McpServer({ name: "nightshift", version: "0.2.0" }, {
     instructions: "Run autonomous companies that build with the IMD swarm and sell via x402. List, create, run shifts, approve or decline spending, change limits, pause, direct the CEO, order work by hand, replay any shift's flight record, and withdraw revenue. Spending decisions stay with the human: show them pending approvals and withdrawals before acting.",
   });
@@ -117,7 +120,7 @@ function build(engine: Engine, owner: string | null) {
     run(async ({ id }: { id: string }) => { const c = pick(id); await engine.shiftNow(c, true); return brief(c); }));
 
   server.registerTool("nightshift_approve", { title: "Approve a pending purchase", description: "Approves an IMD purchase the company is holding for you. SPENDS the company's IMD.", inputSchema: { id: z.string(), taskId: z.string() } },
-    run(async ({ id, taskId }: { id: string; taskId: string }) => { const c = pick(id); await engine.approve(c, taskId); return brief(c); }));
+    run(async ({ id, taskId }: { id: string; taskId: string }) => { if (!canSpend) throw new Error(NO_SPEND); const c = pick(id); await engine.approve(c, taskId); return brief(c); }));
 
   server.registerTool("nightshift_decline", { title: "Decline a pending purchase", description: "Turns down a held purchase. Nothing is spent.", inputSchema: { id: z.string(), taskId: z.string() } },
     run(async ({ id, taskId }: { id: string; taskId: string }) => { const c = pick(id); engine.reject(c, taskId); return brief(c); }));
@@ -128,6 +131,8 @@ function build(engine: Engine, owner: string | null) {
     inputSchema: { id: z.string(), dailyBudgetUsd: z.number().min(0).max(10000).optional(), askOverUsd: z.number().min(0).optional(), autopilot: z.boolean().optional(), shiftMinutes: z.number().int().min(1).max(10080).optional() },
   }, run(async (a: { id: string; dailyBudgetUsd?: number; askOverUsd?: number; autopilot?: boolean; shiftMinutes?: number }) => {
     const c = pick(a.id);
+    // a key without spend rights may tighten limits, never loosen them
+    if (!canSpend && ((a.dailyBudgetUsd ?? 0) > c.policy.dailyBudgetUsd || (a.askOverUsd ?? 0) > c.policy.approvalOverUsd)) throw new Error(NO_SPEND);
     engine.setPolicy(c, { ...(a.dailyBudgetUsd !== undefined ? { dailyBudgetUsd: a.dailyBudgetUsd } : {}), ...(a.askOverUsd !== undefined ? { approvalOverUsd: a.askOverUsd } : {}), ...(a.autopilot !== undefined ? { autopilot: a.autopilot } : {}), ...(a.shiftMinutes !== undefined ? { shiftMinutes: a.shiftMinutes } : {}) });
     return c.policy;
   }));
@@ -140,6 +145,7 @@ function build(engine: Engine, owner: string | null) {
     description: "Sends the company's USDC revenue to your wallet (all of it, or amountUsd). Requires confirm: true.",
     inputSchema: { id: z.string(), amountUsd: z.number().positive().optional(), confirm: z.boolean().default(false) },
   }, run(async (a: { id: string; amountUsd?: number; confirm: boolean }) => {
+    if (!canSpend) throw new Error(NO_SPEND);
     const c = pick(a.id);
     const to = (owner ?? c.owner) as `0x${string}` | null;
     if (!to) throw new Error("This company has no owner wallet to withdraw to.");
@@ -168,6 +174,7 @@ function build(engine: Engine, owner: string | null) {
       confirm: z.boolean().default(false),
     },
   }, run(async ({ id, confirm, ...w }: { id: string; confirm: boolean } & Record<string, unknown>) => {
+    if (!canSpend) throw new Error(NO_SPEND);
     const c = pick(id);
     if (!confirm) return { ok: false, needsConfirm: true, costImd: 0.5, note: "This spends 0.5 IMD of the company's budget. Call again with confirm: true." };
     const t = await engine.commission(c, w);
@@ -200,7 +207,10 @@ function arenaOnly(engine: Engine, key: string) {
 }
 
 export async function handleMcp(engine: Engine, req: IncomingMessage, res: ServerResponse, body: unknown): Promise<void> {
-  const owner = engine.auth.owner(req);
+  const caller = engine.auth.caller(req);
+  const owner = caller?.addr ?? null;
+  // a wallet session spends; an API key only when its owner allowed it
+  const canSpend = caller?.via === "session" || caller?.spend === true || !config.requireAuth;
   const bearer = (req.headers.authorization ?? "").replace(/^Bearer\s+/, "").trim();
   const arenaKey = bearer.startsWith("nsa_") ? bearer : "";
   if (config.requireAuth && !owner && !arenaKey) {
@@ -208,7 +218,7 @@ export async function handleMcp(engine: Engine, req: IncomingMessage, res: Serve
     res.end(JSON.stringify({ error: "Create an API key in your NIGHTSHIFT dashboard and send it as Authorization: Bearer nsk_…" }));
     return;
   }
-  const server = arenaKey ? arenaOnly(engine, arenaKey) : build(engine, owner);
+  const server = arenaKey ? arenaOnly(engine, arenaKey) : build(engine, owner, canSpend);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on("close", () => { void transport.close(); void server.close(); });
   await server.connect(transport);

@@ -22,16 +22,22 @@ const NONCE_MS = 5 * 60_000;
 /** Keys one wallet may hold at once: plenty for every agent it runs, not a way to grow the state file. */
 export const MAX_KEYS_PER_OWNER = 20;
 
-export interface ApiKey { hash: string; owner: string; label: string; createdAt: number; lastUsedAt: number | null }
-/** Who is calling, and how: a wallet session can do everything, an API key only what keys may. */
-export interface Caller { addr: string; via: "session" | "key" }
+export interface ApiKey { hash: string; owner: string; label: string; createdAt: number; lastUsedAt: number | null; spend?: boolean }
+/**
+ * Who is calling, and how: a wallet session can do everything, an API key only what keys may.
+ * `app`: a session the phone app holds, whose approvals carry the phone's signature and whose money-out needs the wallet again.
+ * `spend`: a key its owner allowed to approve spending and withdraw (keys made before this was asked never can).
+ */
+export interface Caller { addr: string; via: "session" | "key"; app?: true; spend?: boolean }
+/** What a step-up signature confirms: a fixed action key, and the words the wallet shows. */
+export interface StepUp { action: string; words: string }
 /** Ethereum mainnet for smart-wallet signatures: the sign-in message says Chain ID 1, where EIP-4361 resolves contract accounts. */
 type Chain = Pick<PublicClient, "verifyMessage" | "getBlockNumber">;
 const mainnet = async (): Promise<Chain> => (await import("./chain.js")).eth;
 
 export class Auth {
   readonly #secret: Buffer;
-  readonly #nonces = new Map<string, { exp: number; issuedAt: string }>();
+  readonly #nonces = new Map<string, { exp: number; issuedAt: string; device?: string; step?: StepUp & { owner: string } }>();
   /** Sessions ended by sign-out (by MAC), until they would have expired anyway. Kept on disk. */
   readonly #revoked = new Map<string, number>();
   /** "Sign out everywhere": per wallet, sessions issued at or before this second are void. Kept on disk. */
@@ -54,33 +60,77 @@ export class Auth {
     } catch { /* first start, or nothing revoked yet */ }
   }
 
-  nonce(): { nonce: string; message: (address: string) => string } {
+  /**
+   * A sign-in nonce. `device`: the phone app's key fingerprint, written into the message as a resource,
+   * so the one signature that signs the owner in also vouches for that phone's approval key.
+   */
+  nonce(device?: string): { nonce: string; message: (address: string) => string } {
     const n = randomBytes(12).toString("hex");
     const issuedAt = new Date().toISOString();
+    const dev = device && /^[0-9a-f]{16}$/.test(device) ? device : undefined;
+    this.#sweep();
+    this.#nonces.set(n, { exp: Date.now() + NONCE_MS, issuedAt, ...(dev ? { device: dev } : {}) });
+    return { nonce: n, message: (address) => Auth.message(address, n, issuedAt, dev ? { device: dev } : {}) };
+  }
+
+  /** Expired nonces out; bounded, so a flood of sign-in requests cannot grow memory without end. */
+  #sweep(): void {
     for (const [k, v] of this.#nonces) if (v.exp < Date.now()) this.#nonces.delete(k);
-    // bounded: a flood of sign-in requests cannot grow memory without end
     if (this.#nonces.size >= 20_000) throw new Error("Too many sign-ins right now; try again in a minute.");
-    this.#nonces.set(n, { exp: Date.now() + NONCE_MS, issuedAt });
-    return { nonce: n, message: (address) => Auth.message(address, n, issuedAt) };
   }
 
   /** EIP-4361 (Sign-In with Ethereum): wallets show the domain and warn when a site is not it. The site checks every line before signing. */
-  static message(address: string, nonce: string, issuedAt: string): string {
+  static message(address: string, nonce: string, issuedAt: string, extra: { device?: string; step?: string } = {}): string {
     const url = new URL(config.publicUrl);
     const exp = new Date(Date.parse(issuedAt) + NONCE_MS).toISOString();
-    return `${url.host} wants you to sign in with your Ethereum account:\n${getAddress(address)}\n\nSign in to NIGHTSHIFT. This proves you own this wallet. It costs nothing and moves no funds.\n\nURI: ${url.origin}\nVersion: 1\nChain ID: 1\nNonce: ${nonce}\nIssued At: ${issuedAt}\nExpiration Time: ${exp}`;
+    const statement = extra.step
+      ? `Confirm on NIGHTSHIFT: ${extra.step}. Only sign this if you just asked for it in the NIGHTSHIFT app.`
+      : extra.device
+        ? "Sign in to the NIGHTSHIFT app on this phone. This proves you own this wallet and lets this phone approve your companies' spending with your fingerprint. It costs nothing and moves no funds."
+        : "Sign in to NIGHTSHIFT. This proves you own this wallet. It costs nothing and moves no funds.";
+    const resources = extra.device ? `\nResources:\n- urn:nightshift:device:${extra.device}` : "";
+    return `${url.host} wants you to sign in with your Ethereum account:\n${getAddress(address)}\n\n${statement}\n\nURI: ${url.origin}\nVersion: 1\nChain ID: 1\nNonce: ${nonce}\nIssued At: ${issuedAt}\nExpiration Time: ${exp}${resources}`;
+  }
+
+  /**
+   * A fresh wallet signature for one money-out action from the app (withdraw, stop, delete, raising a
+   * limit, deleting the account, adding a phone): the message names the action, and the nonce is good
+   * for that action, that wallet and five minutes, once.
+   */
+  stepNonce(owner: string, step: StepUp): { nonce: string; message: string } {
+    const n = randomBytes(12).toString("hex");
+    const issuedAt = new Date().toISOString();
+    this.#sweep();
+    const words = step.words.replace(/[\u0000-\u001f]/g, " ").slice(0, 160);
+    this.#nonces.set(n, { exp: Date.now() + NONCE_MS, issuedAt, step: { action: step.action, words, owner: owner.toLowerCase() } });
+    return { nonce: n, message: Auth.message(owner, n, issuedAt, { step: words }) };
+  }
+
+  /** True when `signature` is this owner's wallet signing the step-up message for exactly this action. Each nonce is tried once. */
+  async checkStep(owner: string, action: string, nonce: string, signature: string): Promise<boolean> {
+    const rec = this.#nonces.get(nonce);
+    if (!rec?.step || rec.exp < Date.now()) return false;
+    this.#nonces.delete(nonce);
+    if (rec.step.owner !== owner.toLowerCase() || rec.step.action !== action || !/^0x[0-9a-fA-F]+$/.test(signature)) return false;
+    const addr = getAddress(owner);
+    return this.#signedBy(addr, Auth.message(addr, nonce, rec.issuedAt, { step: rec.step.words }), signature as `0x${string}`).catch(() => false);
   }
 
   async verify(address: string, nonce: string, signature: `0x${string}`): Promise<string> {
+    return (await this.verifyFull(address, nonce, signature)).token;
+  }
+
+  /** Sign-in: a session, or for the app (a nonce made with a device) an app session plus the phone key fingerprint the wallet vouched for. */
+  async verifyFull(address: string, nonce: string, signature: `0x${string}`): Promise<{ token: string; device: string | null }> {
     const rec = this.#nonces.get(nonce);
-    if (!rec || rec.exp < Date.now()) throw new Error("sign-in expired; try again");
+    if (!rec || rec.exp < Date.now() || rec.step) throw new Error("sign-in expired; try again");
     const addr = getAddress(address);
-    const message = Auth.message(addr, nonce, rec.issuedAt);
+    const message = Auth.message(addr, nonce, rec.issuedAt, rec.device ? { device: rec.device } : {});
     const ok = await this.#signedBy(addr, message, signature);
     // one try per nonce: a wrong signature cannot be retried against the node again and again
     this.#nonces.delete(nonce);
     if (!ok) throw new Error("signature does not match this wallet");
-    return this.session(addr);
+    return rec.device ? { token: this.session(addr, Date.now(), "app"), device: rec.device } : { token: this.session(addr), device: null };
   }
 
   /**
@@ -97,11 +147,21 @@ export class Auth {
     return false;
   }
 
-  session(address: string, now = Date.now()): string {
+  /** A session token. An app session's MAC covers its kind, so one kind can never be relabelled as the other. */
+  session(address: string, now = Date.now(), kind: "web" | "app" = "web"): string {
     const exp = Math.floor(now / 1000) + SESSION_DAYS * DAY;
     const body = `${address.toLowerCase()}.${exp}`;
-    const mac = createHmac("sha256", this.#secret).update(body).digest("base64url");
-    return `s.${body}.${mac}`;
+    const mac = createHmac("sha256", this.#secret).update(kind === "app" ? `app:${body}` : body).digest("base64url");
+    return `${kind === "app" ? "a" : "s"}.${body}.${mac}`;
+  }
+
+  /** A new token for a valid session of the same kind (the app keeps itself signed in); the old one stops working. */
+  refresh(req: IncomingMessage, now = Date.now()): string | null {
+    const s = this.#checkSession(Auth.token(req));
+    if (!s) return null;
+    this.#revoked.set(s.mac, s.exp * 1000);
+    this.#save();
+    return this.session(s.addr, now, s.app ? "app" : "web");
   }
 
   /** The token a request carries: Bearer (a session or an nsk_ key), else the cookie, which only ever holds a session. */
@@ -115,16 +175,17 @@ export class Auth {
   }
 
   /** The wallet behind a valid, unrevoked session token, or null. */
-  #checkSession(token: string): { addr: string; exp: number; mac: string } | null {
-    const [, addr, expS, mac] = token.split(".");
-    if (!addr || !expS || !mac || Number(expS) < Date.now() / 1000) return null;
-    const want = createHmac("sha256", this.#secret).update(`${addr}.${expS}`).digest("base64url");
+  #checkSession(token: string): { addr: string; exp: number; mac: string; app: boolean } | null {
+    const [kind, addr, expS, mac] = token.split(".");
+    if ((kind !== "s" && kind !== "a") || !addr || !expS || !mac || Number(expS) < Date.now() / 1000) return null;
+    const app = kind === "a";
+    const want = createHmac("sha256", this.#secret).update(app ? `app:${addr}.${expS}` : `${addr}.${expS}`).digest("base64url");
     const a = Buffer.from(mac);
     const b = Buffer.from(want);
     if (a.length !== b.length || !timingSafeEqual(a, b) || this.#revoked.has(mac)) return null;
     // issued at exp - 7 days: a sign-out everywhere voids everything issued up to that second
     if (Number(expS) - SESSION_DAYS * DAY <= (this.#validAfter.get(addr) ?? -1)) return null;
-    return { addr, exp: Number(expS), mac };
+    return { addr, exp: Number(expS), mac, app };
   }
 
   /** Sign-outs to disk, without what has expired: a restart does not bring a session back. */
@@ -141,7 +202,7 @@ export class Auth {
   /** Ends this request's session token now (sign-out). Only a real session is recorded, so junk cannot grow the list. */
   revoke(req: IncomingMessage): void {
     const token = Auth.token(req);
-    const s = token.startsWith("s.") ? this.#checkSession(token) : null;
+    const s = this.#checkSession(token);
     if (!s) return;
     this.#revoked.set(s.mac, s.exp * 1000);
     this.#save();
@@ -157,14 +218,14 @@ export class Auth {
   caller(req: IncomingMessage): Caller | null {
     const token = Auth.token(req);
     if (!token) return null;
-    if (token.startsWith("s.")) { const s = this.#checkSession(token); return s ? { addr: s.addr, via: "session" } : null; }
+    if (token.startsWith("s.") || token.startsWith("a.")) { const s = this.#checkSession(token); return s ? { addr: s.addr, via: "session", ...(s.app ? { app: true as const } : {}) } : null; }
     if (token.startsWith("nsk_")) {
       const hash = createHash("sha256").update(token).digest("hex");
       if (this.#byHash.size !== this.keys.length) { this.#byHash.clear(); for (const x of this.keys) this.#byHash.set(x.hash, x); }
       const k = this.#byHash.get(hash);
       if (!k) return null;
       k.lastUsedAt = Date.now();
-      return { addr: k.owner, via: "key" };
+      return { addr: k.owner, via: "key", ...(k.spend ? { spend: true } : {}) };
     }
     return null;
   }
@@ -180,18 +241,27 @@ export class Auth {
     return c?.via === "session" ? c.addr : null;
   }
 
-  createKey(owner: string, label: string): { key: string; record: Omit<ApiKey, "hash"> & { id: string } } {
+  /** A new key. `spend`: it may also approve held spending and withdraw revenue over MCP; without it, a leaked key cannot move money. */
+  createKey(owner: string, label: string, opts: { spend?: boolean } = {}): { key: string; record: Omit<ApiKey, "hash"> & { id: string } } {
     if (this.keys.filter((k) => k.owner === owner.toLowerCase()).length >= MAX_KEYS_PER_OWNER) throw new Error(`One wallet can hold ${MAX_KEYS_PER_OWNER} API keys; revoke one first.`);
     const key = `nsk_${randomBytes(24).toString("base64url")}`;
-    const rec: ApiKey = { hash: createHash("sha256").update(key).digest("hex"), owner: owner.toLowerCase(), label: label.slice(0, 60) || "MCP", createdAt: Date.now(), lastUsedAt: null };
+    const rec: ApiKey = { hash: createHash("sha256").update(key).digest("hex"), owner: owner.toLowerCase(), label: label.slice(0, 60) || "MCP", createdAt: Date.now(), lastUsedAt: null, ...(opts.spend ? { spend: true } : {}) };
     this.keys.push(rec);
     this.#byHash.set(rec.hash, rec);
     this.onChange();
-    return { key, record: { id: rec.hash.slice(0, 12), owner: rec.owner, label: rec.label, createdAt: rec.createdAt, lastUsedAt: null } };
+    return { key, record: { id: rec.hash.slice(0, 12), owner: rec.owner, label: rec.label, createdAt: rec.createdAt, lastUsedAt: null, spend: Boolean(rec.spend) } };
   }
 
   listKeys(owner: string) {
-    return this.keys.filter((k) => k.owner === owner.toLowerCase()).map((k) => ({ id: k.hash.slice(0, 12), label: k.label, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt }));
+    return this.keys.filter((k) => k.owner === owner.toLowerCase()).map((k) => ({ id: k.hash.slice(0, 12), label: k.label, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt, spend: Boolean(k.spend) }));
+  }
+
+  /** Every key of a wallet, when the account is deleted. */
+  revokeAllKeys(owner: string): number {
+    const before = this.keys.length;
+    for (let i = this.keys.length - 1; i >= 0; i--) if (this.keys[i]!.owner === owner.toLowerCase()) { this.#byHash.delete(this.keys[i]!.hash); this.keys.splice(i, 1); }
+    if (this.keys.length !== before) this.onChange();
+    return before - this.keys.length;
   }
 
   revokeKey(owner: string, id: string): boolean {

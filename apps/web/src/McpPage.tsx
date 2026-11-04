@@ -18,6 +18,7 @@ export function McpPage({ health }: { health: Health | null }) {
   const [keys, setKeys] = useState<ApiKeyView[]>([]);
   const [fresh, setFresh] = useState<string | null>(null);
   const [label, setLabel] = useState("Claude");
+  const [spend, setSpend] = useState(false);
   const [stats, setStats] = useState<McpStats | null>(null);
   const endpoint = `${location.origin}/mcp`;
   const key = fresh ?? "nsk_…";
@@ -26,7 +27,8 @@ export function McpPage({ health }: { health: Health | null }) {
   useEffect(() => { api.mcpStats().then(setStats).catch(() => {}); }, []);
 
   async function mint() {
-    const r = await api.createKey(label);
+    const r = await api.createKey(label, spend);
+    setSpend(false);
     setFresh(r.key);
     setKeys(await api.keys());
   }
@@ -75,10 +77,11 @@ export function McpPage({ health }: { health: Health | null }) {
                 <input className="field" style={{ maxWidth: 220 }} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label" />
                 <button className="btn primary" onClick={mint}>Create API key</button>
               </div>
+              <label className="dim" style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}><input type="checkbox" checked={spend} onChange={(e) => setSpend(e.target.checked)} /> Let this key approve held spending, order paid work, raise limits and withdraw revenue. Leave it off for an assistant that only reads and steers: a leaked key then cannot move money.</label>
               {fresh && <p className="warn" style={{ fontSize: 13 }}>Copy this key now; it is shown once: <span className="mono">{fresh}</span></p>}
               {keys.length > 0 && (
                 <table><tbody>{keys.map((k) => (
-                  <tr key={k.id}><td>{k.label}</td><td className="mono faint">{k.id}…</td><td className="dim">used {k.lastUsedAt ? ago(k.lastUsedAt) : "never"}</td>
+                  <tr key={k.id}><td>{k.label}</td><td className="mono faint">{k.id}…</td><td className="dim">{k.spend ? "can spend" : "no spending"}</td><td className="dim">used {k.lastUsedAt ? ago(k.lastUsedAt) : "never"}</td>
                     <td className="r"><button className="btn ghost danger" style={{ height: 30 }} onClick={async () => { await api.revokeKey(k.id); setKeys(await api.keys()); }}>Revoke</button></td></tr>
                 ))}</tbody></table>
               )}

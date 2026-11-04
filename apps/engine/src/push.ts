@@ -72,6 +72,13 @@ export function unsubscribe(endpoint: string): boolean {
   return true;
 }
 export const subscribed = (endpoint: string) => all().find((x) => x.endpoint === endpoint) ?? null;
+/** Unties every browser subscription from this wallet, when its account is deleted. */
+export function forgetWallet(wallet: string): number {
+  const w = wallet.toLowerCase(), hit = all().filter((s) => s.wallet === w);
+  for (const s of hit) s.wallet = null;
+  if (hit.length) persist();
+  return hit.length;
+}
 
 /** Who gets a note: everyone on the topic, or only devices whose wallet holds. */
 export async function audience(list: Sub[], topic: Topic, only: "holders" | "everyone" | "others", holds: (wallet: string) => Promise<boolean>): Promise<Sub[]> {
