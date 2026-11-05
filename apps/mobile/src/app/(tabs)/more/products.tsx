@@ -112,7 +112,7 @@ function PriceSheet({ product, onClose, onSave }: { product: DeskProduct | null;
     <Modal visible={!!product} transparent animationType="slide" onRequestClose={onClose} onShow={() => setV(product ? product.priceUsd.toFixed(2) : "")} statusBarTranslucent navigationBarTranslucent>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <Pressable style={{ flex: 1, backgroundColor: C.scrim }} onPress={onClose} />
-        <View style={{ backgroundColor: "#0b0a1d", borderTopWidth: 1, borderTopColor: C.lineHi, padding: S.gutter, paddingBottom: insets.bottom + 18 }}>
+        <View style={{ backgroundColor: "#080d09", borderTopWidth: 1, borderTopColor: C.lineHi, padding: S.gutter, paddingBottom: insets.bottom + 18 }}>
           <Caps>Set price</Caps>
           <Title style={{ marginTop: 6 }} numberOfLines={2}>{product?.name}</Title>
           <View style={{ flexDirection: "row", alignItems: "center", marginTop: 16, borderWidth: 1, borderColor: C.lineHi, backgroundColor: C.panel, paddingHorizontal: 14 }}>

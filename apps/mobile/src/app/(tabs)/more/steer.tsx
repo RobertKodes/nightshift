@@ -94,7 +94,7 @@ export default function Steer() {
               <Caps>Strong model today</Caps>
               <Mono style={{ color: C.ink, fontSize: 13 }}>{usd(brain.spentTodayUsd)} <Text style={{ color: C.faint }}>/ {usd(brain.dailyUsd)}</Text></Mono>
             </View>
-            <Bar value={brain.spentTodayUsd} max={Math.max(brain.dailyUsd, 0.01)} color={C.violet} style={{ marginTop: 8 }} />
+            <Bar value={brain.spentTodayUsd} max={Math.max(brain.dailyUsd, 0.01)} color={C.pepe} style={{ marginTop: 8 }} />
           </>
         )}
 
@@ -103,7 +103,7 @@ export default function Steer() {
           {lines.length === 0 && <Dim>Ask the CEO anything: why sales moved, what it plans next, what to build. Its answers come with buttons that do the work.</Dim>}
           {lines.map((l) => l.from === "owner" ? (
             <View key={l.id} style={{ alignSelf: "flex-end", maxWidth: "86%" }}>
-              <Frame fill="#17133a" stroke={C.violetDeep} padding={13}><Body style={{ fontSize: 15.5 }}>{l.text}</Body></Frame>
+              <Frame fill="#0c160e" stroke={C.limeDim} padding={13}><Body style={{ fontSize: 15.5 }}>{l.text}</Body></Frame>
             </View>
           ) : (
             <View key={l.id} style={{ flexDirection: "row", gap: 10, maxWidth: "96%" }}>
@@ -173,7 +173,7 @@ function Report({ line, onClose, onSend }: { line: ChatLine | null; onClose: () 
     <Modal visible={!!line} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <Pressable style={{ flex: 1, backgroundColor: C.scrim }} onPress={onClose} />
-        <View style={{ backgroundColor: "#0b0a1d", borderTopWidth: 1, borderTopColor: C.lineHi, padding: S.gutter, paddingBottom: insets.bottom + 18 }}>
+        <View style={{ backgroundColor: "#080d09", borderTopWidth: 1, borderTopColor: C.lineHi, padding: S.gutter, paddingBottom: insets.bottom + 18 }}>
           <Caps style={{ color: C.coral }}>Report this answer</Caps>
           <Title style={{ marginTop: 6, fontSize: 17 }} numberOfLines={3}>{line?.text}</Title>
           <View style={{ marginTop: 14, gap: 8 }}>

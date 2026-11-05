@@ -1,0 +1,42 @@
+/* /impact: what NIGHTSHIFT gives IMD. IMD blue marks what is IMD's own. Builds on shift.css. */
+
+.sh-impact .pk-hero h1 em { color: var(--px-lime); }
+.imp-board .pk-panel-b { position: relative; }
+.imp-frog { position: absolute; right: 12px; top: 12px; width: 40px; height: 40px; image-rendering: pixelated; }
+.imp-board .sh-prompt { margin: 0 -14px -14px; border-top-color: rgba(47, 123, 255, .25); }
+.imp-board .sh-prompt span:first-child { color: #6fa3ff; }
+.imp-board .sh-prompt i { background: #2f7bff; }
+.imp-board .sh-board-row { border-color: rgba(47, 123, 255, .25); background: rgba(47, 123, 255, .25); }
+.imp-board .sh-board-row > * { background: #070c14; }
+
+.imp-stats .pk-stat::before { border-color: #2f7bff; }
+.imp-stats .pk-stat { border-color: rgba(47, 123, 255, .25); background: #060a10; }
+.imp-stats a.pk-stat:hover { border-color: rgba(47, 123, 255, .5); background: #08101c; }
+.imp-stats .pk-stat-v svg { vertical-align: -2px; color: var(--px-gold); }
+
+/* the job ledger in IMD blue */
+.px .sh-impact .imp-jobs { border-color: rgba(47, 123, 255, .25); background: transparent; }
+.px .sh-impact .imp-jobs > div { grid-template-columns: 110px minmax(0, 1fr); border-bottom-color: rgba(47, 123, 255, .14); }
+.px .sh-impact .imp-jobs b { color: #8db6ff; }
+.px .sh-impact .imp-jobs a { color: var(--px-text); text-decoration: none; }
+.px .sh-impact .imp-jobs a:hover { color: #8db6ff; text-decoration: underline; text-underline-offset: 3px; }
+.px .sh-impact .imp-grid > li::before { border-color: #2f7bff; }
+.px .sh-impact .imp-grid.one { grid-template-columns: 1fr; margin-top: 10px; }
+
+.imp-builds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
+.px .sh-impact .imp-builds > * { margin-top: 0; }
+.imp-builds .pk-panel { display: flex; flex-direction: column; }
+.imp-builds .pk-panel-b { display: grid; gap: 12px; align-content: start; flex: 1; }
+.imp-builds .pk-panel-h b { display: inline-flex; align-items: center; gap: 8px; }
+.imp-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.imp-cmd { display: flex; gap: 10px; align-items: baseline; margin: 0; padding: 10px 12px; border: 1px solid rgba(47, 123, 255, .3); border-left: 3px solid #2f7bff; background: #05080d; overflow-x: auto; }
+.imp-cmd span { color: #6fa3ff; font: 600 12px var(--px-mono); }
+.px .sh-impact .imp-cmd code { padding: 0; border: 0; background: none; color: #d6e2f5; font: 500 12px/1.5 var(--px-mono); white-space: nowrap; }
+
+@media (min-width: 900px) { .px .sh-impact .imp-jobs { max-height: 560px; overflow-y: auto; } }
+@media (max-width: 1080px) { .imp-builds { grid-template-columns: 1fr; } }
+@media (max-width: 899px) { .imp-stats .pk-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) {
+  .px .sh-impact .imp-jobs > div { grid-template-columns: 1fr; }
+  .imp-frog { display: none; }
+}

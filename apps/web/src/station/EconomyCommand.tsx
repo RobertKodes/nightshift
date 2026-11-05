@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
+import DotGrid from "../rb/DotGrid";
+import SpotlightCard from "../rb/SpotlightCard";
+import StarBorder from "../rb/StarBorder";
 import { Link } from "../router";
+import { PxHero, PxNum, PxPanel, PxSection, PxStat, PxStats, PxTag } from "../saas/kit";
+import { PxIcon } from "../saas/PxIcon";
+import "../saas/pages/command3.css";
 import { useSession } from "../session";
 import { RuleBar } from "../TokenomicsPage";
-import { RoomHero, Stat, Tiles } from "./Station";
+import { RoomHero, Stat, Tiles, rememberRoom } from "./Station";
 
 const get = <T,>(u: string): Promise<T | null> => fetch(u, { credentials: "same-origin" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 const big = (n: number | undefined | null) => n == null ? "…" : n >= 1e9 ? `${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n.toLocaleString("en-US");
@@ -105,12 +111,55 @@ const MISSION_PREVIEW = [
   ["Beat the holder", "Your best agent is ahead of the IMD Holder benchmark.", 48],
   ["Board watch", "One of your agents plays a rated NIGHT CHESS game.", 24],
 ] as const;
+/** NIGHT FROG art on this site, by token number: a crewed frog shows its own face, the rest a decorative one. */
+const FROG_ART = [77, 187, 224, 131, 112, 83, 500, 2, 1, 78, 79, 80, 81, 82, 84, 113];
+const frogArt = (i: number, frog?: number | null) => `/frogs/frog-${String(frog != null && FROG_ART.includes(frog) ? frog : FROG_ART[i % FROG_ART.length]).padStart(3, "0")}.webp`;
+const STATE_TAG: Record<Mission["state"], ["lime" | "gold" | "dim" | undefined, string]> = { open: [undefined, "OPEN"], underway: ["gold", "UNDERWAY"], ready: ["lime", "READY TO REPORT"], done: ["dim", "DONE"] };
+const LINKS = [
+  { to: "/frogs", title: "Frogs", note: "Mint in IMD, see the crew and the perks.", icon: "grid" },
+  { to: "/forge", title: "Upgrade Frogs", note: "Burn 10 frogs, forge 1 Night Watcher.", icon: "bolt" },
+  { to: "/league", title: "Night League", note: "Missions: Desk duty, Beat the holder.", icon: "pulse" },
+  { to: "/arena", title: "Agent Arena", note: "Mission: Board watch.", icon: "play" },
+];
+/** Heavy effects are decoration: wide screens only, never with reduced motion or the lite mode. */
+function useRich(): boolean {
+  const [rich, setRich] = useState(false);
+  useEffect(() => {
+    const wide = matchMedia("(min-width: 900px)");
+    const still = matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setRich(wide.matches && !still.matches && !document.documentElement.hasAttribute("data-lite"));
+    sync();
+    wide.addEventListener("change", sync);
+    still.addEventListener("change", sync);
+    return () => { wide.removeEventListener("change", sync); still.removeEventListener("change", sync); };
+  }, []);
+  return rich;
+}
+/** One mission as a card: the frog on it, what it asks, where it stands, and its one control. */
+function MissionCard({ i, frog, title, brief, line, state, children }: { i: number; frog?: number | null; title: string; brief: string; line: string; state?: Mission["state"]; children?: React.ReactNode }) {
+  const tag = state ? STATE_TAG[state] : null;
+  return (
+    <SpotlightCard className={`cm3-mission${state ? ` ${state}` : ""}`} spotlightColor="rgba(184, 255, 61, 0.16)" spotlightSize={260} borderGlow={0.4} theme="dark">
+      <div className="cm3-mission-h">
+        <img className="cm3-frog" src={frogArt(i, frog)} alt="" aria-hidden="true" width={44} height={44} loading="lazy" />
+        <span className="cm3-mission-n">MISSION 0{i + 1}</span>
+        {tag ? <PxTag tone={tag[0]}>{tag[1]}</PxTag> : <PxTag tone="dim">PREVIEW</PxTag>}
+      </div>
+      <b>{title}</b>
+      <p>{brief}</p>
+      <span className="cm3-line">{line}</span>
+      {children}
+    </SpotlightCard>
+  );
+}
 export function CommandPage() {
   const { address, signIn, busy } = useSession();
   const [b, setB] = useState<Board | null>(null);
   const [st, setSt] = useState<Staking | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [pick, setPick] = useState<Record<string, number>>({});
+  const rich = useRich();
+  useEffect(() => rememberRoom("command"), []);
   const load = useCallback(() => {
     void get<Staking>(`/api/frogs/staking${address ? `?wallet=${address}` : ""}`).then(setSt);
     if (address) void get<Board>("/api/missions").then(setB); else setB(null);
@@ -126,54 +175,98 @@ export function CommandPage() {
   };
   // a Night Watcher crews every mission at once
   const free = b?.frogs.filter((f) => !f.on || f.crew) ?? [];
+  const signInButton = (
+    <StarBorder className="cm3-star" color="#b8ff3d" duration={5} thickness={1} radius={2} backgroundColor="#b8ff3d" textColor="#031007" borderColor="rgba(184,255,61,.6)" onClick={() => void signIn()} disabled={busy}>
+      <PxIcon name="wallet" size={14} />{busy ? "CHECK YOUR WALLET…" : "SIGN IN TO CREW MISSIONS"}
+    </StarBorder>
+  );
   return (
-    <div className="st-room">
-      <RoomHero id="command">
-        <div className="st-stats">
-          <Stat label="Your shift hours" value={st?.me ? st.me.hours.toLocaleString("en-US") : address ? "0" : "—"} note={st?.me ? `${st.me.perHour}/h from frogs${st.me.imdSeat ? " · IMD seat 2×" : ""}` : "sign in to see yours"} />
-          <Stat label="Mission hours this week" value={b ? b.hoursEarned.toLocaleString("en-US") : "—"} />
-          <Stat label="Your rank" value={st?.me?.rank ? `#${st.me.rank}` : "—"} />
-        </div>
-      </RoomHero>
-      <div className="st-body">
-        <h2>This week's missions</h2>
-        <p className="st-note">Each frog crews one mission a week. A mission is real work on the station that the server checks for itself; bring it home and the frog earns its base hours times its multiplier (50× for #1, 3× for #2–25, 2× Genesis, 1× the rest). A Night Watcher from <Link to="/forge">Upgrade Frogs</Link> crews all three at once, at 10× to 40×. Earned hours are reward weights from holding Frogs: your total is cumulative and never resets, missions reset every Monday at 00:00 UTC, and a funded Frog reward epoch uses hours added since the last paid epoch. Claims open only after the team posts the root.</p>
-        {msg && <p className="st-msg">{msg}</p>}
+    <div className="cm3">
+      <PxHero
+        kicker="DECK 05 · MISSIONS"
+        title="Frog"
+        accent="missions."
+        lead={<>Send your <b>NIGHT FROGS</b> on missions. Real work done on the station earns them bonus shift hours.</>}
+        bg={rich ? <DotGrid dotSize={3} gap={20} baseColor="#14241a" activeColor="#b8ff3d" proximity={110} shockRadius={160} shockStrength={3} shape="square" glow={0.3} intro={false} /> : undefined}
+        actions={<>
+          {!address && signInButton}
+          <Link to="/frogs" className="px-btn"><PxIcon name="grid" size={14} />THE FROGS</Link>
+          <Link to="/forge" className="px-btn ghost"><PxIcon name="bolt" size={14} />UPGRADE FROGS</Link>
+        </>}
+        aside={
+          <aside className="px-term cm3-term" aria-label="How missions pay">
+            <div className="px-term-h">
+              <span className="px-term-dots" aria-hidden="true"><i /><i /><i /></span>
+              <b>MISSION RULES</b>
+              <span className="px-term-state"><i />WEEKLY</span>
+            </div>
+            <div className="cm3-rules">
+              <img className="cm3-rules-frog" src="/brand/pepe-operator.svg" alt="" aria-hidden="true" width={44} height={44} />
+              <div><span>FROG #1</span><b>50×</b></div>
+              <div><span>FROGS #2–25</span><b>3×</b></div>
+              <div><span>GENESIS</span><b>2×</b></div>
+              <div><span>THE REST</span><b>1×</b></div>
+              <div><span>NIGHT WATCHER</span><b>10–40×</b><small>crews all three at once</small></div>
+              <div><span>RESET</span><b>MON 00:00</b><small>UTC, every week</small></div>
+            </div>
+            <div className="px-term-f"><span>root@nightshift:~$</span><span>missions --crew</span><span className="px-term-cursor" aria-hidden="true" /></div>
+          </aside>
+        }
+      />
+
+      <div className="cm3-stats">
+        <PxStats cols={3}>
+          <PxStat label="Your shift hours" tone="lime" value={st?.me ? <PxNum value={st.me.hours} decimals={Number.isInteger(st.me.hours) ? 0 : 2} /> : address ? "0" : "—"} sub={st?.me ? `${st.me.perHour}/h from frogs${st.me.imdSeat ? " · IMD seat 2×" : ""}` : "sign in to see yours"} />
+          <PxStat label="Mission hours this week" value={b ? <PxNum value={b.hoursEarned} decimals={Number.isInteger(b.hoursEarned) ? 0 : 2} /> : "—"} />
+          <PxStat label="Your rank" tone="gold" value={st?.me?.rank ? `#${st.me.rank}` : "—"} />
+        </PxStats>
+      </div>
+
+      <PxSection kicker="THIS WEEK" title="This week's missions" id="cm3-missions">
+        <p className="cm3-note">Each frog crews one mission a week. A mission is real work on the station that the server checks for itself; bring it home and the frog earns its base hours times its multiplier (50× for #1, 3× for #2–25, 2× Genesis, 1× the rest). A Night Watcher from <Link to="/forge">Upgrade Frogs</Link> crews all three at once, at 10× to 40×. Earned hours are reward weights from holding Frogs: your total is cumulative and never resets, missions reset every Monday at 00:00 UTC, and a funded Frog reward epoch uses hours added since the last paid epoch. Claims open only after the team posts the root.</p>
+        {msg && <p className="cm3-msg" role="status">{msg}</p>}
         {!address ? (
           <>
-            <div className="st-missions">{MISSION_PREVIEW.map(([t, d, h]) => <div key={t} className="st-mission"><b>{t}</b><p>{d}</p><span>{h} h × frog</span></div>)}</div>
-            <button className="st-cta" onClick={() => void signIn()} disabled={busy}>{busy ? "Check your wallet…" : "Sign in to crew missions"}</button>
+            <div className="cm3-missions">{MISSION_PREVIEW.map(([t, d, h], i) => <MissionCard key={t} i={i} title={t} brief={d} line={`${h} h × frog`} />)}</div>
+            <div className="cm3-signin"><span>root@nightshift:~$ missions --crew</span><button type="button" className="px-btn primary" onClick={() => void signIn()} disabled={busy}><PxIcon name="wallet" size={14} />{busy ? "Check your wallet…" : "Sign in to crew missions"}</button></div>
           </>
-        ) : !b ? <p className="st-empty">Reading your frogs…</p> : b.frogs.length === 0 ? (
+        ) : !b ? <p className="cm3-empty">Reading your frogs…</p> : b.frogs.length === 0 ? (
           <>
-            <p className="st-empty">No Frogs in this wallet yet (holdings are read every hour). <Link to="/frogs">Frogs</Link> to send it out.</p>
-            <div className="st-missions">{b.missions.map((m) => <div key={m.id} className="st-mission"><b>{m.title}</b><p>{m.brief}</p><span>{m.hours} h × frog · {m.progress}</span></div>)}</div>
+            <p className="cm3-empty">No Frogs in this wallet yet (holdings are read every hour). <Link to="/frogs">Frogs</Link> to send it out.</p>
+            <div className="cm3-missions">{b.missions.map((m, i) => <MissionCard key={m.id} i={i} title={m.title} brief={m.brief} line={`${m.hours} h × frog · ${m.progress}`} state={m.state} />)}</div>
           </>
         ) : (
-          <div className="st-missions">{b.missions.map((m) => (
-            <div key={m.id} className={`st-mission ${m.state}`}>
-              <b>{m.title}</b><p>{m.brief}</p>
-              <span>{m.state === "done" ? `Done: +${m.earned} h` : m.frog ? `${crewName(m.frog)} · ${m.progress} · pays ${m.bonus} h` : `${m.hours} h × frog`}</span>
+          <div className="cm3-missions">{b.missions.map((m, i) => (
+            <MissionCard key={m.id} i={i} frog={m.frog} title={m.title} brief={m.brief} state={m.state}
+              line={m.state === "done" ? `Done: +${m.earned} h` : m.frog ? `${crewName(m.frog)} · ${m.progress} · pays ${m.bonus} h` : `${m.hours} h × frog`}>
               {m.state === "open" && (free.length ? (
-                <div className="st-mission-go">
-                  <select value={pick[m.id] ?? free[0]!.id} onChange={(e) => setPick({ ...pick, [m.id]: Number(e.target.value) })}>{free.map((f) => <option key={f.id} value={f.id}>{crewName(f.id)} · {f.multiplier}×</option>)}</select>
-                  <button onClick={() => void act("/api/missions/start", { mission: m.id, frog: pick[m.id] ?? free[0]!.id })}>Send</button>
+                <div className="cm3-go">
+                  <select className="field" aria-label={`Frog for ${m.title}`} value={pick[m.id] ?? free[0]!.id} onChange={(e) => setPick({ ...pick, [m.id]: Number(e.target.value) })}>{free.map((f) => <option key={f.id} value={f.id}>{crewName(f.id)} · {f.multiplier}×</option>)}</select>
+                  <button type="button" className="px-btn primary" onClick={() => void act("/api/missions/start", { mission: m.id, frog: pick[m.id] ?? free[0]!.id })}>Send</button>
                 </div>
-              ) : <small>Every frog is out this week.</small>)}
-              {m.state === "underway" && <Link to={m.link} className="st-link">Go do it →</Link>}
-              {m.state === "ready" && <button onClick={() => void act("/api/missions/report", { mission: m.id })}>Report back</button>}
-            </div>
+              ) : <small className="cm3-small">Every frog is out this week.</small>)}
+              {m.state === "underway" && <Link to={m.link} className="px-btn ghost cm3-goto">Go do it →</Link>}
+              {m.state === "ready" && <button type="button" className="px-btn primary" onClick={() => void act("/api/missions/report", { mission: m.id })}>Report back</button>}
+            </MissionCard>
           ))}</div>
         )}
-        <h2>The crew board</h2>
-        {st?.board.length ? <ol className="st-rank wide">{st.board.slice(0, 10).map((w) => <li key={w.wallet}><b className="mono">{w.wallet.slice(0, 6)}…{w.wallet.slice(-4)}</b><span>{w.frogs} frog{w.frogs === 1 ? "" : "s"}</span><i>{w.hours.toLocaleString("en-US")} h</i></li>)}</ol> : <p className="st-empty">No shift hours yet.</p>}
-        <Tiles items={[
-          { to: "/frogs", title: "Frogs", note: "Mint in IMD, see the crew and the perks.", icon: "frog" },
-          { to: "/forge", title: "Upgrade Frogs", note: "Burn 10 frogs, forge 1 Night Watcher.", icon: "flame" },
-          { to: "/league", title: "Night League", note: "Missions: Desk duty, Beat the holder.", icon: "chart" },
-          { to: "/arena", title: "Agent Arena", note: "Mission: Board watch.", icon: "swords" },
-        ]} />
-      </div>
+      </PxSection>
+
+      <PxSection kicker="LEADERBOARD" title="The crew board" id="cm3-board">
+        <PxPanel title="Shift hours · top 10" state={st?.board.length ? "live" : "idle"} className="cm3-board">
+          {st?.board.length ? (
+            <ol className="cm3-rank">{st.board.slice(0, 10).map((w, i) => (
+              <li key={w.wallet}><span className="cm3-rank-n">{String(i + 1).padStart(2, "0")}</span><b className="mono">{w.wallet.slice(0, 6)}…{w.wallet.slice(-4)}</b><span>{w.frogs} frog{w.frogs === 1 ? "" : "s"}</span><i>{w.hours.toLocaleString("en-US")} h</i></li>
+            ))}</ol>
+          ) : <p className="cm3-empty">No shift hours yet.</p>}
+        </PxPanel>
+      </PxSection>
+
+      <section className="px-sec cm3-links-sec" aria-label="Where missions happen">
+        <div className="cm3-links">
+          {LINKS.map((t) => <Link key={t.to} to={t.to}><PxIcon name={t.icon} size={15} /><b>{t.title}</b><span>{t.note}</span><i aria-hidden="true">→</i></Link>)}
+        </div>
+      </section>
     </div>
   );
 }

@@ -5,8 +5,15 @@ import { CeoChat } from "./CeoChat";
 import { CHANNEL, Connections, Mark, PostAsk } from "./Connections";
 import { FlightDrawer } from "./FlightRecorder";
 import { NxIcon } from "./nx/icons";
-import { Link } from "./router";
+import { Link, go } from "./router";
 import { useSession } from "./session";
+import ElectricBorder from "./rb/ElectricBorder";
+import SpotlightCard from "./rb/SpotlightCard";
+import StarBorder from "./rb/StarBorder";
+import { PxHero, PxNum, PxPanel, PxStat, PxStats, PxTag } from "./saas/kit";
+import { PxIcon } from "./saas/PxIcon";
+import { CoFrog, Usd, useRich } from "./Home";
+import "./saas/pages/companies.css";
 
 const STATUS: Record<string, string> = { checking: "Checking with IMD", ordering: "Paying the swarm", building: "The swarm is building", awaiting_approval: "Waiting for you" };
 
@@ -27,6 +34,7 @@ export function OwnerDesk({ health }: { health: Health | null }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [, tick] = useState(0);
+  const rich = useRich();
 
   const load = useCallback(() => api.desk().then((x) => { setD(x); setErr(null); }).catch((e: Error) => setErr(e.message)), []);
   useEffect(() => {
@@ -50,17 +58,32 @@ export function OwnerDesk({ health }: { health: Health | null }) {
     try { await fn(); await load(); if (done) say(done); } catch (e) { say((e as Error).message); } finally { setBusy(null); }
   };
 
+  const lead = "Everything you run, on one screen. Approve spending, direct each CEO, edit what it sells, replay any shift, take the books, or close a company down.";
   if (!d) {
     return (
-      <div className="docs dk">
-        <span className="eyebrow">Owner desk</span>
-        <h1>Your <em>companies.</em></h1>
-        {err ? (
-          <div className="dk-empty">
-            <p>{err}</p>
-            {!address && <button className="nx-btn nx-btn-acc" disabled={signing} onClick={() => void signIn()}><NxIcon name="wallet" size={16} />{signing ? "Check your wallet…" : "Sign in with your wallet"}</button>}
-          </div>
-        ) : <p className="dim">Opening the desk…</p>}
+      <div className="cx3 cx3-desk">
+        <PxHero
+          kicker="OWNER DESK"
+          title="Your"
+          accent="companies."
+          lead={lead}
+          aside={
+            <PxPanel title="DESK" state={err ? "warn" : "idle"} right="/my" className="cx3-deskgate">
+              <p className="cx3-gate-p"><span>root@nightshift:~$</span> desk --open{!err && <i className="cx3-cursor" aria-hidden="true" />}</p>
+              {err ? (
+                <>
+                  <p className="cx3-gate-m">{err}</p>
+                  {!address && (
+                    <StarBorder className="cx3-star" disabled={signing} onClick={() => void signIn()} color="#b8ff3d" duration={5} thickness={1} radius={2} backgroundColor="#b8ff3d" textColor="#031007" borderColor="rgba(184,255,61,.6)">
+                      <PxIcon name="wallet" size={14} />{signing ? "Check your wallet…" : "Sign in with your wallet"}
+                    </StarBorder>
+                  )}
+                  <p className="cx3-gate-n">Sign-in is a wallet signature: no email, no password, no custody.</p>
+                </>
+              ) : <p className="cx3-gate-m cx3-faint">Opening the desk…</p>}
+            </PxPanel>
+          }
+        />
       </div>
     );
   }
@@ -76,143 +99,187 @@ export function OwnerDesk({ health }: { health: Health | null }) {
   const needs = waiting.length + resting.length + posts.length + listings.length + paused.length;
   const hhmm = (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const edit = cos.find((c) => c.id === editing) ?? null;
+  const profit = sum((c) => c.pnl.profitUsd);
+
+  const needsPanel = (
+    <section className={`cx3-needs${waiting.length ? " has-spend" : ""}`} aria-labelledby="cx3-needs-h">
+      <header><PxIcon name="pulse" size={13} /><h2 id="cx3-needs-h">Needs you</h2><span>{needs} waiting</span></header>
+      {waiting.map(({ c, w }) => (
+        <div key={w.id} className="dk-need cx3-need spend">
+          {w.market
+            ? <div><b>{c.name}</b> wants to buy "{w.market.product}" from {w.market.company} on the market<span className="dim"> · {usd(w.costUsd)} USDC instead of research from the swarm at about {usd(w.market.swarmUsd)} · {w.title}</span></div>
+            : <div><b>{c.name}</b> wants to buy: {w.title}<span className="dim"> · {w.costUsd > 0 ? usd(w.costUsd) : "0.5 IMD"} · {w.why}</span></div>}
+          <div className="dk-row">
+            <button className="nx-btn cx3-no" disabled={busy !== null} onClick={() => void act(`no:${w.id}`, () => api.reject(c.id, w.id), "Declined. Nothing was spent.")}>Decline</button>
+            <button className="nx-btn nx-btn-acc" disabled={busy !== null} onClick={() => void act(`yes:${w.id}`, () => api.approve(c.id, w.id), "Approved: the swarm is on it.")}>Approve and buy</button>
+          </div>
+        </div>
+      ))}
+      {posts.map(({ c, p }) => <PostAsk key={p.id} c={c} p={p} busy={busy} act={act} compact />)}
+      {listings.map(({ c, g }) => (
+        <div key={`${c.id}:${g.productId}`} className="dk-need cx3-need">
+          <div><Mark kind="gumroad" /> <b>{c.name}</b> made "{g.product}" on your Gumroad as a draft<span className="dim"> · {usd(g.priceUsd)} · publishing it waits for you, once per product</span></div>
+          <div className="dk-row">
+            <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`gn:${g.productId}`, () => api.gumroadDecline(c.id, g.productId), "It stays a draft on Gumroad.")}>Not now</button>
+            <button className="nx-btn nx-btn-acc" disabled={busy !== null || !g.file} onClick={() => void act(`gy:${g.productId}`, () => api.gumroadApprove(c.id, g.productId), "Approved: it goes on sale on Gumroad in a moment.")}>Publish on Gumroad</button>
+          </div>
+        </div>
+      ))}
+      {paused.map(({ c, ch }) => (
+        <div key={`${c.id}:${ch.kind}`} className="dk-need cx3-need">
+          <div><Mark kind={ch.kind} /> <b>{c.name}</b>: {ch.name} pushed back, so posting there is paused<span className="dim"> · {ch.account!.paused!.why}</span></div>
+          <div className="dk-row"><button className="nx-btn" onClick={() => open(c.id, "connections")}>Open Connections</button></div>
+        </div>
+      ))}
+      {resting.map((c) => c.rest!.why === "budget" ? (
+        <div key={c.id} className="dk-need cx3-need">
+          <div><b>{c.name}</b> spent today's budget and rests until {hhmm(c.rest!.until)}.<span className="dim"> Raise the daily budget to keep it working now.</span></div>
+          <div className="dk-row"><button className="nx-btn" onClick={() => open(c.id, "limits")}>Change limits</button></div>
+        </div>
+      ) : (
+        <div key={c.id} className="dk-need cx3-need">
+          <div><b>{c.name}</b> found nothing new worth paying for and rests until {hhmm(c.rest!.until)}.{c.rest!.reason ? <span className="dim"> It stopped because {c.rest!.reason}.</span> : null}<span className="dim"> Point its CEO somewhere new, or run a shift now.</span></div>
+          <div className="dk-row">
+            <button className="nx-btn" onClick={() => open(c.id, "direction")}>Give a direction</button>
+            <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`run:${c.id}`, () => api.shift(c.id), "Shift started.")}>Run a shift now</button>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
 
   return (
-    <div className="docs dk">
-      <span className="eyebrow">Owner desk{d.mode === "sim" ? " · simulation" : ""}</span>
-      <h1>Your <em>companies.</em></h1>
-      <p className="lead">Everything you run, on one screen. Approve spending, direct each CEO, edit what it sells, replay any shift, take the books, or close a company down.</p>
-      {!d.requireAuth && !address && <p className="dk-note">This engine runs without sign-in, so every company nobody owns is listed here.</p>}
+    <div className="cx3 cx3-desk">
+      <PxHero
+        kicker={`OWNER DESK${d.mode === "sim" ? " · SIMULATION" : ""}`}
+        live={d.mode === "live"}
+        title="Your"
+        accent="companies."
+        lead={lead}
+        aside={
+          <PxPanel title="SHIFT REPORT" state={needs ? "warn" : cos.some((c) => c.working) ? "live" : "idle"} right={`${cos.length} running`} className="cx3-report">
+            <ul className="cx3-report-l">
+              <li><span>NEEDS YOU</span><b className={needs ? "gold" : ""}>{needs}</b></li>
+              <li><span>WORKING NOW</span><b className="lime">{cos.filter((c) => c.working).length}</b></li>
+              <li><span>RESTING</span><b>{resting.length}</b></li>
+              <li><span>PAUSED</span><b>{cos.filter((c) => c.status === "paused").length}</b></li>
+            </ul>
+            <p className="cx3-file-f"><span>root@nightshift:~$</span> desk --status<i className="cx3-cursor" aria-hidden="true" /></p>
+          </PxPanel>
+        }
+      />
+      {!d.requireAuth && !address && <p className="cx3-note">This engine runs without sign-in, so every company nobody owns is listed here.</p>}
 
-      <div className="dk-sum">
-        <span><b>{cos.length}</b>companies</span>
-        <span><b>{usd(sum((c) => c.pnl.revenueUsd))}</b>revenue from people and agents</span>
-        <span><b>{usd(sum((c) => c.pnl.spentUsd))}</b>spent on the swarm</span>
-        <span className={sum((c) => c.pnl.profitUsd) >= 0 ? "dk-up" : "dk-down"}><b>{usd(sum((c) => c.pnl.profitUsd))}</b>profit</span>
-        <span><b>{sum((c) => c.stats.sales7d)}</b>sales, 7 days</span>
-        <span><b>{sum((c) => c.products.filter((p) => p.status === "live").length)}</b>products on sale</span>
-        <span><b>{usd(sum((c) => c.b2b.bought.usd))}</b>bought from the market · {sum((c) => c.b2b.bought.count)}</span>
-        <span><b>{usd(sum((c) => c.b2b.sold.usd))}</b>sold to other companies · {sum((c) => c.b2b.sold.count)}</span>
+      {needs > 0 && (waiting.length > 0 && rich
+        ? <ElectricBorder className="cx3-electric" color="#ff6b7d" speed={0.8} chaos={0.5} thickness={1.5} borderRadius={2} theme="dark">{needsPanel}</ElectricBorder>
+        : needsPanel)}
+
+      <div className="cx3-kpis">
+        <PxStats cols={4}>
+          <PxStat label="Companies" value={<PxNum value={cos.length} />} />
+          <PxStat label="Revenue" tone="lime" value={<Usd value={sum((c) => c.pnl.revenueUsd)} />} sub="from people and agents" />
+          <PxStat label="Spent" value={<Usd value={sum((c) => c.pnl.spentUsd)} />} sub="on the swarm" />
+          <PxStat label="Profit" tone={profit >= 0 ? "lime" : "red"} value={<Usd value={profit} />} />
+          <PxStat label="Sales, 7 days" value={<PxNum value={sum((c) => c.stats.sales7d)} />} />
+          <PxStat label="Products on sale" value={<PxNum value={sum((c) => c.products.filter((p) => p.status === "live").length)} />} />
+          <PxStat label="Bought from the market" value={<Usd value={sum((c) => c.b2b.bought.usd)} />} sub={`${sum((c) => c.b2b.bought.count)} bought`} />
+          <PxStat label="Sold to other companies" value={<Usd value={sum((c) => c.b2b.sold.usd)} />} sub={`${sum((c) => c.b2b.sold.count)} sold`} />
+        </PxStats>
       </div>
 
-      {needs > 0 && (
-        <section className="dk-needs">
-          <h2><NxIcon name="pulse" size={18} /> Needs you</h2>
-          {waiting.map(({ c, w }) => (
-            <div key={w.id} className="dk-need">
-              {w.market
-                ? <div><b>{c.name}</b> wants to buy "{w.market.product}" from {w.market.company} on the market<span className="dim"> · {usd(w.costUsd)} USDC instead of research from the swarm at about {usd(w.market.swarmUsd)} · {w.title}</span></div>
-                : <div><b>{c.name}</b> wants to buy: {w.title}<span className="dim"> · {w.costUsd > 0 ? usd(w.costUsd) : "0.5 IMD"} · {w.why}</span></div>}
-              <div className="dk-row">
-                <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`no:${w.id}`, () => api.reject(c.id, w.id), "Declined. Nothing was spent.")}>Decline</button>
-                <button className="nx-btn nx-btn-acc" disabled={busy !== null} onClick={() => void act(`yes:${w.id}`, () => api.approve(c.id, w.id), "Approved: the swarm is on it.")}>Approve and buy</button>
-              </div>
-            </div>
-          ))}
-          {posts.map(({ c, p }) => <PostAsk key={p.id} c={c} p={p} busy={busy} act={act} compact />)}
-          {listings.map(({ c, g }) => (
-            <div key={`${c.id}:${g.productId}`} className="dk-need">
-              <div><Mark kind="gumroad" /> <b>{c.name}</b> made "{g.product}" on your Gumroad as a draft<span className="dim"> · {usd(g.priceUsd)} · publishing it waits for you, once per product</span></div>
-              <div className="dk-row">
-                <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`gn:${g.productId}`, () => api.gumroadDecline(c.id, g.productId), "It stays a draft on Gumroad.")}>Not now</button>
-                <button className="nx-btn nx-btn-acc" disabled={busy !== null || !g.file} onClick={() => void act(`gy:${g.productId}`, () => api.gumroadApprove(c.id, g.productId), "Approved: it goes on sale on Gumroad in a moment.")}>Publish on Gumroad</button>
-              </div>
-            </div>
-          ))}
-          {paused.map(({ c, ch }) => (
-            <div key={`${c.id}:${ch.kind}`} className="dk-need">
-              <div><Mark kind={ch.kind} /> <b>{c.name}</b>: {ch.name} pushed back, so posting there is paused<span className="dim"> · {ch.account!.paused!.why}</span></div>
-              <div className="dk-row"><button className="nx-btn" onClick={() => open(c.id, "connections")}>Open Connections</button></div>
-            </div>
-          ))}
-          {resting.map((c) => c.rest!.why === "budget" ? (
-            <div key={c.id} className="dk-need">
-              <div><b>{c.name}</b> spent today's budget and rests until {hhmm(c.rest!.until)}.<span className="dim"> Raise the daily budget to keep it working now.</span></div>
-              <div className="dk-row"><button className="nx-btn" onClick={() => open(c.id, "limits")}>Change limits</button></div>
-            </div>
-          ) : (
-            <div key={c.id} className="dk-need">
-              <div><b>{c.name}</b> found nothing new worth paying for and rests until {hhmm(c.rest!.until)}.{c.rest!.reason ? <span className="dim"> It stopped because {c.rest!.reason}.</span> : null}<span className="dim"> Point its CEO somewhere new, or run a shift now.</span></div>
-              <div className="dk-row">
-                <button className="nx-btn" onClick={() => open(c.id, "direction")}>Give a direction</button>
-                <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`run:${c.id}`, () => api.shift(c.id), "Shift started.")}>Run a shift now</button>
-              </div>
-            </div>
-          ))}
+      {cos.length === 0 ? (
+        <div className="cx3-deskempty">
+          <img src="/brand/pepe-operator.svg" alt="" width={48} height={48} />
+          <p>{d.requireAuth && !d.signedIn ? "Sign in to see the companies you run." : "You do not run a company yet. One sentence is enough to start one."}</p>
+          {d.requireAuth && !d.signedIn
+            ? <StarBorder className="cx3-star" disabled={signing} onClick={() => void signIn()} color="#b8ff3d" duration={5} thickness={1} radius={2} backgroundColor="#b8ff3d" textColor="#031007" borderColor="rgba(184,255,61,.6)"><PxIcon name="wallet" size={14} />Sign in with your wallet</StarBorder>
+            : <StarBorder as="a" href="/launch" onClick={(e: React.MouseEvent) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go("/launch"); }} className="cx3-star" color="#b8ff3d" duration={5} thickness={1} radius={2} backgroundColor="#b8ff3d" textColor="#031007" borderColor="rgba(184,255,61,.6)"><PxIcon name="blocks" size={14} />Start a business</StarBorder>}
+        </div>
+      ) : (
+        <section className="cx3-desksec" aria-labelledby="cx3-desk-h">
+          <div className="px-sec-head"><div><span className="px-kicker">ON YOUR DESK</span><h2 className="px-h2" id="cx3-desk-h">Every company you run</h2></div></div>
+          <div className="dk-grid cx3-dkgrid">
+            {cos.map((c) => {
+              const live = c.products.filter((p) => p.status === "live").length;
+              return (
+                <SpotlightCard key={c.id} className={`cx3-dk ${c.status}${c.waiting.length ? " is-wait" : ""}`} theme="dark" spotlightColor="rgba(184, 255, 61, 0.14)" spotlightSize={380} borderGlow={0.5} grain={0} style={{ "--spotlight-card-surface": "#0a0f0b", "--spotlight-card-border": "rgba(184, 255, 61, 0.15)", "--spotlight-card-shadow": "none" } as React.CSSProperties}>
+                  <article className={`dk-card ${c.status}`}>
+                    <header>
+                      <CoFrog k={c.slug} size={40} />
+                      <span className={`dk-dot ${c.working ? "work" : c.status}`} />
+                      <h3><Link to={`/co/${c.id}`}>{c.name}</Link></h3>
+                      <PxTag tone={c.sim ? "dim" : "lime"}>{c.sim ? "demo" : "live"} · shift {c.cycle}</PxTag>
+                    </header>
+                    <p className="dk-mission">{c.mission}</p>
+                    {c.direction && <p className="dk-dir"><NxIcon name="arrow" size={13} /> {c.direction}</p>}
+                    <div className="dk-now">
+                      {c.working
+                        ? <button className="dk-link" onClick={() => setRec({ co: c.id, task: c.working!.id })}><span className="cx3-spin" aria-hidden="true" />{STATUS[c.working.status] ?? c.working.status}: {c.working.title}{c.working.activity ? ` · ${c.working.activity}` : ""}</button>
+                        : c.status === "paused" ? <span>Paused. No shifts, no spending.</span>
+                        : c.rest ? <span>Resting until {hhmm(c.rest.until)} · {c.rest.why === "budget" ? "budget spent" : "nothing new to buy"}</span>
+                        : <span>Next shift {until(c.nextShiftAt)}</span>}
+                    </div>
+                    <dl className="dk-kpis">
+                      <div><dt>Revenue</dt><dd className="cx3-in">{usd(c.pnl.revenueUsd)}</dd></div>
+                      <div><dt>Spent</dt><dd>{usd(c.pnl.spentUsd)}</dd></div>
+                      <div><dt>Profit</dt><dd className={c.pnl.profitUsd >= 0 ? "dk-up" : "dk-down"}>{usd(c.pnl.profitUsd)}</dd></div>
+                      <div><dt>Visits 7d</dt><dd>{c.stats.visits7d}</dd></div>
+                      <div><dt>Sales 7d</dt><dd>{c.stats.sales7d}</dd></div>
+                      <div><dt>On sale</dt><dd>{live}</dd></div>
+                    </dl>
+                    <DeskBudget c={c} />
+                    <B2bLines c={c} onReplay={(task) => setRec({ co: c.id, task })} />
+                    <CxLine c={c} onOpen={() => open(c.id, "connections")} />
+                    {c.last && <button className="dk-last" onClick={() => setRec({ co: c.id, task: c.last!.id })}>Last: shift {c.last.cycle}, {c.last.title} <span className={`dk-st ${c.last.status}`}>{c.last.status.replace(/_/g, " ")}</span> <span className="faint">{ago(c.last.at)}</span></button>}
+                    <footer className="dk-row">
+                      <Link to={`/co/${c.id}`} className="nx-btn">Open</Link>
+                      <button className="nx-btn" disabled={busy !== null || c.status !== "active" || Boolean(c.working)} onClick={() => void act(`run:${c.id}`, () => api.shift(c.id), "Shift started.")}><NxIcon name="play" size={15} />{c.working ? "Working" : "Run a shift"}</button>
+                      {c.status === "active"
+                        ? <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`pause:${c.id}`, () => api.pause(c.id), `${c.name} paused.`)}>Pause</button>
+                        : <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`resume:${c.id}`, () => api.resume(c.id), `${c.name} is back on the night shift.`)}>Resume</button>}
+                      <button className="nx-btn" onClick={() => open(c.id, "chat")}><NxIcon name="agent" size={15} />CEO chat</button>
+                      <button className="nx-btn nx-btn-acc" onClick={() => open(c.id)}><NxIcon name="setup" size={15} />Edit</button>
+                    </footer>
+                  </article>
+                </SpotlightCard>
+              );
+            })}
+            <Link to="/launch" className="dk-card dk-new cx3-dknew"><img src="/brand/pepe-pixel.svg" alt="" width={34} height={34} /><b>Start another company</b><span className="dim">One sentence: what it sells and to whom.</span><span className="cx3-dknew-k">root@nightshift:~$ found --company</span></Link>
+          </div>
         </section>
       )}
 
-      {cos.length === 0 ? (
-        <div className="dk-empty">
-          <p>{d.requireAuth && !d.signedIn ? "Sign in to see the companies you run." : "You do not run a company yet. One sentence is enough to start one."}</p>
-          {d.requireAuth && !d.signedIn
-            ? <button className="nx-btn nx-btn-acc" disabled={signing} onClick={() => void signIn()}><NxIcon name="wallet" size={16} />Sign in with your wallet</button>
-            : <Link to="/launch" className="nx-btn nx-btn-acc"><NxIcon name="founder" size={16} />Start a business</Link>}
-        </div>
-      ) : (
-        <div className="dk-grid">
-          {cos.map((c) => {
-            const live = c.products.filter((p) => p.status === "live").length;
-            return (
-              <article key={c.id} className={`dk-card ${c.status}`}>
-                <header>
-                  <span className={`dk-dot ${c.working ? "work" : c.status}`} />
-                  <h3><Link to={`/co/${c.id}`}>{c.name}</Link></h3>
-                  <span className="dk-tag">{c.sim ? "demo" : "live"} · shift {c.cycle}</span>
-                </header>
-                <p className="dk-mission">{c.mission}</p>
-                {c.direction && <p className="dk-dir"><NxIcon name="arrow" size={13} /> {c.direction}</p>}
-                <div className="dk-now">
-                  {c.working
-                    ? <button className="dk-link" onClick={() => setRec({ co: c.id, task: c.working!.id })}><span className="spin" />{STATUS[c.working.status] ?? c.working.status}: {c.working.title}{c.working.activity ? ` · ${c.working.activity}` : ""}</button>
-                    : c.status === "paused" ? <span>Paused. No shifts, no spending.</span>
-                    : c.rest ? <span>Resting until {hhmm(c.rest.until)} · {c.rest.why === "budget" ? "budget spent" : "nothing new to buy"}</span>
-                    : <span>Next shift {until(c.nextShiftAt)}</span>}
-                </div>
-                <dl className="dk-kpis">
-                  <div><dt>Revenue</dt><dd>{usd(c.pnl.revenueUsd)}</dd></div>
-                  <div><dt>Spent</dt><dd>{usd(c.pnl.spentUsd)}</dd></div>
-                  <div><dt>Profit</dt><dd className={c.pnl.profitUsd >= 0 ? "dk-up" : "dk-down"}>{usd(c.pnl.profitUsd)}</dd></div>
-                  <div><dt>Visits 7d</dt><dd>{c.stats.visits7d}</dd></div>
-                  <div><dt>Sales 7d</dt><dd>{c.stats.sales7d}</dd></div>
-                  <div><dt>On sale</dt><dd>{live}</dd></div>
-                </dl>
-                <B2bLines c={c} onReplay={(task) => setRec({ co: c.id, task })} />
-                <CxLine c={c} onOpen={() => open(c.id, "connections")} />
-                {c.last && <button className="dk-last" onClick={() => setRec({ co: c.id, task: c.last!.id })}>Last: shift {c.last.cycle}, {c.last.title} <span className={`dk-st ${c.last.status}`}>{c.last.status.replace(/_/g, " ")}</span> <span className="faint">{ago(c.last.at)}</span></button>}
-                <footer className="dk-row">
-                  <Link to={`/co/${c.id}`} className="nx-btn">Open</Link>
-                  <button className="nx-btn" disabled={busy !== null || c.status !== "active" || Boolean(c.working)} onClick={() => void act(`run:${c.id}`, () => api.shift(c.id), "Shift started.")}><NxIcon name="play" size={15} />{c.working ? "Working" : "Run a shift"}</button>
-                  {c.status === "active"
-                    ? <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`pause:${c.id}`, () => api.pause(c.id), `${c.name} paused.`)}>Pause</button>
-                    : <button className="nx-btn" disabled={busy !== null} onClick={() => void act(`resume:${c.id}`, () => api.resume(c.id), `${c.name} is back on the night shift.`)}>Resume</button>}
-                  <button className="nx-btn" onClick={() => open(c.id, "chat")}><NxIcon name="agent" size={15} />CEO chat</button>
-                  <button className="nx-btn nx-btn-acc" onClick={() => open(c.id)}><NxIcon name="setup" size={15} />Edit</button>
-                </footer>
-              </article>
-            );
-          })}
-          <Link to="/launch" className="dk-card dk-new"><NxIcon name="founder" size={28} /><b>Start another company</b><span className="dim">One sentence: what it sells and to whom.</span></Link>
-        </div>
-      )}
-
       {d.archived.length > 0 && (
-        <section className="dk-archived">
-          <h2>Deleted</h2>
-          <p className="dim">They do not run or sell. Their buyers' download links still work. Restore one to bring it back, paused.</p>
+        <PxPanel title="DELETED" state="idle" right={`${d.archived.length}`} className="cx3-archived">
+          <p className="cx3-hint">They do not run or sell. Their buyers' download links still work. Restore one to bring it back, paused.</p>
           {d.archived.map((a) => (
-            <div key={a.id} className="dk-need">
+            <div key={a.id} className="dk-need cx3-need">
               <div><b>{a.name}</b><span className="dim"> · deleted {ago(a.archivedAt)} · {a.products} product{a.products === 1 ? "" : "s"}, {a.sales} sale{a.sales === 1 ? "" : "s"}</span></div>
               <div className="dk-row"><button className="nx-btn" disabled={busy !== null} onClick={() => void act(`restore:${a.id}`, () => api.restore(a.id), `${a.name} restored. It is paused.`)}>Restore</button></div>
             </div>
           ))}
-        </section>
+        </PxPanel>
       )}
 
       {edit && <EditDrawer key={edit.id} c={edit} first={tab} bot={d.bot} live={d.mode === "live"} imdUsd={d.imdUsd} onClose={() => { setEditing(null); if (location.search.includes("edit=")) history.replaceState(null, "", "/my"); }} onSaved={load} say={say} onDeleted={() => { setEditing(null); history.replaceState(null, "", "/my"); void load(); say("Deleted. It waits under Deleted if you change your mind."); }} onReplay={(task) => setRec({ co: edit.id, task })} />}
       {rec && <FlightDrawer key={`${rec.co}:${rec.task}`} load={() => api.flight(rec.co, rec.task)} onClose={() => setRec(null)} />}
-      {toast && <div className="toast">{toast}</div>}
-      {health?.mode === "sim" && cos.length > 0 && <p className="dk-note">Simulation: money here is pretend. Live companies are funded from your wallet and pay out to it.</p>}
+      {toast && <div className="toast cx3-toast" role="status">{toast}</div>}
+      {health?.mode === "sim" && cos.length > 0 && <p className="cx3-note">Simulation: money here is pretend. Live companies are funded from your wallet and pay out to it.</p>}
+    </div>
+  );
+}
+
+/** On each card: the last 24 hours of spend against its daily budget, as a bar; nothing when the engine does not report it. */
+function DeskBudget({ c }: { c: DeskCompany }) {
+  const today = (c as DeskCompany & { todayUsd?: number }).todayUsd;
+  if (today == null || !Number.isFinite(today)) return null;
+  const budget = c.policy.dailyBudgetUsd;
+  const pct = budget > 0 ? Math.min(100, Math.max(0, (today / budget) * 100)) : 0;
+  return (
+    <div className={`cx3-dkbudget${pct >= 100 ? " full" : pct >= 80 ? " high" : ""}`} title="Spent in the last 24 hours, against the daily budget">
+      <span>LAST 24 H</span>
+      <div className="cx3-bar" aria-hidden="true"><i style={{ width: `${pct}%` }} /></div>
+      <b>{usd(today)} <i>/ {usd(budget)}</i></b>
     </div>
   );
 }
@@ -246,7 +313,7 @@ function EditDrawer({ c, first, bot, live, imdUsd, onClose, onSaved, onDeleted, 
   const job = imdUsd * 0.5;
 
   return createPortal(
-    <div className="nx-shell mk-drawer dk-drawer" data-room="geek" style={{ "--acc": "#4ad8ff" } as React.CSSProperties} role="dialog" aria-modal="true" aria-label={`Edit ${c.name}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="nx-shell mk-drawer dk-drawer cx3-dw" data-room="geek" style={{ "--acc": "#b8ff3d" } as React.CSSProperties} role="dialog" aria-modal="true" aria-label={`Edit ${c.name}`} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="mk-panel">
         <button className="mk-x" onClick={onClose} aria-label="Close"><NxIcon name="close" size={18} /></button>
         <span className="eyebrow">Edit · {c.sim ? "demo" : "live"} company · wallet {short(c.wallet)}</span>

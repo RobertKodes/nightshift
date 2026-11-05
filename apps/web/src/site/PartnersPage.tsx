@@ -2,7 +2,10 @@ import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { createWalletClient, custom, getAddress } from "viem";
 import { chooseSolana, chooseWallet } from "../wallet";
 import { NxIcon } from "../nx/icons";
-import { Stat } from "../station/Station";
+import StarBorder from "../rb/StarBorder";
+import { PxSection, PxStat, PxStats } from "../saas/kit";
+import { PxIcon } from "../saas/PxIcon";
+import { ToolHero } from "../crews/shared";
 import { SectionIcon } from "./SectionIcon";
 import "../forge.css";
 import "./partners.css";
@@ -99,117 +102,112 @@ export function PartnersPage() {
   const openForm = () => { setApplying(true); window.setTimeout(() => document.getElementById("pv-pt-apply-form")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); };
   const pass = PASS[passChain]!;
 
-  return <div className="st-room fg pt">
-    <header className="fg-hero" style={{ "--tc": pass.tone } as CSSProperties}>
-      <div className="fg-hero-in">
-        <span className="fg-eyebrow"><NxIcon name="crew" size={16} /> $SHIFT · ECOSYSTEM · PARTNER PROGRAM</span>
-        <h1>Partner with NIGHTSHIFT. <em>Bring your token aboard.</em></h1>
-        <p className="fg-lead">Projects from any chain can join the NIGHTSHIFT ecosystem. Partners carry a badge across our pages and on Token Deals, get announced to our community and get a place in our tools. Applying is free: a short form, a signature from your project's wallet and one post saying you applied.</p>
-        <div className="fg-cta">
-          <button type="button" className="nx-btn nx-btn-acc" onClick={openForm}><NxIcon name="crew" size={18} /> Apply now</button>
-          <a className="nx-btn" href="#get">What partners get</a>
-          <a className="nx-btn" href="/deals">Token Deals</a>
-        </div>
-        <div className="st-stats">
-          <Stat label="Partners" value={partners === null ? "—" : String(partners.length)} note={partners?.length ? "accepted and announced" : "the first places are open"} />
-          <Stat label="Cost" value="FREE" note="no fee to apply or to stay" />
-          <Stat label="Chains" value="ANY" note="EVM and Solana sign; others by hand" />
-          <Stat label="Review" value="BY HAND" note="every application, then announced" />
-        </div>
-      </div>
-      <div className="fg-show">
-        <div className="pt-pass" aria-label="Partner pass example">
-          <div className="pt-pass-in">
-            <header><span>NIGHTSHIFT / PARTNER PASS</span><span>No. {String((partners?.length ?? 0) + 1).padStart(3, "0")}</span></header>
-            <div className="pt-pass-name"><i>?</i><div><b>Your token</b><span>{pass.name}</span></div><em>PARTNER</em></div>
-            <ul>{PASS_PERKS.map((p) => <li key={p}>{p}</li>)}</ul>
-            <footer><span>OPEN FOR APPLICATIONS</span><span>FREE</span></footer>
+  return <div className="st-room fg pt tl tl-partners">
+    <div className="tl-in">
+      <ToolHero docTitle="Partner with NIGHTSHIFT" trail={[{ to: "/token", label: "shift" }, { label: "partners" }]} kicker="$SHIFT · ECOSYSTEM · PARTNER PROGRAM" title="Partner with NIGHTSHIFT." accent="Bring your token aboard." tone="lime"
+        lead="Projects from any chain can join the NIGHTSHIFT ecosystem. Partners carry a badge across our pages and on Token Deals, get announced to our community and get a place in our tools. Applying is free: a short form, a signature from your project's wallet and one post saying you applied."
+        actions={<>
+          <StarBorder as="button" type="button" onClick={openForm} className="tl-star" color="#b8ff3d" duration={5} thickness={1} radius={2} backgroundColor="#b8ff3d" textColor="#031007" borderColor="rgba(184,255,61,.6)"><NxIcon name="crew" size={16} />APPLY NOW</StarBorder>
+          <a className="px-btn ghost" href="#get"><PxIcon name="blocks" size={14} />WHAT PARTNERS GET</a>
+          <a className="px-btn ghost" href="/deals"><PxIcon name="swap" size={14} />TOKEN DEALS</a>
+        </>}
+        aside={<div className="fg-show tl-pass" style={{ "--tc": pass.tone } as CSSProperties}>
+          <div className="pt-pass" aria-label="Partner pass example">
+            <div className="pt-pass-in">
+              <header><span>NIGHTSHIFT / PARTNER PASS</span><span>No. {String((partners?.length ?? 0) + 1).padStart(3, "0")}</span></header>
+              <div className="pt-pass-name"><i>?</i><div><b>Your token</b><span>{pass.name}</span></div><em>PARTNER</em></div>
+              <ul>{PASS_PERKS.map((p) => <li key={p}>{p}</li>)}</ul>
+              <footer><span>OPEN FOR APPLICATIONS</span><span>FREE</span></footer>
+            </div>
           </div>
-        </div>
-        <div className="fg-pills pt-pills" role="group" aria-label="Your chain">{PASS.map((c, i) => <button key={c.name} type="button" className={i === passChain ? "on" : ""} aria-pressed={i === passChain} onClick={() => setPassChain(i)}><b>{c.short}</b><span>{c.line}</span></button>)}</div>
-      </div>
-    </header>
+          <div className="fg-pills pt-pills" role="group" aria-label="Your chain">{PASS.map((c, i) => <button key={c.name} type="button" className={i === passChain ? "on" : ""} aria-pressed={i === passChain} onClick={() => setPassChain(i)}><b>{c.short}</b><span>{c.line}</span></button>)}</div>
+        </div>} />
+      <PxStats cols={4}>
+        <PxStat label="Partners" value={partners === null ? "—" : String(partners.length)} sub={partners?.length ? "accepted and announced" : "the first places are open"} tone="lime" />
+        <PxStat label="Cost" value="FREE" sub="no fee to apply or to stay" />
+        <PxStat label="Chains" value="ANY" sub="EVM and Solana sign; others by hand" />
+        <PxStat label="Review" value="BY HAND" sub="every application, then announced" />
+      </PxStats>
 
-    <div className="st-body">
-      {status && <section className="pv-pt-status fg-sec" data-state={status.status} aria-live="polite">
-        <b>{status.status === "pending" ? "Application received" : status.status === "accepted" ? "You are a NIGHTSHIFT partner" : "Application declined"}</b>
-        <p>{status.status === "pending" ? `${status.project} is in our review list (reference ${status.id}). We check every application by hand and announce new partners in our community.` : status.status === "accepted" ? `${status.project} was accepted. Welcome aboard.` : `${status.project} was not accepted this time${status.note ? `: ${status.note}` : ""}. You can apply again after 7 days.`}</p>
+      <div className="tl-body">
+        {status && <section className="pv-pt-status fg-sec" data-state={status.status} aria-live="polite">
+          <b>{status.status === "pending" ? "Application received" : status.status === "accepted" ? "You are a NIGHTSHIFT partner" : "Application declined"}</b>
+          <p>{status.status === "pending" ? `${status.project} is in our review list (reference ${status.id}). We check every application by hand and announce new partners in our community.` : status.status === "accepted" ? `${status.project} was accepted. Welcome aboard.` : `${status.project} was not accepted this time${status.note ? `: ${status.note}` : ""}. You can apply again after 7 days.`}</p>
+        </section>}
+
+        <PxSection kicker="THE CREW" title="Our partners" id="partners-list">
+          {partners?.length ? <div className="pv-pt-partners">{partners.map((p) => <article key={p.id} className="pv-pt-partner">
+            <div className="pv-pt-partner-head">{p.image ? <img src={p.image} alt="" width="40" height="40" loading="lazy" referrerPolicy="no-referrer" /> : <i aria-hidden="true">{p.name.slice(0, 1)}</i>}<div><b>{p.name}</b><span>{p.symbol ? `$${p.symbol} · ` : ""}{p.token.chainName}</span></div><em>PARTNER</em></div>
+            <p>{p.about}</p>
+            <code title={p.token.address}>{short(p.token.address)}</code>
+            <nav><a href={p.website} target="_blank" rel="noreferrer">Website</a><a href={p.x} target="_blank" rel="noreferrer">X</a><a href={p.telegram} target="_blank" rel="noreferrer">Telegram</a>{p.chart && <a href={p.chart} target="_blank" rel="noreferrer">Chart</a>}</nav>
+          </article>)}</div>
+            : <div className="pv-pt-partners">{[1, 2, 3].map((n) => <button key={n} type="button" className="pv-pt-slot" onClick={openForm}><i aria-hidden="true">+</i><b>Your project here</b><span>Be one of the first NIGHTSHIFT partners.</span></button>)}</div>}
+        </PxSection>
+
+        <div id="get" className="tl-anchor">
+          <PxSection kicker="WHAT PARTNERS GET" title="A place in the ecosystem" id="get-h">
+            <div className="fg-perks">{PERKS.map(([icon, title, text]) => <article key={title} className="fg-perk"><NxIcon name={icon} size={22} /><b>{title}</b><p>{text}</p></article>)}</div>
+          </PxSection>
+        </div>
+
+        <PxSection kicker="HOW TO JOIN" title="Four steps, about five minutes" id="join">
+          <ol className="fg-steps pt-steps">
+            <li><b>Fill in the form</b><span>Your token, your links and what you would like from the partnership.</span></li>
+            <li><b>Sign with your wallet</b><span>The wallet that deployed or owns the token proves it is yours. A message only: no transaction, no fee.</span></li>
+            <li><b>Post that you applied</b><span>One public post on X or your Telegram channel, then paste its link in the form.</span></li>
+            <li><b>We review and announce</b><span>We check the token and the project by hand. When we accept, we announce you as an official partner.</span></li>
+          </ol>
+        </PxSection>
+
+        <PxSection kicker="FOR HOLDERS" title="More partners, more deals, more burn" id="holders" sub="Every partner token brings new deals to Token Deals, and every deal pays a fee to the FeeSplitter: 40% to $SHIFT stakers and NIGHT FROGS holders, 20% burned.">
+          <div className="st-row"><a className="px-btn" href="/deals"><PxIcon name="swap" size={14} />SEE TOKEN DEALS</a></div>
+        </PxSection>
+
+        {!applying ? <PxSection kicker="APPLY" title="Ready to come aboard?" id="apply-cta" sub="The form takes about five minutes. Have your token address, your links and your project wallet at hand.">
+          <div className="st-row"><button type="button" className="nx-btn nx-btn-acc" onClick={openForm}><NxIcon name="crew" size={18} /> Apply now</button></div>
+        </PxSection>
+        : <section className="pv-pt-form fg-sec" id="pv-pt-apply-form" aria-labelledby="pv-pt-apply">
+        <span className="px-kicker">APPLY · FREE · ABOUT FIVE MINUTES</span>
+        <h2 id="pv-pt-apply" className="px-h2">Apply</h2>
+        <fieldset><legend>Your token</legend>
+          <label>Chain<select value={f.chain} onChange={set("chain")}>{CHAINS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></label>
+          {f.chain === "other" && <label>Chain name<input value={f.chainName} onChange={set("chainName")} placeholder="Sui, TON, Tron…" /></label>}
+          <label className="pv-pt-wide">Token address<input value={f.token} onChange={set("token")} placeholder={f.chain === "solana" ? "Mint address" : f.chain === "other" ? "Address or identifier" : "0x…"} spellCheck={false} autoComplete="off" /></label>
+        </fieldset>
+        <fieldset><legend>Your project</legend>
+          <label>Project name<input value={f.project} onChange={set("project")} maxLength={60} /></label>
+          <label>Website<input value={f.website} onChange={set("website")} placeholder="https://" inputMode="url" /></label>
+          <label>X account<input value={f.x} onChange={set("x")} placeholder="@yourproject" /></label>
+          <label>Telegram<input value={f.telegram} onChange={set("telegram")} placeholder="t.me/yourgroup" /></label>
+          <label>Docs or audit (optional)<input value={f.docs} onChange={set("docs")} placeholder="https://" inputMode="url" /></label>
+          <label>Team contact<input value={f.contact} onChange={set("contact")} placeholder="Email or @telegram" /></label>
+          <label className="pv-pt-wide">About the project<textarea value={f.about} onChange={set("about")} rows={4} maxLength={600} placeholder="What it does, who it is for, what is live today." /><small>{f.about.trim().length}/600</small></label>
+        </fieldset>
+        <fieldset><legend>What you would like</legend><div className="pv-pt-wants">{WANTS.map(([k, label]) => <label key={k} className="pv-pt-check"><input type="checkbox" checked={picked.includes(k)} onChange={(e) => setPicked((v) => e.target.checked ? [...v, k] : v.filter((x) => x !== k))} /><span>{label}</span></label>)}</div></fieldset>
+        <fieldset><legend>Post that you applied</legend>
+          <p className="pv-pt-note">Post this (or your own words) from your project's account, then paste the link to the post.</p>
+          <pre className="pv-pt-post">{postText}</pre>
+          <div className="pv-pt-actions"><a className="nx-btn" href={`https://x.com/intent/post?text=${encodeURIComponent(postText)}`} target="_blank" rel="noreferrer">Post on X<SectionIcon id="arrow" /></a><button type="button" className="nx-btn" onClick={() => void navigator.clipboard?.writeText(postText)}>Copy the text</button></div>
+          <label className="pv-pt-wide">Link to your post<input value={f.post} onChange={set("post")} placeholder="https://x.com/yourproject/status/… or https://t.me/yourchannel/123" inputMode="url" /></label>
+        </fieldset>
+        {error && <p className="pv-pt-error" role="alert">{error}</p>}
+        <div className="pv-pt-submit">
+          <button type="button" className="nx-btn nx-btn-acc" disabled={!!busy || status?.status === "pending"} onClick={() => void apply()}>{busy || (f.chain === "other" ? "Send the application" : "Sign with your wallet and apply")}</button>
+          <p>{f.chain === "other" ? "Tokens on other chains are checked by hand." : "The wallet signs a message only. No transaction, no fee."}</p>
+        </div>
       </section>}
 
-      <section className="fg-sec">
-        <div className="fg-head"><span className="fg-kicker">The crew</span><h2>Our partners</h2></div>
-        {partners?.length ? <div className="pv-pt-partners">{partners.map((p) => <article key={p.id} className="pv-pt-partner">
-          <div className="pv-pt-partner-head">{p.image ? <img src={p.image} alt="" width="40" height="40" loading="lazy" referrerPolicy="no-referrer" /> : <i aria-hidden="true">{p.name.slice(0, 1)}</i>}<div><b>{p.name}</b><span>{p.symbol ? `$${p.symbol} · ` : ""}{p.token.chainName}</span></div><em>PARTNER</em></div>
-          <p>{p.about}</p>
-          <code title={p.token.address}>{short(p.token.address)}</code>
-          <nav><a href={p.website} target="_blank" rel="noreferrer">Website</a><a href={p.x} target="_blank" rel="noreferrer">X</a><a href={p.telegram} target="_blank" rel="noreferrer">Telegram</a>{p.chart && <a href={p.chart} target="_blank" rel="noreferrer">Chart</a>}</nav>
-        </article>)}</div>
-          : <div className="pv-pt-partners">{[1, 2, 3].map((n) => <button key={n} type="button" className="pv-pt-slot" onClick={openForm}><i aria-hidden="true">+</i><b>Your project here</b><span>Be one of the first NIGHTSHIFT partners.</span></button>)}</div>}
-      </section>
-
-      <section className="fg-sec" id="get">
-        <div className="fg-head"><span className="fg-kicker">What partners get</span><h2>A place in the ecosystem</h2></div>
-        <div className="fg-perks">{PERKS.map(([icon, title, text]) => <article key={title} className="fg-perk"><NxIcon name={icon} size={22} /><b>{title}</b><p>{text}</p></article>)}</div>
-      </section>
-
-      <section className="fg-sec">
-        <div className="fg-head"><span className="fg-kicker">How to join</span><h2>Four steps, about five minutes</h2></div>
-        <ol className="fg-steps pt-steps">
-          <li><b>Fill in the form</b><span>Your token, your links and what you would like from the partnership.</span></li>
-          <li><b>Sign with your wallet</b><span>The wallet that deployed or owns the token proves it is yours. A message only: no transaction, no fee.</span></li>
-          <li><b>Post that you applied</b><span>One public post on X or your Telegram channel, then paste its link in the form.</span></li>
-          <li><b>We review and announce</b><span>We check the token and the project by hand. When we accept, we announce you as an official partner.</span></li>
-        </ol>
-      </section>
-
-      <section className="fg-sec">
-        <div className="pt-panel">
-          <div className="fg-head"><span className="fg-kicker">For holders</span><h2>More partners, more deals, more burn</h2><p className="fg-dim">Every partner token brings new deals to Token Deals, and every deal pays a fee to the FeeSplitter: 40% to $SHIFT stakers and NIGHT FROGS holders, 20% burned.</p></div>
-          <a className="nx-btn" href="/deals">See Token Deals</a>
-        </div>
-      </section>
-
-      {!applying ? <section className="fg-sec"><div className="pt-panel"><div className="fg-head"><span className="fg-kicker">Apply</span><h2>Ready to come aboard?</h2><p className="fg-dim">The form takes about five minutes. Have your token address, your links and your project wallet at hand.</p></div><button type="button" className="nx-btn nx-btn-acc" onClick={openForm}><NxIcon name="crew" size={18} /> Apply now</button></div></section>
-      : <section className="pv-pt-form fg-sec" id="pv-pt-apply-form" aria-labelledby="pv-pt-apply">
-      <h2 id="pv-pt-apply">Apply</h2>
-      <fieldset><legend>Your token</legend>
-        <label>Chain<select value={f.chain} onChange={set("chain")}>{CHAINS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></label>
-        {f.chain === "other" && <label>Chain name<input value={f.chainName} onChange={set("chainName")} placeholder="Sui, TON, Tron…" /></label>}
-        <label className="pv-pt-wide">Token address<input value={f.token} onChange={set("token")} placeholder={f.chain === "solana" ? "Mint address" : f.chain === "other" ? "Address or identifier" : "0x…"} spellCheck={false} autoComplete="off" /></label>
-      </fieldset>
-      <fieldset><legend>Your project</legend>
-        <label>Project name<input value={f.project} onChange={set("project")} maxLength={60} /></label>
-        <label>Website<input value={f.website} onChange={set("website")} placeholder="https://" inputMode="url" /></label>
-        <label>X account<input value={f.x} onChange={set("x")} placeholder="@yourproject" /></label>
-        <label>Telegram<input value={f.telegram} onChange={set("telegram")} placeholder="t.me/yourgroup" /></label>
-        <label>Docs or audit (optional)<input value={f.docs} onChange={set("docs")} placeholder="https://" inputMode="url" /></label>
-        <label>Team contact<input value={f.contact} onChange={set("contact")} placeholder="Email or @telegram" /></label>
-        <label className="pv-pt-wide">About the project<textarea value={f.about} onChange={set("about")} rows={4} maxLength={600} placeholder="What it does, who it is for, what is live today." /><small>{f.about.trim().length}/600</small></label>
-      </fieldset>
-      <fieldset><legend>What you would like</legend><div className="pv-pt-wants">{WANTS.map(([k, label]) => <label key={k} className="pv-pt-check"><input type="checkbox" checked={picked.includes(k)} onChange={(e) => setPicked((v) => e.target.checked ? [...v, k] : v.filter((x) => x !== k))} /><span>{label}</span></label>)}</div></fieldset>
-      <fieldset><legend>Post that you applied</legend>
-        <p className="pv-pt-note">Post this (or your own words) from your project's account, then paste the link to the post.</p>
-        <pre className="pv-pt-post">{postText}</pre>
-        <div className="pv-pt-actions"><a className="nx-btn" href={`https://x.com/intent/post?text=${encodeURIComponent(postText)}`} target="_blank" rel="noreferrer">Post on X<SectionIcon id="arrow" /></a><button type="button" className="nx-btn" onClick={() => void navigator.clipboard?.writeText(postText)}>Copy the text</button></div>
-        <label className="pv-pt-wide">Link to your post<input value={f.post} onChange={set("post")} placeholder="https://x.com/yourproject/status/… or https://t.me/yourchannel/123" inputMode="url" /></label>
-      </fieldset>
-      {error && <p className="pv-pt-error" role="alert">{error}</p>}
-      <div className="pv-pt-submit">
-        <button type="button" className="nx-btn nx-btn-acc" disabled={!!busy || status?.status === "pending"} onClick={() => void apply()}>{busy || (f.chain === "other" ? "Send the application" : "Sign with your wallet and apply")}</button>
-        <p>{f.chain === "other" ? "Tokens on other chains are checked by hand." : "The wallet signs a message only. No transaction, no fee."}</p>
+        <PxSection kicker="QUESTIONS" title="The fine print" id="faq">
+          <div className="fg-faq">
+            <details open><summary>Does it cost anything?</summary><p>No. Applying, being accepted and staying a partner are free. The only thing we ask is one public post saying you applied.</p></details>
+            <details><summary>Which chains can apply?</summary><p>Any. Tokens on Ethereum, Base, Arbitrum, BNB Chain, Polygon, Optimism, Avalanche, Robinhood Chain and Solana sign with their wallet in the form; tokens on other chains are reviewed by hand.</p></details>
+            <details><summary>Why sign with a wallet?</summary><p>So nobody can apply in your name. The wallet that deployed or owns the token signs a short message. It is not a transaction and costs nothing.</p></details>
+            <details><summary>What do you check?</summary><p>Who controls the token, its market and liquidity, the links and the project itself. Safety checks run on the spot; a person reviews every application before anything is announced.</p></details>
+            <details><summary>When do I hear back?</summary><p>Your status shows on this page in the browser you applied from. When we accept, we announce you in our community and you get the badge.</p></details>
+          </div>
+        </PxSection>
       </div>
-    </section>}
-
-      <section className="fg-sec">
-        <div className="fg-head"><span className="fg-kicker">Questions</span><h2>The fine print</h2></div>
-        <div className="fg-faq">
-          <details open><summary>Does it cost anything?</summary><p>No. Applying, being accepted and staying a partner are free. The only thing we ask is one public post saying you applied.</p></details>
-          <details><summary>Which chains can apply?</summary><p>Any. Tokens on Ethereum, Base, Arbitrum, BNB Chain, Polygon, Optimism, Avalanche, Robinhood Chain and Solana sign with their wallet in the form; tokens on other chains are reviewed by hand.</p></details>
-          <details><summary>Why sign with a wallet?</summary><p>So nobody can apply in your name. The wallet that deployed or owns the token signs a short message. It is not a transaction and costs nothing.</p></details>
-          <details><summary>What do you check?</summary><p>Who controls the token, its market and liquidity, the links and the project itself. Safety checks run on the spot; a person reviews every application before anything is announced.</p></details>
-          <details><summary>When do I hear back?</summary><p>Your status shows on this page in the browser you applied from. When we accept, we announce you in our community and you get the badge.</p></details>
-        </div>
-      </section>
     </div>
   </div>;
 }

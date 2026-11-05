@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createWalletClient, custom, erc20Abi, formatEther, formatUnits, parseEther } from "viem";
 import { base, mainnet } from "viem/chains";
 import { chooseWallet } from "./wallet";
+import { PxPanel, PxTag } from "./saas/kit";
 
 const IMD = "0xd34a99bc0f67ae1bbd63c660e6d0b0dd03e263b7";
 /** What a company needs before its first shift: IMD for the swarm, gas on Ethereum, gas where it sells. */
@@ -71,27 +72,26 @@ export function FundCard({ id, wallet, first = true, onFunded }: { id: string; w
 
   if (!bal) return null;
   if (funded) return null;
-  const row = (label: string, have: string, need: string, ok: boolean) => <li><i className={`dot ${ok ? "ok" : "warn"}`} /><div><b>{label}</b><span>{have} of {need}</span></div></li>;
+  const row = (label: string, have: string, need: string, ok: boolean) => <li className={ok ? "ok" : "miss"}><i aria-hidden="true" /><div><b>{label}</b><span>{have} of {need}</span></div><PxTag tone={ok ? "lime" : "gold"}>{ok ? "ok" : "missing"}</PxTag></li>;
   return (
-    <div className="card fund-card">
-      <div className="card-h"><h3>Fund the company</h3><span className="pill failed">{first ? "needed before its first shift" : "running low: top it up"}</span></div>
-      <ul className="checks">
+    <PxPanel title="FUND THE COMPANY" state="warn" right={<PxTag tone="gold">{first ? "needed before its first shift" : "running low: top it up"}</PxTag>} className="cx3-fund">
+      <ul className="cx3-checks">
         {row("IMD for the swarm (Ethereum)", formatUnits(bal.imd, 18), "1 IMD", !missing!.imd)}
         {row("Gas on Ethereum", formatEther(bal.eth), "0.002 ETH", !missing!.eth)}
         {row("Gas on Base, for sales and withdrawals", formatEther(bal.saleGas), "0.0005 ETH", !missing!.saleGas)}
       </ul>
-      <div className="card-b" style={{ display: "grid", gap: 8 }}>
-        <button className="btn primary" disabled={Boolean(step)} onClick={() => void fund()}>{step ?? "Fund from my wallet"}</button>
-        {err && <span className="bad" style={{ fontSize: 13 }}>{err}</span>}
-        <details className="fund-manual">
+      <div className="cx3-fund-b">
+        <button className="px-btn primary" disabled={Boolean(step)} onClick={() => void fund()}>{step ?? "Fund from my wallet"}</button>
+        {err && <span className="cx3-bad">{err}</span>}
+        <details className="cx3-fund-manual">
           <summary>Or send it yourself from your wallet</summary>
           <span>Send to the company wallet, on Ethereum: IMD and ETH. On Base: a little ETH.</span>
           <code>{wallet}</code>
-          <button className="btn" type="button" onClick={() => void navigator.clipboard?.writeText(wallet)}>Copy address</button>
-          <span className="dim">This page sees the funds within a minute either way.</span>
+          <button className="px-btn small" type="button" onClick={() => void navigator.clipboard?.writeText(wallet)}>Copy address</button>
+          <span className="cx3-hint">This page sees the funds within a minute either way.</span>
         </details>
-        <span className="dim" style={{ fontSize: 13 }}>Only what is missing is asked for, one confirmation each. The money goes to the company's own wallet {wallet.slice(0, 6)}…{wallet.slice(-4)}, which pays the IMD swarm and receives the sales.</span>
+        <span className="cx3-hint">Only what is missing is asked for, one confirmation each. The money goes to the company's own wallet {wallet.slice(0, 6)}…{wallet.slice(-4)}, which pays the IMD swarm and receives the sales.</span>
       </div>
-    </div>
+    </PxPanel>
   );
 }

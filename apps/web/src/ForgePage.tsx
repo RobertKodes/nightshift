@@ -6,9 +6,15 @@ import { type Step, canBatch, sendSteps } from "./batch";
 import { type NxIconName, NxIcon } from "./nx/icons";
 import { Link } from "./router";
 import { useSession } from "./session";
-import { Stat, rememberRoom } from "./station/Station";
+import { rememberRoom } from "./station/Station";
 import { chooseWallet } from "./wallet";
 import "./forge.css";
+import ElectricBorder from "./rb/ElectricBorder";
+import StatusMark from "./rb/StatusMark";
+import { PxButton, PxHero, PxNum, PxStat, PxStats } from "./saas/kit";
+import { PxIcon } from "./saas/PxIcon";
+import { HeroDots, ShStar, useRich } from "./saas/pages/shift-kit";
+import "./saas/pages/forge.css";
 
 /**
  * THE FORGE: 10 NIGHT FROGS in, 1 Night Watcher (NIGHT FROGS Gen 2) out. The 10 go to 0x…dEaD; the share
@@ -34,7 +40,7 @@ type Wallet = { frogs: Frog[]; plan: { strongest: number[] | null; cheapest: { t
 type Preview = { ids: number[]; points: number; tier: number; name: string; rate: number; before: number; toNext: number; mix: Record<string, number>; traits: { layer: string; value: string }[]; tierInfo: Tier; captain: boolean };
 type Room = { on: boolean; members: number };
 
-const RARITY_TONE: Record<string, string> = { Common: "#8e89a8", Uncommon: "#3fe6ff", Rare: "#a98bff", Epic: "#ff4fd8", Legendary: "#ffc46b" };
+const RARITY_TONE: Record<string, string> = { Common: "#8e89a8", Uncommon: "#3fe6ff", Rare: "#a98bff", Epic: "#ff4fd8", Legendary: "#f2c14e" };
 const ten = (...parts: [number, number][]) => parts.flatMap(([n, p]) => Array<number>(n).fill(p));
 const EXAMPLES: [string, number[]][] = [["10 Common", ten([10, 1])], ["10 Uncommon", ten([10, 2])], ["10 Genesis", ten([10, 4])], ["5 Legendary + 5 Common", ten([5, 16], [5, 1])], ["6 Legendary + 4 Epic", ten([6, 16], [4, 8])], ["10 Legendary", ten([10, 16])]];
 /** Each tier's seat in the Night Watch (nightwatch.ts TERMS): share weight and cut of the bonus it keeps. */
@@ -150,51 +156,57 @@ export function ForgePage() {
   const bosses = info?.forged.byTier[5] ?? 0;
   const pick = (i: number) => { setAuto(false); setFeat(i); };
   return (
-    <div className="st-room fg">
-      <header className="fg-hero" style={tone(ft?.color ?? "#ffc46b")}>
-        <div className="fg-hero-in">
-          <span className="fg-eyebrow"><NxIcon name="forge" size={16} /> DECK 05 · THE FORGE · NIGHT WATCHERS · GEN 2</span>
-          <h1>Upgrade Frogs</h1>
-          <p className="fg-lead">Put 10 NIGHT FROGS through the night shift's forge and 1 Night Watcher comes out: fully onchain, glowing in its tier's colour, earning 10× to 40× of the frog pot and holding a seat in the Night Watch, the bot crew that liquidates unsafe imdUSD loans for a bonus. The rarer your 10, the higher the tier. No luck and no reveal: you see the exact Night Watcher before you sign.</p>
-          <div className="fg-cta">
-            <a className="nx-btn nx-btn-acc" href="#bench"><NxIcon name="forge" size={18} /> Start forging</a>
-            <a className="nx-btn" href="#perks">What you get</a>
-            <Link to="/ship" className="nx-btn"><NxIcon name="frogs" size={18} /> See the crew on the Ship</Link>
+    <div className="sh sh-forge fg">
+      <PxHero
+        kicker="DECK 05 · THE FORGE · NIGHT WATCHERS · GEN 2"
+        live={open}
+        title="Upgrade"
+        accent="Frogs."
+        lead={<>Put 10 NIGHT FROGS through the night shift's forge and 1 Night Watcher comes out: fully onchain, glowing in its tier's colour, earning 10× to 40× of the frog pot and holding a seat in the Night Watch, the bot crew that liquidates unsafe imdUSD loans for a bonus. The rarer your 10, the higher the tier. <b>No luck and no reveal: you see the exact Night Watcher before you sign.</b></>}
+        actions={<>
+          <ShStar href="#bench" icon="bolt">START FORGING</ShStar>
+          <a className="px-btn" href="#perks"><PxIcon name="grid" size={14} />What you get</a>
+          <PxButton to="/ship" kind="ghost" icon="play">See the crew on the Ship</PxButton>
+        </>}
+        aside={
+          <div className="fg-show" style={tone(ft?.color ?? "#f2c14e")}>
+            <TiltCard src={info ? artOf(info.showcase[feat]!) : null} alt={ft ? `Night Watcher, Tier ${ft.roman} ${ft.name}` : "Night Watcher"} />
+            {/* every tier's art, loaded once so switching never flickers */}
+            <div className="fg-preload" aria-hidden="true">{info?.showcase.map((ids) => <img key={ids.join()} src={artOf(ids)} alt="" width={1} height={1} />)}</div>
+            <div className="fg-pills" role="tablist" aria-label="The five tiers">
+              {tiers.map((t, i) => (
+                <button key={t.tier} role="tab" aria-selected={i === feat} className={i === feat ? "on" : ""} style={tone(t.color)} onClick={() => pick(i)}>
+                  <b>{t.roman}</b><span>{t.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="st-stats">
-            <Stat label="The forge" value={open ? "OPEN" : "WAITING FOR IMD"} note={open ? "10 frogs in, 1 Night Watcher out" : "the IMD swarm builds the 3 contracts"} />
-            <Stat label="Night Watchers" value={info ? `${info.forged.count} / 50` : "— / 50"} note="500 frogs ÷ 10, never more" />
-            <Stat label="Night Bosses" value={`${bosses} / 4`} note={`${4 - bosses} can still be forged`} />
-            <Stat label="Forge fee" value={`${fee} IMD`} note="1 burned, 1 to NIGHTSHIFT" />
-          </div>
-        </div>
-        <div className="fg-show">
-          <TiltCard src={info ? artOf(info.showcase[feat]!) : null} alt={ft ? `Night Watcher, Tier ${ft.roman} ${ft.name}` : "Night Watcher"} />
-          {/* every tier's art, loaded once so switching never flickers */}
-          <div className="fg-preload" aria-hidden="true">{info?.showcase.map((ids) => <img key={ids.join()} src={artOf(ids)} alt="" width={1} height={1} />)}</div>
-          <div className="fg-pills" role="tablist" aria-label="The five tiers">
-            {tiers.map((t, i) => (
-              <button key={t.tier} role="tab" aria-selected={i === feat} className={i === feat ? "on" : ""} style={tone(t.color)} onClick={() => pick(i)}>
-                <b>{t.roman}</b><span>{t.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </header>
+        }
+        bg={<HeroDots tone="gold" />}
+      />
 
-      <div className="st-body">
+      <PxStats cols={4}>
+        <PxStat label="The forge" tone={open ? "lime" : "gold"} value={open ? "OPEN" : "WAITING FOR IMD"} sub={open ? "10 frogs in, 1 Night Watcher out" : "the IMD swarm builds the 3 contracts"} />
+        <PxStat label="Night Watchers" value={info ? <><PxNum value={info.forged.count} /><small className="fg-of"> / 50</small></> : "— / 50"} sub="500 frogs ÷ 10, never more" />
+        <PxStat label="Night Bosses" tone="gold" value={<><PxNum value={bosses} /><small className="fg-of"> / 4</small></>} sub={`${4 - bosses} can still be forged`} />
+        <PxStat label="Forge fee" value={<PxNum value={fee} suffix=" IMD" />} sub="1 burned, 1 to NIGHTSHIFT" />
+      </PxStats>
+
+      <div className="fg-body">
         {!open && (
           <section className="fg-sec">
-            <div className="fg-wait">
-              <span className="fg-kicker">Waiting for IMD</span>
-              <h2>The IMD swarm is building the Night Watchers</h2>
-              <p>Three contracts, each coded, tested, audited by four agents and a judge, and deployed by IMD on Ethereum: the art, the identity layer and the forge. Everything on this page is already the exact preview of what they will make. Forging opens the day they are deployed and checked against it.</p>
-              <ul className="fg-build">
-                {(info?.build ?? [{ key: "art", title: "NIGHT WATCHERS art", stage: "…", job: null }, { key: "skin", title: "NIGHT WATCHERS identity layer", stage: "…", job: null }, { key: "forge", title: "NIGHT WATCHERS forge (Gen 2)", stage: "…", job: null }]).map((b) => (
-                  <li key={b.key}><b>{b.title}</b><span>{b.stage}</span>{b.job && <a href={`https://explorer.imd.fun/jobs/${b.job}`} target="_blank" rel="noreferrer">follow it on IMD ↗</a>}</li>
-                ))}
-              </ul>
-            </div>
+            <WaitFrame>
+              <div className="fg-wait">
+                <span className="fg-kicker">Waiting for IMD</span>
+                <h2>The IMD swarm is building the Night Watchers</h2>
+                <p>Three contracts, each coded, tested, audited by four agents and a judge, and deployed by IMD on Ethereum: the art, the identity layer and the forge. Everything on this page is already the exact preview of what they will make. Forging opens the day they are deployed and checked against it.</p>
+                <ul className="fg-build">
+                  {(info?.build ?? [{ key: "art", title: "NIGHT WATCHERS art", stage: "…", job: null }, { key: "skin", title: "NIGHT WATCHERS identity layer", stage: "…", job: null }, { key: "forge", title: "NIGHT WATCHERS forge (Gen 2)", stage: "…", job: null }]).map((b) => (
+                    <li key={b.key}><StatusMark status="pending" size={16} strokeWidth={2} color="#2f7bff" className="fg-build-mark" /><b>{b.title}</b><span>{b.stage}</span>{b.job && <a href={`https://explorer.imd.fun/jobs/${b.job}`} target="_blank" rel="noreferrer">follow it on IMD ↗</a>}</li>
+                  ))}
+                </ul>
+              </div>
+            </WaitFrame>
           </section>
         )}
         <section id="perks" className="fg-sec">
@@ -410,6 +422,12 @@ export function ForgePage() {
       </div>
     </div>
   );
+}
+
+/** The waiting notice is the thing on this page that needs attention: a live arc runs its border on wide screens. */
+function WaitFrame({ children }: { children: React.ReactNode }) {
+  const rich = useRich();
+  return rich ? <ElectricBorder className="fg-electric" color="#f2c14e" glowColor="#f2c14e" speed={0.5} chaos={0.35} thickness={1} glow={0.35} intensity={0.55} borderRadius={2}>{children}</ElectricBorder> : <>{children}</>;
 }
 
 /** The card: tilts toward the pointer with a moving glare, like holding a foil card. Still for reduced motion. */

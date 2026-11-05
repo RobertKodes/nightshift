@@ -22,9 +22,9 @@ const DOORS: Partial<Record<RoomId, { art: string; tag: string; line: string }>>
 
 /** What is new on the station right now: kept short, and taken down when it is no longer new. */
 const NEW_NOW = [
-  { to: "/deals", tag: "OPENING SOON", title: "Token Deals", line: "Holders sell tokens at a fixed price through an escrow contract, instead of dumping on the chart.", acc: "#c9c2ff" },
-  { to: "/partners", tag: "OPEN TO PROJECTS", title: "Partner program", line: "Projects from any chain can apply for free and join the station's crew.", acc: "#4ad8ff" },
-  { to: "/watch", tag: "WITH imdUSD", title: "The Night Watch", line: "Forge a Night Watcher and run a keeper seat that keeps imdUSD loans safe for a bonus.", acc: "#b8ff4a" },
+  { to: "/deals", tag: "OPENING SOON", title: "Token Deals", line: "Holders sell tokens at a fixed price through an escrow contract, instead of dumping on the chart.", acc: "#d9f2e1" },
+  { to: "/partners", tag: "OPEN TO PROJECTS", title: "Partner program", line: "Projects from any chain can apply for free and join the station's crew.", acc: "#62d9cf" },
+  { to: "/watch", tag: "WITH imdUSD", title: "The Night Watch", line: "Forge a Night Watcher and run a keeper seat that keeps imdUSD loans safe for a bonus.", acc: "#9ee37d" },
 ];
 
 /** The way back from the third step to the first, under the cards (in a 1000-wide box). */
@@ -151,12 +151,12 @@ export function Gate() {
     info: ov?.stakedPct ? `${ov.stakedPct.toFixed(1)}% of all $SHIFT is staked` : "",
   };
   const cells: { k: string; v: string | null; sub: string; acc: string; to: string }[] = [
-    { k: "Price", v: ov?.market ? money(ov.market.priceUsd) : null, sub: "per $SHIFT", acc: "#ffc861", to: "/token" },
+    { k: "Price", v: ov?.market ? money(ov.market.priceUsd) : null, sub: "per $SHIFT", acc: "#f2c14e", to: "/token" },
     { k: "Market cap", v: ov?.market ? money(ov.market.mcap) : null, sub: "all $SHIFT at today's price", acc: "#ff9f5a", to: "/token" },
-    { k: "Staked", v: ov?.staked != null ? amount(ov.staked) : null, sub: ov?.stakedPct != null ? `${ov.stakedPct.toFixed(1)}% of supply, locked to earn` : "locked to earn", acc: "#b8ff4a", to: "/stake" },
-    { k: "$SHIFT burned", v: ov ? amount(ov.burnedShift) : null, sub: "gone for good", acc: "#ff5ca8", to: "/tokenomics" },
-    { k: "IMD burned", v: ov?.burnedImd != null ? amount(ov.burnedImd) : null, sub: "from the fee split", acc: "#4ad8ff", to: "/impact" },
-    { k: "Liquidity", v: ov?.market?.liquidity != null ? money(ov.market.liquidity) : null, sub: "in the trading pool", acc: "#c9c2ff", to: "/token" },
+    { k: "Staked", v: ov?.staked != null ? amount(ov.staked) : null, sub: ov?.stakedPct != null ? `${ov.stakedPct.toFixed(1)}% of supply, locked to earn` : "locked to earn", acc: "#9ee37d", to: "/stake" },
+    { k: "$SHIFT burned", v: ov ? amount(ov.burnedShift) : null, sub: "gone for good", acc: "#f0a3b6", to: "/tokenomics" },
+    { k: "IMD burned", v: ov?.burnedImd != null ? amount(ov.burnedImd) : null, sub: "from the fee split", acc: "#62d9cf", to: "/impact" },
+    { k: "Liquidity", v: ov?.market?.liquidity != null ? money(ov.market.liquidity) : null, sub: "in the trading pool", acc: "#d9f2e1", to: "/token" },
   ];
 
   return <div className="ns nx-gate gx">

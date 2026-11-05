@@ -1,12 +1,15 @@
 import { serviceLabel } from "../labels";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { type CrewEvent, type CrewMetrics, type CrewProfile, type CrewsIndex, type ServicesIndex, ago, api } from "../api";
 import { ROOMS, type RoomId } from "../nx/map";
 import { Link } from "../router";
-import { Stat } from "../station/Station";
+import AnimatedList from "../rb/AnimatedList";
+import DotGrid from "../rb/DotGrid";
+import { PxHero, PxStat, PxStats } from "../saas/kit";
 import "../station/station.css";
 import "../station/services.css";
 import "./crews.css";
+import "../saas/pages/tools.css";
 
 /**
  * The pieces every crews page shares: loading with honest states, the hero, a copyable request,
@@ -92,14 +95,86 @@ export function useServices(): ServicesIndex | null {
   return d;
 }
 
-export function Copy({ code, label }: { code: string; label?: string }) {
+/** A line that is a shell command gets the terminal's prompt in front of it (never copied). */
+const isCommand = (line: string) => /^(curl|claude|npx|npm|pnpm|git|KEY=|export |cd |node )/.test(line.trim());
+
+/** A command or config to copy, as a terminal block: the label in its header, a prompt on each command line. */
+export function Copy({ code, label, tone }: { code: string; label?: string; tone?: "imd" }) {
   const [done, setDone] = useState(false);
+  const lines = code.split("\n");
   return (
-    <div className="svc-copy">
-      {label && <span>{label}</span>}
-      <pre className="st-pre">{code}</pre>
-      <button type="button" onClick={() => { void navigator.clipboard?.writeText(code).then(() => { setDone(true); setTimeout(() => setDone(false), 1400); }); }}>{done ? "Copied" : "Copy"}</button>
+    <div className={`svc-copy tl-term${tone ? ` ${tone}` : ""}`}>
+      <div className="tl-term-h">
+        <span className="pk-dots" aria-hidden="true"><i /><i /><i /></span>
+        <span className="tl-term-k">{label ?? (lines.some(isCommand) ? "shell" : "config")}</span>
+        <button type="button" onClick={() => { void navigator.clipboard?.writeText(code).then(() => { setDone(true); setTimeout(() => setDone(false), 1400); }); }}>{done ? "Copied" : "Copy"}</button>
+      </div>
+      <pre className="st-pre">{lines.map((line, i) => <Fragment key={i}>{i > 0 && "\n"}{isCommand(line) && <i className="tl-ps1" aria-hidden="true">$ </i>}{line}</Fragment>)}</pre>
     </div>
+  );
+}
+
+/** Heavy effects are decoration: wide screens only, never with reduced motion or the lite mode. */
+export function useRich(): boolean {
+  const [rich, setRich] = useState(false);
+  useEffect(() => {
+    const wide = matchMedia("(min-width: 900px)");
+    const still = matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setRich(wide.matches && !still.matches && !document.documentElement.hasAttribute("data-lite"));
+    sync();
+    wide.addEventListener("change", sync);
+    still.addEventListener("change", sync);
+    return () => { wide.removeEventListener("change", sync); still.removeEventListener("change", sync); };
+  }, []);
+  return rich;
+}
+
+/** Light motion (typing, split-flap) runs on phones too, but never with reduced motion. */
+export function useMotionOk(): boolean {
+  const [ok, setOk] = useState(false);
+  useEffect(() => {
+    const still = matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setOk(!still.matches);
+    sync();
+    still.addEventListener("change", sync);
+    return () => still.removeEventListener("change", sync);
+  }, []);
+  return ok;
+}
+
+/** The grid behind a hero: IMD blue for IMD's own tools, lime for the protocol's. A cheap canvas, desktop only. */
+export function HeroGrid({ tone = "imd" }: { tone?: "imd" | "lime" }) {
+  const rich = useRich();
+  if (!rich) return null;
+  return tone === "imd"
+    ? <DotGrid dotSize={2} gap={20} baseColor="#1c3d78" activeColor="#2f7bff" proximity={120} shockRadius={170} shockStrength={3} shape="square" glow={0.35} clickShock />
+    : <DotGrid dotSize={2} gap={20} baseColor="#1f4226" activeColor="#b8ff3d" proximity={120} shockRadius={170} shockStrength={3} shape="square" glow={0.3} clickShock />;
+}
+
+/** Where you are, as a terminal path: each folder a link back. */
+export function Trail({ items }: { items: { to?: string; label: string }[] }) {
+  return (
+    <nav className="tl-trail" aria-label="Where you are">
+      <span aria-hidden="true">root@nightshift:~</span>
+      {items.map((it, i) => <Fragment key={`${it.label}-${i}`}><i aria-hidden="true">/</i>{it.to ? <Link to={it.to}>{it.label}</Link> : <b>{it.label}</b>}</Fragment>)}
+      <em aria-hidden="true">$</em>
+    </nav>
+  );
+}
+
+/** The protocol hero for the AI tools pages: a terminal path, the kit hero over the grid, and the tab's name. */
+export function ToolHero({ docTitle, trail, kicker, title, accent, lead, actions, aside, live, tone = "imd", bg }: {
+  docTitle: string; trail?: { to?: string; label: string }[]; kicker: string; title: ReactNode; accent?: string; lead?: ReactNode; actions?: ReactNode; aside?: ReactNode; live?: boolean; tone?: "imd" | "lime";
+  /** a background of the page's own instead of the grid (one WebGL background at most, desktop only) */
+  bg?: ReactNode;
+}) {
+  // every render: the app shell names the tab on its own renders, the page's name must win
+  useEffect(() => { document.title = /NIGHTSHIFT/.test(docTitle) ? docTitle : `${docTitle} · NIGHTSHIFT`; });
+  return (
+    <>
+      {trail && <Trail items={trail} />}
+      <PxHero kicker={kicker} title={title} accent={accent} lead={lead} actions={actions} aside={aside} live={live} bg={bg ?? <HeroGrid tone={tone} />} />
+    </>
   );
 }
 
@@ -147,16 +222,16 @@ export function StatusTag({ p }: { p: CrewProfile }) {
 export function MetricStats({ m }: { m: CrewMetrics | null | undefined }) {
   if (!m) return <p className="st-empty">No metrics yet.</p>;
   return (
-    <div className="st-stats wide cr-stats4">
-      <Stat label="Jobs done" value={count(m.done)} note={`${count(m.jobs)} started · ${count(m.failed)} failed`} />
-      <Stat label="Success rate" value={pct(m.successRate)} note={m.successRate == null ? "no finished jobs yet" : "done ÷ (done + failed)"} />
-      <Stat label="Median time" value={dur(m.medianLatencyMs)} note="start to answer" />
-      <Stat label="Customer-paid jobs" value={count(m.customerPaidJobs)} note={`${count(m.paidJobs)} paid in all, any payer`} />
-      <Stat label="Paying wallets" value={count(m.payingWallets)} note={`${count(m.repeatWallets)} paid more than once`} />
-      <Stat label="Revenue" value={price(m.revenueUsd)} note="outside wallets only" />
-      <Stat label="Known cost" value={price(m.knownCostUsd)} note="RPC, model and IMD spend we measure" />
-      <Stat label="Last job" value={m.lastJobAt ? when(m.lastJobAt) : "—"} note={m.lastJobAt ? day(m.lastJobAt) : "none yet"} />
-    </div>
+    <PxStats cols={4}>
+      <PxStat label="Jobs done" value={count(m.done)} sub={`${count(m.jobs)} started · ${count(m.failed)} failed`} tone="lime" />
+      <PxStat label="Success rate" value={pct(m.successRate)} sub={m.successRate == null ? "no finished jobs yet" : "done ÷ (done + failed)"} />
+      <PxStat label="Median time" value={dur(m.medianLatencyMs)} sub="start to answer" />
+      <PxStat label="Customer-paid jobs" value={count(m.customerPaidJobs)} sub={`${count(m.paidJobs)} paid in all, any payer`} />
+      <PxStat label="Paying wallets" value={count(m.payingWallets)} sub={`${count(m.repeatWallets)} paid more than once`} />
+      <PxStat label="Revenue" value={price(m.revenueUsd)} sub="outside wallets only" tone="lime" />
+      <PxStat label="Known cost" value={price(m.knownCostUsd)} sub="RPC, model and IMD spend we measure" tone="gold" />
+      <PxStat label="Last job" value={m.lastJobAt ? when(m.lastJobAt) : "—"} sub={m.lastJobAt ? day(m.lastJobAt) : "none yet"} />
+    </PxStats>
   );
 }
 
@@ -265,6 +340,35 @@ export function Feed({ events, names, limit = 12 }: { events: CrewEvent[]; names
         </li>
       ))}
     </ul>
+  );
+}
+
+function FeedRow({ e, names }: { e: CrewEvent; names: Map<string, string> }) {
+  return (
+    <div className="cr-feed-row">
+      <time dateTime={new Date(toMs(e.at) ?? 0).toISOString()}>{when(e.at)}</time>
+      <div className="cr-feed-h">
+        <b>{names.get(e.crew) ?? (e.crew.startsWith("op:") ? `Outside crew ${e.crew.slice(3)}` : e.crew)}</b>
+        <span className="cr-tag dim">{kindText(e.kind)}</span>
+        <span className={`cr-st ${e.status}`}>{e.status}</span>
+        {e.paid ? <span className="cr-tag good">paid</span> : <span className="cr-tag dim">free</span>}
+        {e.house ? <span className="cr-tag">house</span> : <span className="cr-tag warn">outside</span>}
+      </div>
+      <em>{e.summary ?? "No public summary for this job."}</em>
+    </div>
+  );
+}
+
+/** The live feed as a moving list (the same rows as Feed): new jobs slide in at the top. */
+export function LiveFeed({ events, names, limit = 15 }: { events: CrewEvent[]; names: Map<string, string>; limit?: number }) {
+  const list = events.slice(0, limit);
+  return (
+    <AnimatedList
+      className="tl-feed"
+      items={list.map((e, i) => ({ id: `${e.at}-${e.crew}-${i}`, title: e.summary ?? kindText(e.kind) }))}
+      renderItem={(_, i) => <FeedRow e={list[i]!} names={names} />}
+      showGradients={false} displayScrollbar={false} maxHeight={560} width="100%" frame={false} theme="dark" accentColor="#2f7bff" radius={2} gap={4} animation="slide" stagger={0.03}
+    />
   );
 }
 

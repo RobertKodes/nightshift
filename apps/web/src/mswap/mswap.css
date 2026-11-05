@@ -23,7 +23,7 @@
 .ms-tokbtn i { font: 400 11.5px Inter, sans-serif; font-style: normal; color: var(--s-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ms-tokbtn em { font-style: normal; color: var(--s-faint); font-size: 11px; }
 .ms-logo { flex: none; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--s-bg2); }
-.ms-letter { display: grid; place-items: center; font: 600 13px Inter, sans-serif; color: #cdbfff; background: var(--s-acc-bg); }
+.ms-letter { display: grid; place-items: center; font: 600 13px Inter, sans-serif; color: #c8efd4; background: var(--s-acc-bg); }
 
 .ms-flip { justify-self: center; position: relative; z-index: 1; width: 36px; height: 36px; margin: -18px 0; border-radius: 10px; border: 1px solid var(--s-line2); background: var(--s-bg); color: var(--s-dim); font-size: 16px; cursor: pointer; }
 .ms-flip:hover { color: var(--s-text); border-color: var(--s-acc); }
@@ -93,12 +93,12 @@
 @media (prefers-reduced-motion: reduce) { .ms-steps li.now::before { animation: none; } }
 
 /* token sheet */
-.ms-sheet { --s-bg: #0e0d15; --s-bg2: rgba(255, 255, 255, .03); --s-line: rgba(255, 255, 255, .08); --s-line2: rgba(255, 255, 255, .14); --s-text: #ecebf3; --s-dim: #a4a1b8; --s-faint: #74718a; --s-acc: #8b6dff; --s-acc-bg: rgba(139, 109, 255, .14); --s-warn: #f2c27b;
+.ms-sheet { --s-bg: #0d1214; --s-bg2: rgba(255, 255, 255, .03); --s-line: rgba(255, 255, 255, .08); --s-line2: rgba(255, 255, 255, .14); --s-text: #ecebf3; --s-dim: #a4a1b8; --s-faint: #74718a; --s-acc: #3ecb74; --s-acc-bg: rgba(139, 109, 255, .14); --s-warn: #f2c27b;
   position: fixed; inset: 0; z-index: 2147482000; color: var(--s-text); font-family: Inter, system-ui, sans-serif; display: grid; place-items: center; padding: 16px; background: rgba(4, 3, 10, .72); }
 .ms-sheet button { font-family: Inter, system-ui, sans-serif; }
 .ms-sheet .bad { color: #ff8a98; }
 .ms-sheet .dim { color: var(--s-dim); }
-.ms-sheet-in { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 12px; width: min(460px, 100%); max-height: min(660px, calc(100dvh - 32px)); box-sizing: border-box; padding: 16px; border-radius: 16px; background: var(--s-bg, #0e0d15); border: 1px solid var(--s-line2); overflow: hidden; }
+.ms-sheet-in { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 12px; width: min(460px, 100%); max-height: min(660px, calc(100dvh - 32px)); box-sizing: border-box; padding: 16px; border-radius: 16px; background: var(--s-bg, #0d1214); border: 1px solid var(--s-line2); overflow: hidden; }
 .ms-sheet-h { display: flex; justify-content: space-between; align-items: center; }
 .ms-sheet-h b { font: 600 16px Inter, sans-serif; }
 .ms-x { width: 32px; height: 32px; border: 0; background: none; color: var(--s-dim); font-size: 22px; line-height: 1; cursor: pointer; }
@@ -117,7 +117,7 @@
 .ms-tok-n b { font: 600 14.5px Inter, sans-serif; }
 .ms-tok-n i { font: 400 12px Inter, sans-serif; font-style: normal; color: var(--s-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-tok-a { display: grid; justify-items: end; font: 500 12px var(--mono); color: var(--s-faint); }
-.ms-pin { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--s-acc-bg); color: #cdbfff; font: 600 9.5px Inter, sans-serif; font-style: normal; letter-spacing: .06em; vertical-align: 2px; }
+.ms-pin { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--s-acc-bg); color: #c8efd4; font: 600 9.5px Inter, sans-serif; font-style: normal; letter-spacing: .06em; vertical-align: 2px; }
 .ms-unv { font: 500 11px Inter, sans-serif; font-style: normal; color: var(--s-warn); }
 .ms-liq { font: 500 11px Inter, sans-serif; font-style: normal; color: var(--s-dim, #9a93b8); margin-left: 6px; }
 

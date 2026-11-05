@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
 
 /** A small router: /, /co/:id (the owner's view) and /c/:slug (the public page). */
 export function go(path: string): void {
@@ -17,11 +17,12 @@ export function useRoute(): string {
   return path;
 }
 
-export function Link(props: { to: string; className?: string; style?: React.CSSProperties; "aria-label"?: string; children: React.ReactNode }) {
+/** An in-app link. It forwards its ref and other anchor props, so components that render `as={Link}` (React Bits StarBorder) can measure it. */
+export const Link = forwardRef<HTMLAnchorElement, { to: string; children: React.ReactNode } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href">>(function Link({ to, children, onClick, ...rest }, ref) {
   return (
-    <a href={props.to} className={props.className} style={props.style} aria-label={props["aria-label"]} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(props.to); }}>
-      {props.children}
+    <a ref={ref} href={to} {...rest} onClick={(e) => { onClick?.(e); if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(to); }}>
+      {children}
     </a>
   );
-}
+});
 

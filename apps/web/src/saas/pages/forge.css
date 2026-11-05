@@ -1,0 +1,104 @@
+/* /forge (and the station blocks /watch and /deals share): the forge in the protocol cut. Builds on shift.css.
+   The tier colours (--tc) stay: they are the art's own; everything around them goes flat, square and lime. */
+
+.sh.fg { overflow-x: clip; }
+.sh-forge .fg-show { position: relative; display: grid; gap: 12px; justify-items: center; }
+.px .sh .fg-card { width: min(100%, 440px); }
+.px .sh .fg-card.small { width: 100%; }
+.px .sh .fg-card-in { border-radius: 2px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--tc) 55%, transparent), 0 0 70px -24px var(--tc), 8px 8px 0 rgba(0, 0, 0, .5); }
+.px .sh .fg-pills { width: min(100%, 460px); gap: 0; border: 1px solid var(--px-line2); background: #070b08; }
+.px .sh .fg-pills button { gap: 3px; padding: 8px 4px; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.px .sh .fg-pills button + button { border-left: 1px solid var(--px-line); }
+.px .sh .fg-pills button.on { background: color-mix(in srgb, var(--tc) 16%, #070b08); box-shadow: inset 0 -2px 0 var(--tc); }
+.px .sh .fg-pills b { font: 700 13px var(--px-mono); }
+.px .sh .fg-pills span { font: 400 8.5px/1.2 var(--px-pixel); letter-spacing: .04em; text-transform: uppercase; }
+.sh .fg-of { color: var(--px-faint); font: 500 .6em var(--px-mono); }
+.sh .fg-body { display: block; }
+
+/* waiting for IMD: the notice that needs attention */
+.px .sh .fg-electric { display: block; }
+.px .sh .fg-wait { position: relative; padding: 20px 22px; border: 1px dashed rgba(242, 193, 78, .45); border-radius: 2px; background: rgba(242, 193, 78, .04); }
+.px .sh .fg-wait h2 { margin: 8px 0 8px; font: 600 clamp(20px, 2.4vw, 26px)/1.15 var(--px-display) !important; letter-spacing: -.02em; }
+.px .sh .fg-wait p { margin: 0; max-width: 78ch; color: var(--px-dim); font: 400 13.5px/1.65 var(--px-sans); }
+.px .sh .fg-wait .fg-kicker { color: var(--px-gold); }
+.px .sh .fg-build li { align-items: center; padding: 9px 12px; border: 1px solid var(--px-line); border-radius: 2px; background: #070b08; }
+.px .sh .fg-build li b { font: 500 13px var(--px-mono); }
+.px .sh .fg-build li span { color: var(--px-gold); font: 400 9px/1.2 var(--px-pixel); letter-spacing: .05em; }
+.px .sh .fg-build li a { color: #8db6ff; font: 400 12px var(--px-mono); }
+.fg-build-mark { flex: none; }
+
+/* keep or forge: a ledger */
+.px .sh .fg-vs { gap: 0; border: 1px solid var(--px-line); background: var(--px-panel); }
+.px .sh .fg-vs-row { padding: 11px 14px; border: 0; border-bottom: 1px solid rgba(184, 255, 61, .08); border-radius: 0; background: transparent; font: 400 13px/1.5 var(--px-sans); color: var(--px-dim); }
+.px .sh .fg-vs-row:last-child { border-bottom: 0; }
+.px .sh .fg-vs-row b { color: var(--px-text); font: 500 12.5px/1.4 var(--px-mono); }
+.px .sh .fg-vs-row span:last-child { color: var(--px-lime); }
+.px .sh .fg-vs-h { background: #080d09; color: var(--px-faint); font: 400 9.5px/1.2 var(--px-pixel); letter-spacing: .05em; padding-block: 10px; }
+
+/* the bench */
+.px .sh .fg-bench { gap: 10px; }
+.px .sh :is(.fg-pick, .fg-result) { position: relative; padding: 16px; border: 1px solid var(--px-line); border-radius: 2px; background: var(--px-panel); }
+.px .sh :is(.fg-pick, .fg-result)::before { content: ""; position: absolute; left: -1px; top: -1px; width: 10px; height: 10px; border-left: 2px solid var(--px-lime); border-top: 2px solid var(--px-lime); pointer-events: none; }
+.px .sh .fg-result { border-color: color-mix(in srgb, var(--tc) 40%, var(--px-line)); box-shadow: none; }
+.px .sh .fg-result::before { border-color: var(--tc); }
+.px .sh .fg-pick-head h3, .px .sh .fg-pick-head h3 { font: 400 10px/1.2 var(--px-pixel); letter-spacing: .06em; text-transform: uppercase; }
+.px .sh .fg-plan { border-radius: 2px; font: 500 11.5px var(--px-mono); }
+.px .sh .fg-frog { border-radius: 2px; background: #070b08; }
+.px .sh .fg-frog img { border-radius: 0; }
+.px .sh .fg-frog.on { border-color: var(--px-lime); box-shadow: 0 0 0 1px var(--px-lime); transform: none; }
+.px .sh .fg-frog-id { font: 600 12px var(--px-mono); }
+.px .sh .fg-frog-r { font: 400 8.5px/1.2 var(--px-pixel); letter-spacing: .03em; text-transform: uppercase; }
+.px .sh .fg-frog-n { border-radius: 0; background: var(--px-lime); color: var(--px-ink); font: 700 11px var(--px-mono); }
+.px .sh .fg-try label { font: 400 9.5px/1 var(--px-pixel); letter-spacing: .05em; }
+.px .sh .fg-tier span { font: 400 9.5px/1 var(--px-pixel); letter-spacing: .06em; }
+.px .sh .fg-tier b { font: 600 24px/1 var(--px-display); letter-spacing: -.02em; }
+.px .sh .fg-meter, .px .sh .fg-meter-fill { border-radius: 0; }
+.px .sh .fg-nums div { border-radius: 2px; background: #070b08; }
+.px .sh .fg-nums b { font: 600 16px var(--px-mono); }
+.px .sh .fg-nums span { color: var(--px-faint); font: 400 9px/1.3 var(--px-pixel); letter-spacing: .04em; text-transform: uppercase; }
+.px .sh .fg-mix span { border-radius: 2px; font: 500 11px var(--px-mono); }
+.px .sh .fg-traits dt { font: 400 9px/1.2 var(--px-pixel); letter-spacing: .05em; }
+.px .sh .fg-soon, .px .sh .fg-warn { border-radius: 2px; }
+.px .sh .fg-slots i { border-radius: 0; font: 500 11px var(--px-mono); }
+.px .sh .fg-go { min-height: 46px; }
+.px .sh .fg-captain-note { border-radius: 2px; }
+
+/* the Captain, the ladder, the room, the rarity table, the gallery */
+.px .sh .fg-captain { position: relative; gap: 28px; padding: 22px; border: 1px solid color-mix(in srgb, var(--tc) 35%, var(--px-line)); border-radius: 2px; background: var(--px-panel); }
+.px .sh .fg-captain h2 { margin: 8px 0 8px; font: 600 clamp(24px, 3vw, 34px)/1.05 var(--px-display) !important; letter-spacing: -.025em; }
+.px .sh .fg-captain p, .px .sh .fg-captain li { color: var(--px-dim); font: 400 13.5px/1.6 var(--px-sans); }
+.px .sh .fg-captain li b { color: var(--px-text); font-family: var(--px-mono); }
+.px .sh .fg-ladder { gap: 8px; }
+.px .sh .fg-rung { position: relative; border-radius: 2px; background: var(--px-panel); box-shadow: none; transform: none; }
+.px .sh .fg-rung:hover { transform: none; box-shadow: none; border-color: var(--tc); }
+.px .sh .fg-rung img { border-radius: 0; }
+.px .sh .fg-rung-r { font: 400 9px/1.2 var(--px-pixel); letter-spacing: .06em; }
+.px .sh .fg-rung > b { font: 600 18px/1.1 var(--px-display) !important; letter-spacing: -.02em; }
+.px .sh .fg-rung-p, .px .sh .fg-rung-n { font: 400 11.5px var(--px-mono); }
+.px .sh .fg-rung ul { font: 400 12px/1.45 var(--px-sans); }
+.px .sh .fg-examples { gap: 8px; }
+.px .sh .fg-examples div { border-radius: 2px; background: var(--px-panel); font-size: 12.5px; }
+.px .sh .fg-room { position: relative; padding: 22px; border: 1px solid rgba(242, 193, 78, .32); border-radius: 2px; background: var(--px-panel); }
+.px .sh .fg-room::before { content: ""; position: absolute; left: -1px; top: -1px; width: 10px; height: 10px; border-left: 2px solid var(--px-gold); border-top: 2px solid var(--px-gold); }
+.px .sh .fg-room h2 { font: 600 clamp(22px, 2.8vw, 30px)/1.1 var(--px-display) !important; letter-spacing: -.025em; }
+.px .sh .fg-room p { color: var(--px-dim); font: 400 13.5px/1.65 var(--px-sans); }
+.px .sh .fg-room .fg-kicker { color: var(--px-gold); }
+.px .sh .fg-door { border-radius: 2px; background: #070b08; }
+.px .sh .fg-door b { font: 500 14px var(--px-mono); }
+.px .sh .fg-door .nx-btn-acc { border-color: var(--px-gold); background: var(--px-gold); box-shadow: 3px 3px 0 rgba(242, 193, 78, .2); }
+.px .sh .fg-rarity { gap: 8px; }
+.px .sh .fg-rarity div { border-radius: 2px; background: var(--px-panel); }
+.px .sh .fg-rarity b { font: 600 26px var(--px-mono); }
+.px .sh .fg-rarity span { font: 400 9.5px/1.2 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh .fg-gallery a { border-radius: 2px; background: var(--px-panel); }
+.px .sh .fg-gallery img { border-radius: 0; }
+.px .sh .fg-gallery span { font: 500 11.5px var(--px-mono); }
+
+@media (max-width: 899px) {
+  .sh-forge .fg-show { order: 0; }
+  .px .sh .fg-card { width: min(100%, 360px); }
+}
+@media (max-width: 640px) {
+  .px .sh .fg-pills span { display: none; }
+  .px .sh .fg-captain { padding: 16px; }
+}

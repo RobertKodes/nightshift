@@ -1,12 +1,22 @@
-/* The changelog page: one section per day, newest first, each update a title and up to three plain lines. */
-.cl { max-width: 860px; }
-.cl-head { display: grid; gap: 14px; }
-.cl-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.cl-day { display: grid; gap: 10px; }
-.cl-day h2 { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; margin: 22px 0 0; padding-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, .1); font: 600 19px/1.25 Inter, system-ui, sans-serif; letter-spacing: -.01em; }
-.cl-day h2 span { color: var(--s-faint, #74718a); font: 500 11px/1 var(--mono, "JetBrains Mono", monospace); letter-spacing: .08em; text-transform: uppercase; }
-.cl-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.cl-entry { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .025); }
-.cl-entry > b { font: 600 15.5px/1.35 Inter, system-ui, sans-serif; color: var(--s-text, #ecebf3); }
-.cl-entry ul { display: grid; gap: 4px; margin: 0; padding-left: 18px; color: var(--s-dim, #a4a1b8); font: 400 14px/1.55 Inter, system-ui, sans-serif; }
-@media (max-width: 600px) { .cl-entry { padding: 12px 13px; } .cl-day h2 { font-size: 17px; } }
+/* The changelog (/changelog): one row per day, the date pinned beside its updates, newest first.
+   Shared parts (hero, panels, board): saas/pages/learn.css. */
+.lx-cl .lx-board { margin-bottom: 12px; }
+.lx-cl .lx-board .split-flap-text { max-width: 100%; }
+.lx-cl-days { margin-top: clamp(28px, 4vw, 44px); }
+.lx-cl-day { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 14px 22px; padding: 18px 0; border-top: 1px dashed var(--px-line); }
+.lx-cl-day > h2 { position: sticky; top: 78px; align-self: start; display: grid; gap: 8px; margin: 0; }
+.lx-cl-day > h2 time { color: var(--px-text); font: 600 15px/1.3 var(--px-display); letter-spacing: -.01em; }
+.lx-cl-day > h2 span { justify-self: start; padding: 4px 7px; border: 1px solid var(--px-line2); color: var(--px-lime); font: 400 9px/1 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.lx-cl-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.lx-cl-entry { position: relative; display: grid; gap: 8px; padding: 14px 16px 14px 30px; border: 1px solid var(--px-line); background: var(--px-panel); }
+.lx-cl-entry::before { content: ""; position: absolute; left: 13px; top: 21px; width: 7px; height: 7px; background: var(--px-lime); }
+.lx-cl-entry > b { color: var(--px-text); font: 600 15px/1.4 var(--px-display); letter-spacing: -.01em; }
+.lx-cl-entry ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.lx-cl-entry li { position: relative; padding-left: 16px; color: var(--px-dim); font: 400 13.5px/1.6 var(--px-sans); overflow-wrap: anywhere; }
+.lx-cl-entry li::before { content: "›"; position: absolute; left: 0; top: 0; color: var(--px-line2); font-family: var(--px-mono); }
+.lx-cl-day:first-child .lx-cl-entry:first-child { border-color: var(--px-line2); }
+
+@media (max-width: 980px) {
+  .lx-cl-day { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .lx-cl-day > h2 { position: static; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+}

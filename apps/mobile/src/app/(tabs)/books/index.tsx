@@ -52,7 +52,7 @@ export default function Books() {
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Segmented small options={[{ value: 7 as Span, label: "7 days" }, { value: 30 as Span, label: "30 days" }, { value: "all" as Span, label: "All time" }]} value={span} onChange={setSpan} />
           <Pressable onPress={share} disabled={sharing} accessibilityLabel="Share the books as CSV">
-            <Frame fill="#100e26" stroke={C.lineHi} padding={0} cut={9} style={{ height: 40, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 6, opacity: sharing ? 0.5 : 1 }}>
+            <Frame fill={C.panel} stroke={C.lineHi} padding={0} cut={9} style={{ height: 40, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 6, opacity: sharing ? 0.5 : 1 }}>
               <Icon name="share" size={17} color={C.ink} /><Text style={{ fontFamily: F.uiSemi, color: C.ink, fontSize: 14.5 }}>CSV</Text>
             </Frame>
           </Pressable>

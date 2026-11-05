@@ -51,8 +51,8 @@ export function TgMoved() {
     });
     return () => { alive = false; };
   }, []);
-  if (!inside) return <div style={{ minHeight: "100dvh", background: "#03020a" }} />;
-  return <main style={{ minHeight: "100dvh", background: "#03020a", color: "#ece9ff", display: "grid", placeItems: "center", padding: "32px 20px", boxSizing: "border-box", textAlign: "center" }}>
+  if (!inside) return <div style={{ minHeight: "100dvh", background: "#070a0b" }} />;
+  return <main style={{ minHeight: "100dvh", background: "#070a0b", color: "#ece9ff", display: "grid", placeItems: "center", padding: "32px 20px", boxSizing: "border-box", textAlign: "center" }}>
     <div style={{ maxWidth: 420, display: "grid", gap: 18, justifyItems: "center" }}>
       <span style={{ color: "#b9a7ff" }}><Icon name="frog" size={44} /></span>
       <h1 style={{ margin: 0, fontSize: 24, lineHeight: 1.25, fontWeight: 700 }}>The NIGHTSHIFT Game Room has moved to the website and app.</h1>

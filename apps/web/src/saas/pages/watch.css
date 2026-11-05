@@ -1,0 +1,73 @@
+/* /watch: the Night Watch, imdUSD's keeper crew. IMD blue for imdUSD (IMD's own), lime for the crew. Builds on shift.css + forge.css. */
+
+.nw-board .sh-board-row { border-color: rgba(47, 123, 255, .25); background: rgba(47, 123, 255, .25); }
+.nw-board .sh-board-row > * { background: #070c14; }
+.nw-board .sh-prompt { margin: 0 -14px -14px; border-top-color: rgba(47, 123, 255, .25); }
+.nw-board .sh-prompt span:first-child { color: #6fa3ff; }
+
+/* the step-by-step guide */
+.px .sh-watch .nwg-flow li, .px .sh-watch .nwg-need article, .px .sh-watch .nwg-step, .px .sh-watch .nwg-pick button, .px .sh-watch .nwg-prov button {
+  position: relative; border: 1px solid var(--px-line); border-radius: 2px; background: var(--px-panel); box-shadow: none;
+}
+.px .sh-watch .nwg-flow li i { border-radius: 0; background: var(--px-lime); color: var(--px-ink); font: 700 13px var(--px-mono); }
+.px .sh-watch .nwg-flow li:not(:last-child)::after { color: var(--px-lime); }
+.px .sh-watch .nwg-flow b, .px .sh-watch .nwg-step b, .px .sh-watch .nwg-need b { font: 600 14.5px/1.3 var(--px-display); letter-spacing: -.01em; }
+.px .sh-watch .nwg-flow span, .px .sh-watch .nwg-need span, .px .sh-watch .nwg-step p, .px .sh-watch .nwg-after p { color: var(--px-dim); font: 400 13px/1.6 var(--px-sans); }
+.px .sh-watch .nwg-pick button.on, .px .sh-watch .nwg-prov button.on { border-color: var(--px-lime); box-shadow: inset 0 0 0 1px var(--px-lime); }
+.px .sh-watch .nwg-pick em { color: var(--px-lime); font: 400 9.5px/1.2 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh-watch .nwg-n { border-radius: 0; background: var(--px-lime); color: var(--px-ink); font: 700 13px var(--px-mono); }
+.px .sh-watch .nwg-cmd pre { border-radius: 2px; border-color: var(--px-line); background: #040705; }
+.px .sh-watch .nwg-cmd pre code { color: #d6f5c8; font: 12px/1.6 var(--px-mono); }
+.px .sh-watch .nwg-step code, .px .sh-watch .nwg-after p code { border-radius: 2px; color: #d6f5c8; }
+.px .sh-watch .nwg-after { border-radius: 2px; border-color: var(--px-line2); }
+.px .sh-watch .nwg-after h3 { color: var(--px-lime); font: 400 10px/1.2 var(--px-pixel); letter-spacing: .06em; text-transform: uppercase; }
+.px .sh-watch .nx-btn-sm { min-height: 32px; padding: 0 11px; font-size: 11.5px; }
+
+/* your seat: the desk */
+.px .sh-watch .nw-steps > li { position: relative; border: 1px solid var(--px-line); border-radius: 2px; background: var(--px-panel); }
+.px .sh-watch .nw-steps > li::before { content: ""; position: absolute; left: -1px; top: -1px; width: 10px; height: 10px; border-left: 2px solid var(--px-lime); border-top: 2px solid var(--px-lime); }
+.px .sh-watch .nw-steps > li > b { color: var(--px-lime); font: 400 10px/1.2 var(--px-pixel); letter-spacing: .06em; text-transform: uppercase; }
+.px .sh-watch .nw-steps > li > span { color: var(--px-dim); font: 400 13px/1.6 var(--px-sans); }
+.px .sh-watch .nw-held li { border-radius: 2px; background: #070b08; font: 400 13px/1.5 var(--px-sans); }
+.px .sh-watch .nw-held li.on { border-color: var(--px-line2); }
+.px .sh-watch .nw-held li.on span { color: var(--px-lime); }
+.px .sh-watch .nw-field { color: var(--px-faint); font: 400 9.5px/1.2 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh-watch .nw-field input { text-transform: none; letter-spacing: 0; }
+.px .sh-watch .nw-desk > .good, .px .sh-watch .nw-desk > .bad { font: 400 13px/1.55 var(--px-sans); }
+
+/* the watchlist and the seats: ledgers */
+.px .sh-watch .nw-table { gap: 0; border: 1px solid var(--px-line); background: var(--px-panel); }
+.px .sh-watch .nw-electric { display: block; }
+.px .sh-watch .nw-row { border: 0; border-bottom: 1px solid rgba(184, 255, 61, .08); border-radius: 0; background: transparent; box-shadow: none; color: var(--px-dim); font: 400 13px/1.45 var(--px-sans); }
+.px .sh-watch .nw-row:last-child { border-bottom: 0; }
+.px .sh-watch .nw-row b { color: var(--px-text); font-weight: 600; }
+.px .sh-watch .nw-row .mono { color: var(--px-text); font: 500 12px var(--px-mono); overflow-wrap: anywhere; }
+.px .sh-watch .nw-th { background: #080d09; color: var(--px-faint); font: 400 9.5px/1.2 var(--px-pixel); letter-spacing: .05em; padding-block: 10px; }
+.px .sh-watch .nw-unmarked, .px .sh-watch .nw-expired { box-shadow: inset 3px 0 0 var(--px-gold); }
+.px .sh-watch .nw-grace { box-shadow: inset 3px 0 0 #ff4fd8; }
+.px .sh-watch .nw-actionable { box-shadow: inset 3px 0 0 var(--px-lime); background: rgba(184, 255, 61, .05); }
+.px .sh-watch .nw-captain { box-shadow: inset 3px 0 0 var(--px-gold); background: rgba(242, 193, 78, .04); }
+.px .sh-watch .nw-recent { gap: 0; border: 1px solid var(--px-line); background: var(--px-panel); }
+.px .sh-watch .nw-recent li { padding: 9px 12px; border-bottom: 1px solid rgba(184, 255, 61, .08); color: var(--px-dim); font: 400 13px/1.5 var(--px-sans); }
+.px .sh-watch .nw-recent li:last-child { border-bottom: 0; }
+
+/* what each seat gets */
+.px .sh-watch .nw-terms { gap: 8px; }
+.px .sh-watch .nw-term { position: relative; border-radius: 2px; background: var(--px-panel); border-color: var(--px-line); }
+.px .sh-watch .nw-term::before { content: ""; position: absolute; left: -1px; top: -1px; width: 8px; height: 8px; border-left: 2px solid var(--px-lime); border-top: 2px solid var(--px-lime); }
+.px .sh-watch .nw-term.nw-captain::before { border-color: var(--px-gold); }
+.px .sh-watch .nw-term b { font: 600 15px/1.2 var(--px-display); letter-spacing: -.01em; }
+.px .sh-watch .nw-term span, .px .sh-watch .nw-term small { color: var(--px-faint); font: 400 11.5px/1.45 var(--px-sans); }
+.px .sh-watch .nw-term strong { color: var(--px-lime); font: 600 18px var(--px-mono); }
+.px .sh-watch .nw-term em { color: var(--px-text); font: 500 12.5px var(--px-mono); }
+
+/* the plan, marked as a plan */
+.px .sh-watch .nw-next { position: relative; padding: 22px; border: 1px dashed var(--px-line2); border-radius: 2px; background: repeating-linear-gradient(135deg, rgba(184, 255, 61, .025) 0 10px, transparent 10px 20px), var(--px-panel); }
+.px .sh-watch .nw-next h2 { margin: 8px 0 10px; font: 600 clamp(22px, 2.8vw, 30px)/1.1 var(--px-display) !important; letter-spacing: -.025em; }
+.px .sh-watch .nw-next p { color: var(--px-dim); font: 400 13.5px/1.65 var(--px-sans); }
+.px .sh-watch .nw-next .fg-kicker { color: var(--px-gold); }
+
+@media (max-width: 900px) {
+  .px .sh-watch .nw-th { display: none; }
+  .px .sh-watch .nw-row, .px .sh-watch .nw-row.nw-seats { grid-template-columns: 1fr 1fr; }
+}

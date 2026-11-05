@@ -27,7 +27,7 @@ export default function Night() {
       <Backdrop glow={0.85} />
       <Header title="The night" />
       <ScrollView contentContainerStyle={{ padding: S.gutter, paddingBottom: 48 }}>
-        <Caps style={{ color: C.violetHi }}>{clock(Date.now())} · station time</Caps>
+        <Caps style={{ color: C.lime }}>{clock(Date.now())} · station time</Caps>
         <H1 style={{ marginTop: 8 }}>The station <Serif style={{ fontSize: 33 }}>{partOfDay()}</Serif></H1>
 
         <Section>Your crew</Section>

@@ -6,8 +6,10 @@ import { Home } from "./Home";
 import { type Active } from "./landing/chrome";
 import { RoomShell } from "./nx/Shell";
 import { roomOf } from "./nx/map";
-import { Gate } from "./nx/Gate";
 import { Landing } from "./landing/Landing";
+import { SxHome } from "./saas/Home";
+import { SxIndex, SxSection } from "./saas/SectionPage";
+import { findSection } from "./site/sitemap";
 
 import "./landing/app.css";
 import { McpPage } from "./McpPage";
@@ -41,6 +43,7 @@ import "./lite"; // marks <html data-lite> before the first paint
 import "./landing/landing.css";
 import "./clarity.css";
 import { HowItWorksPage } from "./HowItWorksPage";
+import "./saas/saas.css";
 
 // where this visitor first came from, kept for the company they may start
 noteFirstTouch();
@@ -88,18 +91,24 @@ function App() {
   const seg = path.split("/").filter(Boolean);
   const oldDoors: Record<string, string> = { breakroom: "games", geek: "services", info: "token", economy: "proof", hr: "proof" };
   if (seg[0] && oldDoors[seg[0]]) seg[0] = oldDoors[seg[0]]!;
-  // The front door is the station gate: pick what you came for.
-  if (seg.length === 0) return <Gate />;
+  // The front door: what this is, the six things to do, every page one click away.
+  if (seg.length === 0) return <SxHome />;
   // Existing room URLs open the matching door; the story keeps its art.
   if (seg[0] === "story") return <Landing />;
   // Start here: the whole station in plain words, for visitors new to crypto
   if (seg[0] === "start") { document.title = "Start here · NIGHTSHIFT"; return <RoomShell room={null} path={path} title="Start here"><Suspense fallback={<div className="st-room" />}><StartPage /></Suspense></RoomShell>; }
-  // The station preview's addresses (shared in posts) open the matching room.
-  if (seg[0] === "new") return <Redirect to={NEW_ROUTES[seg[1] ?? ""] ?? "/"} />;
+  // The index: every section, or every page of one section.
+  if (seg[0] === "new") {
+    if (!seg[1]) { document.title = "Every page · NIGHTSHIFT"; return <RoomShell room={null} path={path}><SxIndex /></RoomShell>; }
+    const section = findSection(seg[1] ?? "");
+    if (!section) return <Redirect to={NEW_ROUTES[seg[1] ?? ""] ?? "/"} />;
+    document.title = `${section.name} · NIGHTSHIFT`;
+    return <RoomShell room={null} path={path}><SxSection section={section} /></RoomShell>;
+  }
   if (seg[0] === "live") return <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#040611" }} />}><NightshiftLivePage /></Suspense>;
   // Where the Telegram Mini App was: the games are on the website and its app now. Outside Telegram
   // this sends the visitor to the same place on the site; inside a Mini App it says the Game Room moved.
-  if (seg[0] === "tg") { document.title = "NIGHTSHIFT Game Room"; return <Suspense fallback={<div style={{ minHeight: "100dvh", background: "#03020a" }} />}><TgMoved /></Suspense>; }
+  if (seg[0] === "tg") { document.title = "NIGHTSHIFT Game Room"; return <Suspense fallback={<div style={{ minHeight: "100dvh", background: "#070a0b" }} />}><TgMoved /></Suspense>; }
   // Space Pinball is a full-screen arcade with its own bar, like the landing.
   if (seg[0] === "games" && seg[1] === "pinball") return <PinballPage />;
   // NIGHT CHESS brings three.js: its own chunk, loaded only on this page.

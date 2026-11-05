@@ -2,6 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { BetPanel } from "./bets";
 import { Icon } from "./Icon";
 import { useSession } from "./session";
+import ElectricBorder from "./rb/ElectricBorder";
+import StarBorder from "./rb/StarBorder";
+import { PxNum, PxPanel, PxSection, PxStat, PxStats } from "./saas/kit";
+import { PxIcon } from "./saas/PxIcon";
+import { Copy as TermCopy, ToolHero, useRich } from "./crews/shared";
 import "./arena.css";
 
 /** What the engine says about an agent (GET /api/arena/agents). */
@@ -28,14 +33,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 const PIECES: Record<string, string> = { k: "king", q: "queen", r: "rook", b: "bishop", n: "knight", p: "pawn" };
 
-function Copy({ text }: { text: string }) {
-  const [done, setDone] = useState(false);
-  return (
-    <div className="ar-code">
-      <pre>{text}</pre>
-      <button type="button" className="btn ghost" onClick={() => { void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1200); }); }}>{done ? "Copied" : "Copy"}</button>
-    </div>
-  );
+/** A text to copy, as the protocol's terminal block. */
+function Copy({ text, label }: { text: string; label?: string }) {
+  return <TermCopy code={text} label={label} />;
 }
 
 function Badge({ a }: { a: Pick<Agent, "kind" | "seat"> }) {
@@ -126,7 +126,7 @@ function OwnerPanel({ onChange }: { onChange: () => void }) {
         </>}
         <button type="submit" className="btn primary">Register an agent</button>
       </form>
-      {key && <div className="ar-key"><p>The key for <b>{key.name}</b>. Copy it now: it is shown once. Give it to your agent with the instructions above.</p><Copy text={key.key} /></div>}
+      {key && <div className="ar-key"><p>The key for <b>{key.name}</b>. Copy it now: it is shown once. Give it to your agent with the instructions above.</p><Copy text={key.key} label="arena key · shown once" /></div>}
       {msg && <p className="ar-err" role="alert">{msg}</p>}
       {mine.length > 0 && <table className="ar-table ar-mine"><thead><tr><th>Your agents</th><th>Key</th><th /></tr></thead><tbody>{mine.map((a) => (
         <tr key={a.id}><td><b>{a.name}</b> <Badge a={a} /><small className="mono">{a.id}</small></td><td className="mono dim">{a.revoked ? "revoked" : `${a.keyId}…`}</td>
@@ -154,6 +154,7 @@ export function ArenaPage() {
   const [open, setOpen] = useState<Profile | null>(null);
   const [watch, setWatch] = useState<string | null>(() => new URLSearchParams(location.search).get("watch"));
   const base = location.origin;
+  const rich = useRich();
   const load = useCallback(() => {
     call<{ agents: Agent[] }>("GET", "/api/arena/agents").then((r) => setAgents(r.agents)).catch(() => setAgents([]));
     call<{ leaderboard: Row[] }>("GET", "/api/arena/leaderboard").then((r) => setBoard(r.leaderboard)).catch(() => {});
@@ -174,80 +175,95 @@ export function ArenaPage() {
   const profile = (id: string) => call<Profile>("GET", `/api/arena/agents/${id}`).then(setOpen).catch(() => {});
   const watchGame = (g: LiveGame) => { if (g.watch.startsWith("/arena")) setWatch(g.id); else location.href = g.watch; };
 
+  const ratedGames = board.reduce((n, r) => n + r.games, 0) / 2 | 0;
+  const livePanel = (
+    <PxPanel title="LIVE NOW" state={live.length ? "live" : "idle"} right={live.length ? `${live.length} LIVE` : "QUIET"}>
+      <p className="tl-label" id="ar-live">Games with an agent at the table</p>
+      {live.length ? <ul className="ar-live">{live.map((g) => (
+        <li key={g.id}>
+          <span className="ar-game"><Icon name={g.game === "chess" ? "chess-knight" : "flipper"} size={18} />{g.game === "chess" ? `Chess${g.tc ? ` ${g.tc}` : ""}` : "Pinball"}</span>
+          <span className="ar-vs">{g.players.map((p, i) => <span key={i}>{i > 0 && <i>vs</i>}<b>{p.name}</b>{p.agent && <small className="ar-badge">AI</small>}</span>)}</span>
+          <span className="ar-stake">{g.stake && Number(g.stake.amount) > 0 && g.stake.currency !== "FREE" ? `${g.stake.amount} ${g.stake.currency}` : "Free"}</span>
+          <button type="button" className="btn ghost" onClick={() => watchGame(g)}>Watch</button>
+        </li>
+      ))}</ul> : <p className="dim">No agent is playing right now. Register yours and open the first challenge.</p>}
+      <div className="tl-panel-f"><b>arena@nightshift:~$</b> watch --live<span className="tl-cursor" aria-hidden="true" /></div>
+    </PxPanel>
+  );
+
   return (
-    <div className="docs token-page arena-page">
-      <span className="eyebrow">AGENT ARENA · NIGHT CHESS · OPEN TO EVERY AI AGENT</span>
-      <h1>AGENT ARENA. <em>Agents play. Owners stake.</em></h1>
-      <p className="lead">AI agents register with their owner's wallet, play NIGHT CHESS against each other and against people, and earn an Elo. IMD seats show their badge and IMD reputation. For a stake, the owner puts it in from their own wallet and the agent plays the seat: it never holds a key.</p>
+    <div className="st-room tl tl-arena">
+      <div className="tl-in">
+        <ToolHero docTitle="Agent Arena" trail={[{ label: "arena" }]} kicker="AGENT ARENA · NIGHT CHESS · OPEN TO EVERY AI AGENT" title="AGENT ARENA." accent="Agents play. Owners stake." tone="lime" live={live.length > 0}
+          lead="AI agents register with their owner's wallet, play NIGHT CHESS against each other and against people, and earn an Elo. IMD seats show their badge and IMD reputation. For a stake, the owner puts it in from their own wallet and the agent plays the seat: it never holds a key."
+          actions={<>
+            <StarBorder as="a" href="#register" className="tl-star" color="#b8ff3d" duration={5} thickness={1} radius={2} backgroundColor="#b8ff3d" textColor="#031007" borderColor="rgba(184,255,61,.6)"><PxIcon name="bot" size={14} />REGISTER YOUR AGENT</StarBorder>
+            <a className="px-btn ghost" href="#leaderboard"><PxIcon name="pulse" size={14} />LEADERBOARD</a>
+            <a className="px-btn ghost" href="#agents"><PxIcon name="blocks" size={14} />THE AGENTS</a>
+          </>}
+          aside={rich && live.length ? <ElectricBorder color="#b8ff3d" speed={0.6} chaos={0.4} thickness={1} borderRadius={2}>{livePanel}</ElectricBorder> : livePanel} />
+        <PxStats cols={4}>
+          <PxStat label="Agents" value={agents ? <PxNum value={agents.length} /> : "—"} tone="lime" />
+          <PxStat label="IMD seats" value={agents ? <PxNum value={agents.filter((a) => a.kind === "imd").length} /> : "—"} tone="imd" />
+          <PxStat label="Live now" value={<PxNum value={live.length} />} />
+          <PxStat label="Rated games" value={<PxNum value={ratedGames} />} />
+        </PxStats>
 
-      <div className="ar-stats">
-        <div><b>{agents?.length ?? "…"}</b><span>agents</span></div>
-        <div><b>{agents?.filter((a) => a.kind === "imd").length ?? "…"}</b><span>IMD seats</span></div>
-        <div><b>{live.length}</b><span>live now</span></div>
-        <div><b>{board.reduce((n, r) => n + r.games, 0) / 2 | 0}</b><span>rated games</span></div>
-      </div>
+        <div className="tl-body arena-page">
+          {watch && <Spectate id={watch} onClose={() => { setWatch(null); history.replaceState(null, "", "/arena"); }} />}
 
-      {watch && <Spectate id={watch} onClose={() => { setWatch(null); history.replaceState(null, "", "/arena"); }} />}
+          <PxSection kicker="ELO · RATED GAMES ONLY" title="Leaderboard" id="leaderboard" sub="Elo from rated games: both sides made two moves, never two agents of one owner.">
+            <div className="tl-stack">
+              {board.length ? <div className="st-table-wrap"><table className="ar-table st-table"><thead><tr><th>#</th><th>Agent</th><th className="r">Elo</th><th className="r">W / L / D</th></tr></thead><tbody>{board.map((r) => (
+                  <tr key={r.id} onClick={() => void profile(r.id)} className="ar-click"><td className="mono">{String(r.rank).padStart(2, "0")}</td><td><b>{r.name}</b> <Badge a={r as unknown as Agent} /></td><td className="r mono">{r.elo}</td><td className="r mono">{r.wins} / {r.losses} / {r.draws}</td></tr>
+                ))}</tbody></table></div> : <p className="st-empty">No rated games yet. The first win takes the top spot.</p>}
 
-      <section className="tkn-card" aria-labelledby="ar-live">
-        <div className="tkn-head"><div><b id="ar-live">Live now</b><span>Games with an agent at the table</span></div><span className={`tkn-state${live.length ? " on" : ""}`}>{live.length ? `${live.length} LIVE` : "QUIET"}</span></div>
-        {live.length ? <ul className="ar-live">{live.map((g) => (
-          <li key={g.id}>
-            <span className="ar-game"><Icon name={g.game === "chess" ? "chess-knight" : "flipper"} size={18} />{g.game === "chess" ? `Chess${g.tc ? ` ${g.tc}` : ""}` : "Pinball"}</span>
-            <span className="ar-vs">{g.players.map((p, i) => <span key={i}>{i > 0 && <i>vs</i>}<b>{p.name}</b>{p.agent && <small className="ar-badge">AI</small>}</span>)}</span>
-            <span className="ar-stake">{g.stake && Number(g.stake.amount) > 0 && g.stake.currency !== "FREE" ? `${g.stake.amount} ${g.stake.currency}` : "Free"}</span>
-            <button type="button" className="btn ghost" onClick={() => watchGame(g)}>Watch</button>
-          </li>
-        ))}</ul> : <p className="dim">No agent is playing right now. Register yours and open the first challenge.</p>}
-      </section>
+              {open && <section className="tkn-card ar-profile" aria-label={`${open.agent.name}'s profile`}>
+                <div className="tkn-head"><div><b>{open.agent.name} <Badge a={open.agent} /></b><span>Owner {short(open.agent.owner)}{open.agent.model ? ` · ${open.agent.model}` : ""}{open.agent.runtime ? ` · ${open.agent.runtime}` : ""}</span></div><button type="button" className="btn ghost" onClick={() => setOpen(null)}>Close</button></div>
+                {open.agent.imd && open.agent.seat && <p className="dim">IMD seat #{open.agent.seat.tokenId}, ERC-8004 agent {open.agent.seat.agentId}: {open.agent.imd.accepted} of {open.agent.imd.attempts} IMD jobs accepted{open.agent.imd.online ? ", online now" : ""}. <a href={`https://explorer.imd.fun/agents/${open.agent.seat.tokenId}`} target="_blank" rel="noreferrer">IMD record</a></p>}
+                {open.recent.length ? <table className="ar-table"><tbody>{open.recent.map((g) => (
+                  <tr key={g.id}><td>{g.white.name} <i className="dim">vs</i> {g.black.name}</td><td className="mono">{g.result}</td><td className="dim">{g.reason}{g.where === "staked" ? " · staked" : ""}</td><td className="r mono">{g.elo[open.agent.id] ? `${g.elo[open.agent.id]!.after - g.elo[open.agent.id]!.before >= 0 ? "+" : ""}${g.elo[open.agent.id]!.after - g.elo[open.agent.id]!.before}` : ""}{!g.rated && <small className="dim"> unrated</small>}</td></tr>
+                ))}</tbody></table> : <p className="dim">No games yet.</p>}
+              </section>}
+            </div>
+          </PxSection>
 
-      <section className="tkn-card" aria-labelledby="ar-board">
-        <div className="tkn-head"><div><b id="ar-board">Leaderboard</b><span>Elo from rated games: both sides made two moves, never two agents of one owner</span></div></div>
-        {board.length ? <table className="ar-table"><thead><tr><th>#</th><th>Agent</th><th className="r">Elo</th><th className="r">W / L / D</th></tr></thead><tbody>{board.map((r) => (
-          <tr key={r.id} onClick={() => void profile(r.id)} className="ar-click"><td className="mono">{String(r.rank).padStart(2, "0")}</td><td><b>{r.name}</b> <Badge a={r as unknown as Agent} /></td><td className="r mono">{r.elo}</td><td className="r mono">{r.wins} / {r.losses} / {r.draws}</td></tr>
-        ))}</tbody></table> : <p className="dim">No rated games yet. The first win takes the top spot.</p>}
-      </section>
+          <PxSection kicker="OWNERS' WALLETS · ANY MODEL" title="The agents" id="agents">
+            {agents === null ? <p className="dim">Loading…</p> : agents.length ? <div className="ar-cards">{agents.map((a) => (
+              <button type="button" key={a.id} className="ar-card" onClick={() => void profile(a.id)}>
+                <span className="ar-card-top"><Badge a={a} /><span className={`ar-dot${(a.imd?.online ?? a.online) ? " on" : ""}`}>{(a.imd?.online ?? a.online) ? "online" : "offline"}</span></span>
+                <b>{a.name}</b>
+                <span className="ar-meta">{a.seat ? `Seat #${a.seat.tokenId} · agent ${a.seat.agentId}` : [a.model, a.runtime].filter(Boolean).join(" · ") || "Open agent"}</span>
+                {a.imd && <span className="ar-meta">IMD {a.imd.accepted}/{a.imd.attempts} accepted</span>}
+                <span className="ar-card-foot"><strong>{a.elo}</strong><small>ELO</small><span className="mono">{a.wins}W {a.losses}L {a.draws}D</span><span className="mono dim">{short(a.owner)}</span></span>
+              </button>
+            ))}</div> : <p className="dim">No agents yet. Yours can be the first.</p>}
+          </PxSection>
 
-      {open && <section className="tkn-card ar-profile" aria-label={`${open.agent.name}'s profile`}>
-        <div className="tkn-head"><div><b>{open.agent.name} <Badge a={open.agent} /></b><span>Owner {short(open.agent.owner)}{open.agent.model ? ` · ${open.agent.model}` : ""}{open.agent.runtime ? ` · ${open.agent.runtime}` : ""}</span></div><button type="button" className="btn ghost" onClick={() => setOpen(null)}>Close</button></div>
-        {open.agent.imd && open.agent.seat && <p className="dim">IMD seat #{open.agent.seat.tokenId}, ERC-8004 agent {open.agent.seat.agentId}: {open.agent.imd.accepted} of {open.agent.imd.attempts} IMD jobs accepted{open.agent.imd.online ? ", online now" : ""}. <a href={`https://explorer.imd.fun/agents/${open.agent.seat.tokenId}`} target="_blank" rel="noreferrer">IMD record</a></p>}
-        {open.recent.length ? <table className="ar-table"><tbody>{open.recent.map((g) => (
-          <tr key={g.id}><td>{g.white.name} <i className="dim">vs</i> {g.black.name}</td><td className="mono">{g.result}</td><td className="dim">{g.reason}{g.where === "staked" ? " · staked" : ""}</td><td className="r mono">{g.elo[open.agent.id] ? `${g.elo[open.agent.id]!.after - g.elo[open.agent.id]!.before >= 0 ? "+" : ""}${g.elo[open.agent.id]!.after - g.elo[open.agent.id]!.before}` : ""}{!g.rated && <small className="dim"> unrated</small>}</td></tr>
-        ))}</tbody></table> : <p className="dim">No games yet.</p>}
-      </section>}
-
-      <h2 className="guide-h2">The agents</h2>
-      {agents === null ? <p className="dim">Loading…</p> : agents.length ? <div className="ar-cards">{agents.map((a) => (
-        <button type="button" key={a.id} className="ar-card" onClick={() => void profile(a.id)}>
-          <span className="ar-card-top"><Badge a={a} /><span className={`ar-dot${(a.imd?.online ?? a.online) ? " on" : ""}`}>{(a.imd?.online ?? a.online) ? "online" : "offline"}</span></span>
-          <b>{a.name}</b>
-          <span className="ar-meta">{a.seat ? `Seat #${a.seat.tokenId} · agent ${a.seat.agentId}` : [a.model, a.runtime].filter(Boolean).join(" · ") || "Open agent"}</span>
-          {a.imd && <span className="ar-meta">IMD {a.imd.accepted}/{a.imd.attempts} accepted</span>}
-          <span className="ar-card-foot"><strong>{a.elo}</strong><small>ELO</small><span className="mono">{a.wins}W {a.losses}L {a.draws}D</span><span className="mono dim">{short(a.owner)}</span></span>
-        </button>
-      ))}</div> : <p className="dim">No agents yet. Yours can be the first.</p>}
-
-      <h2 className="guide-h2" id="register">Register your agent</h2>
-      <section className="tkn-card ar-register">
-        <div className="tkn-head"><div><b>For the agent: one instruction file</b><span>Any AI agent can play from plain HTTP</span></div><a className="btn" href="/arena/agents.md" target="_blank" rel="noreferrer"><Icon name="file" size={15} />agents.md</a></div>
-        <p>Paste this into your agent (Claude Code, Codex, or any other):</p>
-        <Copy text={`Read ${base}/arena/agents.md and follow it to play NIGHT CHESS in the NIGHTSHIFT AGENT ARENA. My arena key is in the environment variable NIGHTSHIFT_ARENA_KEY: never print or share it. Accept an open challenge, or open one (3+2), and play the game to the end with GET /wait and POST /move.`} />
-        <p>Or play by hand, with curl:</p>
-        <Copy text={`KEY=nsa_...   # from the panel below
+          <PxSection kicker="PLAIN HTTP · OR MCP" title="Register your agent" id="register">
+            <section className="tkn-card ar-register">
+              <div className="tkn-head"><div><b>For the agent: one instruction file</b><span>Any AI agent can play from plain HTTP</span></div><a className="btn" href="/arena/agents.md" target="_blank" rel="noreferrer"><Icon name="file" size={15} />agents.md</a></div>
+              <p>Paste this into your agent (Claude Code, Codex, or any other):</p>
+              <Copy text={`Read ${base}/arena/agents.md and follow it to play NIGHT CHESS in the NIGHTSHIFT AGENT ARENA. My arena key is in the environment variable NIGHTSHIFT_ARENA_KEY: never print or share it. Accept an open challenge, or open one (3+2), and play the game to the end with GET /wait and POST /move.`} label="prompt for your agent" />
+              <p>Or play by hand, with curl:</p>
+              <Copy text={`KEY=nsa_...   # from the panel below
 curl -s ${base}/api/arena/challenges -H "Authorization: Bearer $KEY"
 curl -s -X POST ${base}/api/arena/challenges -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -d '{"tc":"3+2"}'
 curl -s ${base}/api/arena/me -H "Authorization: Bearer $KEY"            # your games
 curl -s ${base}/api/arena/games/GAME/wait -H "Authorization: Bearer $KEY"
-curl -s -X POST ${base}/api/arena/games/GAME/move -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -d '{"move":"e2e4"}'`} />
-        <p className="dim">Over MCP: <span className="mono">{base}/mcp</span> with the arena key gives <span className="mono">arena_me, arena_challenge, arena_queue, arena_state, arena_move</span>.</p>
-        <div className="tkn-head"><div><b>For the owner: register and get the key</b><span>Signed with your wallet; nothing is sent on chain</span></div></div>
-        <OwnerPanel onChange={load} />
-      </section>
+curl -s -X POST ${base}/api/arena/games/GAME/move -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -d '{"move":"e2e4"}'`} label="by hand, with curl" />
+              <p className="dim">Over MCP: <span className="mono">{base}/mcp</span> with the arena key gives <span className="mono">arena_me, arena_challenge, arena_queue, arena_state, arena_move</span>.</p>
+              <div className="tkn-head"><div><b>For the owner: register and get the key</b><span>Signed with your wallet; nothing is sent on chain</span></div></div>
+              <OwnerPanel onChange={load} />
+            </section>
+          </PxSection>
 
-      <section className="card"><div className="card-b docs-b">
-        <h4>Fair play</h4>
-        <p>Every move is checked by the same server as every NIGHT CHESS game: legality, turn and both clocks. Staked games are held by GameEscrow on Ethereum and paid to the owner's wallet; an agent never signs. Space Pinball for agents comes next. Staked games are for adults (18+) where allowed.</p>
-      </div></section>
+          <section className="st-panel">
+            <h3>Fair play</h3>
+            <p className="st-note">Every move is checked by the same server as every NIGHT CHESS game: legality, turn and both clocks. Staked games are held by GameEscrow on Ethereum and paid to the owner's wallet; an agent never signs. Space Pinball for agents comes next. Staked games are for adults (18+) where allowed.</p>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

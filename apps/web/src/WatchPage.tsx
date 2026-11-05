@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
 import { createWalletClient, custom } from "viem";
 import { mainnet } from "viem/chains";
-import { NxIcon } from "./nx/icons";
 import { Link } from "./router";
-import { Stat, rememberRoom } from "./station/Station";
+import { rememberRoom } from "./station/Station";
 import { chooseWallet } from "./wallet";
 import { WatchGuide } from "./WatchGuide";
 import "./forge.css";
 import "./watch.css";
+import ElectricBorder from "./rb/ElectricBorder";
+import { PxButton, PxHero, PxNum, PxPanel, PxStat, PxStats } from "./saas/kit";
+import { Flap, HeroDots, Prompt, ShStar, useRich } from "./saas/pages/shift-kit";
+import "./saas/pages/forge.css";
+import "./saas/pages/watch.css";
 
 /**
  * THE NIGHT WATCH: the keeper crew of imdUSD, one seat per Night Watcher plus the Captain's seat (NIGHT FROG #1).
@@ -45,27 +49,42 @@ export function WatchPage() {
   const b = st?.book;
   const online = st?.seats.filter((x) => x.online).length ?? 0;
   const t = st?.terms;
+  const board = (
+    <PxPanel className="sh-board nw-board" tone="imd" title="imdUSD · THE PEG" state={b ? (b.stale.length ? "warn" : "live") : "idle"} right={b ? (b.stale.length ? "PRICES WAITING" : "PRICES LIVE") : "READING THE VAULT"}>
+      <span className="sh-board-k">imdUSD PRICE · IN ITS USDC PEG POOL</span>
+      <div className="sh-flap-wrap"><Flap text={b?.peg ? `$${b.peg.toFixed(4)}` : "—"} size={26} tone="imd" /></div>
+      <div className="sh-board-row">
+        <div><span>The line</span><b className="imd">{b ? `${b.mat}%` : "—"}</b></div>
+        <div><span>Mark → repay</span><b>{b ? `${num(b.lullHours)} h` : "—"}</b></div>
+        <div><span>Keeper bonus</span><b className="lime">{b ? `${b.bonusPct}%` : "—"}</b></div>
+        <div><span>Closest loan</span><b>{b?.closestCr ? `${b.closestCr}%` : "—"}</b></div>
+      </div>
+      <Prompt cmd="node bot.mjs doctor" />
+    </PxPanel>
+  );
   return (
-    <div className="st-room fg nw">
-      <header className="fg-hero nw-hero" style={{ "--tc": "#3fe6ff" } as React.CSSProperties}>
-        <div className="fg-hero-in">
-          <span className="fg-eyebrow"><NxIcon name="security" size={16} /> DECK 05 · THE NIGHT WATCH · imdUSD KEEPERS</span>
-          <h1>Run a keeper</h1>
-          <p className="fg-lead">imdUSD is IMD's dollar, borrowed against staked IMD. When IMD falls and a loan drops under {b?.mat ?? 170}%, someone has to mark it and, {b ? num(b.lullHours) : 6} hours later, repay it: whoever does takes staked IMD worth {b?.bonusPct ?? 20}% more than the debt they repay. The Night Watch is the crew that does it, one seat per Night Watcher and the Captain's seat for NIGHT FROG #1 (The Captain's, once #1 is forged), each running its own bot with its own wallet, working in turn instead of racing.</p>
-          <div className="fg-cta">
-            <a className="nx-btn nx-btn-acc" href="#run"><NxIcon name="security" size={18} /> Set up my seat</a>
-            <Link className="nx-btn" to="/forge">Upgrade Frogs</Link>
-          </div>
-          <div className="st-stats">
-            <Stat label="imdUSD price" value={b?.peg ? `$${b.peg.toFixed(4)}` : "—"} note="in its USDC peg pool" />
-            <Stat label="imdUSD out" value={b ? num(b.supply) : "—"} note={b ? `${b.loans} loans in the vault` : "reading the vault"} />
-            <Stat label="Seats online" value={st ? `${online} / ${st.seats.length}` : "—"} note={st?.open ? `${st.watchers} Night Watchers forged` : "Night Watcher seats wait for IMD; the Captain's is open"} />
-            <Stat label="Prices" value={b ? (b.stale.length ? "WAITING" : "LIVE") : "—"} note={b?.stale.length ? "liquidations wait for a fresh price" : "marks and liquidations can run"} />
-          </div>
-        </div>
-      </header>
+    <div className="sh sh-watch fg">
+      <PxHero
+        kicker="DECK 05 · THE NIGHT WATCH · imdUSD KEEPERS"
+        live={Boolean(b)}
+        title="Run a"
+        accent="keeper."
+        lead={<>imdUSD is IMD's dollar, borrowed against staked IMD. When IMD falls and a loan drops under {b?.mat ?? 170}%, someone has to mark it and, {b ? num(b.lullHours) : 6} hours later, repay it: whoever does takes staked IMD worth {b?.bonusPct ?? 20}% more than the debt they repay. The Night Watch is the crew that does it, one seat per Night Watcher and the Captain's seat for NIGHT FROG #1 (The Captain's, once #1 is forged), each running its own bot with its own wallet, working in turn instead of racing.</>}
+        actions={<>
+          <ShStar href="#run" icon="shield">SET UP MY SEAT</ShStar>
+          <PxButton to="/forge" icon="bolt">Upgrade Frogs</PxButton>
+        </>}
+        aside={board}
+        bg={<HeroDots tone="imd" />}
+      />
 
-      <div className="st-body">
+      <PxStats cols={3}>
+        <PxStat label="imdUSD out" tone="imd" value={b ? <PxNum value={b.supply} /> : "—"} sub={b ? `${b.loans} loans in the vault` : "reading the vault"} />
+        <PxStat label="Seats online" tone="lime" value={st ? <>{online}<small className="fg-of"> / {st.seats.length}</small></> : "—"} sub={st?.open ? `${st.watchers} Night Watchers forged` : "Night Watcher seats wait for IMD; the Captain's is open"} />
+        <PxStat label="Prices" tone={b ? (b.stale.length ? "gold" : "lime") : undefined} value={b ? (b.stale.length ? "WAITING" : "LIVE") : "—"} sub={b?.stale.length ? "liquidations wait for a fresh price" : "marks and liquidations can run"} />
+      </PxStats>
+
+      <div className="fg-body">
         <WatchGuide mat={b?.mat ?? 170} lullHours={b?.lullHours ?? 6} />
 
         <section id="pair" className="fg-sec">
@@ -78,7 +97,7 @@ export function WatchPage() {
           {!b ? <p className="st-empty">Reading the vault…</p> : b.watchlist.length === 0 ? (
             <p className="st-empty">Every loan in the vault is well above {b.mat}%. The seats watch; nothing to do until IMD falls.</p>
           ) : (
-            <div className="nw-table" role="table">
+            <Attention on={b.watchlist.some((l) => l.state === "actionable")}><div className="nw-table" role="table">
               <div className="nw-row nw-th" role="row"><span>Loan</span><span>Debt</span><span>Ratio</span><span>State</span><span>Next</span></div>
               {b.watchlist.map((l) => (
                 <div key={l.owner} className={`nw-row nw-${l.state}`} role="row">
@@ -86,7 +105,7 @@ export function WatchPage() {
                   <span className="mono">{l.state === "grace" && l.opensAt ? `opens in ${Math.max(0, Math.round((l.opensAt - now) / 60))} min` : l.state === "actionable" ? `${num(l.repay)} imdUSD to repay` : l.state === "safe" ? `${l.cr - b.mat} pts above` : "a seat marks it"}</span>
                 </div>
               ))}
-            </div>
+            </div></Attention>
           )}
           {b && <p className="st-note">The vault holds {num(b.totalDebt)} imdUSD of debt across {b.loans} loans; the line is {b.mat}%. A loan falls under it only if IMD drops: the closest one goes under after a fall of about {b.closestCr ? Math.max(0, Math.round((1 - b.mat / b.closestCr) * 100)) : "—"}%.</p>}
         </section>
@@ -144,6 +163,12 @@ export function WatchPage() {
       </div>
     </div>
   );
+}
+
+/** A loan open to liquidate is the one thing here that needs attention: a live arc runs the watchlist's border (wide screens). */
+function Attention({ on, children }: { on: boolean; children: React.ReactNode }) {
+  const rich = useRich();
+  return on && rich ? <ElectricBorder className="nw-electric" color="#b8ff3d" glowColor="#b8ff3d" speed={0.6} chaos={0.4} thickness={1} glow={0.35} intensity={0.6} borderRadius={2}>{children}</ElectricBorder> : <>{children}</>;
 }
 
 type Held = { watcher: number; name: string; tier: string | null; weight: number; cutBps: number; paired: boolean; keeper: string | null; online: boolean; arrears: boolean };

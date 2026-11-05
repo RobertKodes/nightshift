@@ -1,0 +1,81 @@
+/* /tokenomics: every number, wallet, rule and power. Builds on shift.css. */
+
+.sh-tokenomics { --tkm-rewards: var(--px-lime); --tkm-dev: #62d9cf; --tkm-treasury: var(--px-pepe); --tkm-burn: var(--px-gold); }
+.sh-tokenomics .px-sec { scroll-margin-top: 80px; }
+
+/* ---- the hero's rule board */
+.tkm-rule-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--px-line); background: var(--px-line); }
+.px .sh .tkm-rule-rows a { display: grid; grid-template-columns: 8px auto minmax(0, 1fr); align-items: center; gap: 8px; padding: 9px 10px; background: #080d09; text-decoration: none; }
+.tkm-rule-rows a:hover { background: #0d1410; }
+.tkm-rule-rows i { width: 8px; height: 8px; }
+.tkm-rule-rows b { font: 600 14px/1 var(--px-mono); color: var(--px-text); }
+.tkm-rule-rows span { color: var(--px-dim); font: 400 9px/1.2 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.tkm-rule-rows .rewards i { background: var(--tkm-rewards); } .tkm-rule-rows .dev i { background: var(--tkm-dev); }
+.tkm-rule-rows .treasury i { background: var(--tkm-treasury); } .tkm-rule-rows .burn i { background: var(--tkm-burn); }
+
+/* ---- the allocation bars and the rule bar */
+.px .sh-tokenomics .tkn-bars { display: grid; gap: 12px; margin-top: 14px; }
+.px .sh-tokenomics .tkn-bar { display: flex; gap: 2px; height: 30px; padding: 2px; border: 1px solid var(--px-line2); background: #070b08; }
+.px .sh-tokenomics .tkn-bar span { display: grid; place-items: center; min-width: 3px; background: var(--px-lime); color: var(--px-ink); font: 700 11px/1 var(--px-mono); }
+.px .sh-tokenomics .tkn-bar span.imd { background: #2f7bff; color: #fff; }
+.px .sh-tokenomics .tkn-bar span.dev { background: #62d9cf; }
+.px .sh-tokenomics .tkn-bars ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.px .sh-tokenomics .tkn-bars li { display: grid; align-content: start; grid-template-columns: 10px minmax(0, 1fr); gap: 4px 10px; padding: 10px 12px; border: 1px solid var(--px-line); background: #070b08; }
+.px .sh-tokenomics .tkn-bars li i { width: 10px; height: 10px; margin-top: 3px; background: var(--px-lime); }
+.px .sh-tokenomics .tkn-bars li i.imd { background: #2f7bff; } .px .sh-tokenomics .tkn-bars li i.dev { background: #62d9cf; }
+.px .sh-tokenomics .tkn-bars li b { color: var(--px-text); font: 600 12.5px/1.3 var(--px-mono); }
+.px .sh-tokenomics .tkn-bars li span { grid-column: 2; color: var(--px-dim); font: 400 12.5px/1.55 var(--px-sans); }
+
+.px .sh-tokenomics .rule { display: grid; gap: 14px; margin: 0; }
+.px .sh-tokenomics .rule-bar { display: flex; gap: 2px; height: 36px; padding: 2px; border: 1px solid var(--px-line2); background: #070b08; }
+.px .sh-tokenomics .rule-bar span { display: grid; place-items: center; color: var(--px-ink); font: 700 12px/1 var(--px-mono); }
+.px .sh-tokenomics .rule-bar .rewards, .px .sh-tokenomics .rule-legend i.rewards { background: var(--tkm-rewards); }
+.px .sh-tokenomics .rule-bar .dev, .px .sh-tokenomics .rule-legend i.dev { background: var(--tkm-dev); }
+.px .sh-tokenomics .rule-bar .treasury, .px .sh-tokenomics .rule-legend i.treasury { background: var(--tkm-treasury); }
+.px .sh-tokenomics .rule-bar .burn, .px .sh-tokenomics .rule-legend i.burn { background: var(--tkm-burn); }
+.px .sh-tokenomics .rule-legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.px .sh-tokenomics .rule-legend > div { display: grid; align-content: start; grid-template-columns: 10px minmax(0, 1fr); gap: 4px 10px; padding: 10px 12px; border: 1px solid var(--px-line); background: #070b08; }
+.px .sh-tokenomics .rule-legend i { width: 10px; height: 10px; margin-top: 3px; }
+.px .sh-tokenomics .rule-legend b { color: var(--px-text); font: 600 12.5px/1.3 var(--px-mono); }
+.px .sh-tokenomics .rule-legend span { grid-column: 2; color: var(--px-dim); font: 400 12.5px/1.55 var(--px-sans); }
+
+/* ---- the worked example: a printed receipt */
+.tkm-receipt { position: relative; max-width: 760px; border: 1px solid var(--px-line2); background: var(--px-panel); }
+.tkm-receipt::before, .tkm-receipt::after { content: ""; position: absolute; left: 0; right: 0; height: 8px; background: radial-gradient(circle at 6px -2px, var(--px-bg) 5px, transparent 5.5px) 0 0 / 12px 8px repeat-x; }
+.tkm-receipt::before { top: -1px; } .tkm-receipt::after { bottom: -1px; transform: scaleY(-1); }
+.tkm-receipt header, .tkm-receipt footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; padding: 16px 16px 12px; border-bottom: 1px dashed var(--px-line2); }
+.tkm-receipt footer { padding: 12px 16px 16px; border-top: 1px dashed var(--px-line2); border-bottom: 0; }
+.tkm-receipt header span, .tkm-receipt footer span { color: var(--px-faint); font: 400 9.5px/1.3 var(--px-pixel); letter-spacing: .05em; }
+.tkm-receipt footer span:first-child { color: var(--px-pepe); font: 400 11px/1.3 var(--px-mono); letter-spacing: 0; }
+.tkm-receipt header b { color: var(--px-text); font: 600 14px/1.2 var(--px-mono); }
+.px .sh-tokenomics .tkm-receipt .frogs-traits { border: 0; background: transparent; }
+.px .sh-tokenomics .tkm-receipt .frogs-traits > div { grid-template-columns: 90px minmax(0, 1fr); border-bottom-style: dotted; }
+.px .sh-tokenomics .tkm-receipt .frogs-traits b { font-size: 15px; }
+
+/* ---- status tags in the fee table */
+.tkm-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 7px; border: 1px solid var(--px-line); color: var(--px-dim); font: 400 9px/1.2 var(--px-pixel); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.tkm-status.live { color: var(--px-lime); border-color: var(--px-line2); }
+.tkm-status.live::before { content: ""; width: 5px; height: 5px; background: currentColor; }
+.tkm-status.soon { color: var(--px-faint); border-style: dashed; }
+.px .sh-tokenomics .tkm-tiers { margin-top: 10px; max-width: 620px; }
+.px .sh-tokenomics .tkm-tiers table { min-width: 0; }
+.px .sh-tokenomics .tkm-holdings { margin-top: 10px; }
+.px .sh-tokenomics .tkm-wallets table { min-width: 0; }
+.px .sh-tokenomics .tkm-wallets td:first-child { width: 34%; color: var(--px-text); }
+.tkm-addr { display: inline-block; max-width: 100%; color: var(--px-lime) !important; font: 500 12.5px/1.4 var(--px-mono); word-break: break-all; text-decoration: none !important; }
+.tkm-addr:hover { text-decoration: underline !important; text-underline-offset: 3px; }
+
+.tkm-powers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.px .sh-tokenomics .tkm-powers > * { margin-top: 0; }
+.px .sh-tokenomics .tkm-risks > li::before { border-color: var(--px-gold); }
+
+@media (max-width: 899px) {
+  .px .sh-tokenomics .rule-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .px .sh-tokenomics .tkn-bars ul { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .tkm-powers, .px .sh-tokenomics .rule-legend { grid-template-columns: 1fr; }
+  .px .sh-tokenomics .tkm-wallets td { display: block; width: auto !important; padding: 6px 10px; }
+  .px .sh-tokenomics .tkm-wallets td:first-child { padding-top: 11px; border-bottom: 0; color: var(--px-faint); font: 400 9px/1.2 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+  .px .sh-tokenomics .tkm-receipt .frogs-traits > div { grid-template-columns: 70px minmax(0, 1fr); }
+}

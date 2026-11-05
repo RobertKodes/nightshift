@@ -11,7 +11,7 @@ export function Crescent({ size = 30 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className="crescent">
       <defs>
-        <linearGradient id="cr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#e9e2ff" /><stop offset="1" stopColor="#7c5cff" /></linearGradient>
+        <linearGradient id="cr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#d9f2e1" /><stop offset="1" stopColor="#3ecb74" /></linearGradient>
       </defs>
       <path d="M21.5 3.2A13 13 0 1 0 28.8 22 10.6 10.6 0 1 1 21.5 3.2Z" fill="url(#cr)" />
     </svg>
@@ -101,9 +101,9 @@ const UTIL_KEYS: Active[] = ["token", "tokenomics", "frogs", "swap", "stake", "l
 
 /** The station's five rooms, a menu of their own. */
 export const ROOM_LINKS: { to: string; label: string; note: string; dot: string; key: Active }[] = [
-  { to: "/services", label: "AI tools", note: "Check, test, research or hire agents", dot: "#4ad8ff", key: "geek" },
-  { to: "/games", label: "Play", note: "Four games, no wallet needed to start", dot: "#ff5ca8", key: "games" },
-  { to: "/token", label: "$SHIFT", note: "Benefits, swap, staking and rewards", dot: "#c9c2ff", key: "token" },
+  { to: "/services", label: "AI tools", note: "Check, test, research or hire agents", dot: "#62d9cf", key: "geek" },
+  { to: "/games", label: "Play", note: "Four games, no wallet needed to start", dot: "#f0a3b6", key: "games" },
+  { to: "/token", label: "$SHIFT", note: "Benefits, swap, staking and rewards", dot: "#d9f2e1", key: "token" },
 ];
 const ROOM_KEYS: Active[] = ["breakroom", "geek", "info", "economy", "command", "league"];
 function RoomsMenu({ active }: { active: Active }) {

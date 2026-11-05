@@ -16,7 +16,7 @@ export function CompanySwitch({ children }: { children: (open: (() => void) | un
       {children(many ? () => setOpen(true) : undefined)}
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)} statusBarTranslucent navigationBarTranslucent>
         <Pressable style={{ flex: 1, backgroundColor: C.scrim }} onPress={() => setOpen(false)} accessibilityLabel="Close" />
-        <View style={{ backgroundColor: "#0b0a1d", borderTopWidth: 1, borderTopColor: C.lineHi, paddingHorizontal: S.gutter, paddingTop: 12, paddingBottom: insets.bottom + 18, maxHeight: "70%" }}>
+        <View style={{ backgroundColor: "#080d09", borderTopWidth: 1, borderTopColor: C.lineHi, paddingHorizontal: S.gutter, paddingTop: 12, paddingBottom: insets.bottom + 18, maxHeight: "70%" }}>
           <View style={{ alignSelf: "center", width: 44, height: 4, borderRadius: 2, backgroundColor: C.lineHi, marginBottom: 16 }} />
           <Caps style={{ marginBottom: 10, letterSpacing: 3 }}>Show company</Caps>
           <ScrollView>

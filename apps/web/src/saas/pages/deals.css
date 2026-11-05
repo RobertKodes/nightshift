@@ -1,0 +1,117 @@
+/* /deals: Token Deals, an escrow desk. Builds on shift.css + forge.css; re-points the desk's own tokens at the protocol palette. */
+
+.sh.dl {
+  --surface: var(--px-panel); --raised: #0d1410; --edge: var(--px-line); --ink: var(--px-text); --muted: var(--px-dim);
+  --brand: var(--px-lime); --accent: var(--px-lime); --pv-font: var(--px-sans); --mono: var(--px-mono);
+}
+
+/* ---- the hero's example ticket: a TearTicket, stub and all */
+.dl-show { display: grid; gap: 12px; justify-items: center; }
+.px .sh-deals .dl-ticket { width: min(100%, 470px); }
+.px .sh-deals .dl-ticket .tear-ticket { margin: 0 auto; filter: drop-shadow(8px 8px 0 rgba(0, 0, 0, .45)); }
+.px .sh-deals .tear-ticket[data-used] .tear-ticket__content { opacity: 1; }
+.px .sh-deals .dl-ticket-in { position: absolute; inset: 0; display: grid; align-content: space-between; gap: 10px; padding: 18px 18px 16px 20px; border: 0; border-radius: 0; background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--tc) 14%, transparent), transparent 60%); }
+.px .sh-deals .dl-ticket-in::before { inset: 7px; border: 1px dashed color-mix(in srgb, var(--tc) 28%, transparent); border-radius: 0; }
+.px .sh-deals .dl-ticket-in::after { background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(255, 255, 255, .02) 3px 4px); }
+.px .sh-deals .dl-ticket header, .px .sh-deals .dl-ticket footer { font: 400 8.5px/1.2 var(--px-pixel); letter-spacing: .05em; color: color-mix(in srgb, var(--tc) 85%, white); }
+.px .sh-deals .dl-ticket footer span:first-child::before { border-radius: 0; box-shadow: none; }
+.px .sh-deals .dl-ticket footer span:last-child { border-radius: 0; }
+.px .sh-deals .dl-ticket-token { gap: 12px; }
+.px .sh-deals .dl-ticket-token i { width: 42px; height: 42px; border-radius: 0; background: #070b08; font: 700 18px var(--px-mono); }
+.px .sh-deals .dl-ticket-token b { font: 600 19px/1.1 var(--px-display); }
+.px .sh-deals .dl-ticket-token span { font: 400 11px var(--px-mono); color: var(--px-dim); }
+.px .sh-deals .dl-ticket-token em { margin-left: auto; padding: 3px 6px; border: 1px solid var(--px-line2); color: var(--px-lime); font: 400 8.5px/1 var(--px-pixel); font-style: normal; letter-spacing: .05em; }
+.px .sh-deals .dl-ticket-price { display: grid; gap: 3px; }
+.px .sh-deals .dl-ticket-price span { color: var(--px-faint); font: 400 8.5px/1 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh-deals .dl-ticket-price b { font: 700 22px/1.1 var(--px-mono); letter-spacing: -.01em; color: var(--px-text); }
+.px .sh-deals .dl-ticket-price small { color: var(--px-dim); font: 400 11px var(--px-mono); }
+.px .sh-deals .dl-ticket-vs { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; color: var(--tc); font: 500 12px var(--px-mono); }
+.px .sh-deals .dl-ticket dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin: 0; border-top: 1px dashed color-mix(in srgb, var(--tc) 30%, transparent); }
+.px .sh-deals .dl-ticket dl div { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 6px 0; border: 0; border-bottom: 1px dashed color-mix(in srgb, var(--tc) 18%, transparent); border-radius: 0; background: none; }
+.px .sh-deals .dl-ticket dl div:nth-child(odd) { padding-right: 10px; }
+.px .sh-deals .dl-ticket dl div:nth-child(even) { padding-left: 10px; border-left: 1px dashed color-mix(in srgb, var(--tc) 18%, transparent); }
+.px .sh-deals .dl-ticket dt { color: var(--px-faint); font: 400 8px/1.2 var(--px-pixel); letter-spacing: .04em; text-transform: uppercase; }
+.px .sh-deals .dl-ticket dd { margin: 0; color: var(--px-text); font: 500 11.5px/1.3 var(--px-mono); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.px .sh-deals .dl-ticket-bar { height: 6px; border-radius: 0; background: #142018; }
+.px .sh-deals .dl-ticket-bar i { display: block; height: 100%; border-radius: 0; background: var(--tc); box-shadow: none; }
+.dl-stub { position: absolute; inset: 0; display: grid; align-content: center; justify-items: center; gap: 6px; padding: 10px; text-align: center; }
+.dl-stub span, .dl-stub small { color: var(--px-faint); font: 400 8px/1.3 var(--px-pixel); letter-spacing: .05em; }
+.dl-stub b { color: var(--tc, var(--px-lime)); font: 700 18px/1 var(--px-mono); }
+.dl-stub i { color: var(--px-text); font: 500 12px var(--px-mono); font-style: normal; }
+.tear-ticket[data-orientation="vertical"] .dl-stub { grid-auto-flow: column; justify-content: space-between; align-items: center; padding: 10px 18px; }
+.px .sh-deals .dl-pills { width: min(100%, 470px); grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.px .sh-deals .dl-pills b { color: var(--tc); }
+
+/* ---- the road to launch, each step with its state */
+.px .sh-deals .fg-steps.dl-track { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.px .sh-deals .dl-track li { padding-left: 14px; }
+.px .sh-deals .dl-track li::before { display: none; }
+.dl-track-mark { margin-bottom: 4px; }
+.px .sh-deals .dl-track li[data-state="done"] { border-color: var(--px-line2); }
+.px .sh-deals .dl-track li[data-state="next"] { border-color: rgba(242, 193, 78, .4); }
+.px .sh-deals .dl-track li[data-state="later"] { border-style: dashed; }
+.px .sh-deals .dl-track li[data-state="next"] b::after { color: var(--px-gold); font: 400 8.5px/1 var(--px-pixel); letter-spacing: .05em; }
+
+/* ---- the board: filters and deal cards */
+.px .sh-deals .pv-dl-board-head .fg-head { margin-bottom: 0; }
+.px .sh-deals .pv-dl-filters select, .px .sh-deals .pv-dl-check, .px .sh-deals .pv-dl-seg { border-radius: 2px; border-color: var(--px-line2); background: #070b08; font: 500 12px var(--px-mono); }
+.px .sh-deals .pv-dl-seg button { font: 400 9.5px/1 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh-deals .pv-dl-seg button[aria-pressed="true"] { background: var(--px-lime); color: var(--px-ink); }
+.px .sh-deals .pv-dl-check input { accent-color: #b8ff3d; }
+.px .sh-deals .pv-dl-card { position: relative; border-radius: 2px; background: var(--px-panel); }
+.px .sh-deals .pv-dl-card::before { content: ""; position: absolute; left: -1px; top: -1px; width: 10px; height: 10px; border-left: 2px solid var(--px-lime); border-top: 2px solid var(--px-lime); }
+.px .sh-deals .pv-dl-card header img, .px .sh-deals .pv-dl-card header i { border-radius: 0; background: #070b08; }
+.px .sh-deals .pv-dl-card header b { font: 600 15px var(--px-display); }
+.px .sh-deals :is(.pv-dl-badge, .pv-dl-tags span) { border-radius: 0; font: 400 8.5px/1.2 var(--px-pixel); letter-spacing: .04em; }
+.px .sh-deals .pv-dl-badge[data-tone="good"], .px .sh-deals .pv-dl-tags span[data-tone="partner"] { color: var(--px-lime); border-color: var(--px-line2); }
+.px .sh-deals .pv-dl-badge[data-tone="warn"] { color: var(--px-gold); border-color: rgba(242, 193, 78, .4); }
+.px .sh-deals .pv-dl-badge[data-tone="bad"], .px .sh-deals .pv-dl-tags span[data-tone="bad"] { color: var(--px-red); border-color: rgba(255, 107, 125, .4); }
+.px .sh-deals .pv-dl-card dt { font: 400 8.5px/1.2 var(--px-pixel); letter-spacing: .05em; color: var(--px-faint); }
+.px .sh-deals .pv-dl-card dd { font: 500 13px/1.35 var(--px-mono); }
+.px .sh-deals .pv-dl-card dd small[data-tone="good"] { color: var(--px-lime); }
+.px .sh-deals .pv-dl-card dd small[data-tone="warn"] { color: var(--px-gold); }
+.px .sh-deals .pv-dl-bar { height: 6px; border-radius: 0; background: #142018; }
+.px .sh-deals .pv-dl-meta { color: var(--px-faint); font: 400 11.5px/1.5 var(--px-mono); }
+.px .sh-deals .pv-dl-card footer nav a { color: var(--px-lime); font: 400 9.5px/1 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; text-decoration: none; }
+.px .sh-deals .pv-dl-link { color: var(--px-lime); }
+
+/* ---- where the fee goes: the split as one pixel bar */
+.px .sh-deals .pv-dl-split { gap: 2px; min-height: 84px; padding: 2px; border: 1px solid var(--px-line2); background: #070b08; }
+.px .sh-deals .pv-dl-split span { border-radius: 0; background: #101a12; color: var(--px-dim); font: 400 11.5px/1.35 var(--px-sans); }
+.px .sh-deals .pv-dl-split span b { font: 700 20px var(--px-mono); }
+.px .sh-deals .pv-dl-split span[data-tone="stake"] { background: rgba(184, 255, 61, .16); color: #e4ffc0; }
+.px .sh-deals .pv-dl-split span[data-tone="stake"] b { color: var(--px-lime); }
+.px .sh-deals .pv-dl-split span[data-tone="burn"] { background: rgba(242, 193, 78, .14); color: #f8e3b0; box-shadow: none; }
+.px .sh-deals .pv-dl-split span[data-tone="burn"] b { color: var(--px-gold); }
+
+.px .sh-deals .pv-dl-projects { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; padding: 20px; border: 1px solid var(--px-line2); background: linear-gradient(90deg, rgba(184, 255, 61, .06), transparent 60%), var(--px-panel); }
+.px .sh-deals .pv-dl-projects .fg-head { margin: 0; }
+
+/* ---- sell form, your deals, the buy dialog */
+.px .sh-deals :is(.pv-dl-sell, .pv-dl-mine) { position: relative; margin-top: clamp(30px, 4vw, 44px); padding: 16px; border: 1px solid var(--px-line); border-radius: 2px; background: var(--px-panel); }
+.px .sh-deals :is(.pv-dl-sell, .pv-dl-mine) h2 { margin: 0 0 10px; font: 400 10.5px/1.2 var(--px-pixel) !important; letter-spacing: .06em; text-transform: uppercase; color: var(--px-lime); }
+.px .sh-deals .pv-dl-sell label, .px .sh-deals .pv-dl-field { color: var(--px-faint); font: 400 9.5px/1.3 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh-deals :is(.pv-dl-field input, .pv-dl-sell input, .pv-dl-sell select, .pv-dl-mine input) { border-radius: 2px; border-color: var(--px-line2); background: #070b08; color: var(--px-text); font: 500 13.5px var(--px-mono); letter-spacing: 0; text-transform: none; }
+.px .sh-deals :is(.pv-dl-field input, .pv-dl-sell input, .pv-dl-mine input):focus { outline: 0; border-color: var(--px-lime); }
+.px .sh-deals .pv-dl-sell label small { color: var(--px-lime); font: 400 11.5px var(--px-mono); text-transform: none; letter-spacing: 0; }
+.px .sh-deals .pv-dl-mine li { border-radius: 2px; background: #070b08; }
+.px .sh-deals .pv-dl-mine li b { font: 500 13px var(--px-mono); }
+.px .sh-deals .pv-dl-total b { color: var(--px-lime); font-family: var(--px-mono); }
+.px .sh-deals .pv-dl-dialog { padding: 16px; border: 1px solid var(--px-line2); border-radius: 2px; background: var(--px-panel); color: var(--px-text); box-shadow: 8px 8px 0 rgba(0, 0, 0, .55); }
+.px .sh-deals .pv-dl-dialog::backdrop { background: rgba(3, 5, 4, .82); }
+.px .sh-deals .pv-dl-dialog h2 { font: 600 20px var(--px-display) !important; letter-spacing: -.02em; }
+.px .sh-deals .pv-dl-dialog .pv-icon-button { border-radius: 2px; }
+.px .sh-deals .pv-dl-sum, .px .sh-deals :is(.pv-dl-warn, .pv-dl-ok, .pv-dl-err) { border-radius: 2px; }
+.px .sh-deals .pv-dl-sum { background: #070b08; border-color: var(--px-line); }
+.px .sh-deals .pv-dl-sum dd { font: 500 13px var(--px-mono); }
+.px .sh-deals .pv-dl-ok { background: rgba(184, 255, 61, .07); border-color: var(--px-line2); color: var(--px-lime); }
+.px .sh-deals .pv-dl-warn { background: rgba(242, 193, 78, .06); border-color: rgba(242, 193, 78, .35); color: #f4d58c; }
+.px .sh-deals .pv-dl-err { background: rgba(255, 107, 125, .06); border-color: rgba(255, 107, 125, .35); color: #ffb3bd; }
+
+@media (max-width: 899px) {
+  .px .sh-deals .fg-steps.dl-track { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .px .sh-deals .fg-steps.dl-track { grid-template-columns: 1fr; }
+  .px .sh-deals .dl-ticket-in { padding: 18px 16px 14px; }
+}

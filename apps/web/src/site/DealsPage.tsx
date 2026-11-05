@@ -6,10 +6,15 @@ import { ethTransport } from "../ethRpc";
 import { useSession } from "../session";
 import { chooseWallet } from "../wallet";
 import { NxIcon } from "../nx/icons";
-import { Stat } from "../station/Station";
 import { SectionIcon } from "./SectionIcon";
 import "../forge.css";
 import "./deals.css";
+import StatusMark from "../rb/StatusMark";
+import TearTicket from "../rb/TearTicket";
+import { PxButton, PxHero, PxNum, PxStat, PxStats } from "../saas/kit";
+import { PxIcon } from "../saas/PxIcon";
+import { HeroDots, ShStar } from "../saas/pages/shift-kit";
+import "../saas/pages/deals.css";
 
 const rpc = createPublicClient({ chain: mainnet, transport: ethTransport() });
 /** TokenDeals, as fixed in the order IMD checked (engine src/order-deals.ts). */
@@ -91,32 +96,36 @@ export function DealsPage() {
   const sell = () => { setSelling(true); window.setTimeout(() => document.getElementById("pv-dl-sell")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); };
   const cap = (desk?.maxFeeBps ?? 200) / 100, openCount = (desk?.deals ?? []).filter((d) => d.status === "open").length;
 
-  return <div className="st-room fg dl">
-    <header className="fg-hero" style={{ "--tc": EXAMPLES[ex]!.tone } as CSSProperties}>
-      <div className="fg-hero-in">
-        <span className="fg-eyebrow"><NxIcon name="market" size={16} /> $SHIFT · TOKEN DEALS · {open ? "LIVE ON ETHEREUM" : "OPENING SOON"}</span>
-        <h1>Token Deals. <em>Below market, from holders.</em></h1>
-        <p className="fg-lead">Holders sell tokens at a fixed price from an escrow contract on Ethereum. Buy all of a deal or part of it: in one transaction the tokens reach your wallet and the seller is paid. No slippage, nothing dumped on the chart, and nobody in the middle holding your money.</p>
-        <div className="fg-cta">
-          {open ? <a className="nx-btn nx-btn-acc" href="#deals"><NxIcon name="market" size={18} /> See the deals</a>
-            : <a className="nx-btn nx-btn-acc" href={TELEGRAM} target="_blank" rel="noreferrer"><NxIcon name="pulse" size={18} /> Get the launch alert</a>}
-          {open ? <button type="button" className="nx-btn" onClick={sell}>Sell tokens</button> : <a className="nx-btn" href="/partners">List your token</a>}
-          <a className="nx-btn" href="#how">How it works</a>
+  return <div className="sh sh-deals fg dl">
+    <PxHero
+      kicker={`$SHIFT · TOKEN DEALS · ${open ? "LIVE ON ETHEREUM" : "OPENING SOON"}`}
+      live={open}
+      title="Token Deals."
+      accent="Below market, from holders."
+      lead={<>Holders sell tokens at a fixed price from an escrow contract on Ethereum. Buy all of a deal or part of it: in one transaction the tokens reach your wallet and the seller is paid. <b>No slippage, nothing dumped on the chart, and nobody in the middle holding your money.</b></>}
+      actions={<>
+        {open ? <ShStar href="#deals" icon="market">See the deals</ShStar>
+          : <ShStar href={TELEGRAM} external icon="pulse">Get the launch alert</ShStar>}
+        {open ? <button type="button" className="px-btn" onClick={sell}><PxIcon name="coin" size={14} />Sell tokens</button> : <PxButton to="/partners" icon="link">List your token</PxButton>}
+        <a className="px-btn ghost" href="#how"><PxIcon name="doc" size={14} />How it works</a>
+      </>}
+      aside={
+        <div className="dl-show" style={{ "--tc": EXAMPLES[ex]!.tone } as CSSProperties}>
+          <DealTicket x={EXAMPLES[ex]!} />
+          <div className="fg-pills dl-pills" role="group" aria-label="Example deals">{EXAMPLES.map((x, i) => <button key={x.sym} type="button" className={i === ex ? "on" : ""} aria-pressed={i === ex} onClick={() => setEx(i)}><b>{x.pill}</b><span>{x.pillLine}</span></button>)}</div>
         </div>
-        <div className="st-stats">
-          <Stat label="Buyer fee" value={`${fee}%`} note="on top; the seller gets the full price" />
-          <Stat label="Holders pay" value={`${holderFee}%`} note="500k $SHIFT, a frog or a Watcher" />
-          <Stat label="Fee cap" value={`${cap}%`} note="written into the contract" />
-          <Stat label="Desk" value={open ? String(openCount) : "SOON"} note={open ? "open deals on Ethereum" : "escrow contract in the build queue"} />
-        </div>
-      </div>
-      <div className="fg-show">
-        <DealTicket x={EXAMPLES[ex]!} />
-        <div className="fg-pills dl-pills" role="group" aria-label="Example deals">{EXAMPLES.map((x, i) => <button key={x.sym} type="button" className={i === ex ? "on" : ""} aria-pressed={i === ex} onClick={() => setEx(i)}><b>{x.pill}</b><span>{x.pillLine}</span></button>)}</div>
-      </div>
-    </header>
+      }
+      bg={<HeroDots />}
+    />
 
-    <div className="st-body">
+    <PxStats cols={4}>
+      <PxStat label="Buyer fee" tone="lime" value={<PxNum value={fee} decimals={fee % 1 ? 2 : 0} suffix="%" />} sub="on top; the seller gets the full price" />
+      <PxStat label="Holders pay" tone="lime" value={<PxNum value={holderFee} decimals={holderFee % 1 ? 1 : 0} suffix="%" />} sub="500k $SHIFT, a frog or a Watcher" />
+      <PxStat label="Fee cap" tone="gold" value={<PxNum value={cap} decimals={cap % 1 ? 1 : 0} suffix="%" />} sub="written into the contract" />
+      <PxStat label="Desk" value={open ? <PxNum value={openCount} /> : "SOON"} sub={open ? "open deals on Ethereum" : "escrow contract in the build queue"} />
+    </PxStats>
+
+    <div className="fg-body">
       {open ? <>
         <section className="fg-sec" id="deals">
           <div className="pv-dl-board-head">
@@ -136,7 +145,7 @@ export function DealsPage() {
         {me && <MyDeals desk={desk!} me={me} deals={mine} onDone={() => void load()} />}
       </> : <section className="fg-sec">
         <div className="fg-head"><span className="fg-kicker">Road to launch</span><h2>What happens before the first deal</h2></div>
-        <ol className="fg-steps dl-track">{TRACK.map(([title, line, state]) => <li key={title} data-state={state}><b>{title}</b><span>{line}</span></li>)}</ol>
+        <ol className="fg-steps dl-track">{TRACK.map(([title, line, state]) => <li key={title} data-state={state}><StatusMark status={state === "done" ? "done" : state === "next" ? "running" : "pending"} size={18} strokeWidth={2} color="#5f7364" doneColor="#b8ff3d" className="dl-track-mark" /><b>{title}</b><span>{line}</span></li>)}</ol>
         {failed && !desk && <p className="fg-dim">The live status could not be loaded right now.</p>}
       </section>}
 
@@ -211,18 +220,35 @@ const PERKS: [Parameters<typeof NxIcon>[0]["name"], string, string][] = [
   ["swap", "Buy all or a part", "Take the whole deal or any amount from the seller's minimum. Pay in the coin the seller chose: ETH, USDC, USDT, IMD or $SHIFT."],
 ];
 
-/** The hero card: one deal as an escrow ticket, in the style of the Forge's Night Watcher card. */
+/** Wide enough for the ticket on its side; a phone gets it upright, stub at the bottom. */
+function useWideTicket(): boolean {
+  const [wide, setWide] = useState(() => typeof matchMedia === "function" && matchMedia("(min-width: 620px)").matches);
+  useEffect(() => {
+    const q = matchMedia("(min-width: 620px)"), sync = () => setWide(q.matches);
+    sync(); q.addEventListener("change", sync);
+    return () => q.removeEventListener("change", sync);
+  }, []);
+  return wide;
+}
+
+/** The hero card: one example deal as an escrow ticket with a stub you can tear off (React Bits TearTicket). */
 function DealTicket({ x }: { x: Example }) {
+  const wide = useWideTicket();
+  const body = <div className="dl-ticket-in">
+    <header><span>TOKEN DEALS / ESCROW</span><span>DEAL #{x.id}</span></header>
+    <div className="dl-ticket-token"><i>{x.sym[0]}</i><div><b>{x.name}</b><span>${x.sym} · Ethereum</span></div>{x.partner && <em>PARTNER</em>}</div>
+    <div className="dl-ticket-price"><span>Price per token</span><b>{x.price}</b><small>{x.usd}</small></div>
+    <p className="dl-ticket-vs">{x.vs}</p>
+    <dl><div><dt>Left</dt><dd>{x.left}</dd></div><div><dt>Min buy</dt><dd>{x.min}</dd></div><div><dt>Ends in</dt><dd>{x.ends}</dd></div><div><dt>Verdict</dt><dd>{x.verdict}</dd></div></dl>
+    <div className="dl-ticket-bar"><i style={{ width: `${Math.max(x.sold, 2)}%` }} /></div>
+    <footer><span>ESCROW LOCKED</span><span>EXAMPLE</span></footer>
+  </div>;
+  const stub = <div className="dl-stub"><span>ADMIT ONE</span><b>${x.sym}</b><i>#{x.id}</i><small>EXAMPLE · TEAR ME</small></div>;
   return <div className="dl-ticket" aria-label={`Example deal: ${x.name}`}>
-    <div className="dl-ticket-in">
-      <header><span>TOKEN DEALS / ESCROW</span><span>DEAL #{x.id}</span></header>
-      <div className="dl-ticket-token"><i>{x.sym[0]}</i><div><b>{x.name}</b><span>${x.sym} · Ethereum</span></div>{x.partner && <em>PARTNER</em>}</div>
-      <div className="dl-ticket-price"><span>Price per token</span><b>{x.price}</b><small>{x.usd}</small></div>
-      <p className="dl-ticket-vs">{x.vs}</p>
-      <dl><div><dt>Left</dt><dd>{x.left}</dd></div><div><dt>Min buy</dt><dd>{x.min}</dd></div><div><dt>Ends in</dt><dd>{x.ends}</dd></div><div><dt>Verdict</dt><dd>{x.verdict}</dd></div></dl>
-      <div className="dl-ticket-bar"><i style={{ width: `${Math.max(x.sold, 2)}%` }} /></div>
-      <footer><span>ESCROW LOCKED</span><span>EXAMPLE</span></footer>
-    </div>
+    <TearTicket key={`${x.id}-${wide ? "w" : "n"}`} orientation={wide ? "horizontal" : "vertical"} width={wide ? 470 : 340} height={wide ? 300 : 470} stubSize={wide ? 116 : 104}
+      radius={2} holes={wide ? 11 : 9} holeSize={5} notch={4} rotate={0} tilt={wide} tiltMax={6} parallax={3} background="#0a0f0b" stubBackground="#0d1410" color="#e9f4ea" borderColor="rgba(184,255,61,.38)" ariaLabel={`Tear the stub off example deal #${x.id}`} stub={stub}>
+      {body}
+    </TearTicket>
   </div>;
 }
 

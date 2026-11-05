@@ -19,7 +19,7 @@ export default function Approvals() {
       <Header title="Approvals" back={false} right={waiting.length > 0 ? <Tag>{waiting.length} waiting</Tag> : undefined} />
       <ScrollView
         contentContainerStyle={{ padding: S.gutter, paddingBottom: 40 }}
-        refreshControl={<RefreshControl refreshing={pulling} tintColor={C.violet} colors={[C.violet]} progressBackgroundColor={C.panel} onRefresh={async () => { setPulling(true); await refresh(); setPulling(false); }} />}
+        refreshControl={<RefreshControl refreshing={pulling} tintColor={C.lime} colors={[C.lime]} progressBackgroundColor={C.panel} onRefresh={async () => { setPulling(true); await refresh(); setPulling(false); }} />}
       >
         {offline && <Offline at={at} />}
         {waiting.length === 0 ? (

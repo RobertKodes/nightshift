@@ -66,7 +66,7 @@ export default function Approve() {
   return (
     <View style={{ flex: 1 }}>
       <Pressable style={{ flex: 1, minHeight: 90, backgroundColor: C.scrim }} onPress={close} accessibilityLabel="Close" />
-      <View style={{ backgroundColor: "#0a0920", borderTopWidth: 1, borderTopColor: C.lineHi, maxHeight: "88%" }}>
+      <View style={{ backgroundColor: "#080d09", borderTopWidth: 1, borderTopColor: C.lineHi, maxHeight: "88%" }}>
         <View style={{ alignSelf: "center", width: 48, height: 4, borderRadius: 2, backgroundColor: C.lineHi, marginTop: 12 }} />
         <ScrollView contentContainerStyle={{ padding: S.gutter + 2, paddingBottom: 18 }}>
           {!company || !w ? (
@@ -105,13 +105,13 @@ export default function Approve() {
               </Frame>
 
               <Section>Why the CEO wants it</Section>
-              <View style={{ borderLeftWidth: 2, borderLeftColor: C.violet, paddingLeft: 14 }}>
-                <Serif style={{ fontSize: 21, lineHeight: 27 }}>“{w.why}”</Serif>
+              <View style={{ borderLeftWidth: 2, borderLeftColor: C.lime, paddingLeft: 14 }}>
+                <Serif style={{ fontSize: 22, lineHeight: 29, color: C.ink, fontFamily: F.ui, letterSpacing: -0.3 }}>“{w.why}”</Serif>
               </View>
               {w.market && <Mono style={{ marginTop: 12, fontSize: 12.5, color: C.faint }}>MARKET FIRST · {usd(w.costUsd)} here instead of the swarm at ~{usd(w.market.swarmUsd)}</Mono>}
               {w.reason && !w.market && <Mono style={{ marginTop: 12, fontSize: 12.5, color: C.faint }}>{w.reason}</Mono>}
 
-              <View style={{ marginTop: 22, alignItems: "center", borderRadius: 22, borderWidth: 1, borderColor: C.lineHi, backgroundColor: "#100e29", paddingVertical: 20, paddingHorizontal: 16 }}>
+              <View style={{ marginTop: 22, alignItems: "center", borderRadius: 2, borderWidth: 1, borderColor: C.lineHi, backgroundColor: "#0a120c", paddingVertical: 20, paddingHorizontal: 16 }}>
                 <Body style={{ fontFamily: F.uiSemi, fontSize: 18, textAlign: "center" }}>Approve {usd(w.costUsd)} for {company.name}</Body>
                 <Dim style={{ marginTop: 4 }}>Signed by this phone's key · valid 120 s</Dim>
                 <View style={{ marginVertical: 16 }}><Icon name="fingerprint" size={48} color={C.lime} stroke={1.6} /></View>
@@ -125,7 +125,7 @@ export default function Approve() {
         </ScrollView>
         {company && w && (
           // the decision stays in reach, whatever the length of the why
-          <View style={{ flexDirection: "row", gap: 12, paddingHorizontal: S.gutter + 2, paddingTop: 12, paddingBottom: insets.bottom + 14, borderTopWidth: 1, borderTopColor: C.line, backgroundColor: "#0a0920" }}>
+          <View style={{ flexDirection: "row", gap: 12, paddingHorizontal: S.gutter + 2, paddingTop: 12, paddingBottom: insets.bottom + 14, borderTopWidth: 1, borderTopColor: C.line, backgroundColor: "#080d09" }}>
             <Button style={{ flex: 0.75 }} kind="danger" busy={busy === "decline"} disabled={!!busy} onPress={decline}>Decline</Button>
             <Button style={{ flex: 1.25 }} kind="lime" busy={busy === "approve"} disabled={!!busy} onPress={approve}>Approve with fingerprint</Button>
           </View>

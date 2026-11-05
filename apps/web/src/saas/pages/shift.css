@@ -1,0 +1,225 @@
+/* ============================================================================
+   NIGHTSHIFT // PROTOCOL INTERFACE v3: the $SHIFT and DeFi pages
+   (/token /stake /swap /tokenomics /deals /impact /frogs /forge /watch).
+   One container, the kit's hero/stats/panels, and the money widgets those pages
+   share (swap legs, lock pickers, ledgers, tables) re-cut as terminal blocks.
+   Everything is scoped under .sh so no other page changes.
+   ========================================================================== */
+
+.sh {
+  /* the old sub-page tokens, re-pointed at the protocol palette: widgets that read them follow along */
+  --s-bg: var(--px-panel); --s-bg2: #070b08; --s-line: var(--px-line); --s-line2: var(--px-line2);
+  --s-text: var(--px-text); --s-dim: var(--px-dim); --s-faint: var(--px-faint); --s-acc: var(--px-lime); --s-acc-bg: rgba(184, 255, 61, .1);
+  --s-ok: var(--px-lime); --s-ok-bg: rgba(184, 255, 61, .1); --s-warn: var(--px-gold); --s-warn-bg: rgba(242, 193, 78, .07);
+  --ink: var(--px-text); --dim: var(--px-dim); --faint: var(--px-faint); --edge: var(--px-line); --acc: var(--px-lime); --tc: var(--px-lime);
+  --nx-ui: var(--px-sans); --nx-mono: var(--px-mono); --serif: var(--px-display);
+  position: relative; box-sizing: border-box; width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 clamp(14px, 4vw, 28px) 88px;
+  color: var(--px-text); font-family: var(--px-sans); overflow-x: clip;
+}
+.sh *, .sh *::before, .sh *::after { box-sizing: border-box; }
+.sh h1, .sh h2, .sh h3 { text-wrap: balance; }
+.sh :is(p, li, dd, span) { overflow-wrap: anywhere; }
+.sh .pk-hero { padding-top: clamp(22px, 4vw, 44px); }
+.sh .pk-stats { margin-top: clamp(18px, 3vw, 28px); }
+.sh .px-sec { margin-top: clamp(38px, 5.4vw, 64px); }
+/* blocks stacked inside a section sit 10px apart (grids of panels set their own gap) */
+.sh .pk-sec > :not(.px-sec-head) + :not(.px-sec-head), .sh .sh-stack > * + * { margin-top: 10px; }
+.sh code { font: 500 .9em var(--px-mono); padding: 1px 5px; border: 1px solid var(--px-line); background: #070b08; color: var(--px-text); border-radius: 2px; overflow-wrap: anywhere; }
+.sh a:not([class]) { color: var(--px-lime); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.sh a:not([class]):hover { color: #d6ff8f; }
+.sh .good, .sh .sh-ok { color: var(--px-lime); }
+.sh .bad, .sh .sh-bad { color: var(--px-red); }
+.sh .dim { color: var(--px-dim); }
+.sh .faint { color: var(--px-faint); }
+.sh .mono { font-family: var(--px-mono); }
+/* panel heads with a long title wrap instead of squeezing the state tag */
+.sh .pk-panel-h { flex-wrap: wrap; row-gap: 6px; }
+.sh .pk-panel-h b { flex: 0 1 auto; min-width: 0; line-height: 1.35; }
+.sh .pk-state, .sh .pk-panel-r { white-space: nowrap; }
+.sh-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---- the one primary action: a lime button with a star running its border */
+.sh .sh-star { min-height: 40px; padding: 0 16px; gap: 8px; font: 700 12.5px/1 var(--px-mono); letter-spacing: .03em; text-transform: uppercase; text-decoration: none; }
+.sh .sh-star > span { display: inline-flex; align-items: center; }
+.sh .sh-star.wide { width: 100%; min-height: 46px; }
+.sh .sh-star:hover { filter: brightness(1.06); }
+/* the shell's link colour must not win over the button's dark ink */
+.px .sh a.sh-star, .px .sh a.sh-star:visited, .px .sh a.sh-star:hover, .px .sh button.sh-star { color: #031007 !important; }
+
+/* ---- hero asides: a readout board (split-flap numbers inside a terminal panel) */
+.sh-board .pk-panel-b { display: grid; gap: 12px; }
+.sh-board-k { color: var(--px-faint); font: 400 9.5px/1 var(--px-pixel); letter-spacing: .06em; text-transform: uppercase; }
+.sh-board-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--px-line); border: 1px solid var(--px-line); }
+.sh-board-row > * { display: grid; gap: 5px; padding: 10px 11px; background: #080d09; text-decoration: none; color: inherit; min-width: 0; }
+.sh-board-row > a:hover { background: #0d1410; }
+.sh-board-row > * > span:first-child { color: var(--px-faint); font: 400 9px/1.2 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.sh-board-row b { font: 600 15px/1.1 var(--px-mono); font-variant-numeric: tabular-nums; color: var(--px-text); overflow-wrap: anywhere; }
+.sh-board-row b.lime { color: var(--px-lime); } .sh-board-row b.gold { color: var(--px-gold); } .sh-board-row b.imd { color: #8db6ff; }
+.sh-flap { max-width: 100%; font-family: var(--px-mono) !important; font-weight: 700 !important; }
+.sh-flap-wrap { overflow: hidden; padding: 10px 0 4px; }
+.sh-art { display: block; width: 100%; height: auto; image-rendering: auto; }
+
+/* a terminal prompt line */
+.sh-prompt { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 9px 12px; border-top: 1px dashed var(--px-line); color: var(--px-faint); font: 400 11px/1.3 var(--px-mono); white-space: nowrap; overflow: hidden; }
+.sh-prompt span:first-child { color: var(--px-pepe); }
+.sh-prompt span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; }
+.sh-prompt i { flex: none; width: 7px; height: 13px; background: var(--px-lime); animation: pk-blink 1.1s steps(2) infinite; }
+
+/* ---- in-page jump links: pixel chips */
+.sh-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 0; padding: 0; list-style: none; }
+.px .sh .sh-chips a, .sh-chips button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 11px; border: 1px solid var(--px-line); background: rgba(10, 15, 11, .8); color: var(--px-dim); font: 400 9.5px/1 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; text-decoration: none; cursor: pointer; }
+.px .sh .sh-chips a:hover, .sh-chips button:hover { color: var(--px-lime); border-color: var(--px-line2); }
+.sh-chips b { color: var(--px-faint); font-weight: 400; }
+
+/* ---- segmented switch (buy/sell, stake/unstake, any chain/pool) */
+.px .sh :is(.sh-seg, .stake-sides, .swap-tabs, .ms-modes) { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; margin: 0; padding: 0; border: 1px solid var(--px-line2); border-radius: 2px; background: #070b08; box-shadow: none; }
+.px .sh :is(.sh-seg, .stake-sides, .swap-tabs, .ms-modes) button { min-height: 38px; padding: 0 12px; border: 0; border-radius: 0; background: transparent; color: var(--px-dim); box-shadow: none; font: 400 10px/1 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; cursor: pointer; }
+.px .sh :is(.sh-seg, .stake-sides, .swap-tabs, .ms-modes) button + button { border-left: 1px solid var(--px-line); }
+.px .sh :is(.sh-seg, .stake-sides, .swap-tabs, .ms-modes) button.on, .px .sh :is(.sh-seg, .stake-sides, .swap-tabs, .ms-modes) button[aria-selected="true"] { background: var(--px-lime); color: var(--px-ink); }
+.px .sh :is(.sh-seg, .stake-sides, .swap-tabs, .ms-modes) button:not(.on):hover { color: var(--px-lime); }
+
+/* ---- the money widgets: swap legs, amounts, slippage and lock pickers */
+/* an embedded legacy card (frog claims and the like) reads as one more terminal panel */
+.px .sh .tkn-card { position: relative; display: grid; gap: 12px; padding: 14px; border: 1px solid var(--px-line); border-radius: 2px; background: var(--px-panel); box-shadow: none; backdrop-filter: none; }
+.px .sh .tkn-card::before { content: ""; display: block; position: absolute; left: -1px; top: -1px; width: 10px; height: 10px; border-left: 2px solid var(--px-lime); border-top: 2px solid var(--px-lime); background: none; pointer-events: none; }
+.px .sh .tkn-card::after { display: none; }
+.px .sh .tkn-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: -14px -14px 0; padding: 10px 14px; border-bottom: 1px solid var(--px-line); background: #080d09; }
+.px .sh .tkn-head > div { display: grid; gap: 4px; flex: 1 1 200px; min-width: 0; }
+.px .sh .tkn-head b { font: 400 10px/1.2 var(--px-pixel); letter-spacing: .06em; text-transform: uppercase; color: var(--px-text); }
+.px .sh .tkn-head span { color: var(--px-faint); font: 400 11.5px/1.4 var(--px-mono); letter-spacing: 0; text-transform: none; }
+.px .sh .tkn-state { padding: 4px 7px; border: 1px solid var(--px-line2); border-radius: 2px; background: transparent; color: var(--px-dim); font: 400 9px/1 var(--px-pixel) !important; letter-spacing: .05em !important; }
+.px .sh .tkn-state.on { color: var(--px-lime); }
+.px .sh .tkn-card .btn.primary { justify-self: start; }
+.px .sh .swap-box { display: grid; gap: 10px; }
+.px .sh .swap-leg { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--px-line); border-radius: 2px; background: #070b08; }
+.px .sh .swap-leg:focus-within { border-color: var(--px-lime); }
+.px .sh .swap-leg > span { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--px-faint); font: 400 9.5px/1.2 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh .swap-leg div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.px .sh .swap-in { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: none; color: var(--px-text); font: 600 clamp(22px, 3vw, 28px)/1.15 var(--px-mono); font-variant-numeric: tabular-nums; }
+.px .sh .swap-in::placeholder { color: #3b4a3f; }
+.px .sh .swap-leg b { font: 600 clamp(22px, 3vw, 28px)/1.15 var(--px-mono); color: var(--px-dim); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.px .sh .swap-leg i { flex: none; font: 400 10px/1 var(--px-pixel); font-style: normal; letter-spacing: .05em; color: var(--px-lime); }
+.px .sh .swap-flip { justify-self: center; display: grid; place-items: center; width: 30px; height: 30px; margin: -14px 0; position: relative; z-index: 1; border: 1px solid var(--px-line2); background: var(--px-panel); color: var(--px-lime); font: 600 14px/1 var(--px-mono); }
+.px .sh .swap-max { padding: 0; border: 0; background: none; color: var(--px-lime); font: 500 11px/1 var(--px-mono); letter-spacing: 0; text-transform: none; cursor: pointer; }
+.px .sh .swap-max:hover { text-decoration: underline; text-underline-offset: 3px; }
+.px .sh .swap-slip { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; color: var(--px-faint); font: 400 9.5px/1 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh .swap-slip > span { margin-right: 6px; }
+.px .sh .swap-slip button { min-height: 30px; padding: 0 10px; border: 1px solid var(--px-line); border-radius: 2px; background: #070b08; color: var(--px-dim); font: 500 11.5px/1 var(--px-mono); letter-spacing: 0; text-transform: none; cursor: pointer; }
+.px .sh .swap-slip button:hover { border-color: var(--px-line2); color: var(--px-text); }
+.px .sh .swap-slip button.on { border-color: var(--px-lime); background: rgba(184, 255, 61, .12); color: var(--px-lime); }
+.px .sh .swap-links { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding-top: 10px; border-top: 1px dashed var(--px-line); font: 400 9.5px/1 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh .swap-links a { color: var(--px-lime); text-decoration: none; }
+.px .sh .swap-links a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.px .sh .swap-box p, .px .sh .sh-line { margin: 0; color: var(--px-dim); font: 400 12.5px/1.55 var(--px-sans); }
+.px .sh .swap-box p.good { color: var(--px-lime); } .px .sh .swap-box p.bad { color: var(--px-red); }
+.px .sh .ns-cta { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: auto; min-height: 46px; padding: 0 16px; border: 1px solid var(--px-lime); border-radius: 2px; background: var(--px-lime); color: var(--px-ink) !important; box-shadow: 3px 3px 0 rgba(184, 255, 61, .2); font: 700 12.5px/1 var(--px-mono); letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.px .sh .ns-cta::before { display: none; }
+.px .sh .ns-cta:hover:not(:disabled) { background: #c8ff63; }
+.px .sh .ns-cta:disabled { cursor: not-allowed; opacity: 1; background: #101a12; border-color: var(--px-line2); color: var(--px-dim) !important; box-shadow: none; }
+.px .sh .tkn-warn { display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 10px 12px; border: 1px solid rgba(242, 193, 78, .3); border-left: 3px solid var(--px-gold); border-radius: 2px; background: rgba(242, 193, 78, .05); color: #f4d58c; font: 400 12.5px/1.55 var(--px-sans); }
+.px .sh .tkn-addr { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 4px 12px; padding: 9px 11px; border: 1px solid var(--px-line); border-radius: 2px; background: #070b08; }
+.px .sh .tkn-addr > span { color: var(--px-faint); font: 400 9px/1.3 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh .tkn-addr :is(a, code) { min-width: 0; padding: 0; border: 0; background: none; color: var(--px-text); font: 500 12px/1.4 var(--px-mono); word-break: break-all; text-decoration: none; }
+.px .sh .tkn-addr a:hover { color: var(--px-lime); }
+.px .sh .tkn-addr > a:last-child:not(:nth-child(2)) { grid-column: 2; color: var(--px-lime); }
+.px .sh .launch-stage { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px dashed var(--px-line2); color: var(--px-lime); font: 500 12px/1.4 var(--px-mono); }
+.px .sh .launch-stage .pulse { width: 7px; height: 7px; background: var(--px-lime); border-radius: 0; animation: pk-blink 1s steps(2) infinite; }
+
+/* ---- a list of points as a grid of terminal cells (was .frogs-util) */
+.px .sh :is(.frogs-util, .sh-grid) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.px .sh .sh-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.px .sh :is(.frogs-util, .sh-grid) > li { position: relative; padding: 14px 16px 15px; border: 1px solid var(--px-line); border-radius: 2px; background: var(--px-panel); color: var(--px-dim); font: 400 13px/1.6 var(--px-sans); }
+.px .sh :is(.frogs-util, .sh-grid) > li::before { content: ""; position: absolute; left: -1px; top: -1px; width: 8px; height: 8px; border-left: 2px solid var(--px-lime); border-top: 2px solid var(--px-lime); }
+.px .sh :is(.frogs-util, .sh-grid) > li > b:first-child { display: block; margin-bottom: 5px; color: var(--px-text); font: 600 14.5px/1.3 var(--px-display); letter-spacing: -.015em; }
+.px .sh :is(.frogs-util, .sh-grid) > li a { color: var(--px-lime); }
+
+/* ---- key/value ledgers (was .frogs-traits) and spec grids (was .token-specs) */
+.px .sh :is(.frogs-traits, .sh-ledger) { display: grid; gap: 0; border: 1px solid var(--px-line); border-radius: 2px; background: var(--px-panel); overflow: hidden; }
+.px .sh :is(.frogs-traits, .sh-ledger) > div { display: grid; grid-template-columns: minmax(96px, 180px) minmax(0, 1fr); gap: 14px; align-items: baseline; padding: 11px 14px; border: 0; border-bottom: 1px solid rgba(184, 255, 61, .08); border-radius: 0; background: transparent; font: 400 13px/1.55 var(--px-sans); color: var(--px-dim); }
+.px .sh :is(.frogs-traits, .sh-ledger) > div:last-child { border-bottom: 0; }
+.px .sh :is(.frogs-traits, .sh-ledger) > div:hover { background: rgba(184, 255, 61, .03); }
+.px .sh :is(.frogs-traits, .sh-ledger) b { font: 600 13px/1.3 var(--px-mono); letter-spacing: 0; text-transform: none; color: var(--px-lime); font-variant-numeric: tabular-nums; }
+.px .sh :is(.frogs-traits, .sh-ledger) a { color: var(--px-text); }
+.px .sh :is(.frogs-traits, .sh-ledger) a:hover { color: var(--px-lime); }
+.px .sh .token-specs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--px-line); background: var(--px-line); }
+.px .sh .token-specs > div { display: grid; gap: 6px; padding: 11px 13px; border: 0; border-radius: 0; background: #080d09; }
+.px .sh .token-specs span { color: var(--px-faint); font: 400 9px/1.2 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh .token-specs b { color: var(--px-text); font: 600 13.5px/1.35 var(--px-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+/* ---- tables: a ledger, scrollable on a phone */
+.sh-table { overflow-x: auto; border: 1px solid var(--px-line); background: var(--px-panel); }
+.px .sh .sh-table table, .px .sh table.plain { width: 100%; margin: 0; border-collapse: collapse; }
+.px .sh .sh-table tr:last-child td, .px .sh .sh-table tr:last-child th[scope="row"] { border-bottom: 0; }
+.px .sh .sh-table table { min-width: 520px; }
+.px .sh table th { background: #080d09; }
+.px .sh table td, .px .sh table th[scope="row"] { color: var(--px-dim); vertical-align: top; }
+.px .sh table th[scope="row"] { font: 500 12.5px/1.4 var(--px-mono); letter-spacing: 0; text-transform: none; color: var(--px-text); border-bottom: 1px solid rgba(184, 255, 61, .07); }
+.px .sh table td b { color: var(--px-text); font-family: var(--px-mono); }
+.px .sh table a { color: var(--px-lime); text-decoration: none; }
+.px .sh table a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.px .sh table .mono, .px .sh table code { font: 500 12px/1.4 var(--px-mono); word-break: break-all; }
+
+/* ---- notes */
+.sh-note { margin: 10px 0 0; max-width: 78ch; color: var(--px-dim); font: 400 13px/1.65 var(--px-sans); }
+.sh-note b { color: var(--px-text); }
+.sh-warn { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 0; padding: 11px 13px; border: 1px solid rgba(242, 193, 78, .3); border-left: 3px solid var(--px-gold); background: rgba(242, 193, 78, .05); color: #f4d58c; font: 400 13px/1.55 var(--px-sans); }
+.sh-warn b { color: var(--px-gold); }
+.sh-legal { margin: 34px 0 0; padding-top: 14px; border-top: 1px dashed var(--px-line); color: var(--px-faint); font: 400 9.5px/1.6 var(--px-pixel); letter-spacing: .04em; text-transform: uppercase; }
+.sh-msg { margin: 0; font: 400 12.5px/1.55 var(--px-sans); }
+.sh-msg.good { color: var(--px-lime); } .sh-msg.bad { color: var(--px-red); }
+
+/* ---- the details/summary FAQ */
+.px .sh :is(.fg-faq, .sh-faq) { display: grid; gap: 0; border: 1px solid var(--px-line); background: var(--px-panel); }
+.px .sh :is(.fg-faq, .sh-faq) details { border: 0; border-bottom: 1px solid var(--px-line); border-radius: 0; background: transparent; padding: 0; }
+.px .sh :is(.fg-faq, .sh-faq) details:last-child { border-bottom: 0; }
+.px .sh :is(.fg-faq, .sh-faq) summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 0 16px; cursor: pointer; list-style: none; color: var(--px-text); font: 500 14px/1.35 var(--px-display); letter-spacing: -.01em; }
+.px .sh :is(.fg-faq, .sh-faq) summary::-webkit-details-marker { display: none; }
+.px .sh :is(.fg-faq, .sh-faq) summary::after { content: "+"; position: static; flex: none; width: auto; height: auto; border: 0; transform: none; color: var(--px-lime); font: 600 16px/1 var(--px-mono); }
+.px .sh :is(.fg-faq, .sh-faq) details[open] summary::after { transform: none; }
+.px .sh :is(.fg-faq, .sh-faq) details[open] summary::after { content: "−"; }
+.px .sh :is(.fg-faq, .sh-faq) details[open] summary { color: var(--px-lime); }
+.px .sh :is(.fg-faq, .sh-faq) details p { margin: 0; padding: 0 16px 16px; color: var(--px-dim); font: 400 13.5px/1.65 var(--px-sans); max-width: 82ch; }
+
+/* ---- the station pages' blocks (forge, watch, deals) in the protocol cut */
+.px .sh .fg-sec { display: block; margin-top: clamp(38px, 5.4vw, 64px); }
+.px .sh .fg-sec > * + * { margin-top: 14px; }
+.px .sh .fg-head { display: grid; gap: 0; margin-bottom: 16px; }
+.px .sh .fg-head h2 { margin: 8px 0 0; font: 600 clamp(22px, 2.8vw, 32px)/1.1 var(--px-display) !important; letter-spacing: -.025em; color: var(--px-text); }
+.px .sh .fg-head p { margin: 8px 0 0; }
+.px .sh .fg-kicker { display: inline-flex; align-items: center; gap: 8px; color: var(--px-lime); font: 400 10px/1 var(--px-pixel) !important; letter-spacing: .08em; text-transform: uppercase; }
+.px .sh .fg-kicker::before { content: ""; width: 6px; height: 6px; background: currentColor; box-shadow: 9px 0 0 currentColor; margin-right: 9px; }
+.px .sh .fg-dim, .px .sh .st-note, .px .sh .st-empty { color: var(--px-dim); font: 400 13px/1.65 var(--px-sans); max-width: 80ch; }
+.px .sh .st-note a, .px .sh .st-empty a, .px .sh .fg-dim a { color: var(--px-lime); }
+.px .sh .fg-perks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.px .sh .fg-perk { position: relative; display: grid; gap: 8px; align-content: start; padding: 16px 16px 18px; border: 1px solid var(--px-line); border-radius: 2px; background: var(--px-panel); overflow: visible; }
+.px .sh .fg-perk::after { display: none; }
+.px .sh .fg-perk { --tc: var(--px-lime); } .px .sh .fg-perk:nth-child(3n+2) { --tc: var(--px-pepe); } .px .sh .fg-perk:nth-child(3n) { --tc: var(--px-gold); }
+.px .sh .fg-perk::before { content: ""; position: absolute; left: -1px; top: -1px; width: 8px; height: 8px; border-left: 2px solid var(--tc); border-top: 2px solid var(--tc); }
+.px .sh .fg-perk b { font: 600 15px/1.25 var(--px-display); letter-spacing: -.015em; color: var(--px-text); }
+.px .sh .fg-perk p { margin: 0; color: var(--px-dim); font: 400 13px/1.6 var(--px-sans); }
+.px .sh .fg-perk .nx-ic { color: var(--tc); }
+.px .sh .fg-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; counter-reset: fg; }
+.px .sh .fg-steps li { position: relative; display: grid; gap: 6px; align-content: start; padding: 14px 14px 15px 50px; border: 1px solid var(--px-line); border-radius: 2px; background: var(--px-panel); counter-increment: fg; }
+.px .sh .fg-steps li::before { content: "0" counter(fg); position: absolute; left: 14px; top: 14px; width: auto; height: auto; display: block; border: 0; border-radius: 0; background: none; color: var(--px-lime); font: 400 11px/1 var(--px-pixel); letter-spacing: .04em; }
+.px .sh .fg-steps b { font: 600 14.5px/1.3 var(--px-display); letter-spacing: -.01em; color: var(--px-text); }
+.px .sh .fg-steps span { color: var(--px-dim); font: 400 13px/1.55 var(--px-sans); }
+.px .sh .nx-btn { --c: var(--px-lime); min-height: 40px; padding: 0 15px; clip-path: none; border: 1px solid var(--px-line2); border-radius: 2px; background: var(--px-panel); box-shadow: none; color: var(--px-text); font: 600 12.5px/1 var(--px-mono); letter-spacing: .02em; }
+.px .sh .nx-btn:hover:not(:disabled) { border-color: var(--px-lime); background: #0e1710; color: #fff; }
+.px .sh .nx-btn-acc { border-color: var(--px-lime); background: var(--px-lime); color: var(--px-ink) !important; box-shadow: 3px 3px 0 rgba(184, 255, 61, .2); }
+.px .sh .nx-btn-acc:hover:not(:disabled) { background: #c8ff63; color: var(--px-ink) !important; }
+.px .sh .nx-btn:disabled { opacity: .5; cursor: not-allowed; }
+.px .sh .nx-btn .nx-ic { flex: none; }
+.px .sh .field { border-radius: 2px; }
+
+@media (max-width: 899px) {
+  .px .sh .fg-perks, .px .sh .fg-steps, .px .sh .sh-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .px .sh .token-specs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .sh { padding-bottom: 104px; }
+  .px .sh :is(.frogs-util, .sh-grid), .px .sh .sh-grid.three, .px .sh .fg-perks, .px .sh .fg-steps { grid-template-columns: 1fr; }
+  .px .sh :is(.frogs-traits, .sh-ledger) > div { grid-template-columns: 1fr; gap: 4px; }
+  .sh .pk-actions > * { flex: 1 1 auto; }
+  .sh .sh-star { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .sh-prompt i { animation: none; } }

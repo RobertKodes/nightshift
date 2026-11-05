@@ -1,6 +1,7 @@
 import "@walletconnect/react-native-compat";
-import { InstrumentSerif_400Regular_Italic } from "@expo-google-fonts/instrument-serif";
+import { Inter_400Regular, Inter_500Medium } from "@expo-google-fonts/inter";
 import { JetBrainsMono_400Regular, JetBrainsMono_500Medium, JetBrainsMono_600SemiBold } from "@expo-google-fonts/jetbrains-mono";
+import { Silkscreen_400Regular } from "@expo-google-fonts/silkscreen";
 import { SpaceGrotesk_400Regular, SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk";
 import { useFonts } from "expo-font";
 import { Redirect, Stack, useSegments } from "expo-router";
@@ -40,7 +41,7 @@ function Gate() {
 
 export default function RootLayout() {
   const [fonts] = useFonts({
-    InstrumentSerif_400Regular_Italic,
+    Inter_400Regular, Inter_500Medium, Silkscreen_400Regular,
     JetBrainsMono_400Regular, JetBrainsMono_500Medium, JetBrainsMono_600SemiBold,
     SpaceGrotesk_400Regular, SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold,
   });

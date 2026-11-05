@@ -1,6 +1,11 @@
 import { ethTransport } from "./ethRpc";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import "./mswap/page.css";
+import SplitFlapText from "./rb/SplitFlapText";
+import { PxButton, PxHero, PxNum, PxPanel, PxSection, PxStat, PxStats } from "./saas/kit";
+import { PxIcon } from "./saas/PxIcon";
+import { HeroDots, ShStar } from "./saas/pages/shift-kit";
+import "./saas/pages/swap.css";
 import { LIVE_LAUNCH, SHIFT, SHIFT_POOL, fetchLaunch } from "./shift";
 import { type Address, createPublicClient, createWalletClient, custom, erc20Abi, formatEther, http, maxUint256, parseEther } from "viem";
 import { mainnet } from "viem/chains";
@@ -118,12 +123,8 @@ export function SwapBox({ launch, initialSide = "buy" }: { launch?: Launch; init
   const outSym = side === "buy" ? `$${sym}` : "ETH";
 
   return (
-      <section className="tkn-card swap-card" aria-label="Swap">
-        <div className="tkn-head">
-          <div><b>SWAP</b><span>Ethereum · Uniswap v4 · ${sym}/ETH</span></div>
-          <span className="tkn-state">{pool ? (l?.open ? "LIVE" : "WAITING") : "SOON"}</span>
-        </div>
-        <div className="swap-tabs" role="tablist">
+      <PxPanel className="sh-swapbox" title={<>SWAP · ETHEREUM · UNISWAP V4 · ${sym}/ETH</>} state={pool ? (l?.open ? "live" : "warn") : "idle"} right={pool ? (l?.open ? undefined : "WAITING") : "SOON"}>
+        <div className="swap-tabs" role="tablist" aria-label="Buy or sell">
           {(["buy", "sell"] as const).map((s) => <button key={s} role="tab" aria-selected={side === s} className={side === s ? "on" : ""} onClick={() => { setSide(s); setAmount(""); }}>{s === "buy" ? `Buy $${sym}` : `Sell $${sym}`}</button>)}
         </div>
         <div className="swap-box">
@@ -145,9 +146,12 @@ export function SwapBox({ launch, initialSide = "buy" }: { launch?: Launch; init
           <a href={`https://etherscan.io/token/${token}`} target="_blank" rel="noreferrer">Etherscan ↗</a>
         </div>}
         {!pool && <p className="tkn-warn">Not open yet. This page switches on by itself when $SHIFT is deployed; any other site or link offering $SHIFT before that is fake.</p>}
-      </section>
+      </PxPanel>
   );
 }
+
+/** The chains the any-chain swap reaches, as the hero's board cycles them. */
+const CHAINS = ["ETHEREUM", "BASE", "ROBINHOOD", "SOLANA", "XRP"];
 
 /**
  * /swap: the multichain swap (Ethereum, Base, Robinhood Chain, Solana, and into XRP) through LI.FI and Relay,
@@ -159,33 +163,70 @@ export function SwapPage() {
   const [mode, setMode] = useState<"any" | "pool">(() => (new URLSearchParams(location.search).get("pool") !== null ? "pool" : "any"));
   const [poolSide, setPoolSide] = useState<"buy" | "sell">("buy");
   const sym = l?.symbol ?? "SHIFT";
-  return (
-    <div className="docs token-page swap-page">
-      <span className="eyebrow">LIVE · ETHEREUM · BASE · ROBINHOOD CHAIN · SOLANA · XRP</span>
-      <h1>NIGHTSHIFT Swap. <em>Five chains, your own wallet.</em></h1>
-      <p className="lead">Swap between Ethereum, Base, Robinhood Chain and Solana, and into XRP on the XRP Ledger. LI.FI and Relay find the route; your wallet signs every step; NIGHTSHIFT holds nothing. Holders of a NIGHT FROG, a Night Watcher or 5M+ $SHIFT pay no NIGHTSHIFT fee.</p>
-
-      <div className="ms-modes" role="tablist" aria-label="Swap">
-        <button type="button" role="tab" aria-selected={mode === "any"} className={mode === "any" ? "on" : ""} onClick={() => setMode("any")}>Any chain</button>
-        <button type="button" role="tab" aria-selected={mode === "pool"} className={mode === "pool" ? "on" : ""} onClick={() => setMode("pool")}>${sym} pool</button>
+  const board = (
+    <PxPanel className="sh-board ms-board" title="ROUTES · ANY CHAIN" state="live">
+      <span className="sh-board-k">FROM YOUR WALLET TO</span>
+      <div className="sh-flap-wrap"><SplitFlapText className="sh-flap" words={CHAINS} charset="ABCDEFGHIJKLMNOPQRSTUVWXYZ" tileColor="#0d1410" textColor="#b8ff3d" fontSize={24} gap={3} tileRadius={2} flipDuration={0.07} stagger={0.03} flipsPerChar={4} padTo={9} cycleDelay={2200} loop intro={false} tileStyle="minimal" /></div>
+      <div className="sh-board-row">
+        <div><span>Route finders</span><b>LI.FI + RELAY</b></div>
+        <div><span>Custody</span><b className="lime">NONE</b></div>
+        <div><span>Holder fee</span><b className="lime">0%</b></div>
+        <div><span>${sym} pool</span><b>UNISWAP V4</b></div>
       </div>
-      {mode === "any"
-        ? <Suspense fallback={<div style={{ minHeight: 420 }}><p className="ms-fine">Loading the swap…</p></div>}><MultiSwap onPool={(side) => { setPoolSide(side); setMode("pool"); }} /></Suspense>
-        : <div className="ms-pool">
-            <SwapBox launch={l} initialSide={poolSide} key={poolSide} />
-            <p className="ms-fine">ETH and ${sym} on Ethereum trade here, straight in the pool: no aggregator and no NIGHTSHIFT fee. ${sym} from another chain or token: <button type="button" className="ms-link" onClick={() => setMode("any")}>Any chain</button>.</p>
-          </div>}
+      <p className="sh-line">Holders of a NIGHT FROG, a Night Watcher or 5M+ ${sym} pay no NIGHTSHIFT fee. Provider, bridge and gas costs still show on their own lines.</p>
+    </PxPanel>
+  );
+  return (
+    <div className="sh sh-swap">
+      <PxHero
+        kicker="LIVE · ETHEREUM · BASE · ROBINHOOD CHAIN · SOLANA · XRP"
+        live
+        title="NIGHTSHIFT Swap."
+        accent="Five chains, your own wallet."
+        lead={<>Swap between Ethereum, Base, Robinhood Chain and Solana, and into XRP on the XRP Ledger. LI.FI and Relay find the route; your wallet signs every step; <b>NIGHTSHIFT holds nothing.</b> Holders of a NIGHT FROG, a Night Watcher or 5M+ ${sym} pay no NIGHTSHIFT fee.</>}
+        actions={<>
+          <ShStar href="#swap" icon="swap">START A SWAP</ShStar>
+          <PxButton onClick={() => { setMode("pool"); document.getElementById("swap")?.scrollIntoView({ behavior: "smooth", block: "start" }); }} icon="coin">${sym} POOL</PxButton>
+          <a href="#how" className="px-btn ghost"><PxIcon name="doc" size={14} />HOW IT WORKS</a>
+        </>}
+        aside={board}
+        bg={<HeroDots />}
+      />
 
-      <h2>How it works</h2>
-      <ul className="frogs-util">
-        <li><b>Two route finders, asked at once</b>LI.FI (bridges and exchanges across Ethereum, Base, Robinhood Chain and Solana) and Relay (the same chains plus native XRP). The route that delivers more after every fee comes first; the other one sits beside it.</li>
-        <li><b>Fees, apart</b>the provider's own fees (LI.FI's 0.25% service fee, bridge and relayer fees) and NIGHTSHIFT's fee are shown on separate lines before you sign. Signed in with a wallet that holds a NIGHT FROG, a Night Watcher or 5M+ ${sym}, NIGHTSHIFT's fee is 0 on every chain.</li>
-        <li><b>Checked before you sign</b>the page only signs calls to the LI.FI and Relay contracts pinned in its code, shows each one with its address, simulates every transaction first, and allows a token exactly the amount you swap, never unlimited.</li>
-        <li><b>Followed to the end</b>after you send, the page follows the transfer with the provider until it lands on the other chain, with both transactions linked.</li>
-        <li><b>XRP</b>into XRP works now: you type your XRP Ledger address. Out of XRP is coming: it needs an XRP Ledger wallet in the page and a tested payment to the provider's XRPL account.</li>
-        <li><b>${sym} stays in its pool</b>ETH ↔ ${sym} on Ethereum goes through the Uniswap v4 pool and its hook, as before (${sym} pool tab). The pool's 1.25% and the 5% sell fee apply as always.</li>
-      </ul>
-      <p className="dim">Research and sources: <a href="https://github.com/RobertKodes/nightshift/blob/main/docs/swap/RESEARCH.md" target="_blank" rel="noreferrer">docs/swap/RESEARCH.md</a>. The routes are LI.FI's and Relay's; cross-chain transfers carry their bridges' risks. V4 router for the pool: <code>{V4.router.slice(0, 6)}…{V4.router.slice(-4)}</code>.</p>
+      <PxStats cols={4}>
+        <PxStat label="Chains" tone="lime" value={<PxNum value={5} />} sub="Ethereum, Base, Robinhood Chain, Solana, into XRP" />
+        <PxStat label="Route finders" value={<PxNum value={2} />} sub="LI.FI and Relay, asked at once" />
+        <PxStat label="NIGHTSHIFT fee · holders" tone="lime" value={<PxNum value={0} suffix="%" />} sub={`a frog, a Night Watcher or 5M+ $${sym}`} />
+        <PxStat label={`$${sym} sell fee`} tone="gold" value={<PxNum value={5} suffix="%" />} sub="split by the one rule; in the quote" to="/tokenomics#rule" />
+      </PxStats>
+
+      <section id="swap" className="ms-desk" aria-label="Swap">
+        <div className="ms-desk-h">
+          <div className="ms-modes" role="tablist" aria-label="Swap">
+            <button type="button" role="tab" aria-selected={mode === "any"} className={mode === "any" ? "on" : ""} onClick={() => setMode("any")}>Any chain</button>
+            <button type="button" role="tab" aria-selected={mode === "pool"} className={mode === "pool" ? "on" : ""} onClick={() => setMode("pool")}>${sym} pool</button>
+          </div>
+          <span className="ms-desk-k">{mode === "any" ? "LI.FI + RELAY · BEST ROUTE FIRST" : `UNISWAP V4 · $${sym}/ETH · NO AGGREGATOR`}</span>
+        </div>
+        {mode === "any"
+          ? <Suspense fallback={<div style={{ minHeight: 420 }}><p className="ms-fine">Loading the swap…</p></div>}><MultiSwap onPool={(side) => { setPoolSide(side); setMode("pool"); }} /></Suspense>
+          : <div className="ms-pool">
+              <SwapBox launch={l} initialSide={poolSide} key={poolSide} />
+              <p className="ms-fine">ETH and ${sym} on Ethereum trade here, straight in the pool: no aggregator and no NIGHTSHIFT fee. ${sym} from another chain or token: <button type="button" className="ms-link" onClick={() => setMode("any")}>Any chain</button>.</p>
+            </div>}
+      </section>
+
+      <PxSection kicker="HOW IT WORKS" title={<>Routed, checked, <em>followed to the end.</em></>} id="how">
+        <ul className="sh-grid three">
+          <li><b>Two route finders, asked at once</b>LI.FI (bridges and exchanges across Ethereum, Base, Robinhood Chain and Solana) and Relay (the same chains plus native XRP). The route that delivers more after every fee comes first; the other one sits beside it.</li>
+          <li><b>Fees, apart</b>the provider's own fees (LI.FI's 0.25% service fee, bridge and relayer fees) and NIGHTSHIFT's fee are shown on separate lines before you sign. Signed in with a wallet that holds a NIGHT FROG, a Night Watcher or 5M+ ${sym}, NIGHTSHIFT's fee is 0 on every chain.</li>
+          <li><b>Checked before you sign</b>the page only signs calls to the LI.FI and Relay contracts pinned in its code, shows each one with its address, simulates every transaction first, and allows a token exactly the amount you swap, never unlimited.</li>
+          <li><b>Followed to the end</b>after you send, the page follows the transfer with the provider until it lands on the other chain, with both transactions linked.</li>
+          <li><b>XRP</b>into XRP works now: you type your XRP Ledger address. Out of XRP is coming: it needs an XRP Ledger wallet in the page and a tested payment to the provider's XRPL account.</li>
+          <li><b>${sym} stays in its pool</b>ETH ↔ ${sym} on Ethereum goes through the Uniswap v4 pool and its hook, as before (${sym} pool tab). The pool's 1.25% and the 5% sell fee apply as always.</li>
+        </ul>
+        <p className="sh-note">Research and sources: <a href="https://github.com/RobertKodes/nightshift/blob/main/docs/swap/RESEARCH.md" target="_blank" rel="noreferrer">docs/swap/RESEARCH.md</a>. The routes are LI.FI's and Relay's; cross-chain transfers carry their bridges' risks. V4 router for the pool: <code>{V4.router.slice(0, 6)}…{V4.router.slice(-4)}</code>.</p>
+      </PxSection>
     </div>
   );
 }

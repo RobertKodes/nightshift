@@ -65,7 +65,7 @@ function rowsOf(d: Data, me: string): Row[] {
   if (s && (BigInt(s.eth) > 0n || BigInt(s.shift) > 0n)) {
     const parts = [...(BigInt(s.eth) > 0n ? [tok(s.eth, "ETH")] : []), ...(BigInt(s.shift) > 0n ? [tok(s.shift, "SHIFT")] : [])];
     const usd = (valued(s.eth, "ETH", p) ?? 0) + (valued(s.shift, "SHIFT", p) ?? 0);
-    rows.push({ key: "staking", icon: "stake", acc: "#a48bff", title: "Staking rewards", sub: `ShiftRewards · on ${tok(s.staked, "SHIFT")} staked`, amount: parts.join(" + "), usd: p.ETH === null && p.SHIFT === null ? null : usd, button: "Claim",
+    rows.push({ key: "staking", icon: "stake", acc: "#8fe6a4", title: "Staking rewards", sub: `ShiftRewards · on ${tok(s.staked, "SHIFT")} staked`, amount: parts.join(" + "), usd: p.ETH === null && p.SHIFT === null ? null : usd, button: "Claim",
       call: async () => ({ address: SHIFT.rewards, abi: REWARDS, functionName: "getReward" }) });
   }
   for (const f of d.frogs) {
@@ -73,16 +73,16 @@ function rowsOf(d: Data, me: string): Row[] {
     const token = f.token.toLowerCase();
     if (token !== ETH && token !== SHIFT.token.toLowerCase()) continue;
     const left = f.postedAt ? Math.max(0, Math.ceil((f.postedAt + 30 * 86_400_000 - Date.now()) / 86_400_000)) : null;
-    rows.push({ key: `frog-${f.epoch}-${token}`, icon: "frogs", acc: "#b8ff4a", title: `Frogs · epoch ${f.epoch}`, sub: left !== null ? `holder rewards · about ${left} day${left === 1 ? "" : "s"} left to claim` : "holder rewards · 30 days to claim", amount: tok(f.amount, f.symbol), usd: valued(f.amount, f.symbol, p), button: "Claim",
+    rows.push({ key: `frog-${f.epoch}-${token}`, icon: "frogs", acc: "#9ee37d", title: `Frogs · epoch ${f.epoch}`, sub: left !== null ? `holder rewards · about ${left} day${left === 1 ? "" : "s"} left to claim` : "holder rewards · 30 days to claim", amount: tok(f.amount, f.symbol), usd: valued(f.amount, f.symbol, p), button: "Claim",
       call: async () => ({ address: SHIFT.rewards, abi: REWARDS, functionName: "claimFrogs", args: [BigInt(f.epoch), token as Address, BigInt(f.amount), f.proof as Hex[]] }) });
   }
   for (const g of d.games.claimable) {
     const [name, icon] = GAME[g.game] ?? [g.game, "play"];
-    rows.push({ key: `game-${g.matchId}`, icon, acc: "#4ad8ff", title: g.kind === "refund" ? `${name} · stake refund` : g.draw ? `${name} · draw, your stake back` : `${name} · winnings`, sub: g.kind === "refund" ? "the match timed out: the escrow returns your stake" : "signed result · GameEscrow pays 95% of the pot", amount: tok(g.amount, g.token), usd: valued(g.amount, g.token, p), button: g.kind === "refund" ? "Refund" : "Claim",
+    rows.push({ key: `game-${g.matchId}`, icon, acc: "#62d9cf", title: g.kind === "refund" ? `${name} · stake refund` : g.draw ? `${name} · draw, your stake back` : `${name} · winnings`, sub: g.kind === "refund" ? "the match timed out: the escrow returns your stake" : "signed result · GameEscrow pays 95% of the pot", amount: tok(g.amount, g.token), usd: valued(g.amount, g.token, p), button: g.kind === "refund" ? "Refund" : "Claim",
       call: g.kind === "refund" ? async () => ({ address: ESCROW, abi: ESCROW_ABI, functionName: "refund", args: [g.matchId] }) : () => settleCall(g.matchId, me) });
   }
   for (const c of d.companies ?? []) {
-    rows.push({ key: `co-${c.id}`, icon: "companies", acc: "#ffc861", title: `${c.name} · sales`, sub: `company revenue in USDC on Base${c.feeBps ? ` · ${(c.feeBps / 100).toFixed(2)}% platform fee for this withdrawal` : ""}`, amount: `${c.usd.toFixed(2)} USDC`, usd: c.usd, button: "Withdraw", company: c.id });
+    rows.push({ key: `co-${c.id}`, icon: "companies", acc: "#f2c14e", title: `${c.name} · sales`, sub: `company revenue in USDC on Base${c.feeBps ? ` · ${(c.feeBps / 100).toFixed(2)}% platform fee for this withdrawal` : ""}`, amount: `${c.usd.toFixed(2)} USDC`, usd: c.usd, button: "Withdraw", company: c.id });
   }
   return rows;
 }

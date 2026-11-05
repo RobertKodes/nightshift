@@ -1,0 +1,41 @@
+/* /stake: stake, unstake and your locks. Builds on shift.css. */
+
+/* ---- the hero's staked-supply board: a split-flap count and a pixel meter */
+.stk-meter { display: grid; grid-template-columns: repeat(40, minmax(0, 1fr)); gap: 2px; height: 14px; padding: 2px; border: 1px solid var(--px-line2); background: #070b08; }
+.stk-meter i { background: #142018; }
+.stk-meter i.on { background: var(--px-lime); }
+
+/* ---- the desk: the stake card, then your stake beside it */
+.stk-desk { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 10px; align-items: start; margin-top: clamp(30px, 4vw, 48px); scroll-margin-top: 80px; }
+.stk-form .pk-panel-b { display: grid; gap: 12px; }
+.stk-stake { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 14px; align-items: start; }
+.stk-gauge { display: grid; justify-items: center; gap: 6px; padding: 10px 6px; border: 1px solid var(--px-line); background: #070b08; text-align: center; }
+.stk-gauge b { color: var(--px-lime); font: 600 12.5px/1.2 var(--px-mono); }
+.stk-gauge span { color: var(--px-faint); font: 400 8.5px/1.3 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh-stake .slosh-gauge { border: 1px solid var(--px-line2); }
+
+.px .sh-stake .stake-split { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--px-line); background: var(--px-line); }
+.px .sh-stake .stake-split div { display: grid; gap: 6px; padding: 10px 11px; border: 0; background: #080d09; }
+.px .sh-stake .stake-split span { color: var(--px-faint); font: 400 9px/1.2 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; }
+.px .sh-stake .stake-split b { font: 600 15px/1.1 var(--px-mono); font-variant-numeric: tabular-nums; }
+
+.stk-mine .pk-panel-b { display: grid; gap: 12px; position: relative; }
+.px .sh-stake .stk-specs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stk-connect { justify-self: start; }
+.stk-frog { position: absolute; right: 12px; bottom: 10px; width: 44px; height: 44px; image-rendering: pixelated; opacity: .9; }
+.px .sh-stake .stk-rows table { min-width: 0; }
+.px .sh-stake .stk-rows td { padding: 9px 10px; }
+.px .sh-stake .stk-rows td:last-child { width: 1%; text-align: right; white-space: nowrap; }
+.px .sh-stake .stk-rows td .dim { display: block; margin-top: 3px; font: 400 9px/1.3 var(--px-pixel); letter-spacing: .04em; text-transform: uppercase; color: var(--px-faint); }
+.stk-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+
+@media (max-width: 899px) {
+  .stk-desk { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .stk-stake { grid-template-columns: 1fr; }
+  .stk-gauge { display: none; }
+  .stk-frog { display: none; }
+  .px .sh-stake .stake-split { grid-template-columns: 1fr; }
+  .stk-meter { grid-template-columns: repeat(40, minmax(0, 1fr)); gap: 1px; }
+}

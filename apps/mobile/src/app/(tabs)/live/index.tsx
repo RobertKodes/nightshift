@@ -75,7 +75,7 @@ export default function CompanyLive() {
 
       <ScrollView
         contentContainerStyle={{ padding: S.gutter, paddingBottom: 30 }}
-        refreshControl={<RefreshControl refreshing={pulling} tintColor={C.violet} colors={[C.violet]} progressBackgroundColor={C.panel} onRefresh={async () => { setPulling(true); await Promise.all([co.refresh(), refreshDesk()]); setPulling(false); }} />}
+        refreshControl={<RefreshControl refreshing={pulling} tintColor={C.lime} colors={[C.lime]} progressBackgroundColor={C.panel} onRefresh={async () => { setPulling(true); await Promise.all([co.refresh(), refreshDesk()]); setPulling(false); }} />}
       >
         {co.offline && <Offline at={co.at} />}
         {co.error && <Problem text={co.error} retry={() => void co.refresh()} />}
@@ -105,7 +105,7 @@ export default function CompanyLive() {
 
             {waiting.length > 0 && (
               <Pressable onPress={() => router.push(`/approve/${focus.id}/${waiting[0]!.id}`)} style={{ marginTop: 18 }}>
-                <Frame stroke="#6a2433" fill="#170a16" style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <Frame stroke="#6a2433" fill="#160a0d" style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                   <Text style={{ fontSize: 22 }}>✋</Text>
                   <View style={{ flex: 1 }}>
                     <Caps style={{ color: C.coral, fontSize: 11 }}>Waiting for your approval</Caps>

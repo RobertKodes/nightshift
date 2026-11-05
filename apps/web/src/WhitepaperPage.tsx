@@ -1,6 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import source from "../../../docs/WHITEPAPER.md?raw";
-import { NxIcon } from "./nx/icons";
+import { PxHero, PxPanel, PxStat, PxStats } from "./saas/kit";
+import { PxIcon } from "./saas/PxIcon";
+import { LxBg, useRich } from "./saas/pages/learn-kit";
+import "./saas/pages/learn.css";
 
 /** A heading's anchor: lowercase words joined by hyphens. */
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -65,6 +68,9 @@ export function WhitepaperPage() {
   const meta = blocks.find((b): b is Extract<Block, { t: "p" }> => b.t === "p");
   const toc = blocks.filter((b): b is Extract<Block, { t: "h" }> => b.t === "h" && b.level === 2);
   const [on, setOn] = useState(toc[0]?.id ?? "");
+  const rich = useRich();
+  // the document's own size: its words and a reading time at 230 words a minute
+  const words = useMemo(() => source.replace(/[#|*`>-]/g, " ").split(/\s+/).filter(Boolean).length, []);
   // a shared link to a section (/whitepaper#7-shift) lands on it once the page has rendered
   useEffect(() => { if (location.hash) document.getElementById(decodeURIComponent(location.hash.slice(1)))?.scrollIntoView(); }, []);
   useEffect(() => {
@@ -74,22 +80,36 @@ export function WhitepaperPage() {
   }, [toc]);
 
   return (
-    <div className="docs wp">
+    <div className="lx lx-wp wp">
       <header className="wp-head">
-        <span className="eyebrow">Whitepaper</span>
-        <h1>NIGHTSHIFT, <em>end to end.</em></h1>
-        {meta && <p className="wp-meta">{meta.text}</p>}
-        <div className="wp-actions">
-          <button className="nx-btn nx-btn-acc" onClick={() => print()}><NxIcon name="story" size={15} />Save as PDF</button>
-          <a className="nx-btn" href="/whitepaper.md" target="_blank" rel="noreferrer"><NxIcon name="agent" size={15} />Markdown, for agents</a>
-        </div>
+        <PxHero
+          kicker="WHITEPAPER"
+          title="NIGHTSHIFT,"
+          accent="end to end."
+          bg={<LxBg rich={rich} />}
+          lead={meta ? <span className="wp-meta">{meta.text}</span> : undefined}
+          actions={<span className="wp-actions">
+            <button className="px-btn primary" onClick={() => print()}><PxIcon name="doc" size={14} />Save as PDF</button>
+            <a className="px-btn" href="/whitepaper.md" target="_blank" rel="noreferrer"><PxIcon name="bot" size={14} />Markdown, for agents</a>
+          </span>}
+          aside={
+            <PxPanel title="THE DOCUMENT" right="docs/WHITEPAPER.md">
+              <PxStats cols={3}>
+                <PxStat label="Sections" value={String(toc.length)} sub="in the contents" />
+                <PxStat label="Words" value={words.toLocaleString("en-US")} sub="plain text" />
+                <PxStat label="Read" value={`${Math.max(1, Math.round(words / 230))} min`} sub="at 230 a minute" tone="lime" />
+              </PxStats>
+              <p className="lx-small" style={{ margin: "12px 0 0" }}>The same file as /whitepaper.md. Agents can read it whole; people can save it as a PDF.</p>
+            </PxPanel>
+          }
+        />
       </header>
       <div className="wp-body">
-        <nav className="wp-toc" aria-label="Contents">
-          <b>Contents</b>
-          {toc.map((t) => <a key={t.id} href={`#${t.id}`} className={on === t.id ? "on" : ""}>{t.text}</a>)}
+        <nav className="wp-toc lx-toc" aria-label="Contents">
+          <b><span>Contents</span><span>{String(toc.length).padStart(2, "0")}</span></b>
+          {toc.map((t) => { const n = /^(\d+)\.\s+(.+)$/.exec(t.text); return <a key={t.id} href={`#${t.id}`} className={on === t.id ? "on" : ""} aria-current={on === t.id ? "location" : undefined}><i aria-hidden="true">{n ? n[1]!.padStart(2, "0") : "··"}</i><span>{n ? n[2] : t.text}</span></a>; })}
         </nav>
-        <article className="wp-text">
+        <article className="wp-text lx-prose">
           {blocks.map((b, i) => {
             if (b === title || b === meta) return null;
             if (b.t === "h") return b.level === 2 ? <h2 key={i} id={b.id}>{inline(b.text)}</h2> : <h3 key={i} id={b.id}>{inline(b.text)}</h3>;

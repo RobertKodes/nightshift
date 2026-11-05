@@ -1,7 +1,7 @@
 /* Partners live in the station's $SHIFT room: night palette, Space Grotesk, mono data. */
 .pt {
-  --surface: rgba(14, 11, 32, .78); --raised: #1b1440; --edge: rgba(164, 139, 255, .22);
-  --ink: #f2efff; --muted: #a9a3c4; --brand: #a48bff; --accent: #a48bff;
+  --surface: rgba(14, 11, 32, .78); --raised: #1b1440; --edge: rgba(255, 255, 255, .22);
+  --ink: #eaf1ee; --muted: #9dadaa; --brand: #8fe6a4; --accent: #8fe6a4;
   --pv-font: "Space Grotesk", Inter, system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
 }
 .pt .pv-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -87,4 +87,4 @@
 @media (max-width: 980px) { .pt .fg-show { order: 2; } .pt .fg-hero-in { order: 1; } }
 
 /* the docking bay behind the hero */
-.pt .fg-hero::before { background: radial-gradient(48% 62% at 74% 46%, color-mix(in srgb, var(--tc) 18%, transparent), transparent 70%), linear-gradient(90deg, #03020a 0%, rgba(3, 2, 10, .82) 38%, rgba(3, 2, 10, .45) 100%), linear-gradient(180deg, rgba(3, 2, 10, .2), #03020a 96%), url(/art/v2/room-partners-1600x900.webp) 70% 40% / cover; }
+.pt .fg-hero::before { background: radial-gradient(48% 62% at 74% 46%, color-mix(in srgb, var(--tc) 18%, transparent), transparent 70%), linear-gradient(90deg, #070a0b 0%, rgba(7, 10, 11, .82) 38%, rgba(7, 10, 11, .45) 100%), linear-gradient(180deg, rgba(7, 10, 11, .2), #070a0b 96%), url(/art/v2/room-partners-1600x900.webp) 70% 40% / cover; }

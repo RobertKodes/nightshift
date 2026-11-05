@@ -32,7 +32,7 @@ function Bar({ state, emitter, navigateToTab }: BarProps) {
           <Text style={{ fontFamily: F.uiSemi, color: C.lime, fontSize: 14 }}>Sign in with your wallet →</Text>
         </Pressable>
       )}
-    <View style={{ flexDirection: "row", backgroundColor: "#08071a", borderTopWidth: 1, borderTopColor: C.line, paddingBottom: Math.max(insets.bottom, 10), paddingTop: 10 }}>
+    <View style={{ flexDirection: "row", backgroundColor: "#040705", borderTopWidth: 1, borderTopColor: C.line, paddingBottom: Math.max(insets.bottom, 10), paddingTop: 10 }}>
       {state.routes.map((r, i) => {
         const tab = TABS[r.name];
         if (!tab) return null;
@@ -55,7 +55,7 @@ function Bar({ state, emitter, navigateToTab }: BarProps) {
             <View>
               <Icon name={tab.icon} size={24} color={on ? C.lime : C.faint} stroke={on ? 2 : 1.7} />
               {badge > 0 && (
-                <View style={{ position: "absolute", top: -9, right: -13, minWidth: 20, height: 20, borderRadius: 10, backgroundColor: C.coral, alignItems: "center", justifyContent: "center", paddingHorizontal: 5, borderWidth: 2, borderColor: "#08071a" }}>
+                <View style={{ position: "absolute", top: -9, right: -13, minWidth: 20, height: 20, borderRadius: 10, backgroundColor: C.coral, alignItems: "center", justifyContent: "center", paddingHorizontal: 5, borderWidth: 2, borderColor: "#040705" }}>
                   <Text style={{ color: "#fff", fontFamily: F.uiBold, fontSize: 11 }}>{badge > 9 ? "9+" : badge}</Text>
                 </View>
               )}

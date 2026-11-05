@@ -126,7 +126,7 @@ export function Landing() {
           <canvas ref={canvas} className="ns-fx" aria-hidden="true" />
           <svg className="ns-hud" viewBox={`0 0 ${ART_W} ${ART_H}`} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
             <defs>
-              <radialGradient id="node"><stop offset="0" stopColor="#fff" /><stop offset=".4" stopColor="#a48bff" /><stop offset="1" stopColor="#7c5cff" stopOpacity="0" /></radialGradient>
+              <radialGradient id="node"><stop offset="0" stopColor="#fff" /><stop offset=".4" stopColor="#8fe6a4" /><stop offset="1" stopColor="#3ecb74" stopOpacity="0" /></radialGradient>
               <path id="ringText" d={ringPath} />
             </defs>
             {/* orbital HUD rings around the reactor */}
@@ -137,7 +137,7 @@ export function Landing() {
               <ellipse cx={R.x} cy={R.y} rx={R.r * 1.36} ry={R.r * 1.36} />
             </g>
             <g className="orbit o3" style={{ transformOrigin: `${R.x}px ${R.y}px` }}>
-              <circle cx={R.x + R.r * 1.36} cy={R.y} r="4" fill="#c4b4ff" />
+              <circle cx={R.x + R.r * 1.36} cy={R.y} r="4" fill="#c8efd4" />
             </g>
             {/* data lines from each label to the structure, with pulses travelling in */}
             {LABELS.map((l, i) => {
@@ -147,7 +147,7 @@ export function Landing() {
                   <path d={d} className="wire" />
                   <path d={d} className="pulse-wire" style={{ animationDelay: `${i * 0.7}s` }} />
                   <circle cx={l.to[0]} cy={l.to[1]} r="10" fill="url(#node)" className="beat" />
-                  <circle cx={l.x + 8} cy={l.y + 22} r="3" fill="#a48bff" />
+                  <circle cx={l.x + 8} cy={l.y + 22} r="3" fill="#8fe6a4" />
                 </g>
               );
             })}

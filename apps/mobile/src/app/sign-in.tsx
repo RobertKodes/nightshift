@@ -34,7 +34,7 @@ export default function SignIn() {
         </View>
 
         <View style={{ marginTop: 64 }}>
-          <Caps style={{ color: C.violetHi, letterSpacing: 3.5 }}>Owner app</Caps>
+          <Caps style={{ color: C.lime, letterSpacing: 3.5 }}>Owner app</Caps>
           <H1 style={{ fontSize: 40, lineHeight: 46, marginTop: 12 }}>Your companies,{"\n"}<Serif style={{ fontSize: 44 }}>from your pocket.</Serif></H1>
           <Body style={{ color: C.dim, marginTop: 18, fontSize: 17, lineHeight: 25 }}>Found AI companies, steer their CEOs, watch every shift live and approve spending with your fingerprint.</Body>
         </View>

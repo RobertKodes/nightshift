@@ -1,0 +1,108 @@
+/* ============================================================================
+   NIGHTSHIFT // PROTOCOL INTERFACE: the shared building blocks, site-wide.
+   Every page inside the shell (.px) uses the same few classes (.card, .btn, .pill, .field,
+   tables, .kpi, .docs page heads). Restyling them here turns all of them into terminal blocks
+   at once: flat ink, lime hairlines, corner ticks, Silkscreen labels, mono numbers. No rounded
+   SaaS cards, no gloss, no serif italics.
+   ========================================================================== */
+
+/* ---- page heads */
+.px .docs { max-width: 1080px; gap: 18px; }
+.px .docs > h1, .px .docs h1:first-of-type {
+  font: 600 clamp(30px, 4.4vw, 50px)/1.04 var(--px-display); letter-spacing: -.035em; color: var(--px-text); text-wrap: balance; margin-top: 18px;
+}
+.px .docs h1 em, .px .guide-h2 em, .px h1 em, .px h2 em, .px h3 em {
+  font-style: normal !important; font-family: inherit !important; color: var(--px-lime);
+  background: linear-gradient(180deg, transparent 74%, rgba(184, 255, 61, .2) 74%);
+}
+.px .docs h2 { font: 600 clamp(20px, 2.4vw, 26px)/1.15 var(--px-display); letter-spacing: -.025em; }
+.px .docs h3 { font: 600 16px/1.25 var(--px-display); letter-spacing: -.015em; }
+.px .docs h4 { font: 400 10.5px/1.2 var(--px-pixel); letter-spacing: .06em; text-transform: uppercase; color: var(--px-lime); margin: 18px 0 8px; }
+.px .lead { color: #c7d4c9; font: 400 15px/1.65 var(--px-sans); max-width: 70ch; }
+.px .dim { color: var(--px-dim); }
+.px .faint { color: var(--px-faint); }
+.px .mono { font-family: var(--px-mono); }
+.px .warn { color: var(--px-gold); }
+/* the small label line above a page title */
+.px .docs .kicker, .px .eyebrow, .px [class$="-kicker"]:not(.px-kicker) {
+  font: 400 10px/1 var(--px-pixel) !important; letter-spacing: .07em; text-transform: uppercase; color: var(--px-lime);
+}
+
+/* ---- cards: terminal blocks with lime corner ticks */
+.px .card, .px .tkn-card {
+  position: relative; background: var(--px-panel); border: 1px solid var(--px-line); border-radius: 2px;
+  box-shadow: none; backdrop-filter: none;
+}
+.px .card::before, .px .tkn-card::before {
+  content: ""; position: absolute; left: -1px; top: -1px; width: 10px; height: 10px; box-shadow: none;
+  border-left: 2px solid var(--px-lime); border-top: 2px solid var(--px-lime); background: transparent; pointer-events: none;
+}
+.px .card::after, .px .tkn-card::after {
+  content: ""; position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px;
+  border-right: 2px solid var(--px-line2); border-bottom: 2px solid var(--px-line2); pointer-events: none;
+}
+.px .card-h { padding: 11px 16px; border-bottom: 1px solid var(--px-line); background: linear-gradient(90deg, rgba(184, 255, 61, .05), transparent 60%); }
+.px .card-h h3, .px .card-h h2 { font: 400 10.5px/1.2 var(--px-pixel) !important; letter-spacing: .07em; text-transform: uppercase; color: var(--px-text); }
+.px .card-b { padding: 16px; }
+.px .card:hover { border-color: var(--px-line2); }
+
+/* ---- buttons */
+.px .btn {
+  height: 40px; padding: 0 16px; border-radius: 2px; border: 1px solid var(--px-line2); background: var(--px-panel); color: var(--px-text);
+  font: 600 12.5px/1 var(--px-mono); letter-spacing: .02em; text-transform: none; box-shadow: none;
+}
+.px .btn:hover { border-color: var(--px-lime); background: #0e1710; color: #fff; }
+.px .btn:active { transform: translate(1px, 1px); }
+.px .btn.primary { background: var(--px-lime); border-color: var(--px-lime); color: var(--px-ink); box-shadow: 3px 3px 0 rgba(184, 255, 61, .25); text-transform: uppercase; font-size: 12px; letter-spacing: .04em; }
+.px .btn.primary:hover { background: #c8ff63; filter: none; }
+.px .btn.ghost { background: transparent; }
+.px .btn.danger { color: var(--px-red); border-color: rgba(255, 107, 125, .45); }
+.px .btn.danger:hover { background: rgba(255, 107, 125, .08); }
+.px .btn[disabled], .px .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+/* ---- pills and tags: square pixel tags */
+.px .pill { border-radius: 2px; padding: 4px 8px; font: 400 9.5px/1 var(--px-pixel); letter-spacing: .05em; text-transform: uppercase; border-color: var(--px-line2); color: var(--px-dim); background: rgba(10, 15, 11, .8); }
+.px .pill.live, .px .pill.ok, .px .pill.good { color: var(--px-lime); border-color: var(--px-line2); }
+.px .pill.live::before { content: ""; width: 6px; height: 6px; background: var(--px-lime); margin-right: 2px; animation: px-blink 1.4s steps(2) infinite; }
+.px .pill.warn { color: var(--px-gold); border-color: rgba(242, 193, 78, .4); }
+.px .pill.bad { color: var(--px-red); border-color: rgba(255, 107, 125, .4); }
+@keyframes px-blink { 50% { opacity: .2; } }
+
+/* ---- form fields */
+.px .field, .px input.field, .px textarea.field, .px select.field {
+  border-radius: 2px; border: 1px solid var(--px-line2); background: #070b08; color: var(--px-text);
+  font: 400 13.5px/1.4 var(--px-mono); box-shadow: none;
+}
+.px .field:focus, .px input.field:focus, .px textarea.field:focus { outline: 0; border-color: var(--px-lime); box-shadow: 0 0 0 3px rgba(184, 255, 61, .14); }
+.px .field::placeholder { color: var(--px-faint); }
+
+/* ---- tables: a ledger */
+.px table { font: 400 13px/1.4 var(--px-sans); }
+.px table th { font: 400 9.5px/1.2 var(--px-pixel); letter-spacing: .06em; text-transform: uppercase; color: var(--px-faint); border-bottom: 1px solid var(--px-line2); padding: 9px 10px; text-align: left; }
+.px table td { border-bottom: 1px solid rgba(184, 255, 61, .07); padding: 10px; font-variant-numeric: tabular-nums; }
+.px table tr:hover td { background: rgba(184, 255, 61, .03); }
+.px table td.r, .px table th.r { text-align: right; }
+
+/* ---- stats */
+.px .kpi span { font: 400 9.5px/1.2 var(--px-pixel) !important; letter-spacing: .06em; color: var(--px-faint); }
+.px .kpi b { font: 600 22px/1.1 var(--px-mono); color: var(--px-text); letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+
+/* ---- links and code */
+.px .docs a:not(.btn):not([class]) { color: var(--px-lime); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.px code, .px pre { font-family: var(--px-mono); border-radius: 2px; }
+.px pre { background: #070b08; border: 1px solid var(--px-line); }
+
+/* ---- the station pages (AI tools, watchtower, crews, league…) share .st-room */
+.px .st-room { --st-radius: 2px; }
+.px .st-room [class*="card"], .px .st-room [class*="panel"] { border-radius: 2px; }
+
+/* serif accents from the old look: the protocol speaks mono */
+.px [class*="serif"]:not(svg) { font-family: var(--px-display) !important; font-style: normal !important; }
+
+/* a scrollbar that belongs to the terminal */
+.px ::-webkit-scrollbar { width: 10px; height: 10px; }
+.px ::-webkit-scrollbar-thumb { background: #18261b; border: 2px solid var(--px-bg); }
+.px ::-webkit-scrollbar-track { background: var(--px-bg); }
+
+/* React Bits StarBorder rendered as a link: the old `.ns a { color: inherit }` must not grey its label */
+.px a.star-border, .ns a.star-border { color: var(--star-border-text); }

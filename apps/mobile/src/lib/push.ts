@@ -17,7 +17,7 @@ export async function setUpNotes(): Promise<void> {
   if (Platform.OS !== "android") return;
   await Notifications.setNotificationChannelAsync("approvals", {
     name: "Approvals", description: "A company is holding a spend for you", importance: Notifications.AndroidImportance.MAX,
-    vibrationPattern: [0, 220, 120, 220], lightColor: "#b8ff4a", lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC, enableVibrate: true, showBadge: true,
+    vibrationPattern: [0, 220, 120, 220], lightColor: "#b8ff3d", lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC, enableVibrate: true, showBadge: true,
   });
   await Notifications.setNotificationChannelAsync("activity", {
     name: "Sales and deliveries", description: "Sales, finished work and warnings", importance: Notifications.AndroidImportance.DEFAULT, lightColor: "#7b61ff", showBadge: false,

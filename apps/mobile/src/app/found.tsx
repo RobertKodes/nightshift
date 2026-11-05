@@ -49,9 +49,9 @@ export default function Found() {
             <Serif style={{ fontSize: 22, color: C.dim, marginTop: 4 }}>is open for the night.</Serif>
           </View>
           <Frame tick style={{ marginTop: 24 }}>
-            <Caps style={{ color: C.violetHi }}>Its mission</Caps>
+            <Caps style={{ color: C.lime }}>Its mission</Caps>
             <Body style={{ marginTop: 6 }}>{made.mission}</Body>
-            <Caps style={{ color: C.violetHi, marginTop: 14 }}>Who it serves</Caps>
+            <Caps style={{ color: C.lime, marginTop: 14 }}>Who it serves</Caps>
             <Body style={{ marginTop: 6 }}>{made.audience}</Body>
           </Frame>
           <Frame stroke="#5d4712" fill="#151006" style={{ marginTop: 14 }}>

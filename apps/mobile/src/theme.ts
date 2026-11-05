@@ -1,43 +1,51 @@
 /**
- * The NIGHTSHIFT night palette, as the owner app's mockups draw it: near-black navy, acid lime for
- * money and go, violet for the crew's own marks, coral for what waits on the owner.
+ * NIGHTSHIFT // PROTOCOL INTERFACE, the same as the website: flat ink, lime hairlines, pixel labels.
+ * Lime is money in and go; IMD blue is the swarm and what the company pays it; coral waits on the
+ * owner; gold warns. (The old names stay so every screen follows: `violet` is now IMD blue.)
  */
 export const C = {
-  bg: "#05040e",
-  bgDeep: "#030209",
-  glow: "#1b1342",
-  panel: "#0d0b20",
-  panelHi: "#131029",
-  inset: "#15122e",
-  line: "#221e45",
-  lineHi: "#37315f",
-  ink: "#f2efff",
-  dim: "#b5b0d6",
-  faint: "#7d78a3",
-  ghost: "#4d4872",
-  lime: "#b8ff4a",
-  limeInk: "#0b0d05",
-  limeDim: "#3f5a17",
-  violet: "#7b61ff",
-  violetHi: "#9a86ff",
-  violetDeep: "#5a3df0",
-  coral: "#ff5c70",
-  coralDeep: "#2a0f1b",
-  amber: "#ffb547",
-  blue: "#8ea6ff",
-  scrim: "rgba(3,2,9,0.72)",
+  bg: "#050706",
+  bgDeep: "#030504",
+  glow: "#0f2a14",
+  panel: "#0a0f0b",
+  panelHi: "#0d1410",
+  inset: "#0c130e",
+  line: "rgba(184,255,61,0.15)",
+  lineHi: "rgba(184,255,61,0.34)",
+  rule: "rgba(255,255,255,0.08)",
+  ink: "#e9f4ea",
+  dim: "#b2c4b5",
+  faint: "#738878",
+  ghost: "#4a5b4e",
+  lime: "#b8ff3d",
+  limeInk: "#031007",
+  limeDim: "#3d5a14",
+  pepe: "#57d97b",
+  violet: "#2f7bff",
+  violetHi: "#79aaff",
+  violetDeep: "#1d55c9",
+  imd: "#2f7bff",
+  coral: "#ff6b7d",
+  coralDeep: "#24090f",
+  amber: "#f2c14e",
+  blue: "#8db6ff",
+  scrim: "rgba(2,4,3,0.76)",
 } as const;
 
-/** The four faces: Space Grotesk to read, Instrument Serif for the one word that sings, JetBrains Mono for numbers and labels. */
+/** Space Grotesk for titles, Inter to read, JetBrains Mono for numbers, Silkscreen for the small pixel labels. No serif. */
 export const F = {
   ui: "SpaceGrotesk_500Medium",
   uiBold: "SpaceGrotesk_700Bold",
   uiSemi: "SpaceGrotesk_600SemiBold",
-  uiReg: "SpaceGrotesk_400Regular",
-  serif: "InstrumentSerif_400Regular_Italic",
+  uiReg: "Inter_400Regular",
+  text: "Inter_400Regular",
+  textMed: "Inter_500Medium",
+  /** was the italic serif accent; the protocol says it in the title face, in lime */
+  serif: "SpaceGrotesk_700Bold",
   mono: "JetBrainsMono_400Regular",
   monoMed: "JetBrainsMono_500Medium",
   monoBold: "JetBrainsMono_600SemiBold",
+  pixel: "Silkscreen_400Regular",
 } as const;
 
 export const S = { gutter: 18, gap: 12, radius: 3, chamfer: 12 } as const;

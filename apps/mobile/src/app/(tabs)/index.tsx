@@ -35,7 +35,7 @@ export default function DeskScreen() {
 
       <ScrollView
         contentContainerStyle={{ padding: S.gutter, paddingBottom: 40 }}
-        refreshControl={<RefreshControl refreshing={pulling} tintColor={C.violet} colors={[C.violet]} progressBackgroundColor={C.panel} onRefresh={async () => { setPulling(true); await refresh(); setPulling(false); }} />}
+        refreshControl={<RefreshControl refreshing={pulling} tintColor={C.lime} colors={[C.lime]} progressBackgroundColor={C.panel} onRefresh={async () => { setPulling(true); await refresh(); setPulling(false); }} />}
       >
         {offline && <Offline at={at} />}
         {error && !desk && <Problem text={error} retry={() => void refresh()} />}
@@ -107,7 +107,7 @@ function CompanyCard({ c, onPress }: { c: DeskCompany; onPress: () => void }) {
     );
   }
   const block = w
-    ? { label: "Waiting for the owner", color: C.violetHi, text: `${w.title}${w.market ? ` · buy "${w.market.product}"` : ""} · ${usd(w.costUsd)}, over your ${usd(c.policy.approvalOverUsd).replace(".00", "")} limit` }
+    ? { label: "Waiting for the owner", color: C.coral, text: `${w.title}${w.market ? ` · buy "${w.market.product}"` : ""} · ${usd(w.costUsd)}, over your ${usd(c.policy.approvalOverUsd).replace(".00", "")} limit` }
     : c.working
       ? { label: "At work", color: C.lime, text: `${c.working.title}${c.working.activity ? ` · ${c.working.activity}` : ""}` }
       : c.rest
@@ -132,7 +132,7 @@ function CompanyCard({ c, onPress }: { c: DeskCompany; onPress: () => void }) {
             {c.waiting.length > 0 && <Tag>{c.waiting.length} approval{c.waiting.length > 1 ? "s" : ""}</Tag>}
           </View>
 
-          <View style={{ backgroundColor: C.inset, borderLeftWidth: 2, borderLeftColor: C.violet, padding: 13, marginTop: 14 }}>
+          <View style={{ backgroundColor: C.inset, borderLeftWidth: 2, borderLeftColor: block.color === C.faint ? C.lineHi : block.color, padding: 13, marginTop: 14 }}>
             <Caps style={{ color: block.color, fontSize: 11, letterSpacing: 2.6 }}>{block.label}</Caps>
             <Body style={{ marginTop: 6, fontSize: 15.5 }} numberOfLines={3}>{block.text}</Body>
           </View>

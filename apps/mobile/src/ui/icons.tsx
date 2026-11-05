@@ -1,4 +1,4 @@
-import Svg, { Circle, Path } from "react-native-svg";
+import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { C } from "../theme";
 
 /** Line icons in the Lucide style (ISC), drawn at 24 and scaled: one stroke weight across the app. */
@@ -34,11 +34,30 @@ const P: Record<string, string[]> = {
   frog: ["M6 10a3 3 0 1 1 4.5-2.6", "M18 10a3 3 0 1 0-4.5-2.6", "M4 13c0 4 3.6 7 8 7s8-3 8-7", "M8.5 15.5c2 1.3 5 1.3 7 0"],
 };
 
+/** The NIGHTSHIFT frog mark (public/brand/pepe-pixel.svg on the website), on a 16-cell grid. */
+type Cell = [x: number, y: number, w: number, h: number];
+export const FROG_CELLS: { body: Cell[]; ink: Cell[]; shade: Cell[] } = {
+  body: [[2, 1, 4, 5], [10, 1, 4, 5], [1, 5, 14, 3], [2, 8, 12, 4], [3, 12, 10, 1], [5, 13, 2, 1], [9, 13, 2, 1]],
+  ink: [[3, 2, 2, 2], [11, 2, 2, 2], [7, 11, 1, 1], [9, 11, 1, 1], [8, 9, 1, 1], [7, 9, 1, 1], [10, 9, 1, 1], [6, 9, 1, 1]],
+  shade: [[1, 5, 1, 2], [14, 5, 1, 2], [2, 8, 1, 2], [13, 8, 1, 2]],
+};
+/** The pixel Pepe, crisp at any size. */
+export function PixelFrog({ size = 24, color = C.lime, ink = C.bg, shade = C.pepe }: { size?: number; color?: string; ink?: string; shade?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16">
+      {FROG_CELLS.body.map(([x, y, w, h], i) => <Rect key={`b${i}`} x={x} y={y} width={w} height={h} fill={color} />)}
+      {FROG_CELLS.ink.map(([x, y, w, h], i) => <Rect key={`i${i}`} x={x} y={y} width={w} height={h} fill={ink} />)}
+      {FROG_CELLS.shade.map(([x, y, w, h], i) => <Rect key={`s${i}`} x={x} y={y} width={w} height={h} fill={shade} />)}
+    </Svg>
+  );
+}
+
 export type IconName = keyof typeof P | "more" | "moon" | "play" | "pause" | "stop" | "dot";
 
 export function Icon({ name, size = 22, color = C.dim, stroke = 1.8 }: { name: IconName; size?: number; color?: string; stroke?: number }) {
   if (name === "more") return <Svg width={size} height={size} viewBox="0 0 24 24">{[5, 12, 19].map((x) => <Circle key={x} cx={x} cy={12} r={1.9} stroke={color} strokeWidth={stroke} fill="none" />)}</Svg>;
-  if (name === "moon") return <Svg width={size} height={size} viewBox="0 0 24 24"><Path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" fill={color} /></Svg>;
+  // the brand mark is the pixel frog now (the moon was the old look)
+  if (name === "moon") return <PixelFrog size={size} />;
   if (name === "play") return <Svg width={size} height={size} viewBox="0 0 24 24"><Path d="M6 3.5v17l14-8.5z" fill={color} /></Svg>;
   if (name === "pause") return <Svg width={size} height={size} viewBox="0 0 24 24"><Path d="M6 4h4v16H6zM14 4h4v16h-4z" fill={color} /></Svg>;
   if (name === "stop") return <Svg width={size} height={size} viewBox="0 0 24 24"><Path d="M5 5h14v14H5z" fill={color} /></Svg>;

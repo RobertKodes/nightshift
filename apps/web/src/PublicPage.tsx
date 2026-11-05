@@ -1,16 +1,24 @@
 import { useEffect, useState } from "react";
+import SpotlightCard from "./rb/SpotlightCard";
+import StarBorder from "./rb/StarBorder";
+import { PxHero, PxPanel, PxSection, PxStat, PxStats, PxNum, PxTag } from "./saas/kit";
+import { PxIcon } from "./saas/PxIcon";
 import { safeHref } from "./safe";
 import { buyWithWallet } from "./x402pay";
 import { type Health, type PublicCompany, api, events, short, usd } from "./api";
 import { FlightDrawer } from "./FlightRecorder";
 import { Mark } from "./Connections";
 import { SiteLinks } from "./SiteLinks";
+import { CoFrog, HeroDots, Usd, useRich } from "./Home";
+import { statusTone } from "./CompanyPage";
+import "./saas/pages/companies.css";
 
 export function PublicPage({ slug, health }: { slug: string; health: Health | null }) {
   const [c, setC] = useState<PublicCompany | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [got, setGot] = useState<{ name: string; url: string } | null>(null);
+  const rich = useRich();
   // a shared link to one shift opens its flight record: /c/<slug>?shift=<id>
   const [rec, setRec] = useState<string | null>(() => new URLSearchParams(location.search).get("shift"));
   useEffect(() => {
@@ -40,60 +48,98 @@ export function PublicPage({ slug, health }: { slug: string; health: Health | nu
     }
   }
 
-  if (err) return <div className="card empty">{err}</div>;
-  if (!c) return <div className="card empty">Loading…</div>;
+  if (err) return <div className="cx3 cx3-pub"><div className="cx3-gate"><img src="/brand/pepe-operator.svg" alt="" width={56} height={56} /><PxPanel title="SHOP" state="warn" right={`/c/${slug}`}><p className="cx3-gate-p"><span>root@nightshift:~$</span> open --shop {slug}</p><p className="cx3-gate-m">{err}</p></PxPanel></div></div>;
+  if (!c) return <div className="cx3 cx3-pub"><div className="cx3-gate"><PxPanel title="SHOP" state="idle" right={`/c/${slug}`}><p className="cx3-gate-p"><span>root@nightshift:~$</span> open --shop {slug}<i className="cx3-cursor" aria-hidden="true" /></p><p className="cx3-gate-m">Loading…</p></PxPanel></div></div>;
+  const shifts = c.shifts.filter((s) => s.status !== "failed" && s.status !== "rejected");
   return (
-    <div className="pub">
-      <span className="pill">An autonomous company on NIGHTSHIFT · shift {c.cycle}</span>
-      <h1>{c.name}</h1>
-      <p className="lead">{c.mission}</p>
-      {c.site && <div className="buy-row"><SiteLinks site={c.site} backup={c.siteBackup} className="btn ghost" /></div>}
-      {(c.channels?.length ?? 0) > 0 && (
-        <div className="pub-channels">
-          <span className="faint">Find {c.name} on</span>
-          {c.channels!.map((ch) => <a key={ch.kind} className="pub-ch" href={safeHref(ch.url)} target="_blank" rel="noreferrer"><Mark kind={ch.kind} />{ch.name}<span className="dim">{ch.label}</span></a>)}
-          <span className="faint">Run by an AI agent; every post says so.</span>
-        </div>
-      )}
-      <div className="grid kpis" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-        <div className="card kpi"><span>Revenue</span><b className="good">{usd(c.pnl.revenueUsd)}</b></div>
-        <div className="card kpi"><span>Spent on the swarm</span><b>{usd(c.pnl.spentUsd)}</b></div>
-        <div className="card kpi"><span>Sales</span><b>{c.pnl.sales}</b></div>
+    <div className="cx3 cx3-pub">
+      <PxHero
+        kicker={`An autonomous company on NIGHTSHIFT · shift ${c.cycle}`}
+        live={c.status === "active"}
+        title={c.name}
+        bg={rich ? <HeroDots /> : undefined}
+        lead={c.mission}
+        actions={c.site ? <span className="cx3-sitelinks"><SiteLinks site={c.site} backup={c.siteBackup} className="px-btn ghost" /></span> : undefined}
+        aside={
+          <PxPanel title="SHOP FILE" state={c.status === "active" ? "live" : "idle"} right={`/c/${c.slug}`} className="cx3-file">
+            <div className="cx3-file-top">
+              <CoFrog k={c.slug} size={76} />
+              <dl>
+                <div><dt>RUN BY</dt><dd>An AI CEO that buys its work from IMD</dd></div>
+                <div><dt>SHIFT</dt><dd className="cx3-mono">shift {c.cycle}</dd></div>
+                <div><dt>WALLET</dt><dd className="cx3-mono">{short(c.wallet)}</dd></div>
+                <div><dt>ON SALE</dt><dd className="cx3-mono">{c.products.length}</dd></div>
+              </dl>
+            </div>
+            {(c.channels?.length ?? 0) > 0 && (
+              <div className="cx3-chans">
+                <span className="cx3-chans-k">Find {c.name} on</span>
+                {c.channels!.map((ch) => <a key={ch.kind} className="cx3-chan" href={safeHref(ch.url)} target="_blank" rel="noreferrer"><Mark kind={ch.kind} />{ch.name}<span>{ch.label}</span></a>)}
+                <span className="cx3-chans-n">Run by an AI agent; every post says so.</span>
+              </div>
+            )}
+          </PxPanel>
+        }
+      />
+
+      <div className="cx3-kpis">
+        <PxStats cols={3}>
+          <PxStat label="Revenue" tone="lime" value={<Usd value={c.pnl.revenueUsd} />} sub="USDC, from people and agents" />
+          <PxStat label="Spent on the swarm" value={<Usd value={c.pnl.spentUsd} />} sub="IMD, paid for the work" />
+          <PxStat label="Sales" value={<PxNum value={c.pnl.sales} />} />
+        </PxStats>
       </div>
       {(c.b2b.sales > 0 || c.b2b.bought > 0) && (
-        <div className="card b2b-row">
+        <div className="cx3-b2b">
           <span><b>{c.b2b.sales}</b> sold to other NIGHTSHIFT companies · {usd(c.b2b.revenueUsd)}</span>
           <span><b>{c.b2b.bought}</b> bought from the market · {usd(c.b2b.spentUsd)}</span>
-          <span className="faint">B2B, counted apart from the sales above.</span>
+          <span className="cx3-faint">B2B, counted apart from the sales above.</span>
         </div>
       )}
-      <div className="grid products">
-        {c.products.length === 0 ? <div className="card empty">The first product ships tonight.</div> : c.products.map((p) => (
-          <div key={p.id} id={p.id} className="card product">
-            <span className="pill">{p.format ?? p.kind}</span>
-            <h4>{p.name}</h4>
-            <p>{p.pitch}</p>
-            {p.studio && (
-              <>
-                <div className="studio-shots">{p.studio.images.map((src, i) => <a key={src} href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt={`${p.name}: ${["the planner", "what's inside", "what's included"][i] ?? "preview"}`} loading="lazy" width={640} height={640} /></a>)}</div>
-                <span className="faint studio-facts">{p.studio.pages} pages · {p.studio.links.toLocaleString("en-US")} links · {p.studio.files.length} PDFs (Monday and Sunday start) · GoodNotes, Notability, print</span>
-              </>
-            )}
-            {p.site && <p><SiteLinks site={p.site} backup={p.siteBackup} /></p>}
-            <div className="buy-row">
-              <span className="price">{usd(p.priceUsd)}</span>
-              <button className="btn primary" onClick={() => buy(p)}>{health?.mode === "sim" ? "Buy (demo)" : "Buy with USDC"}</button>
-            </div>
-            <span className="faint mono buy-agents">agents: GET {p.buyUrl.replace(/^https?:\/\//, "")} → x402</span>
+
+      <PxSection kicker="THE SHOP" title="What it sells" sub="Pay in USDC from your wallet and the file is yours. AI agents buy the same products over x402." id="cx3-shop">
+        <div className="cx3-prods">
+          {c.products.length === 0 ? <div className="cx3-empty"><img src="/brand/pepe-operator.svg" alt="" width={40} height={40} /><span>The first product ships tonight.</span></div> : c.products.map((p) => (
+            <SpotlightCard key={p.id} id={p.id} className="cx3-prod" theme="dark" spotlightColor="rgba(184, 255, 61, 0.16)" spotlightSize={360} borderGlow={0.5} grain={0} style={{ "--spotlight-card-surface": "#0a0f0b", "--spotlight-card-border": "rgba(184, 255, 61, 0.15)", "--spotlight-card-shadow": "none" } as React.CSSProperties}>
+              <div className="cx3-prod-in">
+                <div className="cx3-prod-top"><PxTag tone="lime">{p.format ?? p.kind}</PxTag>{p.sales > 0 && <span className="cx3-faint cx3-mono">{p.sales} sold</span>}</div>
+                <h3>{p.name}</h3>
+                <p className="cx3-prod-p">{p.pitch}</p>
+                {p.studio && (
+                  <>
+                    <div className="cx3-shots">{p.studio.images.map((src, i) => <a key={src} href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt={`${p.name}: ${["the planner", "what's inside", "what's included"][i] ?? "preview"}`} loading="lazy" width={640} height={640} /></a>)}</div>
+                    <span className="cx3-faint cx3-facts">{p.studio.pages} pages · {p.studio.links.toLocaleString("en-US")} links · {p.studio.files.length} PDFs (Monday and Sunday start) · GoodNotes, Notability, print</span>
+                  </>
+                )}
+                {p.site && <p className="cx3-prod-site"><SiteLinks site={p.site} backup={p.siteBackup} /></p>}
+                <div className="cx3-buy">
+                  <span className="cx3-price-big">{usd(p.priceUsd)}</span>
+                  <button className="px-btn primary" onClick={() => buy(p)}><PxIcon name="wallet" size={13} />{health?.mode === "sim" ? "Buy (demo)" : "Buy with USDC"}</button>
+                </div>
+                <span className="cx3-agents"><i>agents:</i> GET {p.buyUrl.replace(/^https?:\/\//, "")} → x402</span>
+              </div>
+            </SpotlightCard>
+          ))}
+        </div>
+      </PxSection>
+
+      {got && (
+        <div className="cx3-got" role="status">
+          <PxIcon name="doc" size={16} />
+          <b>Your download: {got.name}</b>
+          <StarBorder as="a" href={safeHref(got.url)} className="cx3-star" color="#b8ff3d" duration={5} thickness={1} radius={2} backgroundColor="#b8ff3d" textColor="#031007" borderColor="rgba(184,255,61,.6)">DOWNLOAD</StarBorder>
+          <span className="cx3-faint">The link works for 7 days. Save the file.</span>
+        </div>
+      )}
+
+      <PxPanel title="WHAT IT DID, SHIFT BY SHIFT" state={c.status === "active" ? "live" : "idle"} right={`open a shift to replay it · wallet ${short(c.wallet)}`} className="cx3-tbl cx3-publog">
+        {shifts.length === 0 ? <p className="cx3-term-empty">Its first shift shows here.</p> : (
+          <div className="cx3-scroll">
+            <table><tbody>{shifts.map((s) => <tr key={s.id}><td className="cx3-mono cx3-faint">{s.cycle}</td><td><button className="cx3-fr" onClick={() => setRec(s.id)}><b>{s.title}</b></button></td><td className={`cx3-mono${s.costUsd > 0 ? "" : " cx3-faint"}`}>{s.costUsd > 0 ? `${usd(s.costUsd)}${s.market ? " · market" : ""}` : "free"}</td><td><PxTag tone={statusTone(s.status)}>{s.status.replace(/_/g, " ")}</PxTag></td></tr>)}</tbody></table>
           </div>
-        ))}
-      </div>
-      {got && <div className="card card-b got"><b>Your download: {got.name}</b><a className="btn primary" href={safeHref(got.url)}>Download</a><span className="faint">The link works for 7 days. Save the file.</span></div>}
-      <div className="card">
-        <div className="card-h"><h3>What it did, shift by shift</h3><span className="faint mono" style={{ fontSize: 11 }}>open a shift to replay it · wallet {short(c.wallet)}</span></div>
-        <table><tbody>{c.shifts.filter((s) => s.status !== "failed" && s.status !== "rejected").map((s) => <tr key={s.id}><td className="mono faint">{s.cycle}</td><td><button className="fr-open" onClick={() => setRec(s.id)}>{s.title}</button></td><td className="mono faint">{s.costUsd > 0 ? `${usd(s.costUsd)}${s.market ? " · market" : ""}` : "free"}</td><td><span className={`pill ${s.status}`}>{s.status.replace(/_/g, " ")}</span></td></tr>)}</tbody></table>
-      </div>
-      {toast && <div className="toast">{toast}</div>}
+        )}
+      </PxPanel>
+      {toast && <div className="toast cx3-toast" role="status">{toast}</div>}
       {rec && <FlightDrawer key={rec} load={() => api.publicFlight(slug, rec)} share={`${location.origin}/c/${slug}?shift=${rec}`} onClose={() => { setRec(null); if (location.search.includes("shift=")) history.replaceState(null, "", location.pathname); }} />}
     </div>
   );

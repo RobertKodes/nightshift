@@ -37,8 +37,8 @@ export default function FlightScreen() {
             {d.error && <Problem text={d.error} />}
 
             <Section>Why the CEO chose it</Section>
-            <View style={{ borderLeftWidth: 2, borderLeftColor: C.violet, paddingLeft: 14 }}>
-              <Serif style={{ fontSize: 21, lineHeight: 27 }}>“{d.why}”</Serif>
+            <View style={{ borderLeftWidth: 2, borderLeftColor: C.lime, paddingLeft: 14 }}>
+              <Serif style={{ fontSize: 22, lineHeight: 29, color: C.ink, fontFamily: F.ui, letterSpacing: -0.3 }}>“{d.why}”</Serif>
             </View>
             {d.mind && (
               <Mono style={{ marginTop: 10, fontSize: 12.5, color: C.faint }}>
@@ -132,8 +132,8 @@ export default function FlightScreen() {
             <Frame tick style={{ gap: 8 }}>
               {d.receipts.orderId && <Mono style={{ fontSize: 12.5 }} numberOfLines={1}>IMD order {d.receipts.orderId}</Mono>}
               {d.receipts.jobUrl && <Link onPress={() => void WebBrowser.openBrowserAsync(d.receipts.jobUrl!)} color={C.violetHi}>The swarm's job on IMD →</Link>}
-              {d.receipts.txUrl && <Link onPress={() => void WebBrowser.openBrowserAsync(d.receipts.txUrl!)} color={C.violetHi}>The payment on chain →</Link>}
-              {d.receipts.siteUrl && <Link onPress={() => void WebBrowser.openBrowserAsync(d.receipts.siteUrl!)} color={C.violetHi}>The site it built →</Link>}
+              {d.receipts.txUrl && <Link onPress={() => void WebBrowser.openBrowserAsync(d.receipts.txUrl!)} color={C.lime}>The payment on chain →</Link>}
+              {d.receipts.siteUrl && <Link onPress={() => void WebBrowser.openBrowserAsync(d.receipts.siteUrl!)} color={C.lime}>The site it built →</Link>}
               {!d.receipts.orderId && !d.receipts.jobUrl && !d.receipts.txUrl && <Dim>No receipts: nothing was bought this shift.</Dim>}
             </Frame>
           </>

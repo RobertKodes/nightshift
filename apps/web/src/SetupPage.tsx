@@ -7,6 +7,7 @@ import { ImdOrders } from "./ImdOrders";
 import { FrogsAdmin } from "./FrogsAdmin";
 import { AfterLaunch } from "./AfterLaunch";
 import { GameStakes } from "./GameStakes";
+import "./saas/pages/learn.css";
 
 type Check = { id: string; label: string; state: "ok" | "warn" | "block"; detail: string };
 type State = {
@@ -185,7 +186,8 @@ export function SetupPage() {
 
   if (!token) {
     return (
-      <div className="docs">
+      <div className="docs setup lx-setup">
+        <span className="px-kicker">OPERATOR · ADMIN</span>
         <h1>Setup</h1>
         <p className="lead">For the operator of this server. The admin token is printed in the engine log on first start and kept in the data folder as <code>admin-token</code>.</p>
         <form className="card card-b setup-login" onSubmit={(e) => { e.preventDefault(); keep(draft.trim()); setToken(draft.trim()); }}>
@@ -196,7 +198,7 @@ export function SetupPage() {
       </div>
     );
   }
-  if (!s) return <div className="docs"><h1>Setup</h1><div className="card empty">{msg ?? "Loading…"}</div></div>;
+  if (!s) return <div className="docs setup lx-setup"><span className="px-kicker">OPERATOR · ADMIN</span><h1>Setup</h1><div className="card empty">{msg ?? "Loading…"}</div></div>;
 
   const save = async (patch: Record<string, string>, restart: boolean) => {
     setBusy(true); setMsg(null);
@@ -219,9 +221,10 @@ export function SetupPage() {
   const blocks = s.checks.filter((c) => c.state === "block" && c.id !== "mode");
 
   return (
-    <div className="docs setup">
+    <div className="docs setup lx-setup">
       <div className="setup-h">
         <div>
+          <span className="px-kicker">OPERATOR · ADMIN · {s.running.NIGHTSHIFT_MODE === "live" ? "LIVE" : "SIMULATION"}</span>
           <h1>Setup</h1>
           <p className="lead">Running in <b>{s.running.NIGHTSHIFT_MODE === "live" ? "LIVE" : "simulation"}</b> at {s.running.PUBLIC_URL} · {s.stats.companies} companies · {s.stats.products} products live</p>
         </div>

@@ -66,7 +66,7 @@ const flat = (nodes: FlightSpan[], depth = 0, out: Row[] = []): Row[] => {
  * The flight recorder: one shift replayed. What the CEO saw, why it moved, each phase and swarm step
  * on a timeline you can scrub or play, the money that moved and whether it paid back.
  */
-export function FlightDrawer({ load, onClose, accent = "#4ad8ff", share }: { load: () => Promise<Flight>; onClose: () => void; accent?: string; share?: string }) {
+export function FlightDrawer({ load, onClose, accent = "#b8ff3d", share }: { load: () => Promise<Flight>; onClose: () => void; accent?: string; share?: string }) {
   const [f, setF] = useState<Flight | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pos, setPos] = useState(1);
@@ -111,7 +111,7 @@ export function FlightDrawer({ load, onClose, accent = "#4ad8ff", share }: { loa
   const picked = rows.find((r) => r.id === sel) ?? null;
   const pb = f?.payback;
   return createPortal(
-    <div className="nx-shell mk-drawer fr" data-room="geek" style={{ "--acc": accent } as React.CSSProperties} role="dialog" aria-modal="true" aria-label="Flight recorder" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="nx-shell mk-drawer fr cx3-dw" data-room="geek" style={{ "--acc": accent } as React.CSSProperties} role="dialog" aria-modal="true" aria-label="Flight recorder" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="mk-panel fr-panel">
         <button className="mk-x" onClick={onClose} aria-label="Close"><NxIcon name="close" size={18} /></button>
         {err ? <p className="warn">{err}</p> : !f ? <p className="dim">Loading the record…</p> : (

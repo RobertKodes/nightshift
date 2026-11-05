@@ -158,7 +158,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       {children}
       {note && (
         <Animated.View pointerEvents="none" style={{ position: "absolute", left: 18, right: 18, bottom: insets.bottom + 92, opacity: fade, transform: [{ translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }}>
-          <View style={{ backgroundColor: "#16132f", borderColor: C.lineHi, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 16 }}>
+          <View style={{ backgroundColor: "#0d1410", borderColor: C.lineHi, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 16 }}>
             <Text style={{ color: C.ink, fontFamily: F.ui, fontSize: 15 }}>{note}</Text>
           </View>
         </Animated.View>

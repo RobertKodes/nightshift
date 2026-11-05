@@ -55,7 +55,7 @@ function appKit(projectId: string) {
       redirect: { native: "nightshift://", universal: "https://getnightshift.tech/app" },
     },
     themeMode: "dark",
-    themeVariables: { accent: "#b8ff4a" },
+    themeVariables: { accent: "#b8ff3d" },
   } as Parameters<typeof createAppKit>[0]);
   return kit;
 }

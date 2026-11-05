@@ -12,7 +12,7 @@ export function kindOf(j: JournalEntry): { tag: string; color: string } {
   if (j.kind === "note" && t.startsWith("You turned down")) return { tag: "Declined", color: C.faint };
   if (j.kind === "note" && t.startsWith("Market first")) return { tag: "Market first", color: C.blue };
   switch (j.kind) {
-    case "decision": return { tag: "The CEO decides", color: C.violetHi };
+    case "decision": return { tag: "The CEO decides", color: C.pepe };
     case "sale": return { tag: "Sale", color: C.lime };
     case "result": return { tag: "Delivered", color: C.lime };
     case "warning": return { tag: "Warning", color: C.amber };

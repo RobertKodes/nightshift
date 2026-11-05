@@ -1,0 +1,91 @@
+/* ============================================================================
+   NIGHTSHIFT // PROTOCOL INTERFACE v3: Frog missions (/command).
+   The hero and its rules readout, the week's missions as frog cards, the crew board as a ranked
+   ledger, and the four places missions happen.
+   ========================================================================== */
+
+.px .cm3 { display: grid; min-width: 0; }
+.px .cm3 > * { min-width: 0; }
+
+/* ---- the primary action */
+.px .cm3-star { min-height: 40px; padding: 0 16px; gap: 8px; font: 700 12.5px/1 var(--px-mono); letter-spacing: .02em; text-decoration: none; }
+.px .cm3-star, .px .cm3-star:hover { color: #031007 !important; }
+
+/* ---- the rules readout, with the operator frog on its corner */
+.px .cm3-term { position: relative; }
+.cm3-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cm3-rules > div { display: grid; gap: 6px; align-content: start; padding: 12px; border-bottom: 1px solid rgba(184, 255, 61, .08); }
+.cm3-rules > div:nth-of-type(odd) { border-right: 1px solid rgba(184, 255, 61, .08); }
+.cm3-rules > div:nth-last-of-type(-n+2) { border-bottom: 0; }
+.cm3-rules span { color: var(--px-faint); font: 400 9px/1.2 var(--px-pixel); letter-spacing: .06em; }
+.cm3-rules b { color: var(--px-lime); font: 600 18px/1 var(--px-mono); font-variant-numeric: tabular-nums; }
+.cm3-rules small { color: var(--px-dim); font: 400 11px/1.35 var(--px-sans); }
+.cm3-rules-frog { position: absolute; z-index: 2; bottom: -20px; right: -12px; width: 56px; height: 56px; image-rendering: pixelated; transform: rotate(8deg); filter: drop-shadow(0 8px 12px rgba(0, 0, 0, .55)); pointer-events: none; }
+
+.cm3-stats { margin-top: 22px; }
+
+/* ---- the week's missions */
+.px .cm3-note { margin: 0 0 14px; max-width: 88ch; color: var(--px-dim); font: 400 13.5px/1.65 var(--px-sans); }
+.px .cm3-note a, .px .cm3-empty a { color: var(--px-lime); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.px .cm3-msg { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--px-line2); border-left: 3px solid var(--px-lime); background: rgba(184, 255, 61, .05); color: #dfffb0; font: 400 13.5px/1.5 var(--px-sans); }
+.px .cm3-empty { margin: 0 0 12px; padding: 14px; border: 1px dashed var(--px-line); color: var(--px-dim); font: 400 13px/1.5 var(--px-mono); }
+.cm3-missions { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; }
+.px .cm3-mission.spotlight-card {
+  --spotlight-card-surface: #0a0f0b !important; --spotlight-card-border: rgba(184, 255, 61, .16) !important; --spotlight-card-shadow: none !important;
+  display: grid; gap: 10px; align-content: start; padding: 16px; border-radius: 2px;
+}
+.px .cm3-mission.spotlight-card::before { content: ""; position: absolute; z-index: 2; left: 0; top: 0; width: 10px; height: 10px; border-left: 2px solid var(--px-lime); border-top: 2px solid var(--px-lime); pointer-events: none; }
+.px .cm3-mission.ready { --spotlight-card-border: rgba(184, 255, 61, .55) !important; }
+.px .cm3-mission.underway { --spotlight-card-border: rgba(242, 193, 78, .35) !important; }
+.px .cm3-mission.done { opacity: .72; }
+.cm3-mission-h { display: flex; align-items: center; gap: 10px; }
+.cm3-frog { flex: none; width: 44px; height: 44px; border: 1px solid var(--px-line2); background: #070b08; object-fit: cover; }
+.cm3-mission-n { color: var(--px-faint); font: 400 9.5px/1 var(--px-pixel); letter-spacing: .06em; }
+.cm3-mission-h .pk-tag { margin-left: auto; }
+.px .cm3-mission b { color: var(--px-text); font: 600 17px/1.2 var(--px-display); letter-spacing: -.02em; }
+.px .cm3-mission p { margin: 0; color: var(--px-dim); font: 400 13px/1.55 var(--px-sans); }
+.cm3-line { color: var(--px-lime); font: 500 12px/1.45 var(--px-mono); }
+.cm3-go { display: flex; gap: 8px; }
+.px .cm3-go select.field { flex: 1; min-width: 0; min-height: 38px; padding: 0 10px; }
+.cm3-goto { justify-self: start; }
+.px .cm3-mission .px-btn { justify-self: start; }
+.cm3-small { color: var(--px-faint); font: 400 12px/1.4 var(--px-sans); }
+.cm3-signin { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--px-line2); background: rgba(10, 15, 11, .6); }
+.cm3-signin > span { color: var(--px-faint); font: 400 9.5px/1.3 var(--px-pixel); letter-spacing: .04em; }
+
+/* ---- the crew board */
+.px .cm3-board .pk-panel-b { padding: 2px 0; }
+.cm3-rank { margin: 0; padding: 0; list-style: none; }
+.cm3-rank li { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto; gap: 12px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid rgba(184, 255, 61, .07); }
+.cm3-rank li:last-child { border-bottom: 0; }
+.cm3-rank li:hover { background: rgba(184, 255, 61, .03); }
+.cm3-rank-n { color: var(--px-faint); font: 400 10px/1 var(--px-pixel); letter-spacing: .04em; }
+.cm3-rank li:first-child .cm3-rank-n { color: var(--px-gold); }
+.cm3-rank li:nth-child(2) .cm3-rank-n, .cm3-rank li:nth-child(3) .cm3-rank-n { color: var(--px-lime); }
+.cm3-rank b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--px-text); font: 500 13px/1.2 var(--px-mono); }
+.cm3-rank span { color: var(--px-dim); font: 400 12px/1.2 var(--px-sans); }
+.cm3-rank i { color: var(--px-lime); font: 600 13.5px/1.2 var(--px-mono); font-style: normal; font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ---- where missions happen */
+.cm3-links { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.cm3-links a { position: relative; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 6px 10px; align-items: start; padding: 14px; border: 1px solid var(--px-line); background: var(--px-panel); text-decoration: none; transition: border-color .14s, background .14s; }
+.cm3-links a:hover { border-color: var(--px-line2); background: #0c1310; }
+.cm3-links svg { grid-row: 1 / span 2; margin-top: 1px; color: var(--px-pepe); }
+.cm3-links b { color: var(--px-text); font: 400 10.5px/1.2 var(--px-pixel); letter-spacing: .06em; text-transform: uppercase; }
+.cm3-links span { grid-column: 2; color: var(--px-dim); font: 400 12px/1.5 var(--px-sans); }
+.cm3-links i { grid-column: 3; grid-row: 1 / span 2; color: var(--px-faint); font-style: normal; font-family: var(--px-mono); }
+.cm3-links a:hover i, .cm3-links a:hover svg { color: var(--px-lime); }
+
+@media (max-width: 899px) {
+  .cm3-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cm3-rules-frog { bottom: -16px; right: -4px; width: 44px; height: 44px; }
+  .cm3-rules b { font-size: 16px; }
+}
+@media (max-width: 560px) {
+  .cm3-links { grid-template-columns: 1fr; }
+  .cm3-rank li { grid-template-columns: 26px minmax(0, 1fr) auto; }
+  .cm3-rank li > span:not(.cm3-rank-n) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cm3-rules-frog { transform: none; }
+}
