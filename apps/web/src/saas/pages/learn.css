@@ -286,6 +286,16 @@
 .lx-setup .dot.ok { background: var(--px-lime); }
 .lx-setup .dot.warn { background: var(--px-gold); }
 .lx-setup .dot.block { background: var(--px-red); }
+/* the Solana launchpad's steps: an action under each, a numbered how-to */
+.lx-setup .checks li > div { display: grid; gap: 6px; min-width: 0; }
+.lx-setup .checks li code { font: 400 11.5px var(--px-mono); color: var(--px-lime); word-break: break-all; }
+.lx-setup .setup-act { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lx-setup .setup-act > .btn { width: auto; flex: none; }
+.lx-setup .setup-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 1 1 100%; }
+.lx-setup .setup-row .field { flex: 1 1 320px; min-width: 0; }
+.lx-setup .checks .setup-ol { margin: 8px 0 0; padding-left: 22px; display: block; list-style: decimal; color: var(--px-dim); font: 400 13px/1.6 var(--px-sans); }
+.lx-setup .checks .setup-ol li { display: list-item; padding: 3px 0; border: 0; gap: 0; }
+.lx-setup .checks .setup-ol li b { font: 600 12px/1.4 var(--px-mono); color: var(--px-text); }
 .lx-setup .setup-grid label > span { color: var(--px-dim); font: 400 12.5px/1.45 var(--px-sans); }
 .lx-setup .setup-grid small { color: var(--px-faint); font: 400 10px var(--px-mono); }
 .lx-setup .setup-bar { z-index: 5; border-radius: 2px; border-color: var(--px-line2); background: rgba(7, 11, 8, .96); backdrop-filter: none; box-shadow: 4px 4px 0 rgba(0, 0, 0, .5); font: 400 12.5px/1.4 var(--px-mono); }

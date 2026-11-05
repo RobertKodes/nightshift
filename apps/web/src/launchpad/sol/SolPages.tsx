@@ -699,6 +699,45 @@ function TradeBox({ pool, mint, symbol, net, solUsd }: { pool: string; mint: str
 
 // ---------------------------------------------------------------- the admin
 
+/** NIGHTSHIFT's share of every launch's trading fees, waiting in each pool until the partner wallet claims it. */
+function PartnerFees({ partner, solUsd }: { partner: string | null; solUsd: number | null }) {
+  const [rows, setRows] = useState<{ pool: string; sol: number; tokens: number; name: string }[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [say, setSay] = useState("");
+  const [msg, setMsg] = useState("");
+  const read = async () => {
+    const { launches } = await solApi.list("new");
+    const live = launches.filter((l) => l.pool && l.status === "live");
+    const c = await loadChain();
+    const fees = await c.partnerFees(live.map((l) => l.pool!));
+    setRows(fees.map((f) => ({ ...f, name: live.find((l) => l.pool === f.pool)?.name ?? f.pool })));
+  };
+  useEffect(() => { void read().catch(() => setRows([])); }, []);
+  const total = (rows ?? []).reduce((a, r) => a + r.sol, 0);
+  const claim = async () => {
+    setBusy(true); setMsg("");
+    try {
+      const who = await wallet();
+      if (who.address !== partner) throw new Error("Connect the partner wallet: only it can claim NIGHTSHIFT's fees.");
+      const c = await loadChain();
+      const n = await c.claimPartnerFees(who, (rows ?? []).map((r) => r.pool), setSay);
+      setMsg(n ? `Claimed from ${n} pool${n > 1 ? "s" : ""} into the partner wallet.` : "Nothing to claim yet.");
+      await read();
+    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); setSay(""); }
+  };
+  return (
+    <PxPanel title="3 · NIGHTSHIFT'S FEES" right={rows ? `${sol(total, 4)} SOL${solUsd ? ` ≈ ${usd(total * solUsd)}` : ""}` : "…"} state={total > 0 ? "live" : "idle"}>
+      <p className="sl3-dim">The partner's share of every trade on the curves (40% of the fee at 1%), and each launch's fee, wait in their pools until the partner wallet claims them. Graduated pools pay through Meteora's DAMM v2 position instead.</p>
+      {rows === null ? <p className="sl3-dim">Reading the pools…</p> : !rows.length ? <p className="sl3-dim">No live launches yet.</p> : (
+        <ul className="sl3-adm">{rows.map((r) => <li key={r.pool}><span><b>{r.name}</b><small>{sol(r.sol, 6)} SOL waiting{r.tokens > 0 ? ` · ${r.tokens.toLocaleString("en-US", { maximumFractionDigits: 0 })} tokens` : ""}</small></span></li>)}</ul>
+      )}
+      <button className="px-btn primary" disabled={busy || !partner || !rows?.length} onClick={() => void claim()}><PxIcon name="coin" size={14} />CLAIM INTO THE PARTNER WALLET</button>
+      {say && <p className="sl3-say" aria-live="polite">{say}</p>}
+      {msg && <p className="sl3-dim" role="status">{msg}</p>}
+    </PxPanel>
+  );
+}
+
 function SolAdmin() {
   const [token, setToken] = useState(adminToken());
   const [state, setState] = useState<Awaited<ReturnType<typeof solApi.adminState>> | null>(null);
@@ -732,7 +771,8 @@ function SolAdmin() {
             ))}</ul>
           )}
         </PxPanel>
-        <PxPanel title="3 · SHARED CONFIG KEY" right="optional" state={state.config ? "live" : "idle"}>
+        <PartnerFees partner={state.partner} solUsd={state.info.solUsd} />
+        <PxPanel title="4 · SHARED CONFIG KEY" right="optional" state={state.config ? "live" : "idle"}>
           {state.config
             ? <p>Standard launches use <a href={solscan("account", state.config, state.network)} target="_blank" rel="noreferrer">{state.config}</a>.</p>
             : <>

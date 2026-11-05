@@ -157,6 +157,38 @@ export async function signText(who: SolSigner, text: string): Promise<string> {
   return Buffer.from(sig).toString("base64");
 }
 
+/** NIGHTSHIFT's unclaimed trading fees in each launch's pool (the partner's share, collected in SOL). */
+export async function partnerFees(pools: string[]): Promise<{ pool: string; sol: number; tokens: number }[]> {
+  const out: { pool: string; sol: number; tokens: number }[] = [];
+  for (const pool of pools) {
+    const p = await client.state.getPool(pool).catch(() => null);
+    if (!p) continue;
+    const s = p.poolState as unknown as { partnerQuoteFee: BN; partnerBaseFee: BN };
+    out.push({ pool, sol: Number(s.partnerQuoteFee.toString()) / LAMPORTS_PER_SOL, tokens: Number(s.partnerBaseFee.toString()) / 10 ** LAUNCH.decimals });
+  }
+  return out;
+}
+
+/**
+ * The partner wallet claims NIGHTSHIFT's share from each pool: its trading fees and, once, the pool's
+ * launch fee. One transaction per pool, simulated first; a pool with nothing left to claim is skipped.
+ */
+export async function claimPartnerFees(who: SolSigner, pools: string[], say: (s: string) => void): Promise<number> {
+  const me = new PublicKey(who.address);
+  let sent = 0;
+  for (const [i, pool] of pools.entries()) {
+    const p = new PublicKey(pool);
+    const fees = await client.partner.claimPartnerTradingFee({ feeClaimer: me, payer: me, pool: p, maxBaseAmount: new BN("18446744073709551615"), maxQuoteAmount: new BN("18446744073709551615") });
+    const creation = await client.partner.claimPartnerPoolCreationFee({ pool: p, feeReceiver: me }).catch(() => null);
+    const tries = creation ? [new Transaction().add(...fees.instructions, ...creation.instructions), fees, creation] : [fees];
+    for (const tx of tries) {
+      try { await sendTx(tx, who, [], 200_000, (s) => say(`Pool ${i + 1} of ${pools.length}: ${s}`)); sent++; break; }
+      catch (e) { if (!/would fail/.test((e as Error).message)) throw e; }
+    }
+  }
+  return sent;
+}
+
 export type Quote = { out: bigint; min: bigint; fee: bigint; feePct: number };
 
 /** What a buy (SOL in) or a sell (tokens in) returns right now, with the slippage floor. */

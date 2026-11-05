@@ -7,6 +7,7 @@ import { ImdOrders } from "./ImdOrders";
 import { FrogsAdmin } from "./FrogsAdmin";
 import { AfterLaunch } from "./AfterLaunch";
 import { GameStakes } from "./GameStakes";
+import { SolSetup } from "./SolSetup";
 import "./saas/pages/learn.css";
 
 type Check = { id: string; label: string; state: "ok" | "warn" | "block"; detail: string };
@@ -234,6 +235,11 @@ export function SetupPage() {
       <section className="card">
         <div className="card-h"><h3>Your to-do</h3><span className="faint" style={{ fontSize: 12 }}>each one a button; done turns green</span></div>
         <OwnerTodo call={call} token={token} guardOn={s.running.MODERATION === "1"} ghSet={s.saved.RECRUITER_GITHUB_TOKEN === "set"} fcmSet={s.saved.FCM_SERVICE_ACCOUNT === "set"} appCert={String(s.running.ANDROID_CERT_SHA256 ?? "")} saveSettings={(patch) => save({ ...form, ...patch }, true)} saveQuiet={(patch) => save({ ...form, ...patch }, false)} onToken={(t) => { keep(t); setToken(t); }} />
+      </section>
+
+      <section className="card">
+        <div className="card-h"><h3>IMD Launch on Solana</h3><span className="faint" style={{ fontSize: 12 }}>the launchpad's setup · what to do, in order · live state</span></div>
+        <SolSetup call={call} token={token} />
       </section>
 
       <section className="card">
