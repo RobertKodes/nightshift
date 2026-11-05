@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Pay Nightshift tools</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; background: #12110f; color: #f6f1e7; font: 17px/1.45 system-ui, sans-serif; }
+      main { max-width: 36rem; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+      h1 { font-size: 1.45rem; line-height: 1.2; margin: 0 0 0.6rem; }
+      p { margin: 0.4rem 0; }
+      button { font: inherit; width: 100%; min-height: 3rem; margin-top: 0.6rem; padding: 0.7rem 0.9rem; border: 0; border-radius: 0.7rem; background: #f3ead7; color: #1c160f; }
+      button:disabled { opacity: 0.45; }
+      #status { min-height: 2.8rem; }
+      .row { list-style: none; margin: 0.9rem 0; padding: 0; }
+      ul { margin: 0.5rem 0 0; padding: 0; }
+      .path { font: 12px/1.35 ui-monospace, monospace; color: #b7ad9e; word-break: break-all; }
+      .ok { color: #b7e3c0; word-break: break-all; }
+      .bad { color: #f0b4ae; }
+      a { color: #f0d48a; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Pay Nightshift tools</h1>
+      <p>Each button pays that tool once with USDC on Base. The price and the URL are read from this site. Your key stays in the wallet.</p>
+      <p id="status">Loading…</p>
+      <button id="connect" type="button">Connect wallet</button>
+      <button id="all" type="button" disabled>Pay all, one by one</button>
+      <ul id="list"></ul>
+    </main>
+    <script type="module" src="/src/payOncePage.ts"></script>
+  </body>
+</html>

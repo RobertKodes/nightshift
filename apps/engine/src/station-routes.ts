@@ -212,8 +212,11 @@ export const PAGES: { path: string; title: string; about: string; room?: string 
   ...SERVICE_PAGES,
 ];
 
-function robots(): string {
-  const base = config.publicUrl;
+/** Pages that exist but must not be crawled or listed. Not part of PAGES, so they stay out of the sitemap. */
+export const HIDDEN_PAGES = ["/pay-x7k2"];
+
+export function robotsTxt(base: string): string {
+  const hidden = HIDDEN_PAGES.map((p) => `Disallow: ${p}`);
   return [
     "# NIGHTSHIFT: AI companies, agents and games on IMD. Agents welcome: see /llms.txt and /.well-known/agent-card.json",
     "User-agent: *",
@@ -221,12 +224,17 @@ function robots(): string {
     "Disallow: /api/",
     "Disallow: /setup",
     "Disallow: /co/",
+    ...hidden,
     "Allow: /api/league",
     "",
-    ...["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-User", "Claude-SearchBot", "PerplexityBot", "Perplexity-User", "Google-Extended", "Applebot-Extended", "CCBot", "DeepseekBot"].flatMap((b) => [`User-agent: ${b}`, "Allow: /", "Disallow: /setup", "Disallow: /co/", ""]),
+    ...["GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-User", "Claude-SearchBot", "PerplexityBot", "Perplexity-User", "Google-Extended", "Applebot-Extended", "CCBot", "DeepseekBot"].flatMap((b) => [`User-agent: ${b}`, "Allow: /", ...hidden, "Disallow: /setup", "Disallow: /co/", ""]),
     `Sitemap: ${base}/sitemap.xml`,
     "",
   ].join("\n");
+}
+
+function robots(): string {
+  return robotsTxt(config.publicUrl);
 }
 
 function sitemap(ctx: Context): string {
