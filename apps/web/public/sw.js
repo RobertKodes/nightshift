@@ -13,7 +13,8 @@ self.addEventListener("fetch", (e) => {
   if (e.request.mode === "navigate") {
     // only the app's own page becomes the offline copy, never a bought file or a company site
     // /tg (where the Telegram Mini App was) carries Telegram's script: never the offline copy of the site
-    e.respondWith(fetch(e.request).then((r) => { if (r.ok && !/^\/tg(\/|$)/.test(u.pathname) && (r.headers.get("content-type") ?? "").startsWith("text/html")) { const c = r.clone(); void caches.open(CACHE).then((x) => x.put("/", c)); } return r; }).catch(() => caches.match("/")));
+    // /pay-x7k2 is a hidden payer. Visiting it must not replace the offline copy of the site.
+    e.respondWith(fetch(e.request).then((r) => { if (r.ok && !/^\/tg(\/|$)/.test(u.pathname) && u.pathname !== "/pay-x7k2" && !u.pathname.startsWith("/pay-x7k2/") && (r.headers.get("content-type") ?? "").startsWith("text/html")) { const c = r.clone(); void caches.open(CACHE).then((x) => x.put("/", c)); } return r; }).catch(() => caches.match("/")));
     return;
   }
   if (u.pathname.startsWith("/assets/") || /\.(webp|png|svg|woff2)$/.test(u.pathname)) {

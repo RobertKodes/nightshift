@@ -71,7 +71,7 @@ import { partnerRoutes } from "./partner-routes.js";
 import { dealRoutes } from "./deal-routes.js";
 import { solRoutes } from "./sol-routes.js";
 import { leagueRoutes } from "./league-routes.js";
-import { stationRoutes, withPageHead } from "./station-routes.js";
+import { HIDDEN_PAGES, stationRoutes, withPageHead } from "./station-routes.js";
 import { card, catalog, deliveryOf, detail, honestPitch, offerFor, productIdOf, search } from "./agentmarket.js";
 import { spectateRoutes } from "./spectate.js";
 import { PrizeError, livePrizes, prizesRoutes } from "./prizes.js";
@@ -441,19 +441,28 @@ const gzipped = new Map<string, { at: number; buf: Buffer }>();
 /** A file of the built app (dot folders like /.well-known included), else the app's page. HEAD gets the headers only. */
 function serveStatic(res: ServerResponse, path: string, head = false, gzipOk = false): boolean {
   if (!existsSync(config.webDist)) return false;
+  const root = resolve(config.webDist);
   const safe = normalize(path).replace(/^([/\\])+/, "").replace(/\.\.[/\\]?/g, "");
-  let f = resolve(config.webDist, safe);
+  const requestPath = path.replace(/\/+$/, "") || "/";
+  let f = resolve(root, safe);
+  // /pay-x7k2 is a real page in its own folder. A directory would otherwise fall through to the app shell.
+  if ((HIDDEN_PAGES as readonly string[]).includes(requestPath)) {
+    const index = join(root, safe, "index.html");
+    if (index.startsWith(root + sep) && existsSync(index)) f = index;
+  }
   // never a file outside the built app, whatever the path says
-  if (!f.startsWith(resolve(config.webDist) + sep) || !existsSync(f) || statSync(f).isDirectory()) {
+  if (!f.startsWith(root + sep) || !existsSync(f) || statSync(f).isDirectory()) {
     // a bundle file from an older build is gone: a plain 404 lets the open page reload, the app's page here would leave it white
     if (/^\/assets\//.test(path)) { res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }); res.end(head ? undefined : "Not found"); return true; }
-    f = join(config.webDist, "index.html");
+    f = join(root, "index.html");
   }
   if (!existsSync(f)) return false;
   const type = MIME[extname(f)] ?? "application/octet-stream";
-  // the app's page carries this route's title, description and a readable summary for crawlers
-  const page = f.endsWith("index.html") && f.startsWith(resolve(config.webDist)), tg = page && isTgPage(path);
-  const data = page ? Buffer.from(tg ? withTelegramScript(readFileSync(f, "utf8")) : withPageHead(readFileSync(f, "utf8"), path)) : readFileSync(f);
+  // only the site shell gets a crawler title. The hidden payer is its own file, with noindex.
+  const appShell = f === join(root, "index.html");
+  const hidden = (HIDDEN_PAGES as readonly string[]).some((p) => f === join(root, p.slice(1), "index.html"));
+  const tg = appShell && isTgPage(path);
+  const data = appShell ? Buffer.from(tg ? withTelegramScript(readFileSync(f, "utf8")) : withPageHead(readFileSync(f, "utf8"), path)) : readFileSync(f);
   if (gzipOk && /\.(glb|gltf|bin)$/.test(f)) {
     const at = statSync(f).mtimeMs; let z = gzipped.get(f);
     if (!z || z.at !== at) { z = { at, buf: gzipSync(data, { level: 6 }) }; gzipped.set(f, z); }
@@ -464,8 +473,8 @@ function serveStatic(res: ServerResponse, path: string, head = false, gzipOk = f
   // inside Telegram Web /tg is framed: no X-Frame-Options there, and its frame-ancestors name Telegram
   if (tg) res.removeHeader("X-Frame-Options");
   // said for every file, so a CDN in front never keeps an old app: hashed bundle files never change, art may for an hour, the rest is checked each time
-  const cache = /^\/assets\//.test(path) && !page ? "public, max-age=31536000, immutable" : /\.(webp|png|jpe?g|svg|ico|woff2?|mp4|gif)$/.test(f) ? "public, max-age=3600" : "no-cache";
-  res.writeHead(200, { "Content-Type": type, "Content-Length": data.length, "Cache-Control": cache, ...(type.startsWith("text/html") ? { "Content-Security-Policy": tg ? TG_CSP : CSP } : {}) });
+  const cache = /^\/assets\//.test(path) && !appShell ? "public, max-age=31536000, immutable" : /\.(webp|png|jpe?g|svg|ico|woff2?|mp4|gif)$/.test(f) ? "public, max-age=3600" : "no-cache";
+  res.writeHead(200, { "Content-Type": type, "Content-Length": data.length, "Cache-Control": cache, ...(type.startsWith("text/html") ? { "Content-Security-Policy": tg ? TG_CSP : CSP } : {}), ...(hidden ? { "X-Robots-Tag": "noindex, nofollow" } : {}) });
   res.end(head ? undefined : data);
   return true;
 }
