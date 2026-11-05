@@ -475,6 +475,19 @@ export async function holderSeats(address: string) {
 
 // ---- the public page
 
+/**
+ * What each keeper wallet kept from its liquidations (the bonus less the seat's cut, in USD at the time, as
+ * watchStatus counts it), with the seat it serves now and that seat's owner (null once no seat names it). The leaderboards.
+ */
+export function keeperEarnings(): { keeper: string; owner: string | null; watcher: number | null; usd: number; bites: number }[] {
+  const s = load(), by = new Map<string, { usd: number; bites: number }>();
+  for (const r of s.bites) { const x = by.get(r.keeper) ?? { usd: 0, bites: 0 }; x.usd += r.bonusUsd * (1 - (r.cutBps ?? 1000) / 10_000); x.bites++; by.set(r.keeper, x); }
+  return [...by].map(([keeper, x]) => {
+    const seat = Object.values(s.seats).find((v) => lc(v.keeper) === keeper);
+    return { keeper, owner: seat ? lc(seat.owner) : null, watcher: seat?.watcher ?? null, usd: Math.round(x.usd * 100) / 100, bites: x.bites };
+  });
+}
+
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const wad = (x: bigint) => Number(x) / 1e18;
 export async function watchStatus() {

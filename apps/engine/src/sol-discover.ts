@@ -22,6 +22,7 @@ const get = async <T>(path: string): Promise<T | null> => fetch(`${API}${path}`,
 
 /** Which launchpad a Solana mint came from, by the vanity suffix those launchpads give their mints. */
 export function launchpadOf(mint: string, dex: string): string | null {
+  if (/imd$/.test(mint)) return "IMD · NIGHTSHIFT";
   if (/pump$/.test(mint)) return "pump.fun";
   if (/bonk$/.test(mint)) return "LetsBonk";
   if (/BAGS$/.test(mint)) return "Bags";

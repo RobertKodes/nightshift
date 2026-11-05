@@ -51,8 +51,8 @@ export class StakeHistory {
     }
   }
 
-  /** One wallet's stakes (amount, unlock time, transaction), what it withdrew and the ETH it was paid, as of the chain's head. */
-  async of(wallet: string) {
+  /** The index brought up to the chain's head; null while staking is not open. */
+  async #fresh(): Promise<Index | null> {
     const l = launchState(), contract = l?.contracts?.rewards?.toLowerCase();
     if (!l?.open || !contract || !l.scanFrom) return null;
     // at most one catch-up at a time; after a complete one, the next waits a block (12 s). A failed one is tried again next time.
@@ -62,15 +62,29 @@ export class StakeHistory {
     if (this.#catching) await this.#catching;
     // never a history that stops short of the chain: a stake missing from it would look withdrawable or gone
     if (!this.#index || this.#index.next <= this.#head) throw new Error("The stake history is still being read.");
-    const who = wallet.toLowerCase(), mine = (this.#index?.rows ?? []).filter((r) => r.account === who);
+    return this.#index;
+  }
+
+  /** One wallet's stakes (amount, unlock time, transaction), what it withdrew and the ETH it was paid, as of the chain's head. */
+  async of(wallet: string) {
+    const index = await this.#fresh();
+    if (!index) return null;
+    const who = wallet.toLowerCase(), mine = index.rows.filter((r) => r.account === who);
     return {
       stakes: mine.filter((r) => r.kind === "staked").map((r) => ({ amount: r.amount, unlockAt: r.unlockAt!, tx: r.tx })),
       out: mine.filter((r) => r.kind === "withdrawn").reduce((s, r) => s + BigInt(r.amount), 0n).toString(),
       paidEth: mine.filter((r) => r.kind === "paid" && r.token === ZERO).reduce((s, r) => s + BigInt(r.amount), 0n).toString(),
-      asOfBlock: (this.#index?.next ?? 1) - 1,
+      asOfBlock: index.next - 1,
     };
   }
+
+  /** Every wallet's stakes, withdrawals and reward payments (the leaderboards), as of the chain's head; null while staking is not open. */
+  async all(): Promise<{ rows: readonly StakeRow[]; asOfBlock: number } | null> {
+    const index = await this.#fresh();
+    return index ? { rows: index.rows, asOfBlock: index.next - 1 } : null;
+  }
 }
+export type StakeRow = Row;
 
 let live: StakeHistory | null = null;
 export const liveStakeHistory = () => (live ??= new StakeHistory(config.dataDir));

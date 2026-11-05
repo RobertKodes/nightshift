@@ -30,7 +30,7 @@ export const ROOMS: Record<RoomId, Room> = {
     id: "info", name: "$SHIFT", short: "$SHIFT", deck: "DOOR 03", accent: "#f2c14e", accent2: "#ffe6a8",
     tagline: "Benefits, swap, staking and funded rewards.", emblem: "/art/v2/door-shift-768.webp", art: "/art/station/room-info-1600x900.webp",
     nav: [{ to: "/token", label: "$SHIFT", icon: "token" }, { to: "/swap", label: "Swap", icon: "swap" }, { to: "/stake", label: "Stake SHIFT", icon: "stake" }, { to: "/frogs", label: "Frogs", icon: "frogs" }],
-    more: [{ to: "/deals", label: "Token Deals", icon: "market" }, { to: "/partners", label: "Partners", icon: "crew" }, { to: "/ship", label: "The Ship", icon: "frogs" }, { to: "/tokenomics", label: "Tokenomics", icon: "tokenomics" }, { to: "/whitepaper", label: "Whitepaper", icon: "story" }, { to: "/watch", label: "Run a keeper", icon: "security" }],
+    more: [{ to: "/leaderboard", label: "Leaderboard", icon: "stake" }, { to: "/deals", label: "Token Deals", icon: "market" }, { to: "/partners", label: "Partners", icon: "crew" }, { to: "/ship", label: "The Ship", icon: "frogs" }, { to: "/tokenomics", label: "Tokenomics", icon: "tokenomics" }, { to: "/whitepaper", label: "Whitepaper", icon: "story" }, { to: "/watch", label: "Run a keeper", icon: "security" }],
   },
   economy: {
     id: "economy", name: "Activity & receipts", short: "Proof", deck: "PROOF", accent: "#b5b0c9", accent2: "#ded9ee",
@@ -50,7 +50,7 @@ export function roomOf(path: string): RoomId | null {
   const a = path.split("/").filter(Boolean)[0] ?? "";
   if (!a || a === "story") return null;
   if (["breakroom", "games", "arena", "league", "play"].includes(a)) return "breakroom";
-  if (["info", "whitepaper", "token", "tokenomics", "frogs", "stake", "staking", "swap", "command", "forge", "watch", "ship", "deals", "partners"].includes(a)) return "info";
+  if (["info", "whitepaper", "token", "tokenomics", "frogs", "stake", "staking", "swap", "command", "forge", "watch", "ship", "deals", "partners", "leaderboard"].includes(a)) return "info";
   return "geek";
 }
 

@@ -24,7 +24,7 @@ export const EDITABLE = [
   "SWARM_DESK", "SWARM_DESK_DAILY_IMD", "SWARM_DESK_IN_FLIGHT", "SWARM_IMD_FLOAT", "SWARM_REFILL_MIN_USD",
   "ACP_BRIDGE",
   "AGENT_RESERVE", "AGENT_RESERVE_DRY", "RESERVE_WALLET",
-  "SOL_NETWORK", "SOL_RPC", "SOL_DBC_CONFIG", "SOL_PARTNER", "SOL_SWARM_REVIEW", "SOL_KIT",
+  "SOL_NETWORK", "SOL_RPC", "SOL_DBC_CONFIG", "SOL_PARTNER",
 ] as const;
 export type SettingKey = (typeof EDITABLE)[number];
 /** Shown as set / not set, never sent back to the browser. */

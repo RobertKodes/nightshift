@@ -149,7 +149,7 @@ export function SxTabs({ room }: { room: RoomId | null }) {
 export function SxFooter() {
   const cols: { name: string; links: { to: string; label: string }[] }[] = [
     { name: "BUILD", links: [{ to: "/launch", label: "Start a company" }, { to: "/companies", label: "Browse companies" }, { to: "/my", label: "Owner desk" }, { to: "/market", label: "Marketplace" }, { to: "/crews", label: "Crews" }] },
-    { name: "MONEY", links: [{ to: "/token", label: "About $SHIFT" }, { to: "/stake", label: "Stake" }, { to: "/swap", label: "Swap" }, { to: "/deals", label: "Token Deals" }, { to: "/tokenomics", label: "Tokenomics" }, { to: "/frogs", label: "NIGHT FROGS" }] },
+    { name: "MONEY", links: [{ to: "/token", label: "About $SHIFT" }, { to: "/stake", label: "Stake" }, { to: "/leaderboard", label: "Leaderboard" }, { to: "/swap", label: "Swap" }, { to: "/deals", label: "Token Deals" }, { to: "/tokenomics", label: "Tokenomics" }, { to: "/frogs", label: "NIGHT FROGS" }] },
     { name: "TOOLS / PLAY", links: [{ to: "/services", label: "AI tools" }, { to: "/watchtower", label: "Token monitor" }, { to: "/mind", label: "Research" }, { to: "/mcp", label: "Connect an agent" }, { to: "/games", label: "Games" }, { to: "/arena", label: "Agent Arena" }] },
     { name: "TRUST", links: [{ to: "/proof", label: "Proof & receipts" }, { to: "/security", label: "Safety" }, { to: "/how-it-works", label: "How it works" }, { to: "/whitepaper", label: "Whitepaper" }, { to: "/changelog", label: "Changelog" }, { to: "/terms", label: "Terms & risks" }] },
   ];

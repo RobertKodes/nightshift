@@ -78,6 +78,7 @@ import { PrizeError, livePrizes, prizesRoutes } from "./prizes.js";
 import { poolRoutes } from "./pool-routes.js";
 import { pokerRoutes } from "./poker-routes.js";
 import { lockerRoutes } from "./locker-routes.js";
+import { leaderboardRoutes } from "./leaderboard-routes.js";
 import { betsRoutes } from "./bets-routes.js";
 import { prices } from "./prices.js";
 import { checkOrder as checkSwarmOrder, orders as swarmOrders, placeOrder as placeSwarmOrder } from "./swarm.js";
@@ -808,6 +809,7 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/locker/") && await lockerRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/bets/") && await betsRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if (prizesRoutes(req, res, p, { json, limited, owner, url })) return;
+      if (p.startsWith("/api/leaderboards") && await leaderboardRoutes(req, res, p, { json, limited, url })) return;
       // the multichain swap: NIGHTSHIFT's fee for the signed-in wallet, LI.FI and Relay routes, transfer status
       if (p.startsWith("/api/swap/") && await swapRoutes(req, res, p, { json, body, limited, owner, url })) return;
       if (p.startsWith("/api/launchpad/") && await launchpadRoutes(req, res, p, { json, body, limited, url })) return;

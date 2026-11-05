@@ -76,6 +76,7 @@ const ConnectAgentPage = lazy(() => import("./crews/ConnectAgentPage").then((x) 
 const PartnersPage = lazy(() => import("./site/PartnersPage").then((x) => ({ default: x.PartnersPage })));
 const DealsPage = lazy(() => import("./site/DealsPage").then((x) => ({ default: x.DealsPage })));
 const ProofPage = lazy(() => import("./crews/ProofPage").then((x) => ({ default: x.ProofPage })));
+const LeaderboardPage = lazy(() => import("./LeaderboardPage").then((x) => ({ default: x.LeaderboardPage })));
 
 /** Retired addresses land on the page that replaced them. */
 function Redirect({ to }: { to: string }) {
@@ -144,6 +145,7 @@ function App() {
   if (seg[0] === "swap") page = <SwapPage />;
   if (seg[0] === "stake" || seg[0] === "staking") page = <StakePage />;
   if (seg[0] === "impact") page = <ImpactPage />;
+  if (seg[0] === "leaderboard") page = <Suspense fallback={<div className="sh" />}><LeaderboardPage /></Suspense>;
   if (seg[0] === "guide") page = <GuidePage />;
   if (seg[0] === "tokenomics") page = <TokenomicsPage />;
   if (seg[0] === "games") page = seg[1] === "live" ? <Suspense fallback={null}><LivePage /></Suspense> : <GameRoomPage />;
@@ -177,7 +179,7 @@ const NEW_ROUTES: Record<string, string> = { "": "/", companies: "/companies", t
 const TITLES: Record<string, string> = {
   companies: "Companies", launch: "Start a business", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
   market: "Market", token: "$SHIFT", frogs: "Frogs", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
-  tokenomics: "Tokenomics", games: "Play", launchpad: "Launch a token", arena: "Agent Arena",
+  tokenomics: "Tokenomics", leaderboard: "Leaderboard", games: "Play", launchpad: "Launch a token", arena: "Agent Arena",
   "how-it-works": "How it works", deals: "Token Deals", partners: "Partners", services: "AI tools", crews: "Crews", watchtower: "Token monitor", agents: "Connect an agent", proof: "Proof", breakroom: "Play", geek: "AI tools", info: "$SHIFT", economy: "Activity & receipts", command: "Frog missions", league: "The Night League", forge: "Upgrade Frogs", watch: "Run a keeper", ship: "The Ship",
 };
 

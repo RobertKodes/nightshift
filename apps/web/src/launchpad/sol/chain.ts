@@ -1,35 +1,44 @@
 import { DynamicBondingCurveClient, getCurrentPoint, SwapMode } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
-import { ComputeBudgetProgram, Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, type Transaction, VersionedTransaction } from "@solana/web3.js";
+import {
+  ComputeBudgetProgram, Connection, Keypair, LAMPORTS_PER_SOL, NONCE_ACCOUNT_LENGTH, PublicKey, SystemProgram, Transaction, type TransactionInstruction, VersionedTransaction,
+} from "@solana/web3.js";
 import BN from "bn.js";
-import { checkOptions, isStandard, LAUNCH, launchConfig, type LaunchOptions, STANDARD } from "./params";
+import { checkOptions, curvePreview, LAUNCH, launchConfig, type LaunchOptions, STANDARD } from "./params";
+
+export { curvePreview };
 
 /**
  * Every Solana transaction of the launchpad, built here in the browser with Meteora's SDK and signed by
- * the user's own wallet. Each one is simulated first: if it would fail, nothing is sent. The RPC is the
- * NIGHTSHIFT proxy (/api/sol/rpc), which forwards reads and sendTransaction only. Loaded only on the
- * Solana launchpad pages (net.ts sets up Buffer first).
+ * the user's own wallet. Transactions the page sends itself are simulated first: if one would fail,
+ * nothing is sent. A launch is signed here and handed to NIGHTSHIFT, which adds the one signature it
+ * holds (the token's address) and sends it: at once, or when the IMD swarm finishes (then it is signed
+ * on a durable nonce, so it does not expire). The RPC is the NIGHTSHIFT proxy (/api/sol/rpc).
  */
 
-export type SolSigner = { address: string; wallet: { signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T> } };
+export type SolSigner = {
+  address: string;
+  wallet: { signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T>; signMessage?(m: Uint8Array): Promise<Uint8Array | { signature: Uint8Array }> };
+};
 
 const conn = new Connection(`${location.origin}/api/sol/rpc`, { commitment: "confirmed" });
 const client = new DynamicBondingCurveClient(conn, "confirmed");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const COMPUTE = ComputeBudgetProgram.programId.toBase58();
 
 /** A priority fee from the network's recent fees, so the transaction lands when Solana is busy. */
-async function priority(units: number) {
+async function priority(units: number, floor = 20_000) {
   const fees = await conn.getRecentPrioritizationFees().catch(() => []);
   const paid = fees.map((f) => f.prioritizationFee).filter((x) => x > 0).sort((a, b) => a - b);
   const median = paid.length ? paid[Math.floor(paid.length / 2)]! : 0;
-  const microLamports = Math.min(2_000_000, Math.max(20_000, Math.round(median * 1.2)));
+  const microLamports = Math.min(2_000_000, Math.max(floor, Math.round(median * 1.2)));
   return [ComputeBudgetProgram.setComputeUnitLimit({ units }), ComputeBudgetProgram.setComputeUnitPrice({ microLamports })];
 }
 
 /** Simulate, sign (extra signers first, then the wallet), send through the proxy, follow to confirmed. */
 async function sendTx(tx: Transaction, who: SolSigner, extra: Keypair[], units: number, say: (s: string) => void): Promise<string> {
   const payer = new PublicKey(who.address);
-  tx.instructions = [...(await priority(units)), ...tx.instructions];
+  tx.instructions = [...(await priority(units)), ...tx.instructions.filter((i) => i.programId.toBase58() !== COMPUTE)];
   const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
   tx.recentBlockhash = blockhash;
   tx.feePayer = payer;
@@ -58,7 +67,7 @@ async function sendTx(tx: Transaction, who: SolSigner, extra: Keypair[], units: 
   return sig;
 }
 
-/** The admin: the shared NIGHTSHIFT config key (the standard launch, one signature for creators), owned by the partner wallet that signs it. */
+/** The admin: the shared NIGHTSHIFT config key (the standard launch), owned by the partner wallet that signs it. */
 export async function createConfig(who: SolSigner, solUsd: number, say: (s: string) => void): Promise<{ config: string; signature: string }> {
   const config = Keypair.generate();
   const me = new PublicKey(who.address);
@@ -67,43 +76,85 @@ export async function createConfig(who: SolSigner, solUsd: number, say: (s: stri
   return { config: config.publicKey.toBase58(), signature };
 }
 
-/** A new mint address for a launch: the page shows it and saves the details under it before signing. */
-export function newMint(): Keypair { return Keypair.generate(); }
+const nonceIxs = async (me: PublicKey, nonce: Keypair): Promise<TransactionInstruction[]> =>
+  SystemProgram.createNonceAccount({ fromPubkey: me, noncePubkey: nonce.publicKey, authorizedPubkey: me, lamports: await conn.getMinimumBalanceForRentExemption(NONCE_ACCOUNT_LENGTH) }).instructions;
 
 /**
- * A launch, with the creator's optional first buy in the same transaction (atomic with the creation,
- * so nobody can buy before it; it pays the normal fee, not the sniper fee). The standard settings use
- * the shared NIGHTSHIFT config (one signature); any other settings create the launch's own Meteora
- * config first, with NIGHTSHIFT as its partner (two signatures). The IMD swarm website, when chosen,
- * is paid to the partner wallet inside the launch transaction itself.
+ * Before the launch is signed, what it needs on Solana: its own Meteora config (unless the standard
+ * shared one is used), with NIGHTSHIFT as partner, and, for a launch that waits for the swarm, a
+ * durable nonce account the creator owns. In one transaction when they fit, else two.
  */
-export async function launch(o: {
-  who: SolSigner; partner: string; shared: string | null; options: LaunchOptions; solUsd: number;
-  mint: Keypair; name: string; symbol: string; uri: string; devBuySol: number; kitLamports: bigint | null; say: (s: string) => void;
-}): Promise<{ signature: string; config: string }> {
+export async function prepareChain(o: { who: SolSigner; partner: string; shared: string | null; standard: boolean; options: LaunchOptions; solUsd: number; nonce: boolean; say: (s: string) => void }): Promise<{ config: string; nonce: string | null }> {
   const problem = checkOptions(o.options, o.solUsd);
   if (problem) throw new Error(problem);
   const me = new PublicKey(o.who.address);
-  const buy = Math.min(Math.max(0, o.devBuySol), LAUNCH.devBuyMaxSol);
-  const firstBuyParam = buy > 0 ? { buyer: me, buyAmount: new BN(Math.round(buy * LAMPORTS_PER_SOL)), minimumAmountOut: new BN(1), referralTokenAccount: null } : undefined;
-  const kit = o.kitLamports && o.kitLamports > 0n ? SystemProgram.transfer({ fromPubkey: me, toPubkey: new PublicKey(o.partner), lamports: o.kitLamports }) : null;
-  if (o.shared && isStandard(o.options)) {
-    const createPoolParam = { baseMint: o.mint.publicKey, config: new PublicKey(o.shared), name: o.name, symbol: o.symbol, uri: o.uri, payer: me, poolCreator: me };
-    const tx = firstBuyParam ? await client.creator.createPoolWithFirstBuy({ createPoolParam, firstBuyParam }) : await client.creator.createPool(createPoolParam);
-    if (kit) tx.add(kit);
-    return { signature: await sendTx(tx, o.who, [o.mint], 450_000, o.say), config: o.shared };
+  const nonce = o.nonce ? Keypair.generate() : null;
+  const useShared = !!o.shared && o.standard;
+  if (useShared && !nonce) return { config: o.shared!, nonce: null };
+  if (useShared) {
+    await sendTx(new Transaction().add(...await nonceIxs(me, nonce!)), o.who, [nonce!], 50_000, (s) => o.say(`Your launch's nonce account: ${s}`));
+    return { config: o.shared!, nonce: nonce!.publicKey.toBase58() };
   }
   const config = Keypair.generate();
   const partner = new PublicKey(o.partner);
-  const { createConfigTx, createPoolWithFirstBuyTx } = await client.partner.createConfigAndPoolWithFirstBuy({
-    payer: me, config: config.publicKey, feeClaimer: partner, leftoverReceiver: partner, quoteMint: NATIVE_MINT, ...launchConfig(o.options, o.solUsd),
-    preCreatePoolParam: { baseMint: o.mint.publicKey, name: o.name, symbol: o.symbol, uri: o.uri, poolCreator: me },
-    firstBuyParam,
-  });
-  await sendTx(createConfigTx, o.who, [config], 250_000, (s) => o.say(`Step 1 of 2, your launch's Meteora settings: ${s}`));
-  if (kit) createPoolWithFirstBuyTx.add(kit);
-  const signature = await sendTx(createPoolWithFirstBuyTx, o.who, [o.mint], 450_000, (s) => o.say(`Step 2 of 2, the token and its curve: ${s}`));
-  return { signature, config: config.publicKey.toBase58() };
+  const cfgTx = await client.partner.createConfig2({ payer: me, config: config.publicKey, feeClaimer: partner, leftoverReceiver: partner, quoteMint: NATIVE_MINT, ...launchConfig(o.options, o.solUsd) });
+  if (nonce) {
+    const both = new Transaction().add(...cfgTx.instructions, ...await nonceIxs(me, nonce));
+    both.feePayer = me;
+    both.recentBlockhash = PublicKey.default.toBase58();
+    // three signatures and two compute budget steps on top of the message: Solana's limit is 1232 bytes
+    if (both.compileMessage().serialize().length + 1 + 3 * 64 + 40 <= 1232) {
+      await sendTx(both, o.who, [config, nonce], 250_000, (s) => o.say(`Your launch's Meteora settings: ${s}`));
+      return { config: config.publicKey.toBase58(), nonce: nonce.publicKey.toBase58() };
+    }
+  }
+  await sendTx(cfgTx, o.who, [config], 250_000, (s) => o.say(`Your launch's Meteora settings: ${s}`));
+  if (nonce) await sendTx(new Transaction().add(...await nonceIxs(me, nonce)), o.who, [nonce], 50_000, (s) => o.say(`Your launch's nonce account: ${s}`));
+  return { config: config.publicKey.toBase58(), nonce: nonce?.publicKey.toBase58() ?? null };
+}
+
+/**
+ * The launch itself, with the creator's optional first buy in the same transaction (atomic with the
+ * creation, so nobody can buy before it; it pays the normal fee, not the sniper fee). Signed here by
+ * the creator only; NIGHTSHIFT adds the token address's signature. Returned as base64.
+ */
+export async function signLaunch(o: { who: SolSigner; config: string; mint: string; name: string; symbol: string; uri: string; devBuySol: number; nonce: string | null; say: (s: string) => void }): Promise<string> {
+  const me = new PublicKey(o.who.address);
+  const buy = Math.min(Math.max(0, o.devBuySol), LAUNCH.devBuyMaxSol);
+  const createPoolParam = { baseMint: new PublicKey(o.mint), config: new PublicKey(o.config), name: o.name, symbol: o.symbol, uri: o.uri, payer: me, poolCreator: me };
+  o.say("Building the launch…");
+  const built = buy > 0
+    ? await client.creator.createPoolWithFirstBuy({ createPoolParam, firstBuyParam: { buyer: me, buyAmount: new BN(Math.round(buy * LAMPORTS_PER_SOL)), minimumAmountOut: new BN(1), referralTokenAccount: null } })
+    : await client.creator.createPool(createPoolParam);
+  const tx = new Transaction();
+  // a waiting launch starts with its nonce: it stays valid until NIGHTSHIFT sends it
+  if (o.nonce) tx.add(SystemProgram.nonceAdvance({ noncePubkey: new PublicKey(o.nonce), authorizedPubkey: me }));
+  tx.add(...await priority(450_000, o.nonce ? 100_000 : 20_000), ...built.instructions.filter((i) => i.programId.toBase58() !== COMPUTE));
+  tx.feePayer = me;
+  if (o.nonce) {
+    const n = await conn.getNonce(new PublicKey(o.nonce), "confirmed");
+    if (!n) throw new Error("The nonce account is not on Solana yet. Wait a moment and try again.");
+    tx.recentBlockhash = n.nonce;
+  } else tx.recentBlockhash = (await conn.getLatestBlockhash("confirmed")).blockhash;
+  o.say(o.nonce ? "Sign the launch in your Solana wallet: it is sent when the swarm finishes…" : "Confirm the launch in your Solana wallet…");
+  const signed = await o.who.wallet.signTransaction(tx);
+  return Buffer.from(signed.serialize({ requireAllSignatures: false, verifySignatures: false })).toString("base64");
+}
+
+/** The nonce account's rent back to the creator (after the launch, or if it never happens). */
+export async function closeNonce(who: SolSigner, nonce: string, say: (s: string) => void): Promise<string> {
+  const me = new PublicKey(who.address), n = new PublicKey(nonce);
+  const lamports = await conn.getBalance(n);
+  if (!lamports) throw new Error("That nonce account is already closed.");
+  return sendTx(new Transaction().add(SystemProgram.nonceWithdraw({ noncePubkey: n, authorizedPubkey: me, toPubkey: me, lamports })), who, [], 50_000, say);
+}
+
+/** The creator's wallet signing a short text (launch without the swarm, cancel), base64. */
+export async function signText(who: SolSigner, text: string): Promise<string> {
+  if (!who.wallet.signMessage) throw new Error("This wallet cannot sign a message. Use Phantom, Solflare or Backpack.");
+  const r = await who.wallet.signMessage(new TextEncoder().encode(text));
+  const sig = r instanceof Uint8Array ? r : r.signature;
+  return Buffer.from(sig).toString("base64");
 }
 
 export type Quote = { out: bigint; min: bigint; fee: bigint; feePct: number };

@@ -2,9 +2,20 @@ import {
   ActivationType, BaseFeeMode, type BaseFeeParams, buildCurveWithMarketCap, CollectFeeMode, type ConfigParameters, MigrationFeeOption, MigrationOption,
   TokenAuthorityOption, TokenDecimal, TokenType,
 } from "@meteora-ag/dynamic-bonding-curve-sdk";
-import { CREATOR_FEE_SHARE, LAUNCH, type LaunchOptions, optionProblem, SNIPER, STANDARD } from "./options";
+import { CREATOR_FEE_SHARE, type FeeBps, LAUNCH, type LaunchOptions, optionProblem, SNIPER, STANDARD } from "./options";
 
 export * from "./options";
+
+/** The graduated DAMM v2 pool's fee, the same as the curve's. */
+const MIGRATION_FEE: Record<FeeBps, MigrationFeeOption> = {
+  25: MigrationFeeOption.FixedBps25, 30: MigrationFeeOption.FixedBps30, 100: MigrationFeeOption.FixedBps100,
+  200: MigrationFeeOption.FixedBps200, 400: MigrationFeeOption.FixedBps400, 600: MigrationFeeOption.FixedBps600,
+};
+
+/** What the picked curve means in SOL at today's price: what it raises to graduate. */
+export function curvePreview(o: LaunchOptions, solUsd: number): { raiseSol: number } | null {
+  try { return { raiseSol: Number(launchConfig(o, solUsd).migrationQuoteThreshold.toString()) / 1e9 }; } catch { return null; }
+}
 
 /**
  * A launch's Meteora Dynamic Bonding Curve config, from the creator's choice (options.ts).
@@ -41,7 +52,7 @@ export function launchConfig(o: LaunchOptions = STANDARD, solUsd = 100): ConfigP
       // the creator's own first buy, in the launch transaction itself, pays the normal fee, not the sniper fee
       enableFirstSwapWithMinFee: true,
     },
-    migration: { migrationOption: MigrationOption.MET_DAMM_V2, migrationFeeOption: o.feeBps === 200 ? MigrationFeeOption.FixedBps200 : MigrationFeeOption.FixedBps100, migrationFee: { feePercentage: 0, creatorFeePercentage: 0 } },
+    migration: { migrationOption: MigrationOption.MET_DAMM_V2, migrationFeeOption: MIGRATION_FEE[o.feeBps], migrationFee: { feePercentage: 0, creatorFeePercentage: 0 } },
     liquidityDistribution: { partnerLiquidityPercentage: 0, partnerPermanentLockedLiquidityPercentage: 50, creatorLiquidityPercentage: 0, creatorPermanentLockedLiquidityPercentage: 50 },
     // the creator's allocation: locked until graduation, then the cliff, then released daily over the vesting days
     lockedVesting: o.dev.pct > 0

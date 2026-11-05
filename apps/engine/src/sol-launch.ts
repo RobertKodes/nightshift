@@ -3,40 +3,43 @@ import { join } from "node:path";
 import { writeAtomic } from "./atomic.js";
 import { config } from "./config.js";
 import { readSettings } from "./settings.js";
+import { IMD_PRICE, type ImdFile, type ImdPort, PAY_CHAINS, type PayChain } from "./sol-imd.js";
+import { MintKeys } from "./sol-mints.js";
+import { launchTxProblem, readTx, walletSigned } from "./sol-tx.js";
+
+export { DBC_PROGRAM } from "./sol-tx.js";
 
 /**
  * IMD Launch on Solana, through NIGHTSHIFT: tokens launched on Meteora's Dynamic Bonding Curve with
- * NIGHTSHIFT as the launch partner, and the IMD swarm doing the work around every launch (a review of
- * each launch, and a website built by the swarm when the creator asks for one). IMD's own launches are
- * EVM-only; this is its Solana rail. The browser builds and signs every transaction with the creator's
- * own wallet; this module only:
- *  - hosts the token's metadata JSON and a small logo (the token's `uri`), written before the launch,
- *  - verifies a reported launch on chain: the pool at its derived address, on a config whose fees go to
- *    NIGHTSHIFT and which keeps the guarantees (frozen token, 100% locked graduated liquidity, DAMM v2),
- *  - reads each pool (price, market cap, progress, the creator's locked allocation), keeps a price
- *    history for the charts, and free safety checks,
- *  - orders the IMD swarm's review of each launch, and the swarm website a creator paid for in the launch,
- *  - proxies a whitelist of Solana JSON-RPC reads and sendTransaction, so an RPC key stays here.
- * NIGHTSHIFT never holds a creator's or a trader's key or funds.
+ * NIGHTSHIFT as the launch partner, and the IMD swarm doing the work the creator picks before the
+ * launch: a sourced review that decides whether it goes live, the logo, an X banner, the website.
+ * IMD's own launches are EVM-only; this is its Solana rail until IMD launches on Solana itself.
+ *
+ * How a launch goes:
+ *  1. prepare: the creator's details, the Meteora settings and the swarm work they pick; NIGHTSHIFT
+ *     gives the launch its address (ending in "imd") and, with swarm work, the exact IMD job body,
+ *     checked by IMD for free.
+ *  2. signed: the creator's wallet signs the launch. Without swarm work NIGHTSHIFT adds the address's
+ *     signature and sends it at once. With swarm work the launch is signed on a durable nonce (it does
+ *     not expire) and waits here: nothing is on Solana yet.
+ *  3. paid: the creator pays the 0.5 IMD job from their own Ethereum or Robinhood Chain wallet; the
+ *     payment is checked to carry exactly that body.
+ *  4. The swarm works; this module follows the job. When it completes (and the review, if picked,
+ *     says launch), NIGHTSHIFT sends the signed launch: the token goes live with the swarm's logo,
+ *     banner and site. If the review says no, it never launches.
+ * NIGHTSHIFT never holds a creator's key or funds: the one key it holds creates the token's address.
  */
 
-export const DBC_PROGRAM = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN";
 export const WSOL = "So11111111111111111111111111111111111111112";
-export const METAPLEX = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
 const RPC_DEFAULT = { mainnet: "https://solana-rpc.publicnode.com", devnet: "https://api.devnet.solana.com" } as const;
 export type SolNet = keyof typeof RPC_DEFAULT;
-/** The swarm website a creator can add to a launch, paid in SOL inside the launch transaction. */
-export const KIT_USD = 6;
 
-export type SolSettings = { network: SolNet; rpc: string; config: string | null; partner: string | null; review: boolean; kit: boolean };
+export type SolSettings = { network: SolNet; rpc: string; config: string | null; partner: string | null };
 export function solSettings(): SolSettings {
   const s = readSettings() as Record<string, string | undefined>;
   const network: SolNet = s.SOL_NETWORK === "devnet" ? "devnet" : "mainnet";
   const isKey = (v?: string) => !!v && BASE58_KEY.test(v);
-  return {
-    network, rpc: s.SOL_RPC?.trim() || RPC_DEFAULT[network], config: isKey(s.SOL_DBC_CONFIG) ? s.SOL_DBC_CONFIG! : null, partner: isKey(s.SOL_PARTNER) ? s.SOL_PARTNER! : null,
-    review: s.SOL_SWARM_REVIEW === "on", kit: s.SOL_KIT === "on",
-  };
+  return { network, rpc: s.SOL_RPC?.trim() || RPC_DEFAULT[network], config: isKey(s.SOL_DBC_CONFIG) ? s.SOL_DBC_CONFIG! : null, partner: isKey(s.SOL_PARTNER) ? s.SOL_PARTNER! : null };
 }
 
 // ---------------------------------------------------------------- what a creator writes
@@ -45,8 +48,6 @@ export const BASE58_KEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 /** Control, zero-width and bidirectional characters out: they make a name display as something else (a reversed "PIRATE"). */
 export const cleanText = (s: string) => s.replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁠-⁩﻿]/g, "");
 export type SolMeta = { mint: string; name: string; symbol: string; description: string; website: string; twitter: string; telegram: string; image: string };
-/** What the creator chose on the page (shown on the token page; the chain is checked for the guarantees and the lock). */
-export type SolOptions = { feeBps: number; startMcapUsd: number; graduateMcapUsd: number; sniper: string };
 const IMAGE_MAX = 160_000; // bytes after the page's 256 px downscale (a webp is ~20-60 KB)
 const IMAGE_TYPES: Record<string, string> = { "image/webp": "webp", "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif" };
 
@@ -62,17 +63,8 @@ const httpsUrl = (v: unknown, host?: RegExp, label?: string): string => {
   return u.toString().slice(0, 200);
 };
 
-const options = (v: unknown): SolOptions | null => {
-  if (!v || typeof v !== "object") return null;
-  const o = v as Record<string, unknown>;
-  const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : 0);
-  return { feeBps: n(o.feeBps), startMcapUsd: n(o.startMcapUsd), graduateMcapUsd: n(o.graduateMcapUsd), sniper: ["off", "standard", "strong"].includes(String(o.sniper)) ? String(o.sniper) : "standard" };
-};
-
-/** The creator's fields, checked; the image as bytes when uploaded. Throws SolInputError with the reason. */
-export function checkMeta(b: Record<string, unknown>): { meta: Omit<SolMeta, "image">; image: { ext: string; bytes: Buffer } | { url: string } | null } {
-  const mint = String(b.mint ?? "").trim();
-  if (!BASE58_KEY.test(mint)) throw new SolInputError("The token address is missing or invalid.");
+/** The creator's fields, checked; the image as bytes when uploaded. A launch without a logo needs the swarm to draw one. */
+export function checkMeta(b: Record<string, unknown>, logoBySwarm = false): { meta: Omit<SolMeta, "image" | "mint">; image: { ext: string; bytes: Buffer } | { url: string } | null } {
   const name = cleanText(String(b.name ?? "")).replace(/\s+/g, " ").trim();
   if (name.length < 2 || name.length > 32) throw new SolInputError("The name needs 2 to 32 characters.");
   const symbol = String(b.symbol ?? "").trim().toUpperCase();
@@ -90,20 +82,127 @@ export function checkMeta(b: Record<string, unknown>): { meta: Omit<SolMeta, "im
     if (bytes.length > IMAGE_MAX) throw new SolInputError("The logo is too large. Use an image under 160 KB.");
     image = { ext: IMAGE_TYPES[m[1]!]!, bytes };
   } else if (b.imageUrl) image = { url: httpsUrl(b.imageUrl) };
-  if (!image) throw new SolInputError("Add a logo for the token.");
-  return { meta: { mint, name, symbol, description, website, twitter, telegram }, image };
+  if (!image && !logoBySwarm) throw new SolInputError("Add a logo for the token, or ask the IMD swarm to draw one.");
+  return { meta: { name, symbol, description, website, twitter, telegram }, image };
 }
 
 /** The token's metadata JSON, in the shape wallets, explorers and Jupiter read. */
-export function metaJson(m: SolMeta, site: string) {
-  const type = m.image.endsWith(".png") ? "image/png" : m.image.endsWith(".gif") ? "image/gif" : m.image.endsWith(".jpg") ? "image/jpeg" : "image/webp";
+export function metaJson(l: SolLaunch, site: string) {
+  const image = l.image || l.swarm?.logo || "";
+  const type = /\.png$|\/artifacts\//.test(image) ? "image/png" : image.endsWith(".gif") ? "image/gif" : image.endsWith(".jpg") ? "image/jpeg" : "image/webp";
+  const website = l.website || l.swarm?.site || "";
+  const page = `${site}/launchpad/sol/${l.mint}`;
   return {
-    name: m.name, symbol: m.symbol, description: m.description, image: m.image,
-    external_url: m.website || `${site}/launchpad/sol/${m.mint}`,
-    extensions: { website: m.website || undefined, twitter: m.twitter || undefined, telegram: m.telegram || undefined, launchpad: `${site}/launchpad/sol/${m.mint}` },
-    properties: { category: "image", files: m.image ? [{ uri: m.image, type }] : [] },
+    name: l.name, symbol: l.symbol, description: l.description, image,
+    external_url: website || page,
+    extensions: { website: website || undefined, twitter: l.twitter || undefined, telegram: l.telegram || undefined, launchpad: page },
+    properties: { category: "image", files: image ? [{ uri: image, type }] : [] },
   };
 }
+
+// ---------------------------------------------------------------- the bonding curve the creator picks
+
+export type Sniper = "off" | "standard" | "strong";
+/** What the creator chose for Meteora's curve (the page builds the config from it; the chain is checked for the guarantees and the lock). */
+export type SolOptions = { feeBps: number; startMcapUsd: number; graduateMcapUsd: number; sniper: Sniper };
+export const FEE_BPS = [25, 30, 100, 200, 400, 600] as const;
+export const MCAP_LIMITS = { start: [1_000, 1_000_000], graduate: [10_000, 100_000_000], minRatio: 2 } as const;
+
+export function checkOptions(v: unknown): SolOptions {
+  const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? Math.round(x) : NaN);
+  const feeBps = n(o.feeBps), start = n(o.startMcapUsd), graduate = n(o.graduateMcapUsd);
+  if (!(FEE_BPS as readonly number[]).includes(feeBps)) throw new SolInputError("The trading fee is one of Meteora's: 0.25%, 0.3%, 1%, 2%, 4% or 6%.");
+  if (!(start >= MCAP_LIMITS.start[0] && start <= MCAP_LIMITS.start[1])) throw new SolInputError("The starting market cap is $1,000 to $1,000,000.");
+  if (!(graduate >= MCAP_LIMITS.graduate[0] && graduate <= MCAP_LIMITS.graduate[1])) throw new SolInputError("The graduation market cap is $10,000 to $100,000,000.");
+  if (graduate < start * MCAP_LIMITS.minRatio) throw new SolInputError("The graduation market cap must be at least twice the starting one.");
+  const sniper = ["off", "standard", "strong"].includes(String(o.sniper)) ? (String(o.sniper) as Sniper) : "standard";
+  return { feeBps, startMcapUsd: start, graduateMcapUsd: graduate, sniper };
+}
+
+// ---------------------------------------------------------------- the swarm work the creator picks
+
+export type SwarmPick = "review" | "logo" | "banner" | "website";
+export const SWARM_PICKS: readonly SwarmPick[] = ["review", "logo", "banner", "website"];
+/** IMD's step for each pick, and the job node keys IMD names them by (a website adds a design critic). */
+const PICK_NODE: Record<SwarmPick, RegExp> = { review: /^research_report/, logo: /^token_logo/, banner: /^create_image/, website: /^(build_website|design_critic)/ };
+
+export type SwarmStep = { pick: SwarmPick; state: "waiting" | "working" | "done" | "failed" };
+export type SwarmRun = {
+  picks: SwarmPick[]; chainId: PayChain; body: string;
+  state: "unpaid" | "paid" | "working" | "done" | "refused" | "failed";
+  payTx: string | null; payer: string | null; job: string | null; steps: SwarmStep[];
+  verdict: { launch: boolean; reason: string } | null; report: string | null; logo: string | null; banner: string | null; site: string | null;
+  note: string | null; paidAt: number | null;
+};
+
+export function picksOf(v: unknown): SwarmPick[] {
+  const a = Array.isArray(v) ? v.map(String) : [];
+  return SWARM_PICKS.filter((p) => a.includes(p));
+}
+
+/** The label a swarm website is published under (lowercase, as IMD's ENS names need). */
+export const siteLabel = (symbol: string, mint: string) => `${symbol.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10) || "token"}-${mint.slice(-6).toLowerCase()}`;
+
+/**
+ * The IMD job for a launch: one job.open (0.5 IMD whatever the creator picks), a chain of the picked
+ * steps. Its objective names the token's address, so the job cannot be reused for another launch.
+ */
+export function swarmBody(l: Pick<SolLaunch, "mint" | "name" | "symbol" | "description" | "website" | "twitter" | "telegram" | "image" | "creator" | "dev" | "logoIdea">, picks: SwarmPick[], site: string) {
+  const page = `${site}/launchpad/sol/${l.mint}`;
+  const links = [l.website, l.twitter, l.telegram].filter(Boolean).join(", ") || "none";
+  const lock = l.dev ? ` The creator keeps ${l.dev.pct}% of the supply locked by Meteora's program until graduation, then ${l.dev.cliffDays} days, then released daily over ${l.dev.vestDays} days.` : " The creator keeps no allocation: the whole supply is on the curve.";
+  const logo = l.image || (picks.includes("logo") ? "the logo drawn in this job's logo step (artifacts/logo.png)" : "");
+  const objective = [
+    `The IMD swarm's work before a Solana token launch through NIGHTSHIFT. Token ${l.name} ($${l.symbol}), mint ${l.mint}, on a Meteora Dynamic Bonding Curve priced in SOL: 1,000,000,000 supply, 6 decimals, the mint and metadata frozen, graduation into a Meteora DAMM v2 pool with 100% of its liquidity locked forever.${lock}`,
+    `Creator wallet ${l.creator}. What it is: ${l.description || "not given"}. Links: ${links}.`,
+    `The creator signed the launch already; NIGHTSHIFT submits it on Solana when this job completes${picks.includes("review") ? " and the review's verdict says launch" : ""}, and publishes this job's work with the token. Its page: ${page}.`,
+  ].join(" ");
+  const steps: Record<string, unknown>[] = [];
+  if (picks.includes("review")) steps.push({
+    skill: "research-report",
+    objective: "Review this launch before it goes live. Check the name, ticker and description for impersonation of an existing project, brand or person; whether the links are real and match; the creator wallet's history on Solscan and its earlier tokens; and scam reports. Write artifacts/verdict.json as {\"launch\": true or false, \"reason\": \"one sentence\"}: false only for impersonation, fake links, a wallet tied to scams, or illegal content. Write the sourced review a buyer can read to artifacts/report.md.",
+    acceptanceCriteria: ["artifacts/verdict.json is valid JSON with a boolean launch and a one-sentence reason", "artifacts/report.md cites what was checked"],
+    outputs: [{ name: "verdict", path: "artifacts/verdict.json", mediaType: "application/json" }, { name: "report", path: "artifacts/report.md", mediaType: "text/markdown" }],
+  });
+  if (picks.includes("logo")) steps.push({
+    skill: "token-logo",
+    objective: `The token's logo${l.logoIdea ? `: ${l.logoIdea}` : `, a bold simple mark for ${l.name} ($${l.symbol})`}. Square, at least 512 px, readable at 32 px, no text but the ticker if any.`,
+    outputs: [{ name: "logo", path: "artifacts/logo.png", mediaType: "image/png" }],
+  });
+  if (picks.includes("banner")) steps.push({
+    skill: "create-image",
+    objective: `An X (Twitter) header banner for ${l.name} ($${l.symbol}), exactly 1500 x 500 px, in the style of ${logo || "the token"}. The ticker large and readable; keep the lower-left corner clear for the profile picture. No promises of returns.`,
+    outputs: [{ name: "banner", path: "artifacts/banner.png", mediaType: "image/png" }],
+  });
+  if (picks.includes("website")) steps.push({
+    skill: "build-website",
+    objective: `A one-page website for the token: ${logo ? `its logo (${logo}), ` : ""}what it is, the mint address ${l.mint} with a copy button, a Buy button linking to ${page}, the creator's allocation as stated above, and the links (${links}). Dark, bold, readable on a phone. Static, no wallet connection, no promises of returns.`,
+  });
+  return {
+    objective: objective.slice(0, 8000), shape: "chain", steps, github: false,
+    ...(picks.includes("review") ? { minCitations: 3 } : {}),
+    ...(picks.includes("website") ? { ipfs: siteLabel(l.symbol, l.mint) } : {}),
+  };
+}
+
+/** The review's verdict, from the swarm's verdict.json (a loose read: the shape the job asked for, or close to it). */
+export function readVerdict(text: string | null): { launch: boolean; reason: string } | null {
+  if (!text) return null;
+  try {
+    const j = JSON.parse(text) as { launch?: unknown; reason?: unknown };
+    if (typeof j.launch === "boolean") return { launch: j.launch, reason: cleanText(String(j.reason ?? "")).slice(0, 300) };
+  } catch { /* fall through to the loose read */ }
+  const m = /"launch"\s*:\s*(true|false)/i.exec(text);
+  if (!m) return null;
+  const r = /"reason"\s*:\s*"([^"]{0,300})/.exec(text);
+  return { launch: m[1]!.toLowerCase() === "true", reason: cleanText(r?.[1] ?? "") };
+}
+
+const nodeState = (s: string): SwarmStep["state"] => s === "accepted" ? "done" : /fail|reject|abandon|cancel/.test(s) ? "failed" : /run|dispatch|claim|work|verif|submit|execut|review|revis|judg/.test(s) ? "working" : "waiting";
+const JOB_DONE = new Set(["completed"]);
+const JOB_FAILED = new Set(["failed", "cancelled", "canceled", "refused", "expired", "rejected"]);
+const SWARM_TIMEOUT = 72 * 3600_000;
 
 // ---------------------------------------------------------------- what the chain says
 
@@ -121,41 +220,39 @@ export type ConfigView = {
 export type MintView = { mintAuthority: string | null; freezeAuthority: string | null; supply: bigint; decimals: number };
 export type Holder = { owner: string | null; account: string; amount: bigint };
 
-/** The chain reads this module needs; sol-chain.ts uses Meteora's SDK, tests pass a fake. */
+/** The chain reads and sends this module needs; sol-chain.ts uses Meteora's SDK, tests pass a fake. */
 export type SolChain = {
   poolOf(config: string, mint: string): Promise<PoolView | null>;
   pools(addresses: string[]): Promise<(PoolView | null)[]>;
   config(config: string): Promise<ConfigView | null>;
   mint(mint: string): Promise<MintView | null>;
   holders(mint: string): Promise<Holder[] | null>;
-  /** launches on a config since the newest signature seen, each with its base mint (the backstop scan) */
-  newLaunches(config: string, since: string | null): Promise<{ newest: string | null; mints: { mint: string; signature: string; at: number }[] }>;
-  onchainMeta(mint: string): Promise<{ name: string; symbol: string; uri: string } | null>;
-  /** lamports the account received in a confirmed transaction (0 if none) */
-  paidTo(signature: string, account: string): Promise<bigint>;
+  /** a durable nonce account's authority and current value */
+  nonce(account: string): Promise<{ authority: string; value: string } | null>;
+  /** a signed (or partly signed) transaction run on Solana without being sent */
+  simulate(txB64: string): Promise<{ ok: boolean; why: string | null }>;
+  /** send a fully signed transaction and follow it until it is confirmed; throws with the reason if it fails */
+  send(txB64: string): Promise<string>;
   solUsd(): Promise<number | null>;
 };
 
-/** The swarm's work for one launch, ordered through the Swarm Desk (see houseOrder). */
-export type SwarmWork = { ref: string; state: "queued" | "running" | "done" | "failed" | "off"; job: string | null; url: string | null; note?: string };
-/** How the engine places and follows the IMD swarm's work; server.ts passes the live Swarm Desk. */
-export type SwarmPort = {
-  /** false while the Swarm Desk is not running: no reviews or kits are offered then */
-  ready?(): boolean;
-  order(kind: "research" | "website", brief: string, ref: string): Promise<void>;
-  follow(ref: string): Promise<{ status: string; job: string | null; site: string | null } | null>;
-};
-
+export type SolStatus = "prepared" | "waiting" | "launching" | "live" | "graduated" | "refused" | "failed" | "cancelled";
 export type SolLaunch = SolMeta & {
-  config: string; pool: string | null; creator: string | null; signature: string | null; createdAt: number; source: "nightshift" | "elsewhere";
-  status: "pending" | "live" | "graduated"; quoteReserve: string; priceSol: number | null; mcapSol: number | null; progress: number;
-  graduateSol: number | null; options: SolOptions | null;
+  config: string; pool: string | null; creator: string; signature: string | null; createdAt: number; launchedAt: number | null;
+  status: SolStatus; note: string | null;
+  quoteReserve: string; priceSol: number | null; mcapSol: number | null; progress: number;
+  graduateSol: number | null; options: SolOptions;
   dev: { pct: number; cliffDays: number; vestDays: number } | null;
+  devBuySol: number; logoIdea: string;
   checks: SolCheck[]; checkedAt: number;
   change1h: number | null; change24h: number | null; movedAt: number | null;
-  review: SwarmWork | null; kit: (SwarmWork & { paidSol: number }) | null; kitWanted?: boolean;
+  swarm: SwarmRun | null;
+  /** the creator's signed launch, waiting for the swarm: never shown */
+  held: { tx: string; nonce: string | null } | null;
 };
 export type SolCheck = { key: string; ok: boolean | null; says: string };
+/** What the public sees of a launch: everything but the signed transaction. */
+export type SolView = Omit<SolLaunch, "held"> & { nonce: string | null };
 
 /** Price in SOL per whole token from a Q64.64 sqrt price (quote atoms per base atom, squared). */
 export function priceFromSqrt(sqrtPrice: bigint, baseDecimals: number, quoteDecimals = 9): number {
@@ -204,53 +301,38 @@ export function termsProblems(c: ConfigView, partner: string): string[] {
   return bad;
 }
 
-/** The brief for the IMD swarm's review of a launch: a sourced report a buyer can read. */
-export function reviewBrief(l: SolLaunch, site: string): string {
-  return [
-    `Review this new Solana token launch for a buyer, as a short sourced report. Token ${l.name} ($${l.symbol}), mint ${l.mint}, launched ${new Date(l.createdAt).toISOString().slice(0, 10)} on a Meteora Dynamic Bonding Curve through NIGHTSHIFT (${site}/launchpad/sol/${l.mint}).`,
-    `Creator wallet ${l.creator ?? "unknown"}.${l.dev ? ` The creator holds ${l.dev.pct}% locked by Meteora until graduation, then ${l.dev.cliffDays} days, then vesting over ${l.dev.vestDays} days.` : ""}`,
-    `Links given: ${[l.website, l.twitter, l.telegram].filter(Boolean).join(", ") || "none"}. Description: ${l.description || "none"}.`,
-    "Check from public sources (Solscan, the links, social accounts): the creator wallet's history and earlier tokens, whether the links are real and match, copies of other projects' names or art, and any scam reports. End with a one-line verdict: looks normal, unclear, or red flags, and why.",
-  ].join(" ").slice(0, 1500);
-}
-
-/** The brief for the website the creator paid for: a one-page site for the token on IPFS. */
-export function kitBrief(l: SolLaunch, site: string): string {
-  return [
-    `A one-page website for the Solana token ${l.name} ($${l.symbol}), mint ${l.mint}.`,
-    l.description ? `What it is: ${l.description}` : "",
-    `Use its logo ${l.image}. Show the token address with a copy button, a Buy button linking to ${site}/launchpad/sol/${l.mint}, and links: ${[l.website, l.twitter, l.telegram].filter(Boolean).join(", ") || "none yet"}.`,
-    "Dark, bold, meme-friendly, readable on a phone. No wallet connection, no promises of returns.",
-  ].filter(Boolean).join(" ").slice(0, 1500);
-}
+/** The words a creator's wallet signs to act on a launch that waits for the swarm. */
+export const actText = (action: "release" | "cancel", mint: string) => `NIGHTSHIFT: ${action === "release" ? "launch without the swarm's work" : "cancel the launch"} ${mint}`;
 
 // ---------------------------------------------------------------- the store
 
 type Stored = Record<string, SolLaunch>;
 type History = Record<string, [number, number][]>;
-const PENDING_TTL = 2 * 3600_000;
+const PREPARED_TTL = 2 * 3600_000;
+const UNPAID_TTL = 48 * 3600_000;
 const DAY = 86_400_000;
+const LISTED: SolStatus[] = ["live", "graduated"];
+const WAITING: SolStatus[] = ["waiting", "launching"];
 
 export class SolLaunchpad {
   private launches: Stored;
   private history: History;
-  private scanSince: Record<string, string | null> = {};
-  private scannedAt = 0;
   private configs = new Map<string, ConfigView>();
   private usd: { v: number | null; at: number } = { v: null, at: 0 };
   private file: string;
   private histFile: string;
   private imgDir: string;
+  private run: Promise<void> | null = null;
+  readonly mints: MintKeys;
 
-  constructor(private chain: SolChain, private settings: () => SolSettings = solSettings, private dir = config.dataDir, private site = config.publicUrl, private swarm: SwarmPort | null = null) {
+  constructor(private chain: SolChain, private settings: () => SolSettings = solSettings, private dir = config.dataDir, private site = config.publicUrl, private imd: ImdPort | null = null, mints?: MintKeys) {
     this.file = join(dir, "sol-launches.json");
     this.histFile = join(dir, "sol-history.json");
     this.imgDir = join(dir, "sol-img");
     this.launches = existsSync(this.file) ? (JSON.parse(readFileSync(this.file, "utf8")) as Stored) : {};
     this.history = existsSync(this.histFile) ? (JSON.parse(readFileSync(this.histFile, "utf8")) as History) : {};
+    this.mints = mints ?? new MintKeys(dir);
   }
-
-  private swarmOn(): boolean { return !!this.swarm && this.swarm.ready?.() !== false; }
 
   private save() { writeAtomic(this.file, JSON.stringify(this.launches)); writeAtomic(this.histFile, JSON.stringify(this.history)); }
 
@@ -259,37 +341,65 @@ export class SolLaunchpad {
     return this.usd.v;
   }
 
-  /** The website add-on's price in SOL right now, or null when it is off. */
-  async kitLamports(): Promise<bigint | null> {
-    const u = await this.solUsd();
-    return this.settings().kit && this.swarmOn() && u ? BigInt(Math.ceil((KIT_USD / u) * 1e3)) * 1_000_000n : null;
-  }
-
   private async configOf(key: string): Promise<ConfigView | null> {
     const c = this.configs.get(key) ?? await this.chain.config(key).catch(() => null);
     if (c) this.configs.set(key, c);
     return c;
   }
 
-  /** Before the launch: the creator's metadata and logo, kept under the mint the page generated. */
-  saveMeta(b: Record<string, unknown>): { uri: string; image: string } {
-    const { meta, image } = checkMeta(b);
-    const was = this.launches[meta.mint];
-    if (was && was.status !== "pending") throw new SolInputError("This token is already launched.", 409);
-    let imageUrl: string;
+  private need(mint: string): SolLaunch {
+    const l = BASE58_KEY.test(mint) ? this.launches[mint] : undefined;
+    if (!l) throw new SolInputError("No launch with that address here.", 404);
+    return l;
+  }
+
+  view(l: SolLaunch): SolView {
+    const { held, ...rest } = l;
+    return { ...rest, nonce: held?.nonce ?? null };
+  }
+
+  /**
+   * Step 1: the creator's details, settings and swarm picks. Returns the launch's address, its metadata
+   * link and, with swarm work, the exact IMD job body and IMD's free check of it.
+   */
+  async prepare(b: Record<string, unknown>): Promise<{ mint: string; uri: string; image: string; swarm: { body: string; chainId: PayChain; blockers: string[]; plan: string[] } | null }> {
+    const s = this.settings();
+    if (!s.partner) throw new SolInputError("The Solana launchpad is not open yet.", 503);
+    const creator = String(b.creator ?? "").trim();
+    if (!BASE58_KEY.test(creator)) throw new SolInputError("Connect the creator's Solana wallet first.");
+    const picks = picksOf(b.swarm);
+    if (picks.length && !this.imd) throw new SolInputError("The IMD swarm is not reachable from here right now. Launch without it, or try again later.", 503);
+    const { meta, image } = checkMeta(b, picks.includes("logo"));
+    const options = checkOptions(b.options);
+    const chainId: PayChain = Number(b.chainId) === 4663 ? 4663 : 1;
+    const devBuySol = Math.max(0, Math.min(5, Number(b.devBuySol) || 0));
+    const d = (b.dev && typeof b.dev === "object" ? b.dev : {}) as Record<string, unknown>;
+    const dev = Number(d.pct) > 0 ? { pct: Math.min(80, Number(d.pct)), cliffDays: Math.max(0, Number(d.cliffDays) || 0), vestDays: Math.max(1, Number(d.vestDays) || 1) } : null;
+    const logoIdea = cleanText(String(b.logoIdea ?? "")).trim().slice(0, 200);
+    const mint = this.mints.take();
+    let imageUrl = "";
     if (image && "bytes" in image) {
       mkdirSync(this.imgDir, { recursive: true });
-      for (const e of Object.values(IMAGE_TYPES)) { const f = join(this.imgDir, `${meta.mint}.${e}`); if (existsSync(f)) unlinkSync(f); }
-      writeFileSync(join(this.imgDir, `${meta.mint}.${image.ext}`), image.bytes);
-      imageUrl = `${this.site}/api/sol/img/${meta.mint}.${image.ext}`;
-    } else imageUrl = (image as { url: string }).url;
-    this.launches[meta.mint] = {
-      ...meta, image: imageUrl, config: "", pool: null, creator: null, signature: null, createdAt: Date.now(), source: "nightshift", status: "pending",
-      quoteReserve: "0", priceSol: null, mcapSol: null, progress: 0, graduateSol: null, options: options(b.options), dev: null, checks: [], checkedAt: 0,
-      change1h: null, change24h: null, movedAt: null, review: null, kit: null, kitWanted: b.kit === true,
+      for (const e of Object.values(IMAGE_TYPES)) { const f = join(this.imgDir, `${mint}.${e}`); if (existsSync(f)) unlinkSync(f); }
+      writeFileSync(join(this.imgDir, `${mint}.${image.ext}`), image.bytes);
+      imageUrl = `${this.site}/api/sol/img/${mint}.${image.ext}`;
+    } else if (image) imageUrl = image.url;
+    const l: SolLaunch = {
+      mint, ...meta, image: imageUrl, config: "", pool: null, creator, signature: null, createdAt: Date.now(), launchedAt: null, status: "prepared", note: null,
+      quoteReserve: "0", priceSol: null, mcapSol: null, progress: 0, graduateSol: null, options, dev, devBuySol, logoIdea, checks: [], checkedAt: 0,
+      change1h: null, change24h: null, movedAt: null, swarm: null, held: null,
     };
+    let swarm: { body: string; chainId: PayChain; blockers: string[]; plan: string[] } | null = null;
+    if (picks.length) {
+      const body = JSON.stringify(swarmBody(l, picks, this.site));
+      const check = await this.imd!.check(JSON.parse(body)).catch((e: Error) => { this.mints.drop(mint); throw new SolInputError(e.message, 503); });
+      swarm = { body, chainId, ...check };
+      l.swarm = { picks, chainId, body, state: "unpaid", payTx: null, payer: null, job: null, steps: picks.map((pick) => ({ pick, state: "waiting" })), verdict: null, report: null, logo: null, banner: null, site: null, note: null, paidAt: null };
+      if (check.blockers.length) { this.mints.drop(mint); return { mint, uri: "", image: imageUrl, swarm }; }
+    }
+    this.launches[mint] = l;
     this.save();
-    return { uri: `${this.site}/api/sol/meta/${meta.mint}.json`, image: imageUrl };
+    return { mint, uri: `${this.site}/api/sol/meta/${mint}.json`, image: imageUrl, swarm };
   }
 
   meta(mint: string) { const l = this.launches[mint]; return l ? metaJson(l, this.site) : null; }
@@ -302,49 +412,134 @@ export class SolLaunchpad {
     return { bytes: readFileSync(f), type: m[2] === "jpg" ? "image/jpeg" : `image/${m[2]}` };
   }
 
-  /** After the launch: the page reports the mint and its config; the pool must exist on chain on terms NIGHTSHIFT lists. */
-  async launched(mint: string, signature: string, configKey?: string): Promise<SolLaunch> {
+  /**
+   * Step 2: the creator's signed launch. It must be exactly a launch of this token on a config with
+   * NIGHTSHIFT's terms, and it must work on Solana right now. Without swarm work it is sent at once;
+   * with swarm work it waits here for the swarm (signed on a durable nonce, so it does not expire).
+   */
+  async signed(mint: string, b: Record<string, unknown>): Promise<SolView> {
     const s = this.settings();
     if (!s.partner) throw new SolInputError("The Solana launchpad is not open yet.", 503);
-    if (!BASE58_KEY.test(mint) || !/^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(signature)) throw new SolInputError("The token address or the transaction is invalid.");
-    const key = configKey || s.config;
-    if (!key || !BASE58_KEY.test(key)) throw new SolInputError("The launch's config is missing.");
-    const l = this.launches[mint];
-    if (!l) throw new SolInputError("Unknown token: save its details first.", 404);
-    const c = await this.configOf(key);
-    if (!c) throw new SolInputError("That config is not on Solana.", 409);
+    const l = this.need(mint);
+    if (!(l.status === "prepared" || l.status === "failed" || (l.status === "waiting" && l.swarm?.state === "unpaid"))) throw new SolInputError("This launch is already signed.", 409);
+    const configKey = String(b.config ?? "") || s.config || "";
+    if (!BASE58_KEY.test(configKey)) throw new SolInputError("The launch's Meteora config is missing.");
+    const c = await this.configOf(configKey);
+    if (!c) throw new SolInputError("That Meteora config is not on Solana yet. Wait a moment and sign again.", 409);
     const bad = termsProblems(c, s.partner);
     if (bad.length) throw new SolInputError(`That launch is not on NIGHTSHIFT terms: ${bad.join(", ")}.`, 409);
-    let pool: PoolView | null = null;
-    for (let i = 0; i < 6 && !pool; i++) { pool = await this.chain.poolOf(key, mint); if (!pool) await new Promise((r) => setTimeout(r, 1500 * (i + 1))); }
-    if (!pool) throw new SolInputError("The launch is not on Solana yet. Try again in a moment.", 409);
-    Object.assign(l, { config: key, pool: pool.pool, creator: pool.creator, signature, status: pool.migrated ? "graduated" : "live", createdAt: l.createdAt || Date.now(), dev: devLock(c) });
-    await this.refreshOne(l, pool);
-    // the website the creator paid for inside the launch transaction
-    if (l.kitWanted && this.swarmOn()) {
-      const price = await this.kitLamports();
-      const paid = await this.chain.paidTo(signature, s.partner).catch(() => 0n);
-      if (price && paid >= (price * 9n) / 10n) l.kit = { ref: `sol-kit:${mint}`, state: "queued", job: null, url: null, paidSol: Number(paid) / 1e9 };
+    const nonceKey = l.swarm ? String(b.nonce ?? "") : "";
+    let nonce: { account: string; value: string } | null = null;
+    if (l.swarm) {
+      if (!BASE58_KEY.test(nonceKey)) throw new SolInputError("A launch that waits for the swarm needs its nonce account.");
+      const n = await this.chain.nonce(nonceKey).catch(() => null);
+      if (!n) throw new SolInputError("The nonce account is not on Solana yet. Wait a moment and sign again.", 409);
+      if (n.authority !== l.creator) throw new SolInputError("That nonce account belongs to another wallet.");
+      nonce = { account: nonceKey, value: n.value };
     }
-    if (s.review && this.swarmOn()) l.review = { ref: `sol-review:${mint}`, state: "queued", job: null, url: null };
+    let tx;
+    try { tx = readTx(String(b.tx ?? "")); } catch { throw new SolInputError("That is not a Solana transaction."); }
+    const problem = launchTxProblem(tx, { creator: l.creator, mint, config: configKey, nonce });
+    if (problem) throw new SolInputError(problem);
+    const txB64 = tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64");
+    const sim = await this.chain.simulate(txB64);
+    if (!sim.ok) throw new SolInputError(`This launch would fail on Solana right now: ${sim.why ?? "unknown error"}. Nothing was sent.`, 409);
+    Object.assign(l, { config: configKey, dev: devLock(c), graduateSol: Number(c.threshold) / 1e9, note: null, held: { tx: txB64, nonce: nonce?.account ?? null } });
+    if (!l.swarm) { await this.release(l); return this.view(l); }
+    l.status = "waiting";
     this.save();
-    void this.work().catch(() => {});
-    return l;
+    return this.view(l);
   }
 
-  /** The launches, in the order a board asks for. */
-  list(sort: "new" | "mcap" | "progress" | "movers" = "new"): SolLaunch[] {
-    const all = Object.values(this.launches).filter((l) => l.status !== "pending");
+  /** Step 3: the creator paid IMD's job; the payment must carry exactly this launch's body. */
+  async paid(mint: string, chainId: unknown, tx: unknown): Promise<SolView> {
+    const l = this.need(mint);
+    const w = l.swarm;
+    if (!w || l.status !== "waiting") throw new SolInputError("This launch is not waiting for an IMD payment.", 409);
+    if (w.state !== "unpaid") return this.view(l);
+    const hash = String(tx ?? "").toLowerCase();
+    if (!/^0x[0-9a-f]{64}$/.test(hash)) throw new SolInputError("That is not a transaction hash.");
+    const chain = Number(chainId) as PayChain;
+    if (!(chain in PAY_CHAINS)) throw new SolInputError("IMD is paid on Ethereum or Robinhood Chain.");
+    if (Object.values(this.launches).some((x) => x !== l && x.swarm?.payTx === hash)) throw new SolInputError("That payment is already used by another launch.", 409);
+    const p = await this.imd!.paid(chain, hash, w.body);
+    if (!p.ok) throw new SolInputError(p.why, 409);
+    Object.assign(w, { state: "paid", payTx: hash, payer: p.payer, chainId: chain, paidAt: Date.now() });
+    this.save();
+    void this.work().catch(() => {});
+    return this.view(l);
+  }
+
+  /** The creator's own decision on a launch that waits: launch without the swarm when the swarm failed, or cancel. */
+  async act(mint: string, action: unknown, signature: unknown): Promise<SolView> {
+    const l = this.need(mint);
+    if (action !== "release" && action !== "cancel") throw new SolInputError("Unknown action.");
+    if (!walletSigned(l.creator, actText(action, mint), String(signature ?? ""))) throw new SolInputError("Sign with the creator's wallet.", 403);
+    return this.decide(l, action, false);
+  }
+
+  /** The owner's override from the admin page: release a refused or stuck launch, or cancel one. */
+  async adminAct(mint: string, action: unknown): Promise<SolView> {
+    if (action !== "release" && action !== "cancel") throw new SolInputError("Unknown action.");
+    return this.decide(this.need(mint), action, true);
+  }
+
+  private async decide(l: SolLaunch, action: "release" | "cancel", owner: boolean): Promise<SolView> {
+    if (!WAITING.includes(l.status) && !(owner && l.status === "refused")) throw new SolInputError("This launch is not waiting.", 409);
+    if (action === "cancel") {
+      Object.assign(l, { status: "cancelled", held: null, note: owner ? "Cancelled by NIGHTSHIFT." : "Cancelled by the creator." });
+      this.mints.drop(l.mint);
+      this.save();
+      return this.view(l);
+    }
+    if (!owner && l.swarm && l.swarm.state !== "failed") throw new SolInputError("The swarm is still working: the launch goes live when it finishes.", 409);
+    if (!l.held) throw new SolInputError("There is no signed launch to send. Sign it again.", 409);
+    await this.release(l);
+    return this.view(l);
+  }
+
+  /** Send the creator's signed launch with NIGHTSHIFT's signature for the token's address, then list it. */
+  private async release(l: SolLaunch): Promise<void> {
+    const kp = this.mints.keypair(l.mint);
+    if (!kp || !l.held) { l.status = "failed"; l.note = "The launch's address key is missing: start a new launch."; this.save(); return; }
+    l.status = "launching";
+    this.save();
+    try {
+      const tx = readTx(l.held.tx);
+      tx.partialSign(kp);
+      l.signature = await this.chain.send(tx.serialize().toString("base64"));
+    } catch (e) {
+      Object.assign(l, { status: "failed", held: l.held, note: `Solana refused the launch: ${(e as Error).message.slice(0, 160)}. Sign it again to retry.` });
+      this.save();
+      return;
+    }
+    let pool: PoolView | null = null;
+    for (let i = 0; i < 6 && !pool; i++) { pool = await this.chain.poolOf(l.config, l.mint).catch(() => null); if (!pool) await new Promise((r) => setTimeout(r, 1500 * (i + 1))); }
+    Object.assign(l, { status: pool?.migrated ? "graduated" : "live", launchedAt: Date.now(), held: null, note: null });
+    this.mints.drop(l.mint);
+    if (pool) await this.refreshOne(l, pool).catch(() => {});
+    this.save();
+  }
+
+  /** The launches on the board, in the order a board asks for. */
+  list(sort: "new" | "mcap" | "progress" | "movers" = "new"): SolView[] {
+    const all = Object.values(this.launches).filter((l) => LISTED.includes(l.status));
     const by = {
-      new: (a: SolLaunch, b: SolLaunch) => b.createdAt - a.createdAt,
+      new: (a: SolLaunch, b: SolLaunch) => (b.launchedAt ?? b.createdAt) - (a.launchedAt ?? a.createdAt),
       mcap: (a: SolLaunch, b: SolLaunch) => (b.mcapSol ?? 0) - (a.mcapSol ?? 0),
       progress: (a: SolLaunch, b: SolLaunch) => (a.status === "graduated" ? 1 : 0) - (b.status === "graduated" ? 1 : 0) || b.progress - a.progress,
       movers: (a: SolLaunch, b: SolLaunch) => (b.movedAt ?? 0) - (a.movedAt ?? 0),
     }[sort];
-    return all.sort(by);
+    return all.sort(by).map((l) => this.view(l));
   }
 
-  one(mint: string): SolLaunch | null { const l = this.launches[mint]; return l && l.status !== "pending" ? l : null; }
+  /** Launches signed and waiting for the IMD swarm (paid ones first). */
+  waiting(): SolView[] {
+    return Object.values(this.launches).filter((l) => WAITING.includes(l.status) && l.swarm && l.swarm.state !== "unpaid")
+      .sort((a, b) => (b.swarm?.paidAt ?? 0) - (a.swarm?.paidAt ?? 0)).map((l) => this.view(l));
+  }
+
+  one(mint: string): SolView | null { const l = this.launches[mint]; return l && l.status !== "prepared" ? this.view(l) : null; }
   chart(mint: string): [number, number][] { return this.history[mint] ?? []; }
   spark(mint: string): number[] { const h = this.history[mint] ?? []; return h.slice(-48).map((p) => p[1]); }
 
@@ -352,12 +547,16 @@ export class SolLaunchpad {
     const s = this.settings();
     const usd = await this.solUsd();
     const shared = s.config ? await this.configOf(s.config) : null;
-    const all = this.list();
+    const all = Object.values(this.launches);
     return {
       network: s.network, open: !!s.partner, partner: s.partner, config: shared ? s.config : null, solUsd: usd,
       shared: shared ? { graduateSol: Number(shared.threshold) / 1e9, createFeeSol: Number(shared.poolCreationFee) / 1e9 } : null,
-      imd: { review: s.review && this.swarmOn(), kit: s.kit && this.swarmOn(), kitUsd: KIT_USD, kitLamports: (await this.kitLamports())?.toString() ?? null },
-      counts: { live: all.filter((l) => l.status === "live").length, graduated: all.filter((l) => l.status === "graduated").length, reviewed: all.filter((l) => l.review?.state === "done").length },
+      imd: { on: !!this.imd, price: IMD_PRICE, imdUsd: config.imdUsd, chains: PAY_CHAINS, picks: SWARM_PICKS },
+      counts: {
+        live: all.filter((l) => l.status === "live").length, graduated: all.filter((l) => l.status === "graduated").length,
+        reviewed: all.filter((l) => LISTED.includes(l.status) && l.swarm?.verdict?.launch).length, swarm: all.filter((l) => LISTED.includes(l.status) && l.swarm?.state === "done").length,
+        waiting: all.filter((l) => WAITING.includes(l.status) && l.swarm && l.swarm.state !== "unpaid").length,
+      },
     };
   }
 
@@ -365,7 +564,7 @@ export class SolLaunchpad {
     const c = l.config ? await this.configOf(l.config) : null;
     if (pool) {
       const before = l.quoteReserve;
-      l.pool = pool.pool; l.creator = pool.creator; l.status = pool.migrated ? "graduated" : "live";
+      l.pool = pool.pool; l.status = pool.migrated ? "graduated" : "live";
       l.quoteReserve = pool.quoteReserve.toString();
       if (before !== l.quoteReserve && before !== "0") l.movedAt = Date.now();
       const dec = c?.tokenDecimal ?? 6;
@@ -388,57 +587,83 @@ export class SolLaunchpad {
     }
     if (Date.now() - l.checkedAt > 600_000) {
       const [m, hs] = await Promise.all([this.chain.mint(l.mint).catch(() => null), this.chain.holders(l.mint).catch(() => null)]);
-      const serial = Object.values(this.launches).filter((x) => x.creator && x.creator === l.creator).length;
+      const serial = Object.values(this.launches).filter((x) => LISTED.includes(x.status) && x.creator === l.creator).length;
       l.checks = safetyChecks(m, hs, pool, serial, l.dev);
       l.checkedAt = Date.now();
     }
   }
 
-  /** The swarm's work: order what is queued, follow what runs. */
+  /** The swarm's work: follow every paid job, and send the launch when its job completes. */
   async work(): Promise<void> {
-    if (!this.swarm || !this.swarmOn()) return;
-    for (const l of Object.values(this.launches)) {
-      for (const [w, kind, brief] of [[l.review, "research", () => reviewBrief(l, this.site)], [l.kit, "website", () => kitBrief(l, this.site)]] as const) {
-        if (!w || w.state === "done" || w.state === "failed" || w.state === "off") continue;
-        try {
-          if (w.state === "queued") { await this.swarm.order(kind, brief(), w.ref); w.state = "running"; }
-          const f = await this.swarm.follow(w.ref);
-          if (f) {
-            w.job = f.job;
-            w.url = f.site ?? (f.job ? `https://explorer.imd.fun/jobs/${f.job}` : null);
-            if (f.status === "done") w.state = "done";
-            if (f.status === "failed" || f.status === "unpaid") { w.state = "failed"; w.note = "The swarm job did not complete."; }
-          }
-        } catch (e) { w.note = (e as Error).message.slice(0, 160); if (w.state === "queued" && /409|400/.test(w.note)) w.state = "failed"; }
-      }
-    }
-    this.save();
+    if (!this.imd) return;
+    // one pass at a time; a call during a pass runs another pass after it, with what is new by then
+    while (this.run) await this.run.catch(() => {});
+    this.run = this.workOnce().finally(() => { this.run = null; });
+    return this.run;
   }
 
-  /** Every minute: pools re-read, stale pending entries dropped, launches made elsewhere picked up, the swarm followed. */
-  async refresh(): Promise<void> {
-    const s = this.settings();
-    const now = Date.now();
-    for (const [k, l] of Object.entries(this.launches)) if (l.status === "pending" && now - l.createdAt > PENDING_TTL) delete this.launches[k];
-    // launches made elsewhere with the shared NIGHTSHIFT config key: every 5 minutes, gently (every trade touches it too)
-    if (s.config && s.partner && now - this.scannedAt > 300_000) try {
-      this.scannedAt = now;
-      const found = await this.chain.newLaunches(s.config, this.scanSince[s.config] ?? null);
-      if (found.newest) this.scanSince[s.config] = found.newest;
-      for (const f of found.mints) {
-        if (this.launches[f.mint] && this.launches[f.mint]!.status !== "pending") continue;
-        const own = this.launches[f.mint];
-        const m = own ?? await this.chain.onchainMeta(f.mint).then((x) => x && { mint: f.mint, name: x.name, symbol: x.symbol, description: "", website: "", twitter: "", telegram: "", image: "" }).catch(() => null);
-        if (!m) continue;
-        this.launches[f.mint] = { ...m, config: s.config, pool: null, creator: null, signature: f.signature, createdAt: f.at || now, source: own ? "nightshift" : "elsewhere", status: "live", quoteReserve: "0", priceSol: null, mcapSol: null, progress: 0, graduateSol: null, options: own?.options ?? null, dev: null, checks: [], checkedAt: 0, change1h: null, change24h: null, movedAt: null, review: null, kit: null } as SolLaunch;
+  private async workOnce(): Promise<void> {
+    try {
+      for (const l of Object.values(this.launches)) {
+        const w = l.swarm;
+        if (!w || l.status !== "waiting" || !w.payTx || w.state === "failed" || w.state === "refused") continue;
+        try { await this.follow(l, w); } catch (e) { w.note = (e as Error).message.slice(0, 160); }
       }
-    } catch { /* the scan is a backstop; the next run tries again */ }
-    const listed = Object.values(this.launches).filter((l) => l.status !== "pending" && l.config);
+    } finally { this.save(); }
+  }
+
+  private async follow(l: SolLaunch, w: SwarmRun) {
+    if (!w.job) {
+      const e = await this.imd!.intake(w.chainId, w.payTx!);
+      if (e?.job) w.job = e.job;
+      else if (e?.state && /refus|fail|reject/.test(e.state)) { Object.assign(w, { state: "failed", note: `IMD did not take the job: ${e.reason ?? e.state}.` }); return; }
+      else { w.note = "IMD is reading the payment."; return; }
+    }
+    const job = await this.imd!.job(w.job);
+    if (!job) return;
+    w.state = "working";
+    w.note = null;
+    for (const st of w.steps) {
+      const nodes = job.nodes.filter((n) => PICK_NODE[st.pick].test(n.key));
+      if (nodes.length) st.state = nodes.every((n) => n.state === "accepted") ? "done" : nodes.some((n) => nodeState(n.state) === "failed") ? "failed" : nodes.some((n) => nodeState(n.state) !== "waiting") ? "working" : "waiting";
+    }
+    if (job.site) w.site = job.site;
+    const files = await this.imd!.files(w.job).catch(() => [] as ImdFile[]);
+    const file = (name: string) => files.find((f) => f.name === name)?.url ?? null;
+    w.report = file("report") ?? w.report; w.logo = file("logo") ?? w.logo; w.banner = file("banner") ?? w.banner;
+    if (w.picks.includes("review") && !w.verdict && file("verdict")) w.verdict = readVerdict(await this.imd!.text(file("verdict")!));
+    if (w.verdict && !w.verdict.launch) {
+      // the signed launch is kept (never sent) so the owner can still overrule a mistaken verdict
+      Object.assign(w, { state: "refused" });
+      Object.assign(l, { status: "refused", note: `The IMD swarm's review said no: ${w.verdict.reason || "no reason given"}.` });
+      return;
+    }
+    if (JOB_FAILED.has(job.state) || (w.paidAt && Date.now() - w.paidAt > SWARM_TIMEOUT && !JOB_DONE.has(job.state))) {
+      Object.assign(w, { state: "failed", note: JOB_FAILED.has(job.state) ? `The swarm's job ended: ${job.state}.` : "The swarm did not finish within three days." });
+      return;
+    }
+    if (!JOB_DONE.has(job.state)) return;
+    if (w.picks.includes("review") && !w.verdict) { Object.assign(w, { state: "failed", note: "The swarm finished, but its verdict could not be read." }); return; }
+    w.state = "done";
+    for (const st of w.steps) if (st.state !== "failed") st.state = "done";
+    await this.release(l);
+  }
+
+  /** Every minute: pools re-read, unsigned and unpaid launches dropped, the swarm followed. */
+  async refresh(): Promise<void> {
+    const now = Date.now();
+    for (const [k, l] of Object.entries(this.launches)) {
+      if (l.status === "prepared" && now - l.createdAt > PREPARED_TTL) { delete this.launches[k]; this.mints.drop(k); }
+      else if (l.status === "waiting" && l.swarm?.state === "unpaid" && now - l.createdAt > UNPAID_TTL) { Object.assign(l, { status: "cancelled", held: null, note: "Not paid within two days." }); this.mints.drop(k); }
+      else if (l.status === "refused" && l.held && now - l.createdAt > 30 * DAY) { l.held = null; this.mints.drop(k); }
+    }
+    const listed = Object.values(this.launches).filter((l) => LISTED.includes(l.status) && l.config);
     const withPool = listed.filter((l) => l.pool);
     const views = withPool.length ? await this.chain.pools(withPool.map((l) => l.pool!)).catch(() => withPool.map(() => null)) : [];
     for (const [i, l] of withPool.entries()) await this.refreshOne(l, views[i] ?? null).catch(() => {});
     for (const l of listed.filter((x) => !x.pool)) await this.refreshOne(l, await this.chain.poolOf(l.config, l.mint).catch(() => null)).catch(() => {});
     await this.work().catch(() => {});
+    void this.mints.fill().catch(() => {});
     this.save();
   }
 
@@ -451,6 +676,11 @@ export class SolLaunchpad {
     if (bad.length) return { ok: false, why: `That config does not match the NIGHTSHIFT terms: ${bad.join(", ")}.` };
     this.configs.set(configKey, c);
     return { ok: true, config: c };
+  }
+
+  /** The admin's view: every launch not yet on the board, newest first. */
+  pending(): SolView[] {
+    return Object.values(this.launches).filter((l) => !LISTED.includes(l.status) && l.status !== "prepared").sort((a, b) => b.createdAt - a.createdAt).slice(0, 50).map((l) => this.view(l));
   }
 }
 

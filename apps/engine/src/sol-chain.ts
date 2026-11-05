@@ -1,11 +1,10 @@
 import { deriveDbcPoolAddress, DynamicBondingCurveClient } from "@meteora-ag/dynamic-bonding-curve-sdk";
-import { Connection, PublicKey } from "@solana/web3.js";
-import { cleanText, type ConfigView, DBC_PROGRAM, type Holder, METAPLEX, type MintView, type PoolView, type SolChain, WSOL } from "./sol-launch.js";
+import { Connection, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
+import { type ConfigView, DBC_PROGRAM, type Holder, type MintView, type PoolView, type SolChain, WSOL } from "./sol-launch.js";
 
 /**
- * The live Solana reads for the launchpad, through Meteora's DBC SDK. The free public RPC answers at
- * most 10 accounts per call and refuses program-wide scans, so pools are read in chunks of 10 and new
- * launches are found from the config key's own signatures, not with getProgramAccounts.
+ * The live Solana reads and sends for the launchpad, through Meteora's DBC SDK. The free public RPC
+ * answers at most 10 accounts per call and refuses program-wide scans, so pools are read in chunks of 10.
  */
 export function liveSolChain(rpc: string): SolChain {
   const conn = new Connection(rpc, "confirmed");
@@ -28,6 +27,8 @@ export function liveSolChain(rpc: string): SolChain {
     if (!data) return null;
     try { return toPool(address, coder.decode("virtualPool", data) as never); } catch { return null; }
   };
+  const why = (logs: string[] | null | undefined, err: unknown) =>
+    ([...(logs ?? [])].reverse().find((l) => /Error|insufficient|failed/i.test(l)) ?? JSON.stringify(err)).replace(/^Program log: /, "").slice(0, 160);
 
   return {
     async poolOf(config, mint) {
@@ -75,34 +76,27 @@ export function liveSolChain(rpc: string): SolChain {
       }
       return accounts.map((a, i) => ({ account: a.address.toBase58(), owner: owners[i] ?? null, amount: BigInt(a.amount) })) satisfies Holder[];
     },
-    async newLaunches(config, since) {
-      const sigs = await conn.getSignaturesForAddress(new PublicKey(config), since ? { until: since, limit: 20 } : { limit: 20 });
-      const mints: { mint: string; signature: string; at: number }[] = [];
-      for (const s of sigs.filter((x) => !x.err).reverse()) {
-        const t = await conn.getTransaction(s.signature, { maxSupportedTransactionVersion: 0 }).catch(() => null);
-        if (!t || !(t.meta?.logMessages ?? []).some((l) => /Instruction: InitializeVirtualPoolWith/i.test(l))) continue;
-        const keys = t.transaction.message.staticAccountKeys;
-        for (let i = 0; i < keys.length; i += 10) {
-          const infos = await conn.getMultipleAccountsInfo(keys.slice(i, i + 10));
-          const hit = infos.findIndex((inf) => inf?.owner.equals(DBC) && inf.data.length === 424);
-          if (hit >= 0) { const p = decodePool(keys[i + hit]!.toBase58(), infos[hit]!.data); if (p && p.config === config) mints.push({ mint: p.baseMint, signature: s.signature, at: (s.blockTime ?? 0) * 1000 }); break; }
-        }
+    async nonce(account) {
+      const n = await conn.getNonce(new PublicKey(account), "confirmed");
+      return n ? { authority: n.authorizedPubkey.toBase58(), value: n.nonce } : null;
+    },
+    async simulate(txB64) {
+      const tx = Transaction.from(Buffer.from(txB64, "base64"));
+      const r = await conn.simulateTransaction(new VersionedTransaction(tx.compileMessage()), { sigVerify: false, commitment: "confirmed" });
+      return r.value.err ? { ok: false, why: why(r.value.logs, r.value.err) } : { ok: true, why: null };
+    },
+    async send(txB64) {
+      const raw = Buffer.from(txB64, "base64");
+      const sig = await conn.sendRawTransaction(raw, { skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 0 }).catch((e: Error & { logs?: string[] }) => { throw new Error(why(e.logs, e.message)); });
+      // resend every few seconds until it is confirmed, fails, or two minutes pass
+      for (let i = 0; i < 60; i++) {
+        const s = (await conn.getSignatureStatuses([sig])).value[0];
+        if (s?.err) throw new Error(`the transaction failed (${JSON.stringify(s.err).slice(0, 80)})`);
+        if (s?.confirmationStatus === "confirmed" || s?.confirmationStatus === "finalized") return sig;
+        if (i % 2 === 1) await conn.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 }).catch(() => {});
+        await new Promise((r) => setTimeout(r, 2000));
       }
-      return { newest: sigs[0]?.signature ?? since, mints };
-    },
-    async onchainMeta(mint) {
-      const [pda] = PublicKey.findProgramAddressSync([Buffer.from("metadata"), new PublicKey(METAPLEX).toBuffer(), new PublicKey(mint).toBuffer()], new PublicKey(METAPLEX));
-      const info = await conn.getAccountInfo(pda);
-      return info ? parseMetaplex(info.data) : null;
-    },
-    async paidTo(signature, account) {
-      const t = await conn.getTransaction(signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" });
-      if (!t?.meta || t.meta.err) return 0n;
-      const keys = t.transaction.message.getAccountKeys({ accountKeysFromLookups: t.meta.loadedAddresses }).keySegments().flat();
-      const i = keys.findIndex((k) => k.toBase58() === account);
-      if (i < 0) return 0n;
-      const d = BigInt(t.meta.postBalances[i] ?? 0) - BigInt(t.meta.preBalances[i] ?? 0);
-      return d > 0n ? d : 0n;
+      throw new Error("Solana did not confirm it in two minutes");
     },
     async solUsd() {
       const j = await fetch(`https://lite-api.jup.ag/price/v3?ids=${WSOL}`, { signal: AbortSignal.timeout(8_000) }).then((r) => r.json()).catch(() => null) as Record<string, { usdPrice?: number }> | null;
@@ -112,17 +106,6 @@ export function liveSolChain(rpc: string): SolChain {
       return g?.solana?.usd ?? null;
     },
   };
-}
-
-/** Name, symbol and uri from a Metaplex metadata account (key, update authority, mint, then three borsh strings). */
-export function parseMetaplex(data: Buffer): { name: string; symbol: string; uri: string } | null {
-  try {
-    let o = 1 + 32 + 32;
-    // names from the chain are anyone's: control and bidi characters out, the ticker letters and digits only
-    const str = () => { const n = data.readUInt32LE(o); o += 4; const s = cleanText(data.subarray(o, o + n).toString("utf8")).trim(); o += n; return s; };
-    const name = str(), symbol = str(), uri = str();
-    return name ? { name: name.slice(0, 32), symbol: symbol.replace(/[^\p{L}\p{N}]/gu, "").slice(0, 10), uri: uri.slice(0, 200) } : null;
-  } catch { return null; }
 }
 
 /** The creator's locked allocation from a config's locked vesting (amount per period x periods + the cliff unlock). */

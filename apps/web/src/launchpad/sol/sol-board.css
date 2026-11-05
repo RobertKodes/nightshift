@@ -91,7 +91,48 @@
 .sl3-work li b { display: block; color: #8db6ff; font: 400 9.5px/1.4 var(--px-pixel); letter-spacing: .06em; text-transform: uppercase; }
 .sl3-work a { color: #8db6ff !important; }
 
+/* ---- the swarm picks on the form */
+.sl3-picks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.sl3-pick { display: grid; grid-template-columns: 18px 1fr; grid-template-rows: auto auto auto; column-gap: 8px; row-gap: 4px; text-align: left; padding: 12px; cursor: pointer; border: 1px solid rgba(47, 123, 255, .25); background: #060a10; color: #c6d4ea; border-radius: 2px; transition: border-color .12s, background .12s; }
+.sl3-pick:hover { border-color: rgba(47, 123, 255, .6); }
+.sl3-pick.on { border-color: #2f7bff; background: linear-gradient(180deg, rgba(47, 123, 255, .14), rgba(47, 123, 255, .04)); }
+.sl3-pick i { grid-row: 1 / 4; font-style: normal; color: #2f7bff; font: 400 13px/1.2 var(--px-mono); }
+.sl3-pick b { font: 400 10px/1.2 var(--px-pixel); letter-spacing: .06em; color: #8db6ff; }
+.sl3-pick span { font: 400 12.5px/1.5 var(--px-sans); color: #aebbd2; }
+.sl3-pick small { font: 400 10.5px/1 var(--px-mono); color: #5c7194; }
+.sl3-caps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* ---- the swarm at work on a launch */
+.sl3-flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.sl3-flow li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; color: #c6d4ea; font: 400 13px/1.5 var(--px-sans); }
+.sl3-flow li b { display: block; color: #8db6ff; font: 400 9.5px/1.4 var(--px-pixel); letter-spacing: .06em; }
+.sl3-flow li.failed b { color: var(--px-red); }
+.sl3-flow li.link { grid-template-columns: 1fr; padding-left: 30px; }
+.sl3-flow a { color: #8db6ff !important; }
+.sl3-banner { display: block; width: 100%; margin-top: 12px; border: 1px solid rgba(47, 123, 255, .3); aspect-ratio: 3 / 1; object-fit: cover; }
+
+/* ---- the board's strip of launches with the swarm */
+.sl3-wait { border: 1px solid rgba(47, 123, 255, .35); background: #060a10; }
+.sl3-wait > header { display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border-bottom: 1px solid rgba(47, 123, 255, .2); }
+.sl3-wait > header b { font: 400 10px/1 var(--px-pixel); letter-spacing: .06em; color: #8db6ff; }
+.sl3-wait > header span { color: #6f86a8; font: 400 11.5px/1 var(--px-sans); }
+.sl3-wait-r { display: flex; gap: 8px; padding: 10px 12px; overflow-x: auto; }
+.sl3-wait-c { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid rgba(47, 123, 255, .25); text-decoration: none; color: inherit; min-width: 260px; flex: none; }
+.sl3-wait-c > :first-child { flex: none; }
+.sl3-wait-c small { white-space: nowrap; }
+.sl3-wait-c:hover { border-color: #2f7bff; }
+.sl3-wait-c span { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.sl3-wait-c b { font: 600 13px/1.2 var(--px-display); color: var(--px-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sl3-wait-c small { font: 400 11px/1.2 var(--px-mono); color: #6f86a8; }
+
+/* ---- the admin's list */
+.sl3-adm { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.sl3-adm li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid rgba(47, 123, 255, .15); }
+.sl3-adm li > span { flex: 1; min-width: 220px; display: grid; gap: 2px; }
+.sl3-adm small { color: var(--px-faint); font: 400 11.5px/1.4 var(--px-mono); }
+
 @media (max-width: 899px) {
+  .sl3-picks, .sl3-caps { grid-template-columns: 1fr; }
   .sl3-cols, .sl3-how { grid-template-columns: 1fr; }
   .sl3-king { grid-template-columns: auto 1fr; }
   .sl3-king-n { grid-column: 1 / -1; }

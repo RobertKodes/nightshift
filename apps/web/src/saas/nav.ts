@@ -31,6 +31,7 @@ export const NAV: NavGroup[] = [
     links: [
       { to: "/token", label: "What $SHIFT does", line: "Perks and rules" },
       { to: "/stake", label: "Stake $SHIFT", line: "A share of every sell" },
+      { to: "/leaderboard", label: "Leaderboard", line: "Top stakers and earners" },
       { to: "/swap", label: "Swap", line: "ETH ⇄ $SHIFT" },
       { to: "/deals", label: "Token Deals", line: "Fixed-price, escrowed" },
       { to: "/frogs", label: "NIGHT FROGS", line: "500 frogs, earned hours" },
