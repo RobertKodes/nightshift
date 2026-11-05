@@ -16,7 +16,8 @@ const REFUND = "NIGHTSHIFT owes you a refund; it is recorded";
 type Quote = { quoteId: string; kind: SwarmKind; priceUsd: number; imdUsd: number; expiresAt: string; body: Record<string, unknown> };
 type Payment = { payer: string; nonce: string; usd: number; network: string; validBefore: number };
 export type InternalInput = SwarmInput & { brief?: string; repo?: string };
-export type InternalOrder = { kind: SwarmKind; input: InternalInput; source: "acp"; ref: string; payer: string; funded?: boolean };
+/** An order the engine places itself: from ACP escrow (Virtuals), or a house order NIGHTSHIFT pays (`network` names it in the books, e.g. "nightshift-sol"). */
+export type InternalOrder = { kind: SwarmKind; input: InternalInput; source: "acp" | "house"; ref: string; payer: string; funded?: boolean; network?: string };
 type DeskOrder = {
   orderId: string; quote: Quote; key: string; payment: Payment; at: number; day: string;
   status: "reserved" | "settling" | "ordering" | "running" | "done" | "failed" | "unpaid";
@@ -156,7 +157,7 @@ export class SwarmDesk {
         const q = await this.quote(input.kind, input.input.brief ?? null, input.input.repo ?? null, "", input.input);
         await this.#ready();
         o = { orderId: `sd_${randomUUID()}`, quote: { ...this.#quote(q.quoteId), priceUsd: 4 }, key,
-          payment: { payer: input.payer, nonce: key, usd: 4, network: "virtuals-acp", validBefore: 0 },
+          payment: { payer: input.payer, nonce: key, usd: 4, network: input.network ?? "virtuals-acp", validBefore: 0 },
           at: this.#now(), day: this.#day(), status: "reserved", acp: { ref: input.ref, funded: false }, reserveUnits: "0", tokenHash: hash(randomBytes(32).toString("hex")) };
         this.#orders.set(o.orderId, o);
         this.#save();
