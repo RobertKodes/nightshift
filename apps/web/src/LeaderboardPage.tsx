@@ -119,7 +119,9 @@ function StakerCells({ r, source }: { r: StakerRow; source: StakerSource }) {
 
 function EarnerCells({ r, source }: { r: EarnerRow; source: "all" | EarnerSource }) {
   if (source !== "all") {
-    const p = r.parts[source]!, d = detail(source, p.stats);
+    const p = r.parts[source];
+    if (!p) return <><td className="faint" data-label={PART_NAME[source]}>—</td>{source !== "hours" && <td className="r faint" data-label="In dollars">—</td>}</>;
+    const d = detail(source, p.stats);
     return (
       <>
         <td data-label={PART_NAME[source]}><span className="lb-stack"><Amounts part={p} signed={NET.includes(source)} />{d && <small>{d}</small>}</span></td>
@@ -184,7 +186,10 @@ export function LeaderboardPage() {
   const [{ board, source }, setPick] = useState(readHash);
   // undefined: still asking; null: the server did not answer
   const [summary, setSummary] = useState<Summary | null | undefined>(undefined);
-  const [view, setView] = useState<View<StakerRow | EarnerRow> | null | undefined>(undefined);
+  // the last answer, with the list it answers: a list picked a moment ago shows "Reading…", never the old list's rows
+  const [got, setGot] = useState<{ key: string; view: View<StakerRow | EarnerRow> | null } | undefined>(undefined);
+  const key = `${board}/${source}/${me ?? ""}`;
+  const view = got && got.key === key ? got.view : undefined;
 
   const pick = (b: Board, s: string) => { setPick({ board: b, source: s }); history.replaceState(null, "", `#${b}${s === "all" ? "" : `/${s}`}`); };
   useEffect(() => {
@@ -195,14 +200,13 @@ export function LeaderboardPage() {
   }, []);
   useEffect(() => {
     let live = true;
-    setView(undefined);
     const go = () => fetch(`/api/leaderboards/${board}?source=${source}&limit=100${me ? `&wallet=${me}` : ""}`, { signal: AbortSignal.timeout(20_000) })
-      .then((r) => (r.ok ? r.json() : null)).then((x: View<StakerRow | EarnerRow> | null) => { if (live) setView(x && Array.isArray(x.rows) ? x : null); })
-      .catch(() => { if (live) setView((v) => v ?? null); });
+      .then((r) => (r.ok ? r.json() : null)).then((x: View<StakerRow | EarnerRow> | null) => { if (live) setGot({ key, view: x && Array.isArray(x.rows) ? x : null }); })
+      .catch(() => { if (live) setGot((g) => (g && g.key === key ? g : { key, view: null })); });
     go();
     const t = setInterval(go, 120_000);
     return () => { live = false; clearInterval(t); };
-  }, [board, source, me]);
+  }, [board, source, me, key]);
 
   const tabs = board === "stakers" ? STAKER_TABS : EARNER_TABS;
   const tab = tabs.find((t) => t.id === source) ?? tabs[0]!;
