@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { writeAtomic } from "../atomic.js";
 import { siteBackups } from "../site-backup.js";
@@ -331,9 +331,18 @@ export class AcpBridge {
       rejected: rows.filter((j) => ["rejected", "refused"].includes(j.phase)).length };
   }
 
+  /** Every acp CLI call is a fresh Node process (~1 s of CPU), so a full reconcile runs only when the
+   *  listener wrote new events, a job is mid-flight, the listener needs restarting, or once a minute. */
   start(): void {
     if (this.#timer) return;
-    const tick = () => void this.tick().catch(() => {});
+    const mark = () => { try { const s = statSync(this.d.eventsFile); return `${s.size}:${s.mtimeMs}`; } catch { return ""; } };
+    let last = -Infinity, seen: string | null = null;
+    const tick = () => {
+      const busy = [...this.#jobs.values()].some((j) => ["budgeting", "opening", "running", "submitting"].includes(j.phase));
+      if (!busy && this.#listener && mark() === seen && this.#now() - last < 60_000) return;
+      last = this.#now();
+      void this.tick().catch(() => {}).finally(() => { seen = mark(); });
+    };
     tick(); this.#timer = setInterval(tick, 5_000); this.#timer.unref();
   }
   stop(): void { clearInterval(this.#timer); this.#timer = undefined; this.#listener?.stop(); this.#listener = undefined; }
