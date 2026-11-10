@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { NodeCompiler } from "@myriaddreamin/typst-ts-node-compiler";
 import { Resvg } from "@resvg/resvg-js";
 import { type PlannerSpec, templateInput } from "./planner.js";
+import { type SheetSpec, sheetInput } from "./sheet.js";
 
 /**
  * The studio's renderer: Typst in process (no browser, no shell), with the fonts we ship. A planner
@@ -14,6 +15,7 @@ import { type PlannerSpec, templateInput } from "./planner.js";
 const here = dirname(fileURLToPath(import.meta.url));
 const FONTS = join(here, "..", "..", "assets", "fonts");
 const TEMPLATE = readFileSync(join(here, "planner.typ"), "utf8");
+const SHEET = readFileSync(join(here, "sheet.typ"), "utf8");
 /** Shadow files (page images for listings) live under this made-up folder in the compiler's world. */
 const WORLD = join(here, "world");
 
@@ -48,6 +50,18 @@ export function renderPlanner(spec: PlannerSpec): { pdf: Buffer; pages: number; 
 
 export type Rendered = { pdf: Buffer; pages: number; links: number; ms: number };
 
+/** A pack of sheets (sheet.typ) as one PDF, with its cover and its first sheet as PNGs for the listing. */
+export function renderSheet(spec: SheetSpec): { pdf: Buffer; pages: number; cover: Buffer; first: Buffer; ms: number } {
+  const t0 = Date.now();
+  const inputs = { spec: sheetInput(spec) };
+  const pdf = run("the pack did not render", () => typst().pdf({ mainFileContent: SHEET, inputs }));
+  const page = (key: string) => png(run(`the ${key} page did not render`, () => typst().plainSvg({ mainFileContent: SHEET, inputs: { ...inputs, preview: key } })), 1000);
+  const out = { pdf, pages: pdfFacts(pdf).pages, cover: page("cover"), first: page("first"), ms: Date.now() - t0 };
+  typst().evictCache(10);
+  return out;
+}
+export type RenderedSheet = ReturnType<typeof renderSheet>;
+
 /** One job in a child process (worker.ts): its memory goes back to the system when it exits. */
 function inChild<T>(job: object, timeoutMs: number, read: (m: Record<string, unknown>) => T): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -65,6 +79,10 @@ function inChild<T>(job: object, timeoutMs: number, read: (m: Record<string, unk
 /** The whole planner, rendered in a child process. */
 export const renderInChild = (spec: PlannerSpec, timeoutMs = 180_000): Promise<Rendered> =>
   inChild({ spec }, timeoutMs, (m) => ({ pdf: Buffer.from(m.pdf as Uint8Array), pages: m.pages as number, links: m.links as number, ms: m.ms as number }));
+
+/** A pack of sheets, rendered in a child process. */
+export const sheetInChild = (spec: SheetSpec, timeoutMs = 120_000): Promise<RenderedSheet> =>
+  inChild({ sheet: spec }, timeoutMs, (m) => ({ pdf: Buffer.from(m.pdf as Uint8Array), pages: m.pages as number, cover: Buffer.from(m.cover as Uint8Array), first: Buffer.from(m.first as Uint8Array), ms: m.ms as number }));
 
 /** The listing images, made in a child process too. */
 export const listingInChild = (spec: PlannerSpec, facts: { pages: number; links: number; files: string[] }, keys: { hero: [string, string]; inside: [string, string][] }, timeoutMs = 120_000): Promise<{ name: string; png: Buffer }[]> =>

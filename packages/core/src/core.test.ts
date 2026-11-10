@@ -161,10 +161,12 @@ describe("money edge cases", () => {
   const live = (c: Company) => { c.products.push({ id: "p1", name: "P", kind: "report", pitch: "x", priceUsdc: 9_000_000n, status: "live", deliverableUrl: null, taskId: "t", sales: 0, revenueUsdc: 0n, createdAt: 0 }); c.site = { url: "http://s", jobId: "j" }; };
 
   it("holds a CEO reprice to the price bounds: no micro-cent, negative or non-number price", async () => {
+    // with visitors who did not buy: a price nobody saw is never cut (see "the loop it no longer runs")
+    const seen = { stats: () => ({ visits7d: 50, sales7d: 0, revenue7dUsd: 0, imdUsd: 6 }) };
     for (const [asked, want] of [[0.000001, 1_000_000n], [-5, 1_000_000n], [100_000, 499_000_000n]] as const) {
       const c = company();
       live(c);
-      await runShift(c, { ...deps({ t: 1_000_000 }), llm: llmSays({ kind: "reprice", title: "x", why: "y", productId: "p1", priceUsd: asked }) });
+      await runShift(c, { ...deps({ t: 1_000_000 }), ...seen, llm: llmSays({ kind: "reprice", title: "x", why: "y", productId: "p1", priceUsd: asked }) });
       expect(c.products[0]!.priceUsdc, String(asked)).toBe(want);
     }
     const c = company();

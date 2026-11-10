@@ -65,7 +65,14 @@ describe("a company never does the same work twice", () => {
   for (const sells of [false, true]) {
     it(`over 25 shifts with the playbook ${sells ? "while it sells" : "while nothing sells"}: no product, research, order or post twice`, async () => {
       const { c } = await simulate(25, { sells });
-      expect(c.tasks.length).toBeGreaterThanOrEqual(25);
+      // nothing sells and nobody visits: it stops making moves that reach no one (one draft waits for its
+      // owner, one question is open) instead of filling shifts with drafts and price cuts
+      expect(c.tasks.length).toBeGreaterThanOrEqual(sells ? 25 : 12);
+      if (!sells) {
+        expect(c.marketing.filter((m) => m.status === "drafted")).toHaveLength(1);
+        expect(c.tasks.filter((t) => t.kind === "reprice")).toEqual([]);
+        expect((c.asks ?? []).filter((a) => a.status === "open")).toHaveLength(1);
+      }
       const names = c.products.map((p) => p.name.toLowerCase());
       expect(new Set(names).size).toBe(names.length);
       // products are things buyers use, never reports

@@ -1,7 +1,6 @@
 import { serviceLabel } from "../labels";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { type CrewEvent, type CrewMetrics, type CrewProfile, type CrewsIndex, type ServicesIndex, ago, api } from "../api";
-import { ROOMS, type RoomId } from "../nx/map";
 import { Link } from "../router";
 import AnimatedList from "../rb/AnimatedList";
 import DotGrid from "../rb/DotGrid";
@@ -175,24 +174,6 @@ export function ToolHero({ docTitle, trail, kicker, title, accent, lead, actions
       {trail && <Trail items={trail} />}
       <PxHero kicker={kicker} title={title} accent={accent} lead={lead} actions={actions} aside={aside} live={live} bg={bg ?? <HeroGrid tone={tone} />} />
     </>
-  );
-}
-
-/** A page's hero, the station way: the room's art, the trail, the title, one line and what follows. */
-export function Hero({ room = "geek", trail, title, line, className, docTitle, children }: { room?: RoomId; trail: React.ReactNode; title: React.ReactNode; line: React.ReactNode; className?: string; docTitle: string; children?: React.ReactNode }) {
-  const r = ROOMS[room];
-  // every render: the app shell names the tab on its own renders, the page's name must win
-  useEffect(() => { document.title = `${docTitle} · NIGHTSHIFT`; });
-  return (
-    <header className={`st-hero slim cr-page${className ? ` ${className}` : ""}`} style={{ "--acc": r.accent } as React.CSSProperties}>
-      <img className="st-hero-art" src={r.art} alt="" />
-      <div className="st-hero-in">
-        <span className="st-deck"><Link to={r.nav[0]!.to}>{r.name.toUpperCase()}</Link> · {trail}</span>
-        <h1>{title}</h1>
-        <p>{line}</p>
-        {children}
-      </div>
-    </header>
   );
 }
 

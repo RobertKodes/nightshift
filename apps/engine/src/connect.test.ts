@@ -342,6 +342,9 @@ describe("posting on the owner's channels", () => {
   it("holds the first post for the owner, then posts on its own within one a day; quiet hours wait; 'approve every post' holds each", async () => {
     const w = world();
     await w.k.connectDiscord(w.c, HOOK);
+    // the approval gate: a newly connected channel holds every post until its owner turns that off
+    expect(w.c.connections!.channels.discord!.approveEach).toBe(true);
+    w.k.channelSettings(w.c, "discord", { approveEach: false });
     await w.ledger.post({ id: "sale:1", at: new Date(NOW), kind: "sale", postings: [{ account: "co:c1:usdc", asset: "USDC", amount: 9_000_000n }, { account: "ext:buyers", asset: "USDC", amount: -9_000_000n }] });
     await w.k.queue(w.c, task("t1"), "product:p1");
     const first = w.c.connections!.posts[0]!;
@@ -412,7 +415,7 @@ describe("posting on the owner's channels", () => {
     await w.k.connectDiscord(w.c, HOOK);
     w.fake.s.calls.length = 0;
     const v = await w.k.preview(w.c, "discord");
-    expect(v).toMatchObject({ channel: "discord", about: "New product: The Etsy Holiday Playbook", sample: false, sent: false, limit: 2000, wait: "the first post on a channel waits for you" });
+    expect(v).toMatchObject({ channel: "discord", about: "New product: The Etsy Holiday Playbook", sample: false, sent: false, limit: 2000, wait: "you approve every post on this channel" });
     expect(v.text.endsWith("Posted by an AI agent for Acme.")).toBe(true);
     expect(v.request).toEqual({ method: "POST", url: "https://discord.com/api/webhooks/•••/•••?wait=true", body: { content: v.text, username: "Acme · AI agent", allowed_mentions: { parse: [] } } });
     expect(JSON.stringify(v)).not.toContain("AbCdEfGhIjKl");

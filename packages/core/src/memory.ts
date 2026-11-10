@@ -23,7 +23,10 @@ const POST_GAP = 20 * 60 * 60 * 1000;
 const PAID = new Set<TaskKind>(["research", "build_product", "build_site", "improve_site"]);
 const LABEL: Record<TaskKind, string> = {
   research: "research", build_product: "product", build_site: "site", improve_site: "site change", marketing: "post", reprice: "price change", retire_product: "retirement", post: "post",
+  improve_listing: "listing change", ask_owner: "question to the owner",
 };
+/** Under this many visits in 7 days nobody is looking: more drafts and lower prices reach no one. */
+const NO_TRAFFIC = 10;
 
 // the words every order of a kind carries (catalog.ts), so only what the work is about is compared
 const BOILER = terms("Write it is a paid digital product so it must be actionable and worth its price. Build a small self-contained web tool. "
@@ -103,7 +106,7 @@ export function siteWithoutAddress(c: Company): Task | undefined {
  * Why a move repeats earlier work, or null when it is new. `order` is the IMD body the move would
  * buy, when it buys one: an identical body is always a repeat.
  */
-export function repeatOf(c: Company, d: Decision, order?: { action: string; input: unknown } | null, now = Date.now()): string | null {
+export function repeatOf(c: Company, d: Decision, order?: { action: string; input: unknown } | null, now = Date.now(), seen?: { visits7d: number }): string | null {
   if (d.kind === "build_site") {
     if (c.site) return "the company already has its site";
     const built = siteWithoutAddress(c);
@@ -113,6 +116,14 @@ export function repeatOf(c: Company, d: Decision, order?: { action: string; inpu
   if (d.kind === "build_product" && d.product) {
     const had = c.products.find((p) => sameName(p.name, d.product!.name));
     if (had) return `it already has "${had.name}" (${had.kind}, ${had.status})`;
+  }
+  // made in-house: nothing is ordered, so only the name and (for a made-for-you file) the recipe can repeat
+  if (d.kind === "build_product" && d.product?.format) {
+    const twin = d.product.format === "custom" ? c.products.find((p) => p.custom?.recipe === d.product!.recipe && p.status !== "retired") : undefined;
+    if (twin) return `it already sells that made-for-you file ("${twin.name}")`;
+    const fails = c.tasks.filter((t) => t.kind === "build_product" && t.status === "failed" && t.studio?.format === d.product!.format && (t.studio?.recipe ?? "") === (d.product!.recipe ?? ""));
+    if (fails.length >= MAX_FAILS) return `the studio could not make that ${fails.length} times (last: ${(fails.at(-1)!.error ?? "no reason given").slice(0, 120)})`;
+    return null;
   }
   if (PAID.has(d.kind)) {
     const about = topicOf(c, aboutOf(c, d));
@@ -129,6 +140,11 @@ export function repeatOf(c: Company, d: Decision, order?: { action: string; inpu
   if (d.kind === "marketing") {
     const text = (d.post || d.brief || "").slice(0, 280).trim();
     if (text && c.marketing.some((m) => m.text.trim() === text)) return "the same post was already drafted";
+    // the loop this rule ends: a draft a day that no owner reads and no visitor sees
+    const waiting = c.marketing.filter((m) => m.status === "drafted").length;
+    if (waiting && seen) return `${waiting} drafted post${waiting === 1 ? " is" : "s are"} still waiting for the owner: another draft reaches nobody`;
+    const recent = c.marketing.at(-1);
+    if (seen && seen.visits7d < NO_TRAFFIC && recent && now - recent.at < 7 * DAY) return `only ${seen.visits7d} visits in 7 days: one draft a week at most until someone is looking`;
     // three posts in four minutes are noise, not reach: the model's posts wait as long as the playbook's
     const last = c.marketing.at(-1);
     if (last && now - last.at < POST_GAP) return `a post was drafted ${Math.max(1, Math.round((now - last.at) / 3_600_000))} h ago; the next one waits about 20 hours`;
@@ -140,10 +156,26 @@ export function repeatOf(c: Company, d: Decision, order?: { action: string; inpu
     if (!p || p.status !== "live") return "that product is not on sale";
     if (d.kind === "reprice") {
       if (p.priceByOwner) return `the owner set the price of "${p.name}"`;
+      if (seen && seen.visits7d < NO_TRAFFIC && Number(d.priceUsd) < fromUsdc(p.priceUsdc)) return `only ${seen.visits7d} visits in 7 days: a lower price reaches nobody new`;
       if (Math.abs(fromUsdc(p.priceUsdc) - Number(d.priceUsd)) < 0.005) return `"${p.name}" already costs $${fromUsdc(p.priceUsdc).toFixed(2)}`;
       const last = [...c.tasks].reverse().find((t) => t.kind === "reprice" && t.status === "done" && t.productId === p.id);
       if (last && now - last.updatedAt < 3 * DAY) return `"${p.name}" was repriced in shift ${last.cycle}; the new price needs a few days to show what it does`;
     }
+  }
+  if (d.kind === "improve_listing") {
+    const p = c.products.find((x) => x.id === d.productId);
+    if (!p || p.status !== "live") return "that product is not on sale";
+    if ((p.listing?.times ?? 0) >= 3) return `the listing of "${p.name}" was rewritten ${p.listing!.times} times already`;
+    if (p.listing && now - p.listing.at < 5 * DAY) return `the listing of "${p.name}" was rewritten ${Math.max(1, Math.round((now - p.listing.at) / DAY))} days ago; it needs time to show what it does`;
+    if (d.listing?.pitch === p.pitch && (!d.listing.name || d.listing.name === p.name)) return "the listing already says that";
+  }
+  if (d.kind === "ask_owner") {
+    const asks = c.asks ?? [];
+    const open = asks.find((a) => a.status === "open");
+    if (open) return "a question to the owner is still open; one at a time";
+    const last = asks.at(-1);
+    if (last && now - last.at < 2 * DAY) return "the owner was asked something less than two days ago";
+    if (d.ask && d.ask.topic !== "other" && asks.some((a) => a.topic === d.ask!.topic && now - a.at < 21 * DAY)) return "the owner was already asked that this month";
   }
   return null;
 }
@@ -169,7 +201,11 @@ export function memoryLines(c: Company): string[] {
     if (g) { g.n += 1; g.t = t; } else failed.push({ t, n: 1 });
   }
   if (failed.length) out.push(`- Failed: ${failed.slice(-5).map(({ t, n }) => `${t.kind} "${t.title.slice(0, 60)}" ${n > 1 ? `${n} times` : "once"} (${(t.error ?? "no reason").slice(0, 80)})${n >= MAX_FAILS ? ", do not try it again that way" : ""}`).join("; ")}`);
-  if (c.marketing.length) out.push(`- Posts drafted: ${c.marketing.length}, the last: "${c.marketing.at(-1)!.text.slice(0, 90)}"`);
+  if (c.marketing.length) out.push(`- Posts drafted: ${c.marketing.length} (${c.marketing.filter((m) => m.status === "drafted").length} still waiting for the owner, ${c.marketing.filter((m) => m.status === "posted").length} posted), the last: "${c.marketing.at(-1)!.text.slice(0, 90)}"`);
+  const asks = c.asks ?? [];
+  if (asks.length) out.push(`- Asked the owner: ${asks.slice(-3).map((a) => `${a.topic.replace(/_/g, " ")} (${a.status})`).join("; ")}`);
+  const relisted = c.products.filter((p) => p.listing);
+  if (relisted.length) out.push(`- Listings rewritten: ${relisted.map((p) => `"${p.name.slice(0, 50)}" ${p.listing!.times}x`).join("; ")}`);
   const sold = c.products.reduce((a, p) => a + p.sales + (p.b2bSales ?? 0), 0);
   const best = [...c.products].sort((a, b) => b.sales - a.sales)[0];
   out.push(`- Sold so far: ${sold ? `${sold} (best: "${best!.name}", ${best!.sales})` : "nothing yet"}`);

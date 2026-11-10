@@ -183,6 +183,25 @@ export const config = {
   /** Companies one wallet may run at once. */
   maxCompaniesPerOwner: num(env.MAX_COMPANIES_PER_OWNER, 5),
   /**
+   * Free shifts (v2): a new company works at once, with no funding, on free resources only (free models,
+   * in-house production). FREE_SHIFTS of them run FREE_SHIFT_MINUTES apart; after that an unfunded
+   * company keeps going every FREE_SLOW_HOURS. FREE_SHIFTS_DAILY_CAP is for the whole engine: past it,
+   * free shifts queue for the next UTC day (0 turns free shifts off: companies then wait for funds).
+   */
+  freeShifts: Math.max(0, Math.floor(num(env.FREE_SHIFTS, 3))),
+  freeShiftMinutes: Math.max(1, num(env.FREE_SHIFT_MINUTES, 10)),
+  freeSlowHours: Math.max(1, num(env.FREE_SLOW_HOURS, 72)),
+  freeShiftsDailyCap: Math.max(0, Math.floor(num(env.FREE_SHIFTS_DAILY_CAP, 200))),
+  /** Made-for-you files the whole engine writes in a UTC day (each is one or two free-model calls); past it, buyers are asked to come back tomorrow and nothing is charged. */
+  freeOrdersDailyCap: Math.max(0, Math.floor(num(env.FREE_ORDERS_DAILY_CAP, 300))),
+  /** Moves a CEO may make in one shift, and in 24 hours (the owner's own orders are not counted). */
+  movesPerShift: Math.min(10, Math.max(1, Math.floor(num(env.CEO_MOVES_PER_SHIFT, 3)))),
+  movesPerDay: Math.min(50, Math.max(1, Math.floor(num(env.CEO_MOVES_PER_DAY, 6)))),
+  /** Seconds a founding waits for the free model to name the company before the plain founding does (the model is asked again later). */
+  foundingWaitSeconds: Math.min(60, Math.max(1, num(env.FOUNDING_WAIT_SECONDS, 12))),
+  /** Sim mode only: simulated IMD a new demo company starts with. 0 (the default): it starts on free shifts, like a live one. */
+  simStartImd: Math.max(0, num(env.SIM_START_IMD, 0)),
+  /**
    * NIGHTSHIFT's Gumroad OAuth app (gumroad.com → Settings → Advanced → Applications), so owners can
    * connect their own Gumroad accounts. Its redirect URI is PUBLIC_URL/api/connect/gumroad/callback.
    * Off while either is empty.

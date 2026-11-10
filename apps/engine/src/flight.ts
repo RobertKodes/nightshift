@@ -196,7 +196,9 @@ export type Flight = ReturnType<typeof flight>;
 
 /** One shift's flight record from the engine's books, for its owner (everything) or the public. */
 export async function flightFor(engine: Engine, c: Company, taskId: string, owner: boolean): Promise<Flight | null> {
-  const t = c.tasks.find((x) => x.id === taskId || String(x.cycle) === taskId);
+  // what the CEO asked its owner, and a draft nobody approved, are the owner's alone: no public record of them
+  const shown = (x: Company["tasks"][number]) => owner || (x.kind !== "ask_owner" && x.kind !== "marketing");
+  const t = c.tasks.find((x) => x.id === taskId && shown(x)) ?? c.tasks.find((x) => String(x.cycle) === taskId && shown(x));
   if (!t) return null;
   await engine.resolveSites(c);
   const m = engine.store.metricsOf(c.id);

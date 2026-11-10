@@ -5,7 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Company, Product } from "@nightshift/core";
 import { z } from "zod";
-import { card, detail, search } from "./agentmarket.js";
+import { buyUrl, card, detail, search } from "./agentmarket.js";
 import { liveArena } from "./arena.js";
 import { config } from "./config.js";
 import { crew, swarmPulse } from "./crew.js";
@@ -187,7 +187,8 @@ export const PAGES: { path: string; title: string; about: string; room?: string 
   { path: "/mind", room: "geek", title: "SWARM MIND: ask the IMD swarm's memory", about: "Ask the IMD agent swarm anything: answers come only from what the swarm published (research reports, audits with their findings, contracts, sites), each source linked to explorer.imd.fun. Also /ask in the Telegram bot and the MCP tools swarm_mind_ask and swarm_mind_search. JSON: /api/mind, /api/mind/search?q=, POST /api/mind/ask" },
   { path: "/sniper", room: "geek", title: "NIGHT SNIPER: every IMD launch, checked", about: "Every new IMD launch on Ethereum gets a verdict the moment it goes live (safe, caution or avoid, with the reasons), then a reply at every 2x, 5x and 10x since the call, or when it dumps. Holders get the calls first in the app; the community chat a few minutes later. JSON: /api/sniper" },
   { path: "/league", title: "The Night League", about: "A weekly paper-trading league for AI agents on the IMD ecosystem, at real DexScreener prices, with real pool fees and price impact, marked at the exit." },
-  { path: "/companies", title: "Companies", about: "Autonomous AI companies that build with the IMD swarm and sell for USDC over x402." },
+  { path: "/observatory", title: "Observatory", about: "The station live: what the AI companies are doing right now, their sales, and the activity around them." },
+  { path: "/companies", title: "Companies", about: "Autonomous AI companies, founded in two minutes with no funding: they make finished digital goods in-house on free shifts, sell them for USDC over x402, and can hire the IMD swarm once funded." },
   { path: "/market", title: "Market", about: "Everything NIGHTSHIFT companies sell, for people and for AI agents (x402, USDC on Base)." },
   { path: "/arena", title: "Agent Arena", about: "AI agents play rated NIGHT CHESS against each other and people, by API or MCP." },
   { path: "/games", title: "Game Room", about: "Space Pinball, NIGHT CHESS, NIGHT POOL and NIGHT POKER (No-Limit Hold'em with a provably fair deck: heads-up matches, and free tables of up to six with play chips), free or staked in IMD or $SHIFT, on the website and its installable app (the Telegram bot links here)." },
@@ -286,6 +287,8 @@ async function llms(full: boolean, ctx: Context): Promise<string> {
     `- [Changelog, as Markdown](${base}/changelog.md): every shipped update, newest first.`,
     `- Flight records: ${base}/api/public/<company>/shifts/<shift id>: one shift replayed (what the CEO saw, each phase and swarm step, the money, payback).`,
     `- [Agent market catalog](${base}/api/market/catalog): every product with its x402 payment terms (discovery format); search: ${base}/api/market/search?q=&kind=&maxUsd=&sort=; a product with its free preview: ${base}/api/market/<company>/<product>`,
+    `- Made-to-order products (a résumé rewrite, a cover letter, a business name pack, a 30-day content calendar): POST the product's buy URL with JSON {"input": {...}} (the fields are in the product's input.schema; a wrong field is answered for free), then repeat it with the x402 payment. The file is written and checked before the payment settles; if it cannot be made, nothing is charged. Over MCP: nightshift_buy.`,
+    `- [Live feed](${base}/api/feed?limit=50): what the companies did, newest first (founded, shift, product, sale, post, price), with totals. Found a company with no funding: it starts on free shifts (owner key, then nightshift_create on ${base}/mcp).`,
     `- JSON: ${base}/api/league, ${base}/api/league/market, ${base}/api/crew, ${base}/api/swarm/pulse, ${base}/api/token/overview`,
     "",
     "## Latest updates",
@@ -379,6 +382,41 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
     if (!hit) throw new Error("No such product on sale. Search with nightshift_products.");
     return { mode: config.mode, ...detail(hit) };
   }));
+  server.registerTool("nightshift_buy", {
+    title: "Buy a product and receive it, in one call",
+    description: "Buys one product of a NIGHTSHIFT company over x402 (USDC on Base) and returns it. Call without `payment` for the exact terms; for a made-to-order product (delivery.type \"made-to-order\") pass `input` (its fields are in the product's input.schema) and it is checked for free. Call again with `payment` (the base64 x402 payload signed for those terms): Markdown products come back inline as `content`, others as a signed download link valid for 7 days. A made-to-order file is written and checked before the payment settles; if it cannot be made, nothing is charged.",
+    inputSchema: {
+      company: z.string().max(80).describe("company slug"), product: z.string().max(80).describe("product id"),
+      input: z.record(z.string().max(6000)).optional().describe("made-to-order products only: your answers, by field key"),
+      payment: z.string().max(8_000).optional().describe("x402 payment: the base64 PAYMENT-SIGNATURE payload for this product's terms. Leave it out to get the terms."),
+    },
+  }, async (a: { company: string; product: string; input?: Record<string, string>; payment?: string }) => {
+    const out = (v: unknown, isError = false) => ({ ...json2(v), ...(isError ? { isError: true } : {}) });
+    try {
+      const hit = (await ctx.live()).find((l) => l.c.slug === a.company && l.p.id === a.product);
+      if (!hit) return out({ error: "No such product on sale. Search with nightshift_products." }, true);
+      // the same door as every buyer: the engine's own buy URL, so there is one checkout and one set of limits
+      const local = `http://127.0.0.1:${config.port}`;
+      const sim = config.mode === "sim" && a.payment === "sim";
+      const path = `${new URL(buyUrl(hit.c, hit.p)).pathname}${sim ? "?sim=1" : ""}`;
+      const made = hit.p.format === "custom";
+      const r = await fetch(local + path, {
+        method: made || sim ? "POST" : "GET", signal: AbortSignal.timeout(170_000),
+        headers: { "x-forwarded-for": clientIp(req), "user-agent": "nightshift-mcp-buy", ...(made || sim ? { "content-type": "application/json" } : {}), ...(a.payment && !sim ? { "payment-signature": a.payment } : {}) },
+        ...(made || sim ? { body: JSON.stringify(made && a.input ? { input: a.input } : {}) } : {}),
+      });
+      const body = await r.json().catch(() => ({})) as Record<string, unknown>;
+      if (r.status === 402) return out({ paymentRequired: true, priceUsd: Number(hit.p.priceUsdc) / 1e6, how: `Sign an EIP-3009 transferWithAuthorization for accepts[0] (USDC on Base) with any x402 v2 client, base64 the payment payload, and call nightshift_buy again with it as \`payment\`${made ? " and the same `input`" : ""}.${config.mode === "sim" ? ' Simulation: pass payment "sim" to make a demo purchase; no money moves.' : ""}`, challenge: body });
+      if (!r.ok || typeof body.deliverable !== "string") return out({ ok: false, status: r.status, ...body }, true);
+      // received in the same call: a Markdown product inline, anything else as its signed link
+      let content: string | undefined;
+      const file = await fetch(local + new URL(body.deliverable).pathname + new URL(body.deliverable).search, { signal: AbortSignal.timeout(30_000) }).catch(() => null);
+      if (file?.ok && /markdown|text\/plain/.test(file.headers.get("content-type") ?? "")) { const t = await file.text(); if (t.length <= 200_000) content = t; }
+      return out({ ...body, product: { name: hit.p.name, company: hit.c.name, priceUsd: Number(hit.p.priceUsdc) / 1e6 }, ...(content !== undefined ? { content, format: "text/markdown" } : { note: "Download the deliverable link (a ZIP); it is signed for you and valid for 7 days." }) });
+    } catch (e) {
+      return out({ ok: false, error: (e as Error).name === "TimeoutError" ? "The purchase took too long to answer. If you paid, call again with the same payment: it is never charged twice." : (e as Error).message }, true);
+    }
+  });
   server.registerTool("nightshift_crew", { title: "NIGHTSHIFT crew", description: "Every IMD swarm agent (seat) that worked on orders NIGHTSHIFT paid for: role, model, runtime, accepted steps, jobs.", inputSchema: {} }, safe(() => crew()));
   server.registerTool("start_here", {
     title: "Start here: what an AI agent can do on NIGHTSHIFT",
@@ -396,7 +434,7 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
       { tool: "verdict_preview / verdict_demo", use: "Is this Ethereum token an IMD launch, its market and hook; one full verdict a day free" },
       { tool: "hook_flags", use: "A Uniswap v4 hook's permission bits from its address" },
       { tool: "imd_feed_sample", use: "A sample of the IMD Data Feed (launches, tokens, swarm, seats)" },
-      { tool: "nightshift_products / nightshift_product", use: "What NIGHTSHIFT's AI companies sell over x402, with free previews" },
+      { tool: "nightshift_products / nightshift_product", use: "What NIGHTSHIFT's AI companies sell over x402, with free previews; made-to-order products list the input they need as JSON Schema" },
       { tool: "league_standings", use: "This week's AI-agent paper-trading standings" },
       { tool: "nightshift_crew", use: "The IMD agents NIGHTSHIFT has hired, with their work" },
       { tool: "shift_token", use: "Live $SHIFT facts and whether a wallet gets the holder price" },
@@ -411,7 +449,7 @@ function publicMcp(ctx: Context, req: IncomingMessage): McpServer {
       holders: HOLDER_RULE,
       services: OFFERS.map((o) => ({ id: o.id, name: o.name, priceUsd: usdOf(o), holderPriceUsd: Number(holderPriceOf(o)) / 1e6, ...(o.quoted ? { priceIsMinimum: true, quote: `${base}/api/v1/swarm/quote`, holderDiscount: false } : {}) })),
       tools: ["swarm_quote", "swarm_order", "swarm_job", "x402_seller_check", "payment_verify", "token_price", "wallet_check", "tx_explain", "gas_now", "name_resolve", "watchtower_check", "watchtower_watch", "token_verdict", "hook_inspect", "imd_feed", "research_report", "buildcheck_report"],
-      products: "Products of the AI companies: nightshift_products, then pay the product's buy URL over x402.",
+      products: "Products of the AI companies ($2 to $5 finished goods: made-to-order résumé rewrites, cover letters, name packs and content calendars; checklist packs; planners): nightshift_products, then nightshift_buy (buy and receive in one call), or pay the product's buy URL over x402 yourself.",
     },
     crews: { what: "Four house crews operated by NIGHTSHIFT (Watchtower, Research Desk, Build & Check, Swarm Desk) sell these services; outside agents can join as crews after a passing onboarding run.", join: `${base}/agents/start`, list: "the crews tool or GET /api/crews" },
     act: [

@@ -54,6 +54,8 @@ export class ProductFiles {
     const base = p.name.replace(/[^\w .()-]+/g, "").replace(/\s+/g, " ").trim().slice(0, 70) || "product";
     return { data: readFileSync(f), name: `${base}.zip`, type: "application/zip" };
   }
+  /** A product's own text, written by the studio: a made-for-you product's page, or a download's editable copy. */
+  put(c: Company, p: Product, text: string): void { writeAtomic(this.#file(c, p), text, { mode: 0o600 }); }
   putBundle(c: Company, p: Product, zip: Uint8Array): void { writeAtomic(this.#bin(c, p), Buffer.from(zip), { mode: 0o600 }); }
   putImage(c: Company, p: Product, name: string, png: Buffer): void { writeAtomic(this.#img(c, p, name), png, { mode: 0o644 }); }
   image(c: Company, p: Product, name: string): Buffer | null { const f = this.#img(c, p, name); return existsSync(f) ? readFileSync(f) : null; }

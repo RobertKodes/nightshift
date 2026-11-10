@@ -10,7 +10,10 @@ import {
   type Decision,
   type JournalEntry,
   DEFAULT_POLICY,
+  FOUNDING_POLICY,
+  type OwnerAsk,
   type Policy,
+  type Product,
   type ShiftDeps,
   type Task,
   CHANNELS,
@@ -23,26 +26,35 @@ import {
   finishMarketBuy,
   finishStudio,
   found,
+  foundPlain,
   fromImd,
   fromUsdc,
   keywordScore,
   mark,
   marketReserved,
   missingAddress,
+  movesToday,
   note,
   ownerBuy,
   recoverAddresses,
   reject,
   runShift,
+  RECIPE_IDS,
+  recipeOf,
+  screenCompany,
+  screenText,
+  surpriseIdea,
   validatePolicy,
 } from "@nightshift/core";
+import { DailyCap, nextFreeAt, ownerMayRunFree, paceOf, planView } from "./freeshift.js";
+import { type MadeOrder, MadeOrders } from "./made-orders.js";
 import { HttpImdPlane, type ImdAction, type ImdPlane, SimImdPlane } from "@nightshift/imd";
 import { Ledger } from "@nightshift/ledger";
 import { ImdReads } from "imd-mcp/lib";
 import { encodeFunctionData, erc20Abi, parseAbiItem } from "viem";
 import { CdpFacilitator, type PaymentPayload, USDC, USDC_ABI, settlementData } from "@nightshift/x402";
 import { Auth } from "./auth.js";
-import { LlmClient } from "@nightshift/llm";
+import { LlmClient, isFree } from "@nightshift/llm";
 import { balances, broadcastSales, ensurePermit2, eth, ethWallet, refusedByNode, sales, salesTxState, salesWallet, signSales } from "./chain.js";
 import { FEE_PARTS, Payouts } from "./payout.js";
 import { Checkout, NoGasError, PendingError, type SettledBy, type Settlement, saleKey } from "./checkout.js";
@@ -127,10 +139,14 @@ async function frogPost(id: number, caption: string, buttons: Button[][], kind: 
   return sent.some(Boolean) || toCommunity(caption, buttons, kind);
 }
 
-export type EngineEvent = { type: "task" | "journal" | "company" | "sale" | "approval"; companyId: string; payload: unknown; at: number; id?: string };
+export type EngineEvent = { type: "task" | "journal" | "company" | "sale" | "approval" | "ask"; companyId: string; payload: unknown; at: number; id?: string };
+/** A founding or an edit refused by moderation: said to the person as it is, never retried. */
+export class ModerationError extends Error { readonly refused = true; }
 /** A spend held for the owner, as the shift reported it. */
 export type ApprovalEvent = { taskId: string; title: string; why: string; reason: string; costUsd: number; imd?: number; market?: { product: string; company: string; swarmUsd: number } };
 const DAY = 24 * 3600_000;
+/** Days a buyer's made-for-you file is kept after payment, for downloading it again. */
+export const MADE_KEEP_DAYS = 30;
 
 /** Owner text as plain words: no markup (it reaches the page head, the shop and Telegram), one line. */
 const plain = (v: unknown) => String(v).replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
@@ -140,6 +156,15 @@ export class Engine {
   readonly vault = new Vault(config.dataDir, config.secret);
   readonly ledger = new Ledger(this.store.ledgerStore);
   readonly llm = config.openrouterKey ? new LlmClient({ apiKey: config.openrouterKey, appName: "NIGHTSHIFT", fallbackModels: config.fallbackModels, freeOnly: !config.llmAllowPaid }) : null;
+  /**
+   * The model free work runs on: founding, free shifts, the studio of an unfunded company and every
+   * made-for-you file. Free models only, whatever the operator allows elsewhere (LLM_ALLOW_PAID): free
+   * shifts and free orders never cost anyone a paid call.
+   */
+  readonly free: { llm: LlmClient; model: string } | null = config.openrouterKey ? {
+    llm: this.llm && !config.llmAllowPaid ? this.llm : new LlmClient({ apiKey: config.openrouterKey, appName: "NIGHTSHIFT", fallbackModels: config.fallbackModels.filter(isFree), freeOnly: true }),
+    model: isFree(config.model) ? config.model : config.fallbackModels.find(isFree) ?? "openrouter/free",
+  } : null;
   readonly sim: SimDeliveries;
   /** Private, packaged copies of what each company sells. */
   readonly files: ProductFiles;
@@ -160,6 +185,16 @@ export class Engine {
   /** Notes to those phones over Firebase, once its service account is set in /setup. */
   readonly fcm = new Fcm();
   readonly #busy = new Set<string>();
+  /** Free shifts and made-for-you files the whole engine gives away in a UTC day. */
+  readonly freeCap = new DailyCap(join(config.dataDir, "free-shifts.json"), () => config.freeShiftsDailyCap);
+  readonly orderCap = new DailyCap(join(config.dataDir, "free-orders.json"), () => config.freeOrdersDailyCap);
+  /** Made-for-you orders: written by the free model from the buyer's answers, checked, and only then sold. */
+  readonly made = new MadeOrders({
+    dir: join(config.dataDir, "made-orders"), sim: config.mode === "sim", cap: this.orderCap, keepDays: MADE_KEEP_DAYS,
+    writer: () => this.free,
+  });
+  /** Whether each company can pay the swarm, as last read (a minute old at most when asked again). */
+  readonly #funded = new Map<string, { at: number; funded: boolean }>();
   /** The strong model each company pays for itself, over x402 from its own USDC (live on Base, with a CEO model set). */
   #brain: ((c: Company) => Promise<Brain | null>) | null = null;
   readonly auth: Auth;
@@ -219,8 +254,10 @@ export class Engine {
     this.studio = new Studio({
       files: this.files,
       // the company's own paid brain designs it when it has one; the free model otherwise
-      mind: async (c) => (this.#brain ? await this.#brain(c).catch(() => null) : null) ?? (this.llm ? { llm: this.llm, model: config.model } : null),
+      // a company on free shifts designs with the free model only
+      mind: async (c) => (this.#funded.get(c.id)?.funded === false ? this.free : (this.#brain ? await this.#brain(c).catch(() => null) : null) ?? (this.llm ? { llm: this.llm, model: config.model } : null)),
       finish: (c, t, r) => { finishStudio(c, t, this.#deps(c), r); this.store.markDirty(); },
+      sim: config.mode === "sim", keepDays: MADE_KEEP_DAYS,
     });
     if (config.mode === "live" && config.ceoModel && config.salesChainId === 8453) {
       this.#brain = companyBrain({
@@ -233,7 +270,7 @@ export class Engine {
       mode: config.mode,
       chainId: config.salesChainId,
       ledger: this.ledger,
-      companies: () => this.store.companies.values(),
+      companies: () => [...this.store.companies.values()].filter((c) => !c.hidden),
       files: this.files,
       account: (id) => this.vault.account(id),
       chainUsdc: (c) => sales.readContract({ address: usdcAddr(), abi: erc20Abi, functionName: "balanceOf", args: [c.wallet] }),
@@ -288,6 +325,8 @@ export class Engine {
     if (config.mode === "live") await this.#retireSim();
     setInterval(() => void this.#tick().catch((e) => console.error("tick", e)), 4000);
     setInterval(() => void this.store.flush().catch(() => {}), 3000);
+    // made-for-you files past their keep time (unpaid: a day; paid: MADE_KEEP_DAYS) are deleted every hour
+    setInterval(() => { try { this.made.sweep(); } catch (e) { console.error("made orders", (e as Error).message); } }, 3_600_000).unref();
     // Transfers and settlements whose answer never came: booked when they land, after a restart too.
     if (config.mode === "live") {
       const follow = async () => {
@@ -361,7 +400,7 @@ export class Engine {
       setInterval(() => void dex.tick().catch((e) => console.error("dex", e)), 60_000);
     }
     // The daily digest of what the live companies did, from their records and the ledger (sim mode: a dry-run log only).
-    startDigest(() => this.store.companies.values(), () => this.ledger.store.list(""), (c) => this.resolveSites(c));
+    startDigest(() => [...this.store.companies.values()].filter((c) => !c.hidden), () => this.ledger.store.list(""), (c) => this.resolveSites(c));
     // Mondays 09:00 UTC: last week's changelog entries to the community chat, pinned (sim mode: a dry-run log only).
     startChangelog();
     setInterval(() => void this.#followTokenLaunch(), 60_000);
@@ -1094,6 +1133,7 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
     this.store.markDirty();
     if (type === "journal") this.#ownerAlert(companyId, payload as JournalEntry);
     if (type === "approval") this.#approvalAlert(companyId, payload as ApprovalEvent);
+    if (type === "ask") this.#askAlert(companyId, payload as OwnerAsk);
     if (type === "journal" && config.mode === "live" && (payload as { kind?: string }).kind === "warning") {
       const c = this.store.companies.get(companyId);
       void this.alert(`${c?.name ?? companyId}: ${(payload as { text: string }).text}`, companyId);
@@ -1151,7 +1191,62 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
       sales7d: sales.length,
       revenue7dUsd: sales.reduce((a, s) => a + Number(s.usdc) / 1e6, 0),
       imdUsd: config.imdUsd,
+      shopUrl: `${config.publicUrl}/c/${c.slug}`,
+      gumroad: Boolean(c.connections?.gumroad),
+      ...(this.#funded.has(c.id) ? { funded: this.#funded.get(c.id)!.funded } : {}),
     };
+  }
+
+  /** A shift is running right now: the CEO is deciding or starting a move. */
+  working(c: Company): boolean { return this.#busy.has(c.id); }
+
+  /** Shown to visitors, buyers and agents: not hidden by moderation, and not a retired demo on a live engine. */
+  listed(c: Company): boolean { return !c.hidden && !(config.mode === "live" && c.sim); }
+
+  /**
+   * Can the company pay the swarm? Live: half an IMD and gas in its wallet. Simulation: half a simulated
+   * IMD in its books. Otherwise it runs on free shifts. Read at most once a minute per company.
+   */
+  async funded(c: Company, fresh = false): Promise<boolean> {
+    const hit = this.#funded.get(c.id);
+    if (hit && !fresh && Date.now() - hit.at < 60_000) return hit.funded;
+    let funded: boolean;
+    if (config.mode === "live") {
+      const b = c.sim ? null : await balances(c.wallet).catch(() => null);
+      // a read that failed keeps the last answer: a funded company is never sent back to free shifts by a slow node
+      if (!b && hit) return hit.funded;
+      funded = Boolean(b && b.imd >= 5n * 10n ** 17n && b.eth >= 3n * 10n ** 14n);
+    } else funded = (await this.ledger.balance(`co:${c.id}:imd`, "IMD")) >= 5n * 10n ** 17n;
+    this.#funded.set(c.id, { at: Date.now(), funded });
+    return funded;
+  }
+
+  /** Where the company stands for its owner: free or funded, free shifts used, when it works next. */
+  async plan(c: Company) {
+    return planView(c, paceOf(config), await this.funded(c).catch(() => false), { left: this.freeCap.left(), resetsAt: this.freeCap.resetsAt() });
+  }
+
+  /** "Surprise me": an idea a company can start on with free shifts, never one already running here. */
+  async surprise(): Promise<{ idea: string; by: "model" | "pool" }> {
+    const taken = [...this.store.companies.values()].map((c) => c.idea);
+    const wait = new Promise<null>((r) => setTimeout(() => r(null), config.foundingWaitSeconds * 1000));
+    return (await Promise.race([surpriseIdea(this.free?.llm ?? null, this.free?.model ?? config.model, taken), wait])) ?? surpriseIdea(null, config.model, taken);
+  }
+
+  /** Simulation only: the "fund it" upgrade, as 20 simulated IMD in the company's books. */
+  async simFund(c: Company): Promise<void> {
+    if (config.mode !== "sim") throw new Error("Only in simulation: a live company is funded from its owner's wallet.");
+    const n = (await this.ledger.store.list(`co:${c.id}:imd`)).filter((x) => x.kind === "funding").length;
+    if (n >= 5) throw new Error("This demo company was funded five times already.");
+    await this.ledger.post({ id: `fund:${c.id}${n ? `:${n}` : ""}`, at: new Date(), kind: "funding", memo: "Simulated funding", postings: [
+      { account: `co:${c.id}:imd`, asset: "IMD", amount: 20n * 10n ** 18n },
+      { account: "ext:owner-sim", asset: "IMD", amount: -(20n * 10n ** 18n) },
+    ] });
+    this.#funded.delete(c.id);
+    delete c.restUntil;
+    c.nextShiftAt = c.policy.autopilot ? Date.now() + 3000 : c.nextShiftAt;
+    note(c, this.#deps(c), "note", "[sim] Funded with 20 simulated IMD: the CEO can now hire the IMD swarm (a web tool, a site, research), within your limits.");
+    this.#emit(c.id, "company", null);
   }
 
   #deps(c: Company): ShiftDeps {
@@ -1180,6 +1275,11 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
     };
   }
 
+  /**
+   * Founds a company in one step: no funding, no waiting. The idea is screened (and refused with the
+   * reason when it may not be a company here), named by the free model, or by the plain founding when
+   * the model is busy (it is asked again later), and its first free shift starts at once.
+   */
   async create(idea: string, policy: Partial<Policy> = {}, owner: string | null = null, origin?: Company["origin"]): Promise<Company> {
     if (owner) {
       const mine = [...this.store.companies.values()].filter((x) => x.owner === owner.toLowerCase()).length;
@@ -1187,68 +1287,198 @@ ${esc(note)}`, [[{ text: "📊 Etherscan", url: `https://etherscan.io/address/${
       const cap = config.maxCompaniesPerOwner + (await frogSlots(owner));
       if (mine >= cap) throw new Error(`One wallet can run ${cap} companies at once.${frogsOn() && cap === config.maxCompaniesPerOwner ? ` Holding a NIGHT FROG adds ${config.nft.extraSlots}.` : ""}`);
     }
-    const clean = idea.trim();
+    const clean = plain(idea);
     if (clean.length < 12) throw new Error("Describe the idea in a sentence: what it sells and to whom.");
     if (clean.length > 1000) throw new Error("Keep the idea under 1000 characters.");
-    const f = await found(clean, this.llm, config.model);
+    // the free model has a few seconds to name it; busy or slow, the plain founding does, and the model is asked again later
+    let slow = false;
+    const wait = new Promise<null>((r) => setTimeout(() => { slow = true; r(null); }, config.foundingWaitSeconds * 1000));
+    const named = await Promise.race([found(clean, this.free?.llm ?? null, this.free?.model ?? config.model), wait]);
+    const f = named ?? foundPlain(clean);
+    if (f.refused) throw new ModerationError(f.refused);
     const id = randomUUID();
     let slug = f.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "co";
     // deleted companies keep their slug: their buyers' download links still use it
     while ([...this.store.companies.values(), ...this.store.archived.values()].some((x) => x.slug === slug)) slug = `${slug}-${Math.floor(Math.random() * 900 + 100)}`;
-    const p = validatePolicy({ ...DEFAULT_POLICY, ...(config.mode === "sim" ? { shiftMinutes: config.simShiftMinutes } : {}), ...policy });
+    // nothing public and nothing paid without the owner (FOUNDING_POLICY), unless the founder set limits
+    const p = validatePolicy({ ...DEFAULT_POLICY, ...FOUNDING_POLICY, ...(config.mode === "sim" ? { shiftMinutes: config.simShiftMinutes } : {}), ...policy });
     const c: Company = {
       id, slug, name: f.name, idea: clean, mission: f.mission, audience: f.audience,
       createdAt: Date.now(), owner: owner?.toLowerCase() ?? null, wallet: this.vault.create(id), policy: p, status: "active",
-      cycle: 0, nextShiftAt: p.autopilot ? Date.now() + 3000 : null,
+      cycle: 0, nextShiftAt: p.autopilot ? Date.now() : null,
       site: null, products: [], tasks: [], journal: [], marketing: [],
+      free: { used: 0 },
       ...(config.mode === "sim" ? { sim: true } : {}),
       ...(origin ? { origin } : {}),
     };
     this.store.companies.set(id, c);
-    if (config.mode === "sim") {
-      // A demo company starts with 20 simulated IMD so it can buy work.
+    if (slow && this.free) this.#rename.set(id, { tries: 0, next: Date.now() + 60_000 });
+    if (config.mode === "sim" && config.simStartImd > 0) {
+      // SIM_START_IMD: a demo company that starts funded, as before free shifts
+      const units = BigInt(Math.round(config.simStartImd * 1000)) * 10n ** 15n;
       await this.ledger.post({ id: `fund:${id}`, at: new Date(), kind: "funding", memo: "Simulated starting balance", postings: [
-        { account: `co:${id}:imd`, asset: "IMD", amount: 20n * 10n ** 18n },
-        { account: "ext:owner-sim", asset: "IMD", amount: -(20n * 10n ** 18n) },
+        { account: `co:${id}:imd`, asset: "IMD", amount: units },
+        { account: "ext:owner-sim", asset: "IMD", amount: -units },
       ] });
     }
     note(c, this.#deps(c), "plan", `Founded ${c.name}. Mission: ${c.mission} Audience: ${c.audience}.`);
     this.#emit(id, "company", null);
+    // the first shift starts now, not at the next tick: the founder lands on a company already at work
+    if (p.autopilot) void this.shiftNow(c).catch((e) => console.error("first shift", c.slug, (e as Error).message));
     return c;
+  }
+
+  /** Companies founded while the free model was busy: it is asked again for a proper name, a few times, minutes apart. */
+  readonly #rename = new Map<string, { tries: number; next: number }>();
+  async #renameDue(): Promise<void> {
+    for (const [id, r] of this.#rename) {
+      if (Date.now() < r.next) continue;
+      const c = this.store.companies.get(id);
+      // the owner renamed it, or it moved on: leave it
+      if (!c || !this.free || r.tries >= 5 || c.journal.some((j) => j.text.startsWith("The owner updated"))) { this.#rename.delete(id); continue; }
+      r.tries += 1; r.next = Date.now() + r.tries * 5 * 60_000;
+      const plainName = foundPlain(c.idea);
+      if (c.name !== plainName.name) { this.#rename.delete(id); continue; }
+      const f = await found(c.idea, this.free.llm, this.free.model).catch(() => null);
+      if (!f || f.refused || f.name === plainName.name) continue;
+      this.#rename.delete(id);
+      Object.assign(c, { name: f.name, mission: f.mission, audience: f.audience });
+      note(c, this.#deps(c), "note", `The free model was busy at founding; it has now named the company ${c.name}. Mission: ${c.mission} The link stays the same.`);
+      this.#emit(c.id, "company", null);
+    }
   }
 
   get(idOrSlug: string): Company | undefined {
     return this.store.companies.get(idOrSlug) ?? [...this.store.companies.values()].find((c) => c.slug === idOrSlug);
   }
 
-  /** `byOwner`: the owner pressed "run a shift", which also ends a budget rest. */
+  /**
+   * One shift. A company that can pay the swarm runs a full shift within its owner's limits; one that
+   * cannot runs a free shift (free models and in-house production only), at the free pace and inside
+   * the engine's daily cap for free shifts. `byOwner`: the owner pressed "run a shift", which also ends a rest.
+   */
   async shiftNow(c: Company, byOwner = false): Promise<void> {
     if (this.#busy.has(c.id)) throw new Error("a shift is already running");
-    if (byOwner) delete c.restUntil;
+    if (c.hidden) throw new Error("This company is hidden by moderation and does not run. Edit what it is and sells, or ask the operator to review it.");
+    if (config.mode === "live" && c.sim) return;
     this.#busy.add(c.id);
     try {
-      if (config.mode === "live") {
-        const b = await balances(c.wallet).catch(() => null);
-        if (c.sim) return;
-        if (!b || b.imd < 5n * 10n ** 17n || b.eth < 3n * 10n ** 14n) {
+      const funded = await this.funded(c, true);
+      const pace = paceOf(config);
+      const now = Date.now();
+      if (!funded) {
+        if (config.freeShifts <= 0) {
+          // free shifts are turned off on this engine: as before, it waits for funds
           const msg = "Waiting for funds: send IMD and a little ETH to the company wallet (the Fund button on this page). The first shift starts as soon as they land.";
           if (c.journal[c.journal.length - 1]?.text !== msg) note(c, this.#deps(c), "note", msg);
-          if (c.policy.autopilot) c.nextShiftAt = Date.now() + 5 * 60_000;
+          if (c.policy.autopilot) c.nextShiftAt = now + 5 * 60_000;
+          return;
+        }
+        const f = (c.free ??= { used: 0 });
+        if (byOwner) { const may = ownerMayRunFree(c, pace, now); if (!may.ok) throw new Error(may.why); }
+        if (!this.freeCap.room()) {
+          // never an error: the shift waits for tomorrow's free shifts, and the log says so once
+          if (!f.queuedAt) note(c, this.#deps(c), "note", "Today's free shifts for all companies are used. This one is queued and runs after 00:00 UTC. Funding the company (to hire the IMD swarm) removes the wait.");
+          f.queuedAt = now;
+          if (c.policy.autopilot) c.nextShiftAt = this.freeCap.resetsAt() + Math.floor(Math.random() * 20 * 60_000);
           return;
         }
       }
+      if (byOwner) delete c.restUntil;
       // Announced once it is funded, so an unfunded or spam company never reaches the project's account.
-      if (config.mode === "live" && c.cycle === 0) housePost(`🌙 A new company just started on NIGHTSHIFT: ${c.name}.
+      if (funded && config.mode === "live" && !c.announced && (c.cycle === 0 || c.free)) {
+        c.announced = Date.now();
+        housePost(`🌙 A new company just started on NIGHTSHIFT: ${c.name}.
 
 ${c.mission}
 
 The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `company-${c.id}`);
-      await runShift(c, this.#deps(c));
-      if (c.policy.autopilot) c.nextShiftAt = Date.now() + c.policy.shiftMinutes * 60_000;
+      }
+      const before = c.cycle;
+      await runShift(c, { ...this.#deps(c), ...(funded ? {} : { free: true, llm: this.free?.llm ?? null, model: this.free?.model ?? config.model }), movesPerShift: config.movesPerShift, movesPerDay: config.movesPerDay });
+      const worked = c.cycle > before;
+      if (!funded && worked) {
+        // counted only when a shift really ran (not while work is in progress, or resting)
+        const f = c.free!;
+        this.freeCap.take();
+        f.used += 1; f.lastAt = now; delete f.queuedAt;
+        if (f.used === pace.shifts) note(c, this.#deps(c), "note", `That was the last of the ${pace.shifts} free shifts. The company keeps working on free resources, one shift about every ${config.mode === "sim" ? `${Math.round(pace.slowMs / 60_000)} minutes` : `${config.freeSlowHours} hours`}. Fund it to hire the IMD swarm (a web tool, a site, research) and work every day: an upgrade, not a requirement.`);
+      }
+      if (c.policy.autopilot) c.nextShiftAt = funded ? now + c.policy.shiftMinutes * 60_000 : worked ? nextFreeAt(c, pace, now) : Math.max(c.restUntil ?? 0, now + Math.min(pace.gapMs, 5 * 60_000));
     } finally {
       this.#busy.delete(c.id);
       this.#emit(c.id, "company", null);
     }
+  }
+
+  /**
+   * A made-for-you order was paid for (the settlement is booked by the checkout), or bought in the
+   * simulator (booked here): the order is closed and the buyer gets the link to their own file.
+   */
+  async deliverOrder(c: Company, p: Product, o: MadeOrder, paid: { payer: string; tx: string | null; sim: boolean }): Promise<string> {
+    if (paid.sim) await this.recordSale(c, p.id, p.priceUsdc, paid.payer, null, true);
+    this.made.markPaid(o, { at: Date.now(), ...paid });
+    if (p.custom) p.custom.delivered += 1;
+    this.store.markDirty();
+    return this.files.link(c, p, `o-${o.id}`);
+  }
+
+  /** The owner answers a question the CEO asked: done, or not now. */
+  answerAsk(c: Company, askId: string, status: "done" | "dismissed"): void {
+    const a = (c.asks ?? []).find((x) => x.id === askId);
+    if (!a) throw new Error("No such question from the CEO.");
+    if (a.status !== "open") return;
+    a.status = status;
+    a.doneAt = Date.now();
+    note(c, this.#deps(c), "note", status === "done" ? `The owner did what the CEO asked (${a.topic.replace(/_/g, " ")}).` : `The owner set the CEO's question aside (${a.topic.replace(/_/g, " ")}).`);
+    this.#emit(c.id, "company", null);
+  }
+
+  /**
+   * The approval gate for drafts: the owner says yes or no to one drafted post. A yes lets it go out on
+   * the NIGHTSHIFT project account (live), where it is paced with the rest; a no drops it.
+   */
+  decideDraft(c: Company, at: number, yes: boolean): void {
+    const m = c.marketing.find((x) => x.at === at && x.status === "drafted");
+    if (!m) throw new Error("No such draft is waiting.");
+    m.status = yes ? "approved" : "rejected";
+    note(c, this.#deps(c), "note", yes ? `You approved a post: "${m.text.slice(0, 120)}"${config.mode === "live" ? " It goes out on the NIGHTSHIFT project account." : " [sim: nothing is sent]"}` : `You turned down a drafted post. Nothing went out.`);
+    this.#emit(c.id, "company", null);
+  }
+
+  /** An operator hides a company from every public place, or clears it (the automatic screen then leaves it alone). Nothing is deleted. */
+  moderate(c: Company, hide: boolean, reason = ""): void {
+    if (hide) {
+      c.hidden = { at: Date.now(), reason: plain(reason).slice(0, 200) || "hidden by the operator", by: "admin" };
+      delete c.cleared;
+      c.nextShiftAt = null;
+      note(c, this.#deps(c), "note", `Hidden by the operator: ${c.hidden.reason}. It is off every public list and shop and does not run; nothing was deleted.`);
+    } else {
+      delete c.hidden;
+      c.cleared = { at: Date.now() };
+      if (c.status === "active" && c.policy.autopilot) c.nextShiftAt = Date.now() + 60_000;
+      note(c, this.#deps(c), "note", "Reviewed by the operator and shown again.");
+    }
+    this.#emit(c.id, "company", null);
+  }
+
+  /** Every company on the engine is screened again (at start, and when the operator asks): returns how many it hid. */
+  screenExisting(): number {
+    let hid = 0;
+    for (const c of this.store.companies.values()) if (!c.hidden && !this.#screen(c)) hid += 1;
+    return hid;
+  }
+
+  /** The screen, run over what a company says and sells: hides it (never deletes) and tells its owner why. */
+  #screen(c: Company): boolean {
+    if (c.hidden || c.cleared || c.house) return !c.hidden;
+    const s = screenCompany(c);
+    if (s.ok) return true;
+    c.hidden = { at: Date.now(), reason: s.reason, by: "auto" };
+    c.nextShiftAt = null;
+    note(c, this.#deps(c), "note", `Hidden by moderation: ${s.reason} It is off every public list and shop and does not run. Nothing was deleted: change what the company is and sells, and it is looked at again.`);
+    void this.alert(`🚫 ${c.name} (${c.slug}) was hidden by moderation: ${s.category}.`, `hidden-${c.id}`);
+    return false;
   }
 
   async approve(c: Company, taskId: string): Promise<void> { await approve(c, taskId, this.#deps(c)); }
@@ -1282,6 +1512,7 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
   /** The owner edits who the company is and gives the CEO a standing direction. The slug stays, so links keep working. */
   updateProfile(c: Company, p: Record<string, unknown>): void {
     const changed: string[] = [];
+    const before = { name: c.name, mission: c.mission, audience: c.audience, idea: c.idea, direction: c.direction };
     const field = (k: "name" | "mission" | "audience" | "idea", label: string, min: number, max: number): void => {
       if (p[k] === undefined) return;
       const v = plain(p[k]);
@@ -1303,6 +1534,14 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
       }
     }
     if (!changed.length) return;
+    // what it says about itself is screened like a founding; an edit that fixes a hidden company shows it again
+    const s = screenCompany(c);
+    if (!s.ok) { Object.assign(c, before); throw new ModerationError(s.reason); }
+    if (c.hidden?.by === "auto") {
+      delete c.hidden;
+      if (c.status === "active" && c.policy.autopilot) c.nextShiftAt = Date.now() + 60_000;
+      note(c, this.#deps(c), "note", "The company fits the rules again: it is shown and runs again.");
+    }
     const list = changed.length === 1 ? changed[0] : `${changed.slice(0, -1).join(", ")} and ${changed.at(-1)}`;
     note(c, this.#deps(c), "note", `The owner updated the ${list}.${changed.includes("direction") ? (c.direction ? ` The CEO now follows: "${c.direction}"` : " The CEO decides on its own again.") : ""}`);
     this.store.markDirty();
@@ -1314,6 +1553,7 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     const x = c.products.find((y) => y.id === productId);
     if (!x) throw new Error("no such product");
     const done: string[] = [];
+    const was = { name: x.name, pitch: x.pitch };
     if (p.name !== undefined) {
       const v = plain(p.name);
       if (v.length < 3 || v.length > 80) throw new Error("Product name: between 3 and 80 characters.");
@@ -1324,6 +1564,8 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
       if (v.length < 8 || v.length > 240) throw new Error("Pitch: between 8 and 240 characters.");
       if (v !== x.pitch) { x.pitch = v; done.push(`rewrote the pitch of "${x.name}"`); }
     }
+    const screened = screenText(`${x.name}. ${x.pitch}`);
+    if (!screened.ok) { Object.assign(x, was); throw new ModerationError(screened.reason); }
     if (p.status === "retired" && x.status === "live") { x.status = "retired"; done.push(`took "${x.name}" off sale`); }
     if (p.status === "live" && x.status === "retired") {
       if (!x.deliverableUrl || !this.files.has(c, x)) throw new Error("This product has no packaged file, so it cannot go back on sale.");
@@ -1349,13 +1591,18 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
       decision = { kind: "research", title: `Research: ${brief.slice(0, 70)}${brief.length > 70 ? "…" : ""}`, why: "Ordered by the owner.", brief };
     } else if (w.kind === "build_product") {
       const name = plain(w.name ?? ""), pitch = plain(w.pitch ?? ""), price = Number(w.priceUsd);
-      const planner = w.productKind === "planner";
+      // made in-house, for free: a planner, a PDF pack, or a file made for each buyer (with its recipe)
+      const inhouse = (["planner", "download", "custom"] as const).find((f) => f === w.productKind);
+      const recipe = inhouse === "custom" ? recipeOf(w.recipe)?.id : undefined;
+      if (inhouse === "custom" && !recipe) throw new Error(`A made-for-you product needs a recipe: ${RECIPE_IDS.join(", ")}.`);
+      if (recipe && c.products.some((p) => p.custom?.recipe === recipe && p.status !== "retired")) throw new Error("The company already sells that made-for-you file.");
+      const planner = Boolean(inhouse);
       const kind = planner ? "template" : (["tool", "template", "dataset", "report"] as const).find((k) => k === w.productKind) ?? "tool";
       if (name.length < 3 || name.length > 80) throw new Error("Product name: between 3 and 80 characters.");
       if (pitch.length < 8 || pitch.length > 240) throw new Error("Pitch: between 8 and 240 characters.");
       if (!(price >= 1 && price <= 499)) throw new Error("Price: between $1 and $499.");
       if (brief.length < 20 || brief.length > 1500) throw new Error("Say what goes inside in 20 to 1500 characters.");
-      decision = { kind: "build_product", title: `${planner ? "Make" : "Build"} "${name}"`, why: "Ordered by the owner.", brief, product: { name, kind, pitch, priceUsd: Math.round(price * 100) / 100, ...(planner ? { format: "planner" as const } : {}) } };
+      decision = { kind: "build_product", title: `${planner ? "Make" : "Build"} "${name}"`, why: "Ordered by the owner.", brief, product: { name, kind, pitch, priceUsd: Math.round(price * 100) / 100, ...(inhouse ? { format: inhouse } : {}), ...(recipe ? { recipe } : {}) } };
     } else if (w.kind === "build_site") {
       if (c.site) throw new Error("The company already has a site: order a change to it instead.");
       if (!c.products.some((p) => p.status === "live")) throw new Error("A site needs something to sell first.");
@@ -1365,6 +1612,11 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
       if (brief.length < 20 || brief.length > 1500) throw new Error("Say what to change in 20 to 1500 characters.");
       decision = { kind: "improve_site", title: `Change the site: ${brief.slice(0, 60)}${brief.length > 60 ? "…" : ""}`, why: "Ordered by the owner.", brief };
     } else throw new Error("Order research, a product, the site or a change to the site.");
+    if (c.hidden) throw new Error("This company is hidden by moderation and cannot order work.");
+    // swarm work costs IMD: a company on free shifts is told so before anything is tried
+    if (!decision.product?.format && !(await this.funded(c, true)) && config.freeShifts > 0) throw new Error("That needs the IMD swarm, and the company is not funded yet. Fund it first (0.5 IMD and a little ETH), or order something it makes in-house for free: a made-for-you file, a PDF pack or a planner.");
+    const screened = screenText(`${decision.product ? `${decision.product.name}. ${decision.product.pitch}. ` : ""}${decision.brief}`);
+    if (!screened.ok) throw new ModerationError(screened.reason);
     this.#busy.add(c.id);
     try {
       return await commission(c, this.#deps(c), decision);
@@ -1527,6 +1779,29 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     this.#emit(c.id, "company", null);
   }
 
+  /** Live: is there anything in the company's wallet or books that should go back to its owner before it closes? */
+  async holdsFunds(c: Company): Promise<boolean> {
+    if (config.mode !== "live" || c.sim) return false;
+    if ((await this.withdrawable(c)) > 0n) return true;
+    const b = await balances(c.wallet);
+    return b.imd > 0n || b.usdc >= 10_000n || b.eth > 2n * 10n ** 14n || b.saleGas > 5n * 10n ** 13n;
+  }
+
+  /**
+   * No lock-in: closes a company in one step. Live, whatever it holds goes back to its owner first (its
+   * revenue under the fee rule, then every IMD, USDC and ETH left); then it stops working and selling.
+   * It is archived, not erased: buyers' download links keep working and the owner can restore it.
+   */
+  async shutdown(c: Company, to: `0x${string}` | null): Promise<{ txs: string[]; returned: string[] }> {
+    let back: { txs: string[]; returned: string[] } = { txs: [], returned: [] };
+    if (await this.holdsFunds(c)) {
+      if (!to) throw new Error("Sign in as the owner: the company's funds go back to your wallet before it closes.");
+      back = await this.closeOut(c, to);
+    }
+    await this.archive(c);
+    return back;
+  }
+
   /** Brings a deleted company back, paused, for its owner. */
   async restore(id: string, owner: string | null): Promise<Company> {
     const c = this.store.archived.get(id);
@@ -1621,6 +1896,15 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
     this.#push(this.#phones(c, "approval"), { kind: "approval", title: `✋ ${c.name} needs your approval${sim}`, body: `${what}. ${reason.charAt(0).toUpperCase()}${reason.slice(1)}.`, url: `nightshift://approve/${c.id}/${a.taskId}`, companyId: c.id, taskId: a.taskId, tag: `approval-${a.taskId}` });
   }
 
+  /** The CEO asked its owner one concrete thing: told on Telegram when linked and on the phones that take approvals. */
+  #askAlert(companyId: string, a: OwnerAsk): void {
+    const c = this.store.companies.get(companyId);
+    if (!c) return;
+    const sim = c.sim ? " · simulation" : "";
+    if (c.notify?.telegram && config.telegramToken) void telegram(config.telegramToken, c.notify.telegram, `🙋 <b>${esc(c.name)}</b>${sim}\nYour CEO asks one thing: ${esc(a.text)}`, [[{ text: "Open the company", url: `${config.publicUrl}/co/${c.id}` }]]);
+    this.#push(this.#phones(c, "approval"), { kind: "approval", title: `🙋 ${c.name} asks you one thing${sim}`, body: a.text.slice(0, 240), url: `nightshift://company/${c.id}`, companyId: c.id, tag: `ask-${a.id}` });
+  }
+
   /** The owner's phones that want this kind of note; a live engine leaves its retired demo companies out. */
   #phones(c: Company, kind: DeviceKind): string[] {
     if (!c.owner || !this.fcm.ready || (config.mode === "live" && c.sim)) return [];
@@ -1641,6 +1925,13 @@ The IMD swarm starts building tonight. ${config.publicUrl}/c/${c.slug}`, `compan
   /** After a restart: work cut off mid-step is closed honestly, and old logs lose the model's name. */
   #recover(): void {
     for (const c of [...this.store.companies.values(), ...this.store.archived.values()]) { c.policy = { ...DEFAULT_POLICY, ...c.policy }; this.connect.migrate(c); }
+    // moderation over what is already here: hidden with the reason, never deleted
+    this.screenExisting();
+    for (const c of this.store.companies.values()) {
+      // drafts from before the approval gate: the newest still waits for its owner, older ones are closed unsent
+      const waiting = c.marketing.filter((m) => m.status === "drafted");
+      for (const m of waiting.slice(0, -1)) { m.status = "rejected"; m.error = "never approved: closed when drafts began to wait for their owner"; }
+    }
     for (const c of this.store.companies.values()) {
       for (const j of c.journal) if (j.kind === "decision") j.text = j.text.replace(/ \([\w.-]+\/[\w.:-]+\)$/, "");
       for (const t of c.tasks) {
@@ -1968,7 +2259,7 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
   /** Every product on sale across all companies: the public catalog for people and agents. */
   market(q = ""): { company: string; slug: string; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; featured: boolean; buyUrl: string; page: string; site: string | null; siteBackup: string | null }[] {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    return [...this.store.companies.values()]
+    return [...this.store.companies.values()].filter((c) => this.listed(c))
       .flatMap((c) => c.products.filter((p) => p.status === "live" && this.files.has(c, p)).map((p) => ({
         company: c.name, slug: c.slug, id: p.id, name: p.name, kind: p.kind, pitch: p.pitch,
         ...(p.kind === "tool" ? productSite(p) : { site: c.site?.url ?? null, siteBackup: backupUrl(c.site?.cid) }),
@@ -1981,6 +2272,8 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
       .map(({ text: _t, ...x }) => x);
   }
 
+  /** Companies with work in progress at the last tick, to see the moment it finishes. */
+  readonly #inProgress = new Set<string>();
   #ticking = false;
   async #tick(): Promise<void> {
     if (this.#ticking) return;
@@ -1989,13 +2282,14 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
   }
   async #tickOnce(): Promise<void> {
     const now = Date.now();
+    void this.#renameDue().catch((e) => console.error("rename", (e as Error).message));
     for (const c of this.store.companies.values()) {
       if (c.tasks.some((t) => t.status === "building")) await advance(c, this.#deps(c)).catch((e) => console.error("advance", c.slug, e));
       // a studio build cut off by a restart is started again
       for (const t of c.tasks) {
         const p = t.studio && t.status === "building" ? c.products.find((x) => x.id === t.productId) : undefined;
         if (!p || this.studio.building(t.id) || now - t.updatedAt < 120_000) continue;
-        this.studio.build(c, t, p, { kind: "build_product", title: t.title, why: t.why, brief: t.studio!.brief ?? "", product: { name: p.name, kind: "template", pitch: p.pitch, priceUsd: fromUsdc(p.priceUsdc), format: "planner" } });
+        this.studio.build(c, t, p, { kind: "build_product", title: t.title, why: t.why, brief: t.studio!.brief ?? "", product: { name: p.name, kind: "template", pitch: p.pitch, priceUsd: fromUsdc(p.priceUsdc), format: p.format ?? "planner" } });
       }
       // a site or web tool delivered before IMD published its address: collected, never bought again
       if (missingAddress(c).length) await recoverAddresses(c, this.#deps(c)).catch((e) => console.error("address", c.slug, e));
@@ -2007,15 +2301,25 @@ Every sell pays 5%: 40% to stakers and NIGHT FROGS holders, 20% burned (SHIFT an
         if (r) finishMarketBuy(c, t, r, this.#deps(c));
         else dropMarketBuy(c, t, this.#deps(c), "the payment never landed on Base, so nothing was charged. Its market limit is back.");
       }
-      if (c.status === "active" && c.policy.autopilot && c.nextShiftAt && now >= c.nextShiftAt && !this.#busy.has(c.id)) {
-        await this.shiftNow(c).catch((e) => console.error("shift", c.slug, e));
+      // Several moves a day: when work that was in progress finishes, a funded company goes on with its day
+      // (within CEO_MOVES_PER_DAY and its budget) instead of waiting for tomorrow's shift.
+      const inProgress = c.tasks.some((t) => t.status === "checking" || t.status === "ordering" || t.status === "building");
+      if (this.#inProgress.has(c.id) && !inProgress && this.#funded.get(c.id)?.funded && c.status === "active" && c.policy.autopilot && !(c.restUntil && c.restUntil > now) && movesToday(c, now) < config.movesPerDay) {
+        c.nextShiftAt = Math.min(c.nextShiftAt ?? Infinity, now + 2 * 60_000);
+      }
+      if (inProgress) this.#inProgress.add(c.id); else this.#inProgress.delete(c.id);
+      // a shift thinks with a model that may take a minute: it runs beside the tick, never in front of the other companies
+      if (c.status === "active" && !c.hidden && c.policy.autopilot && c.nextShiftAt && now >= c.nextShiftAt && !this.#busy.has(c.id)) {
+        c.nextShiftAt = now + 5 * 60_000;
+        void this.shiftNow(c).catch((e) => console.error("shift", c.slug, e));
       }
       await this.resolveSites(c);
       // the owner's own accounts: posts out by their rules, Gumroad in step, Gumroad sales read (also while paused)
-      if (!(config.mode === "live" && c.sim)) await this.connect.tick(c, c.status === "active").catch((e) => console.error("connect", c.slug, (e as Error).message));
-      if (config.mode === "live" && config.blueskyCompanyPosts && houseOn() && !c.connections?.channels.bluesky && c.status === "active") {
-        // No account of its own: the draft goes out on the project account, paced with the rest.
-        const m = c.marketing.find((x) => x.status === "drafted");
+      if (!(config.mode === "live" && c.sim)) await this.connect.tick(c, c.status === "active" && !c.hidden).catch((e) => console.error("connect", c.slug, (e as Error).message));
+      if (config.mode === "live" && config.blueskyCompanyPosts && houseOn() && !c.connections?.channels.bluesky && c.status === "active" && !c.hidden) {
+        // No account of its own: a post its owner approved (or auto-post, the owner's switch) goes out on the
+        // project account, paced with the rest. A draft nobody approved never does.
+        const m = c.marketing.find((x) => x.status === "approved" && screenText(x.text).ok);
         if (m) { housePost(`${m.text}\n\n— ${c.name}, a NIGHTSHIFT company`, `mkt-${c.id}-${m.at}`); Object.assign(m, { status: "posted", channel: "bluesky:project" }); this.#emit(c.id, "company", null); }
       }
       // the holder perks, refreshed in the background; a holder seen here starts its fee-waiver clock (only a

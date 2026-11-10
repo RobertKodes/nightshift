@@ -63,7 +63,7 @@ function build(engine: Engine, owner: string | null, canSpend: boolean) {
   };
   const run = <A,>(fn: (a: A) => Promise<unknown> | unknown) => async (a: A) => { try { return text(await fn(a)); } catch (e) { return err((e as Error).message); } };
 
-  const live = () => [...engine.store.companies.values()].flatMap((c) => c.products.filter((x) => x.status === "live" && engine.files.has(c, x)).map((x) => ({ c, p: x, text: engine.files.read(c, x) })));
+  const live = () => [...engine.store.companies.values()].filter((c) => engine.listed(c)).flatMap((c) => c.products.filter((x) => x.status === "live" && engine.files.has(c, x)).map((x) => ({ c, p: x, text: engine.files.read(c, x) })));
   server.registerTool("swarm_mind_ask", {
     title: "Ask the IMD swarm's memory",
     description: "SWARM MIND: answers a question from everything the IMD agent swarm published (research, audits, contracts, sites), citing the works it used with explorer links.",
@@ -108,12 +108,13 @@ function build(engine: Engine, owner: string | null, canSpend: boolean) {
 
   server.registerTool("nightshift_create", {
     title: "Found a company",
-    description: "Starts an autonomous company from an idea. It decides, builds with the IMD swarm and sells on its own within the limits you set.",
-    inputSchema: { idea: z.string().min(12).max(1000), dailyBudgetUsd: z.number().min(0).max(10000).default(10), askOverUsd: z.number().min(0).default(5), autopilot: z.boolean().default(true) },
-  }, run(async (a: { idea: string; dailyBudgetUsd: number; askOverUsd: number; autopilot: boolean }) => {
+    description: "Starts an autonomous company from an idea (or surprise: true, and the engine invents a sensible one). No funding needed: it starts working at once on free shifts, making finished digital goods in-house and selling them over x402. Funding it later lets it hire the IMD swarm. askOverUsd: purchases above this wait for the owner (0, the default: every purchase waits).",
+    inputSchema: { idea: z.string().max(1000).default(""), surprise: z.boolean().default(false), dailyBudgetUsd: z.number().min(0).max(10000).default(10), askOverUsd: z.number().min(0).default(0), autopilot: z.boolean().default(true) },
+  }, run(async (a: { idea: string; surprise: boolean; dailyBudgetUsd: number; askOverUsd: number; autopilot: boolean }) => {
     if (config.requireAuth && !owner) throw new Error("This key has no owner.");
-    const c = await engine.create(a.idea, { dailyBudgetUsd: a.dailyBudgetUsd, approvalOverUsd: a.askOverUsd, autopilot: a.autopilot }, owner, { via: "mcp", from: "mcp" });
-    return { ok: true, ...await brief(c), fund: config.mode === "live" ? `Send IMD (and a little ETH for the one-time Permit2 approval) to ${c.wallet} on Ethereum.` : "Simulation: it starts with 20 simulated IMD." };
+    const idea = a.surprise && !a.idea.trim() ? (await engine.surprise()).idea : a.idea;
+    const c = await engine.create(idea, { dailyBudgetUsd: a.dailyBudgetUsd, approvalOverUsd: a.askOverUsd, autopilot: a.autopilot }, owner, { via: "mcp", from: "mcp" });
+    return { ok: true, ...await brief(c), idea: c.idea, plan: await engine.plan(c), fund: config.mode === "live" ? `Optional upgrade: send 0.5 IMD or more (and a little ETH for gas) to ${c.wallet} on Ethereum to let it hire the IMD swarm. Without it, it keeps working on free resources.` : "Simulation: it runs on free shifts; POST /api/companies/<id>/sim-fund adds 20 simulated IMD." };
   }));
 
   server.registerTool("nightshift_shift", { title: "Run a shift now", description: "Makes the CEO decide and start its next move now instead of waiting for autopilot.", inputSchema: { id: z.string() } },
@@ -166,17 +167,20 @@ function build(engine: Engine, owner: string | null, canSpend: boolean) {
   }));
 
   server.registerTool("nightshift_order", {
-    title: "Order work from the swarm",
-    description: "The owner orders one piece of work by hand: research, a new product (name, pitch, price, what goes inside), the site, or a change to the site. SPENDS 0.5 IMD of the company's budget after IMD's free check, with no approval wait. Requires confirm: true.",
+    title: "Order work by hand",
+    description: "The owner orders one piece of work by hand: research, a new product (name, pitch, price, what goes inside), the site, or a change to the site. A product with productKind planner, download or custom (with recipe) is made in-house for FREE. Anything else is bought from the IMD swarm: it SPENDS 0.5 IMD of the company's budget after IMD's free check, with no approval wait, needs a funded company and confirm: true.",
     inputSchema: {
       id: z.string(), kind: z.enum(["research", "build_product", "build_site", "improve_site"]), brief: z.string().max(1500).optional(),
-      name: z.string().optional(), pitch: z.string().optional(), priceUsd: z.number().optional(), productKind: z.enum(["tool", "template", "dataset", "report"]).optional(),
+      name: z.string().optional(), pitch: z.string().optional(), priceUsd: z.number().optional(), productKind: z.enum(["tool", "template", "dataset", "report", "planner", "download", "custom"]).optional().describe("planner, download (a PDF pack) and custom (a file made for each buyer; needs recipe) are made in-house for free; the others are bought from the swarm"),
+      recipe: z.enum(["resume", "cover_letter", "names", "calendar"]).optional(),
       confirm: z.boolean().default(false),
     },
   }, run(async ({ id, confirm, ...w }: { id: string; confirm: boolean } & Record<string, unknown>) => {
-    if (!canSpend) throw new Error(NO_SPEND);
+    // what the company makes in-house costs nothing: no spend right and no confirmation needed for it
+    const free = w.kind === "build_product" && ["planner", "download", "custom"].includes(String(w.productKind ?? ""));
+    if (!canSpend && !free) throw new Error(NO_SPEND);
     const c = pick(id);
-    if (!confirm) return { ok: false, needsConfirm: true, costImd: 0.5, note: "This spends 0.5 IMD of the company's budget. Call again with confirm: true." };
+    if (!confirm && !free) return { ok: false, needsConfirm: true, costImd: 0.5, note: "This spends 0.5 IMD of the company's budget. Call again with confirm: true." };
     const t = await engine.commission(c, w);
     return { ok: t.status !== "failed", taskId: t.id, shift: t.cycle, status: t.status, error: t.error, follow: "nightshift_flight with this shift" };
   }));

@@ -6,10 +6,10 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import type { Company, Product } from "@nightshift/core";
 import { NameError, saveName, savedName } from "./players.js";
 import { attachLastspawn } from "./lastspawn/index.js";
-import { fromImd, fromUsdc, spentTodayUsd } from "@nightshift/core";
+import { fromImd, fromUsdc, screenCompany, spentTodayUsd } from "@nightshift/core";
 import { type PaymentPayload, USDC, challenge as challenge402, decodeHeader, encodeHeader, requirement, verifyPayment } from "@nightshift/x402";
 import { balances, eth, sales } from "./chain.js";
-import { NoGasError, PaymentRefused, PendingError } from "./checkout.js";
+import { NoGasError, PaymentRefused, PendingError, saleKey } from "./checkout.js";
 import { findPool } from "./v4.js";
 import { BOT, liveStats, pageClosed, pageOpened, sawVisitor } from "./live.js";
 import { liveUsage } from "./usage.js";
@@ -41,7 +41,10 @@ import { frogPng } from "./frogpng.js";
 import { board as pinBoard, frogImage as pinFrogImage, inMatch as pinInMatch, soloFinish as pinSoloFinish, soloProgress as pinSoloProgress, soloStart as pinSoloStart, finish as pinFinish, get as pinGet, leave as pinLeave, listen as pinListen, progress as pinProgress, queue as pinQueue, stakes as pinStakes } from "./pinball.js";
 import { claimsOf, epochs, markPosted } from "./frogpot.js";
 import { config } from "./config.js";
-import type { Engine, EngineEvent } from "./engine.js";
+import { type Engine, type EngineEvent, ModerationError } from "./engine.js";
+import { type MadeOrder, OrderError, customView } from "./made-orders.js";
+import { buildFeed, cachedFeed } from "./feed.js";
+import { exportCompany } from "./export.js";
 import { handleMcp } from "./mcp.js";
 import { type Caller, clientIp, keyAllowed } from "./auth.js";
 import { deviceId, deviceView } from "./devices.js";
@@ -72,7 +75,7 @@ import { dealRoutes } from "./deal-routes.js";
 import { solRoutes } from "./sol-routes.js";
 import { leagueRoutes } from "./league-routes.js";
 import { HIDDEN_PAGES, stationRoutes, withPageHead } from "./station-routes.js";
-import { card, catalog, deliveryOf, detail, honestPitch, offerFor, productIdOf, search } from "./agentmarket.js";
+import { buyUrl, card, catalog, deliveryOf, detail, honestPitch, marketOpenapi, offerFor, previewOf, productIdOf, search } from "./agentmarket.js";
 import { spectateRoutes } from "./spectate.js";
 import { PrizeError, livePrizes, prizesRoutes } from "./prizes.js";
 import { poolRoutes } from "./pool-routes.js";
@@ -189,6 +192,12 @@ async function full(engine: Engine, c: Company) {
     todayUsd: Math.round(spentTodayUsd(c, config.imdUsd) * 100) / 100,
     holder: tokenOn() ? { symbol: config.token.symbol, ...(await holderStatus(c.owner)), min: config.token.holderMin } : null,
     platformFeeBps: config.platformTreasury ? config.platformFeeBps : 0,
+    // free or funded, the free shifts used and when it works next; the shop's public address to share
+    plan: await engine.plan(c),
+    // a shift is running now: the CEO is deciding its move
+    thinking: engine.working(c),
+    shopUrl: `${config.publicUrl}/c/${c.slug}`,
+    asks: (c.asks ?? []).slice(-10),
     series: series(m.visits, m.sales.map((s) => ({ at: s.at, usd: Number(s.usdc) / 1e6 }))),
   };
 }
@@ -216,6 +225,9 @@ async function desk(engine: Engine, owner: string | null) {
       status: c.status, cycle: c.cycle, createdAt: c.createdAt, nextShiftAt: c.nextShiftAt, wallet: c.wallet, sim: Boolean(c.sim),
       rest: c.restUntil && c.restUntil > Date.now() ? { until: c.restUntil, why: c.restReason || resting?.text.startsWith("Saver:") ? "saver" as const : "budget" as const, reason: c.restReason ?? null } : null,
       policy: c.policy, site: c.site?.url ?? null, siteBackup: backupUrl(c.site?.cid), alerts: Boolean(c.notify?.telegram),
+      plan: await engine.plan(c), hidden: c.hidden ? { reason: c.hidden.reason, at: c.hidden.at } : null,
+      asks: (c.asks ?? []).filter((a) => a.status === "open").map((a) => ({ id: a.id, at: a.at, topic: a.topic, text: a.text })),
+      drafts: c.marketing.filter((m) => m.status === "drafted").map((m) => ({ at: m.at, text: m.text })),
       products: c.products.map((x) => ({ id: x.id, name: x.name, pitch: x.pitch, kind: x.kind, status: x.status, priceUsd: fromUsdc(x.priceUsdc), priceByOwner: Boolean(x.priceByOwner), sales: x.sales, revenueUsd: fromUsdc(x.revenueUsdc), b2bSales: x.b2bSales ?? 0, packaged: engine.files.has(c, x), ...studioView(c, x) })),
       pnl: { revenueUsd, spentUsd, profitUsd: revenueUsd + soldUsd - spentUsd - boughtUsd },
       todayUsd: Math.round(spentTodayUsd(c, config.imdUsd) * 100) / 100,
@@ -317,6 +329,26 @@ const STEP_ACTIONS = ["withdraw", "close", "delete", "limits", "erase", "device"
 /** A studio product's facts and the addresses of its listing images. */
 const studioView = (c: Company, p: Product) => p.studio ? { format: p.format, studio: { pages: p.studio.pages, links: p.studio.links, files: p.studio.files.filter((f) => f.endsWith(".pdf")), mb: Math.round(p.studio.bytes / 1e5) / 10, year: p.studio.year, images: p.studio.images.map((n) => `${config.publicUrl}/api/studio/${c.slug}/${p.id}/${n}.png`) } } : {};
 
+/** The sample on a made-for-you product's page (written from a made-up example), cut to a readable length. */
+function sampleOf(text: string | null): string | null {
+  const i = text ? text.indexOf("\n## Sample\n") : -1;
+  if (i < 0) return null;
+  const body = text!.slice(i + 11).replace(/^\s*_Made from a made-up example[^\n]*\n/m, "").trim();
+  return body.length > 1400 ? `${body.slice(0, 1400).replace(/\s+\S*$/, "")}…` : body;
+}
+
+/** What an in-house product adds to its card: the order form, the pack's facts and images, where else it is sold. */
+function inhouseView(engine: Engine, c: Company, p: Product) {
+  const img = (n: string) => `${config.publicUrl}/api/studio/${c.slug}/${p.id}/${n}.png`;
+  const text = p.format === "custom" || p.format === "download" ? engine.files.read(c, p) : null;
+  return {
+    ...(p.format === "custom" && customView(p) ? { custom: { ...customView(p)!, sample: sampleOf(text) } } : {}),
+    ...(p.format === "download" && p.download ? { download: { pages: p.download.pages, sheets: p.download.sections, lines: p.download.items, mb: Math.round(p.download.bytes / 1e5) / 10, images: [img("hero"), img("inside")], outline: text ? previewOf(text).outline.slice(0, 8) : [] } } : {}),
+    // the same product on the owner's own Gumroad, where people pay by card: only once the owner published it there
+    ...(p.gumroad?.state === "published" && p.gumroad.url && !p.gumroad.sim ? { gumroadUrl: p.gumroad.url } : {}),
+  };
+}
+
 /** The public view: what a visitor or investor may see. No wallet keys, no drafts. */
 async function publicView(engine: Engine, c: Company) {
   await engine.resolveSites(c);
@@ -328,7 +360,9 @@ async function publicView(engine: Engine, c: Company) {
   return {
     slug: c.slug, name: c.name, mission: c.mission, audience: c.audience, createdAt: c.createdAt, wallet: c.wallet, status: c.status, cycle: c.cycle,
     site: c.site?.url ?? null, siteBackup: backupUrl(c.site?.cid),
-    products: c.products.filter((p) => p.status === "live").map((p) => ({ id: p.id, name: p.name, kind: p.kind, pitch: honestPitch(p), delivery: deliveryOf(p.kind), priceUsd: fromUsdc(p.priceUsdc), sales: p.sales, b2bSales: p.b2bSales ?? 0, buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, ...productSite(p), ...studioView(c, p) })),
+    products: c.products.filter((p) => p.status === "live").map((p) => ({ id: p.id, name: p.name, kind: p.kind, pitch: honestPitch(p), delivery: deliveryOf(p.kind, p.format), priceUsd: fromUsdc(p.priceUsdc), sales: p.sales, b2bSales: p.b2bSales ?? 0, buyUrl: `${config.publicUrl}/buy/${c.slug}/${p.id}`, packaged: engine.files.has(c, p), ...(p.format ? { format: p.format } : {}), ...productSite(p), ...studioView(c, p), ...inhouseView(engine, c, p) })),
+    // free shifts or funded, as last read: a free company is run on free resources only
+    plan: engine.stats(c).funded ? "funded" : "free",
     // sales to people and outside agents; sales to and purchases from other NIGHTSHIFT companies apart
     pnl: { revenueUsd: revenue, spentUsd: fromImd(spent) * config.imdUsd, sales: m.sales.length },
     b2b: {
@@ -337,7 +371,8 @@ async function publicView(engine: Engine, c: Company) {
       bought: bought.length,
       spentUsd: bought.reduce((a, l) => a + fromUsdc(l.usdc), 0),
     },
-    shifts: c.tasks.slice(-12).reverse().map((t) => ({ id: t.id, cycle: t.cycle, kind: t.kind, title: t.title, status: t.status, costUsd: fromImd(t.costImd) * config.imdUsd + fromUsdc(t.costUsdc ?? 0n), ...(t.market?.paid ? { market: true } : {}) })),
+    // the public shifts: not the CEO's questions to its owner, and not drafts nobody approved
+    shifts: c.tasks.filter((t) => t.kind !== "ask_owner" && t.kind !== "marketing").slice(-12).reverse().map((t) => ({ id: t.id, cycle: t.cycle, kind: t.kind, title: t.title, status: t.status, costUsd: fromImd(t.costImd) * config.imdUsd + fromUsdc(t.costUsdc ?? 0n), ...(t.market?.paid ? { market: true } : {}) })),
     mode: config.mode,
     /** The accounts the owner chose to show: where else to find the company. */
     channels: engine.connect.publicChannels(c),
@@ -351,7 +386,7 @@ async function landing(engine: Engine) {
     swarmCache = { at: Date.now(), agents: h?.connectedDaemons ?? null, working: h?.workingNow ?? null };
   }
   // Live: demo companies retired from simulation are not shown; their revenue was never real.
-  const companies = [...engine.store.companies.values()].filter((c) => (config.mode !== "live" || !c.sim) && !c.house);
+  const companies = [...engine.store.companies.values()].filter((c) => engine.listed(c) && !c.house);
   const live = companies.flatMap((c) => c.products.filter((p) => p.status === "live").map((p) => ({ c, p })));
   const since = Date.now() - 24 * 3600_000;
   const featured = [...companies].sort((a, b) => b.products.reduce((x, p) => x + Number(p.revenueUsdc), 0) - a.products.reduce((x, p) => x + Number(p.revenueUsdc), 0))[0];
@@ -556,7 +591,7 @@ async function tokenOverview(): Promise<unknown> {
 
 /** Every product on sale whose file is packaged, with its text for previews. */
 function liveProducts(engine: Engine) {
-  return [...engine.store.companies.values()].flatMap((c) => c.products.filter((x) => x.status === "live" && engine.files.has(c, x)).map((x) => ({ c, p: x, text: engine.files.read(c, x) })));
+  return [...engine.store.companies.values()].filter((c) => engine.listed(c)).flatMap((c) => c.products.filter((x) => x.status === "live" && engine.files.has(c, x)).map((x) => ({ c, p: x, text: engine.files.read(c, x) })));
 }
 
 export function serve(engine: Engine) {
@@ -619,6 +654,7 @@ export function serve(engine: Engine) {
     setTimeout(() => void check(), 60_000).unref();
     setInterval(() => void check(), 5 * 60_000).unref();
   }
+  const liveFeed = cachedFeed((limit) => buildFeed({ all: [...engine.store.companies.values()], listed: (c) => engine.listed(c), metrics: (id) => engine.store.metricsOf(id), mode: config.mode, chainId: config.salesChainId }, limit));
   const server = createServer(async (req, res) => {
     let url: URL;
     // a request line the URL parser refuses (GET //[) would throw outside the catch below and stop the whole server
@@ -629,7 +665,7 @@ export function serve(engine: Engine) {
     for (const [k, v] of Object.entries(BASE_HEADERS)) res.setHeader(k, v);
     if (req.method !== "GET" && req.method !== "HEAD" && crossSite(req)) return json(res, 403, { error: "cross-site request refused" });
     try {
-      if (p === "/api/health") return json(res, 200, { ok: true, mode: config.mode, llm: Boolean(engine.llm), imdUsd: config.imdUsdPinned || Date.now() - config.imdUsdAt < 30 * 60_000 ? config.imdUsd : null, salesChainId: config.salesChainId, requireAuth: config.requireAuth, platformFeeBps: config.platformTreasury ? config.platformFeeBps : 0 });
+      if (p === "/api/health") return json(res, 200, { ok: true, mode: config.mode, llm: Boolean(engine.llm), free: { shifts: config.freeShifts, slowHours: config.freeSlowHours, movesPerShift: config.movesPerShift, movesPerDay: config.movesPerDay }, imdUsd: config.imdUsdPinned || Date.now() - config.imdUsdAt < 30 * 60_000 ? config.imdUsd : null, salesChainId: config.salesChainId, requireAuth: config.requireAuth, platformFeeBps: config.platformTreasury ? config.platformFeeBps : 0 });
 
       // ---- the operator's setup dashboard (/setup), behind the admin token
       if (p.startsWith("/api/admin/")) {
@@ -712,6 +748,17 @@ export function serve(engine: Engine) {
           void engine.alert(`🪙 ${String(b.symbol)} launch paid: https://etherscan.io/tx/${String(b.tx)}`, "launch-paid");
           return json(res, 200, { ok: true, launch: launchState() });
         }
+        // moderation: every company with what the screen says, and the operator's hide / show again (nothing is ever deleted)
+        if (p === "/api/admin/moderation" && req.method === "GET") {
+          return json(res, 200, { companies: [...engine.store.companies.values()].filter((c) => !c.house).map((c) => ({ id: c.id, slug: c.slug, name: c.name, mission: c.mission, idea: c.idea, owner: c.owner, hidden: c.hidden ?? null, cleared: c.cleared ?? null, screen: screenCompany(c) })) });
+        }
+        if (p === "/api/admin/moderation" && req.method === "POST") {
+          const b = await body(req);
+          const c = engine.get(String(b.company ?? ""));
+          if (!c || c.house) return json(res, 404, { error: "no such company" });
+          engine.moderate(c, b.hide === true, String(b.reason ?? ""));
+          return json(res, 200, { ok: true, hidden: c.hidden ?? null });
+        }
         if (p === "/api/admin/pause-all" && req.method === "POST") {
           // Before going live: the simulated demo companies stop, so none tries a real order from an empty wallet.
           let n = 0;
@@ -788,6 +835,14 @@ export function serve(engine: Engine) {
       if ((p === "/api/mind" || p.startsWith("/api/mind/")) && engine.mind && await mindRoutes(req, res, p, { json, body, limited, url, mind: engine.mind, weather: engine.weather, llm: engine.llm, model: config.chatModel })) return;
       if ((p === "/api/sniper" || p.startsWith("/api/sniper/") || p.startsWith("/api/push/")) && await sniperRoutes(req, res, p, { json, body, limited, owner: caller?.via === "session" ? caller.addr : null, sniper: engine.sniper, dex: engine.dex })) return;
       // ---- the landing page's live numbers: real where they can be, labelled where simulated
+      // /openapi.json: the house services' document, plus the companies' market and every product on sale with its price and input schema
+      if (p === "/openapi.json" && req.method === "GET") {
+        const doc = await liveServices()?.handle({ method: "GET", path: "/openapi.json", query: new URLSearchParams(), header: () => undefined, ip: clientIp(req), base: config.publicUrl, limited: () => false }).catch(() => null);
+        if (doc?.status === 200 && doc.body && typeof doc.body === "object") {
+          const body = doc.body as { paths?: Record<string, unknown> };
+          return json(res, 200, { ...body, paths: { ...body.paths, ...marketOpenapi(liveProducts(engine)) } }, { "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=60" });
+        }
+      }
       if (await serviceRoutes(req, res, p, { url, base: config.publicUrl, ip: clientIp(req), limited })) return;
       if (p === "/api/landing") return json(res, 200, await landing(engine));
       if (p === "/api/impact") return json(res, 200, await impact(engine));
@@ -815,7 +870,7 @@ export function serve(engine: Engine) {
       if (p.startsWith("/api/launchpad/") && await launchpadRoutes(req, res, p, { json, body, limited, url })) return;
       if (p.startsWith("/api/omni/") && await omniRoutes(req, res, p, { json, limited, url })) return;
       if (p.startsWith("/api/forge") && await forgeRoutes(req, res, p, { json, limited, url, owner })) return;
-      if (p.startsWith("/api/ship") && await shipRoutes(req, res, p, { json, limited, url, companies: () => [...engine.store.companies.values()] })) return;
+      if (p.startsWith("/api/ship") && await shipRoutes(req, res, p, { json, limited, url, companies: () => [...engine.store.companies.values()].filter((c) => !c.hidden) })) return;
       if (((p.startsWith("/api/watch") && !p.startsWith("/api/watchtower")) || p.startsWith("/nightwatch/")) && await watchRoutes(req, res, p, { json, body, limited, url })) return;
       if (p.startsWith("/api/games/") && await gamesRoutes(req, res, p, { json, body, limited, owner, url, vault: engine.vault })) return;
       if ((p.startsWith("/api/arena/") || p === "/arena/agents.md") && await arenaRoutes(req, res, p, { json, body, limited, owner, url, auth: engine.auth, vault: engine.vault })) return;
@@ -1008,6 +1063,11 @@ export function serve(engine: Engine) {
           launch: launchState(), verification: verification(),
         });
       }
+      // the public live feed for the front page: what the companies did, newest first (feed.ts), the same answer for 15 seconds
+      if (p === "/api/feed" && req.method === "GET") {
+        if (limited(req, "feed", 120, 60_000)) return json(res, 429, { error: "slow down" });
+        return json(res, 200, liveFeed(Number(url.searchParams.get("limit") ?? 50)), { "Cache-Control": "public, max-age=10" });
+      }
       if (p === "/api/market") {
         await Promise.all([...engine.store.companies.values()].map((c) => engine.resolveSites(c)));
         return json(res, 200, { mode: config.mode, chainId: config.salesChainId, products: engine.market(url.searchParams.get("q") ?? "") });
@@ -1021,7 +1081,7 @@ export function serve(engine: Engine) {
           const max = url.searchParams.get("maxUsd");
           const sort = url.searchParams.get("sort");
           const rows = search(live, { q: url.searchParams.get("q") ?? "", kind: url.searchParams.get("kind") ?? undefined, maxUsd: max ? Number(max) : undefined, sort: sort === "price" || sort === "new" ? sort : "best" });
-          const shown = [...engine.store.companies.values()].filter((c) => (config.mode !== "live" || !c.sim) && !c.house);
+          const shown = [...engine.store.companies.values()].filter((c) => engine.listed(c) && !c.house);
           return json(res, 200, { mode: config.mode, chainId: config.salesChainId, count: rows.length, kinds: [...new Set(live.map((l) => l.p.kind))], items: rows.slice(0, 100).map(card), totals: marketTotals(shown) });
         }
         if (p === "/api/market/catalog") { const c = catalog(live), svc = catalogItems(config.publicUrl, config.salesChainId, engine.store.companies.get(HOUSE_ID)?.wallet ?? null); return json(res, 200, { ...c, count: c.count + svc.length, items: [...svc, ...c.items] }); }
@@ -1207,10 +1267,11 @@ export function serve(engine: Engine) {
       if (p === "/api/companies" && req.method === "GET") {
         const onlyMine = url.searchParams.get("mine") === "1";
         // Live: retired demo companies stay in their owner's own list only.
-        const list = await Promise.all([...engine.store.companies.values()].filter((c) => onlyMine ? owner !== null && c.owner === owner : (config.mode !== "live" || !c.sim) && !c.house).sort((a, b) => b.createdAt - a.createdAt).map(async (c) => {
+        // Live: retired demo companies and companies hidden by moderation stay in their owner's own list only.
+        const list = await Promise.all([...engine.store.companies.values()].filter((c) => onlyMine ? owner !== null && c.owner === owner : engine.listed(c) && !c.house).sort((a, b) => b.createdAt - a.createdAt).map(async (c) => {
           const v = await publicView(engine, c);
           const working = c.tasks.find((t) => ["checking", "ordering", "building", "awaiting_approval"].includes(t.status));
-          return { id: c.id, ...v, nextShiftAt: c.nextShiftAt, working: working ? { title: working.title, status: working.status, activity: working.activity } : null, mine: owner !== null && c.owner === owner };
+          return { id: c.id, ...v, nextShiftAt: c.nextShiftAt, working: working ? { title: working.title, status: working.status, activity: working.activity } : null, mine: owner !== null && c.owner === owner, ...(c.hidden ? { hidden: true } : {}) };
         }));
         return json(res, 200, list);
       }
@@ -1229,8 +1290,15 @@ export function serve(engine: Engine) {
         const b = await body(req);
         // where the founder came from, as the site saw it on their first visit: a referrer's host or a campaign tag
         const from = String(b.from ?? "").toLowerCase().replace(/[^a-z0-9.:_-]/g, "").slice(0, 60) || undefined;
-        const c = await engine.create(String(b.idea ?? ""), (b.policy ?? {}) as never, owner, { via: b.via === "web" ? "web" : "api", ...(from ? { from } : {}) });
-        return json(res, 201, { id: c.id, slug: c.slug });
+        // "Surprise me" in one call: the engine invents the idea (free model, or its own list when the model is busy)
+        const idea = b.surprise === true && !String(b.idea ?? "").trim() ? (await engine.surprise()).idea : String(b.idea ?? "");
+        const c = await engine.create(idea, (b.policy ?? {}) as never, owner, { via: b.via === "web" ? "web" : "api", ...(from ? { from } : {}) });
+        return json(res, 201, { id: c.id, slug: c.slug, name: c.name, idea: c.idea, shop: `${config.publicUrl}/c/${c.slug}`, free: { shifts: config.freeShifts } });
+      }
+      // "Surprise me": one sensible, legal, sellable idea to found on. Never fails: a busy model means an idea from the engine's own list.
+      if (p === "/api/ideas/surprise" && (req.method === "POST" || req.method === "GET")) {
+        if (limited(req, "surprise", 12, 3600_000)) return json(res, 429, { error: "That is a lot of surprises: write your own idea, or try again in a while." });
+        return json(res, 200, await engine.surprise());
       }
       if (seg[0] === "api" && seg[1] === "companies" && seg[2]) {
         const c = engine.get(seg[2]);
@@ -1248,6 +1316,19 @@ export function serve(engine: Engine) {
         if (action === "shifts" && seg[4] && req.method === "GET") {
           const f = await flightFor(engine, c, seg[4], true);
           return f ? json(res, 200, f) : json(res, 404, { error: "no such shift" });
+        }
+        // no lock-in: everything the company is, made and earned, as one archive for its owner
+        if (action === "export.zip" && req.method === "GET") {
+          if (limited(req, `export:${c.id}`, 3, 60_000)) return json(res, 429, { error: "slow down" });
+          try {
+            const x = await exportCompany(c, {
+              text: (co, pr) => engine.files.read(co, pr), bytes: (co, pr) => engine.files.bytes(co, pr), image: (co, pr, n) => engine.files.image(co, pr, n),
+              ledger: (co) => engine.ledger.store.list(`co:${co.id}:`), booksCsv: (co) => books(engine, co), metrics: (co) => engine.store.metricsOf(co.id),
+              siteHtml: (co) => (config.mode === "sim" && co.site ? engine.sim.site(co) : null), publicUrl: config.publicUrl, mode: config.mode,
+            });
+            res.writeHead(200, { "Content-Type": "application/zip", "Content-Length": x.zip.length, "Content-Disposition": `attachment; filename="${x.name}"`, "Cache-Control": "private, no-store" });
+            return res.end(Buffer.from(x.zip));
+          } catch (e) { return json(res, 400, { error: (e as Error).message }); }
         }
         if (action === "books.csv" && req.method === "GET") {
           res.writeHead(200, { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${c.slug}-books.csv"`, "Cache-Control": "private, no-store" });
@@ -1336,6 +1417,17 @@ export function serve(engine: Engine) {
           try { await engine.archive(c); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
           return json(res, 200, { ok: true });
         }
+        // no lock-in: close the company in one step. Whatever it holds goes back to its owner first (that part is
+        // confirmed with the wallet); it is archived, not erased, and can be restored from the owner desk.
+        if (action === "shutdown") {
+          if (limited(req, `delete:${c.id}`, 2, 60_000)) return json(res, 429, { error: "slow down" });
+          if (config.requireAuth ? !owner || c.owner !== owner : c.owner !== null && c.owner !== owner) return json(res, 403, { error: "Only the company's owner can close it." });
+          try {
+            if (await engine.holdsFunds(c)) { const step = await stepUp(req, caller, `close:${c.id}`); if (step) return json(res, 428, { error: step, stepUp: "close" }); }
+            const r = await engine.shutdown(c, owner && /^0x[0-9a-fA-F]{40}$/.test(owner) ? getAddress(owner) : null);
+            return json(res, 200, { ok: true, closed: true, ...r, restore: "It is in your owner desk under deleted companies, and can be restored." });
+          } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+        }
         if (action === "withdraw") {
           const b = await body(req);
           if (limited(req, `withdraw:${c.id}`, 3, 60_000)) return json(res, 429, { error: "slow down" });
@@ -1362,6 +1454,23 @@ export function serve(engine: Engine) {
         if (action === "social" && seg[4] === "disconnect") { await engine.disconnectBluesky(c); return json(res, 200, { ok: true }); }
         // drafts are not posted by hand any more: posts about real events go out from Connections, by its rules
         if (action === "posts" && seg[4] && seg[5] === "publish") return json(res, 410, { error: "Posts go out from the owner desk's Connections tab now." });
+        // the CEO's question to its owner: done, or set aside
+        if (action === "asks" && seg[4]) {
+          const b = await body(req);
+          try { engine.answerAsk(c, seg[4], b.status === "dismissed" ? "dismissed" : "done"); } catch (e) { return json(res, 404, { error: (e as Error).message }); }
+          return json(res, 200, { ok: true });
+        }
+        // the approval gate for drafted posts: nothing goes public without this yes (or the owner's auto-post switch)
+        if (action === "drafts" && seg[4] && (seg[5] === "approve" || seg[5] === "reject")) {
+          if (limited(req, `decide:${owner ?? "anon"}`, 20, 60_000)) return json(res, 429, { error: "slow down" });
+          try { engine.decideDraft(c, Number(seg[4]), seg[5] === "approve"); } catch (e) { return json(res, 409, { error: (e as Error).message }); }
+          return json(res, 200, { ok: true });
+        }
+        // simulation only: the "fund it" upgrade without a wallet
+        if (action === "sim-fund") {
+          try { await engine.simFund(c); } catch (e) { return json(res, 400, { error: (e as Error).message }); }
+          return json(res, 200, { ok: true });
+        }
         if (action === "pause") { engine.setStatus(c, "paused"); return json(res, 200, { ok: true }); }
         if (action === "resume") { engine.setStatus(c, "active"); return json(res, 200, { ok: true }); }
         if (action === "tasks" && seg[4] && (seg[5] === "approve" || seg[5] === "reject")) {
@@ -1386,11 +1495,13 @@ export function serve(engine: Engine) {
       }
       if (seg[0] === "api" && seg[1] === "public" && seg[2] && seg[3] === "shifts" && seg[4]) {
         const c = engine.get(seg[2]);
-        const f = c && !(config.mode === "live" && c.sim) ? await flightFor(engine, c, seg[4], false) : null;
+        const f = c && engine.listed(c) ? await flightFor(engine, c, seg[4], false) : null;
         return f ? json(res, 200, f) : json(res, 404, { error: "no such shift" });
       }
       if (seg[0] === "api" && seg[1] === "public" && seg[2]) {
-        const c = engine.get(seg[2]);
+        // a company hidden by moderation has no public page, whoever asks
+        const found = engine.get(seg[2]);
+        const c = found && !found.hidden ? found : undefined;
         // the shop page loads this: one visit per visitor per 10 minutes (bots left out), the number the CEO reads as traffic
         if (c && !seg[3] && !BOT.test(String(req.headers["user-agent"] ?? "x")) && !limited(req, `visit:${c.id}`, 1, 600_000)) {
           const v = engine.store.metricsOf(c.id).visits; v.push(Date.now()); if (v.length > 5000) v.splice(0, v.length - 5000); engine.store.markDirty();
@@ -1406,12 +1517,38 @@ export function serve(engine: Engine) {
         return c ? json(res, 200, await publicView(engine, c)) : json(res, 404, { error: "no such company" });
       }
 
+      // ---- made-for-you orders: fill the form, the file is written and checked, then (and only then) it can be paid for
+      if (p === "/api/orders" && req.method === "POST") {
+        if (limited(req, "made-order", 6, 3600_000)) return json(res, 429, { error: "Six orders an hour from one place. Try again later." });
+        const b = await body(req, 40_000);
+        const c = engine.get(String(b.company ?? ""));
+        const product = c?.products.find((x) => x.id === productIdOf(String(b.product ?? "")) && x.status === "live");
+        if (!c || !product || !engine.listed(c)) return json(res, 404, { error: "no such product on sale" });
+        try {
+          const o = engine.made.create(c, product, b.input);
+          return json(res, 201, { order: engine.made.view(o), buy: `${buyUrl(c, product)}?order=${o.id}`, priceUsd: fromUsdc(product.priceUsdc), poll: `${config.publicUrl}/api/orders/${o.id}` });
+        } catch (e) {
+          if (e instanceof OrderError) return json(res, e.status, { error: e.message, ...(e.errors ? { errors: e.errors } : {}) });
+          throw e;
+        }
+      }
+      if (seg[0] === "api" && seg[1] === "orders" && seg[2] && req.method === "GET") {
+        if (limited(req, "made-read", 120, 60_000)) return json(res, 429, { error: "slow down" });
+        const o = engine.made.get(seg[2]);
+        const c = o ? engine.store.companies.get(o.companyId) ?? engine.archived(o.companyId) : undefined;
+        const product = c?.products.find((x) => x.id === o!.productId);
+        if (!o || !c || !product) return json(res, 404, { error: "no such order" });
+        // ?wait=1: answers when the file is written (or after 25 seconds), so a page need not poll every second
+        const now = url.searchParams.get("wait") === "1" && o.status === "writing" ? (await engine.made.ready(o.id, 25_000)) ?? o : o;
+        return json(res, 200, { order: engine.made.view(now), product: { id: product.id, name: product.name, priceUsd: fromUsdc(product.priceUsdc), company: c.name, slug: c.slug }, buy: `${buyUrl(c, product)}?order=${o.id}`, ...(now.paid ? { deliverable: engine.files.link(c, product, `o-${o.id}`) } : {}) });
+      }
+
       // x402: pay in USDC, get the product. Agents and people use the same door.
       if (seg[0] === "buy" && seg[1] && seg[2]) {
         const c = engine.get(seg[1]);
         const id = productIdOf(seg[2]);
         const product = c?.products.find((x) => x.id === id && x.status === "live");
-        if (!c || !product) return json(res, 404, { error: "no such product" });
+        if (!c || !product || c.hidden) return json(res, 404, { error: "no such product" });
         // Never take money for something that cannot be handed over yet.
         if (!engine.files.has(c, product)) return json(res, 409, { error: "This product is being packaged. Try again in a few minutes." });
         // what the agent is buying, in the same words the discovery catalog uses: the facilitator settles against exactly this
@@ -1419,13 +1556,54 @@ export function serve(engine: Engine) {
         const req402 = offer.requirement;
         const challenge = (error?: string) => challenge402(offer.requirement, offer.resource, error, offer.extensions);
         const sig = req.headers["payment-signature"] ?? req.headers["x-payment"];
+        // A made-for-you product: the buyer's answers come with the request (POST {input}, or ?input=<base64url JSON>),
+        // or as an order made before (?order=<id>). The file is written and checked before any payment settles.
+        const custom = product.format === "custom";
+        let made: MadeOrder | undefined;
+        let answers: unknown;
+        if (custom) {
+          const oid = url.searchParams.get("order");
+          if (oid) {
+            made = engine.made.get(oid);
+            if (!made || made.productId !== product.id || made.companyId !== c.id) return json(res, 404, { error: "No such order for this product." });
+            if (made.status === "paid") return json(res, 409, { error: "This order is already paid. Its download link is at GET /api/orders/<id>.", order: made.id });
+          } else {
+            try {
+              const packed = url.searchParams.get("input");
+              answers = req.method === "POST" ? (await body(req, 40_000)).input : packed ? JSON.parse(Buffer.from(packed, "base64url").toString("utf8")) : undefined;
+              if (answers !== undefined) engine.made.check(product, answers);
+            } catch (e) {
+              return json(res, 400, { error: e instanceof OrderError ? e.message : "The input is not valid JSON.", ...(e instanceof OrderError && e.errors ? { errors: e.errors } : {}), input: customView(product)?.inputSchema });
+            }
+          }
+        }
+        /** The buyer's file, written now if it was not ordered before: ready, or the answer that says why not (nothing is charged). */
+        const written = async (payKey?: string): Promise<{ order: MadeOrder } | { status: number; body: Record<string, unknown> }> => {
+          let o = made ?? (payKey ? engine.made.byPayment(payKey) : undefined);
+          if (!o) {
+            if (answers === undefined) return { status: 400, body: { error: 'This product is made to order: send your answers as JSON {"input": {...}} with the request, or order first at POST /api/orders.', input: customView(product)?.inputSchema } };
+            if (limited(req, "made-order", 6, 3600_000)) return { status: 429, body: { error: "Six orders an hour from one place. Nothing was charged; try again later." } };
+            try { o = engine.made.create(c, product, answers, payKey); } catch (e) { if (e instanceof OrderError) return { status: e.status, body: { error: e.message, ...(e.errors ? { errors: e.errors } : {}) } }; throw e; }
+          }
+          if (o.status === "writing") o = (await engine.made.ready(o.id, 150_000)) ?? o;
+          if (o.status === "writing") return { status: 202, body: { ok: false, pending: true, order: o.id, error: "Your file is still being written. Nothing was charged yet: repeat the same request in a minute." } };
+          if (o.status === "failed") return { status: 503, body: { ok: false, order: o.id, error: `Your file could not be made: ${(o.problems ?? ["try again later"]).join("; ")}.` } };
+          return { order: o };
+        };
         if (config.mode === "sim" && url.searchParams.get("sim") === "1" && req.method === "POST") {
+          if (custom) {
+            const w = await written();
+            if (!("order" in w)) return json(res, w.status, w.body);
+            if (w.order.status === "paid") return json(res, 409, { error: "This order is already paid.", order: w.order.id });
+            return json(res, 200, { ok: true, sim: true, order: w.order.id, deliverable: await engine.deliverOrder(c, product, w.order, { payer: "0xdemo000000000000000000000000000000buyer", tx: null, sim: true }) });
+          }
           await engine.recordSale(c, product.id, product.priceUsdc, "0xdemo000000000000000000000000000000buyer", null, true);
           return json(res, 200, { ok: true, sim: true, deliverable: engine.files.link(c, product, `sim-${Date.now()}`) });
         }
         if (!sig || Array.isArray(sig)) {
           const ch = challenge("payment required");
-          return json(res, 402, ch, { "PAYMENT-REQUIRED": encodeHeader(ch) });
+          // a made-to-order product says what to send with the payment, next to the terms
+          return json(res, 402, custom ? { ...ch, input: { schema: customView(product)?.inputSchema, send: made ? "nothing more: this order is written and waits for the payment" : 'the same request as a POST with JSON {"input": {...}} and the payment header', ...(made ? { order: engine.made.view(made) } : {}) } } : ch, { "PAYMENT-REQUIRED": encodeHeader(ch) });
         }
         const payment = decodeHeader<PaymentPayload>(sig);
         const auth = payment?.payload?.authorization;
@@ -1443,6 +1621,13 @@ export function serve(engine: Engine) {
           const bal = await sales.readContract({ address: USDC[config.salesChainId]!.address, abi: erc20Abi, functionName: "balanceOf", args: [v.payer as `0x${string}`] }).catch(() => 0n);
           if (bal < value) return json(res, 402, challenge("insufficient USDC balance"), { "PAYMENT-REQUIRED": encodeHeader(challenge("insufficient USDC balance")) });
         }
+        // Made to order: the file exists and has passed its checks before the payment is settled. When it
+        // cannot be written the buyer is told so here, with the authorization unused: nothing is charged.
+        if (custom) {
+          const w = await written(saleKey(auth.from, auth.nonce));
+          if (!("order" in w)) return json(res, w.status, w.body);
+          made = w.order;
+        }
         // Through the CDP facilitator when it is on (it pays the gas); otherwise the company settles,
         // saved before it is broadcast. Booked once it lands; the same header again never pays twice.
         const run = engine.settleInTurn(c.id, () => engine.checkout.settle(c.id, c.wallet, product.id, payment, undefined, offer));
@@ -1457,6 +1642,7 @@ export function serve(engine: Engine) {
           }
           throw e;
         }
+        if (made) return json(res, 200, { ok: true, tx, order: made.id, deliverable: await engine.deliverOrder(c, product, made, { payer: v.payer, tx, sim: false }) }, { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network: req402.network, payer: v.payer }) });
         return json(res, 200, { ok: true, tx, deliverable: engine.files.link(c, product, tx) }, { "PAYMENT-RESPONSE": encodeHeader({ success: true, transaction: tx, network: req402.network, payer: v.payer }) });
       }
 
@@ -1466,6 +1652,13 @@ export function serve(engine: Engine) {
         const product = c?.products.find((x) => x.id === seg[2]);
         const ref = url.searchParams.get("ref") ?? "";
         if (!c || !product || !engine.files.check(c, product.id, seg[3], seg[4], ref)) return json(res, 403, { error: "This download link is invalid or has expired." });
+        // a made-for-you file: the buyer's own, by the order the link was signed for
+        if (ref.startsWith("o-")) {
+          const o = engine.made.get(ref.slice(2));
+          if (!o || !o.paid || !o.text || o.productId !== product.id) return json(res, 404, { error: "This file is no longer kept. Made-for-you files are deleted some weeks after the purchase." });
+          res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8", "Content-Disposition": `attachment; filename="${c.slug}-${o.recipe}-${o.id.slice(0, 6)}.md"`, "Cache-Control": "private, no-store", "Content-Security-Policy": SANDBOX_CSP });
+          return res.end(o.text);
+        }
         const bin = engine.files.bytes(c, product);
         if (bin) {
           res.writeHead(200, { "Content-Type": bin.type, "Content-Length": bin.data.length, "Content-Disposition": `attachment; filename="${bin.name.replace(/"/g, "")}"`, "Cache-Control": "private, no-store" });
@@ -1482,7 +1675,7 @@ export function serve(engine: Engine) {
         if (limited(req, "studio-img", 120, 60_000)) return json(res, 429, { error: "slow down" });
         const c = engine.get(seg[2]);
         const product = c?.products.find((x) => x.id === seg[3] && x.status === "live");
-        const png = c && product ? engine.files.image(c, product, seg[4]!.slice(0, -4)) : null;
+        const png = c && product && !c.hidden ? engine.files.image(c, product, seg[4]!.slice(0, -4)) : null;
         if (!png) return json(res, 404, { error: "no such image" });
         res.writeHead(200, { "Content-Type": "image/png", "Content-Length": png.length, "Cache-Control": "public, max-age=3600" });
         return res.end(png);
@@ -1513,6 +1706,8 @@ export function serve(engine: Engine) {
       }
       return json(res, 404, { error: "not found" });
     } catch (err) {
+      // refused by moderation: said as it is, and not an engine error
+      if (err instanceof ModerationError) return json(res, 422, { error: err.message, refused: true });
       console.error(err);
       // Our own errors are written for people; library errors (RPC URLs, versions, stacks) are not shown.
       const msg = String((err as Error).message ?? "").split("\n")[0] ?? "";

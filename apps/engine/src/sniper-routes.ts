@@ -39,6 +39,17 @@ export async function sniperRoutes(req: IncomingMessage, res: ServerResponse, p:
     });
     return true;
   }
+  // the numbers alone, for pages that show a count and not the calls (the full list is several hundred kB)
+  if (p === "/api/sniper/stats" && req.method === "GET") {
+    if (h.limited(req, "sniper-stats", 240, 60_000)) { h.json(res, 429, { error: "slow down" }); return true; }
+    const calls = h.sniper?.calls(false) ?? [];
+    const count = (v: string) => calls.filter((c) => c.verdict === v).length;
+    h.json(res, 200, {
+      live: Boolean(h.sniper), calls: calls.length, verdicts: { safe: count("safe"), caution: count("caution"), avoid: count("avoid") },
+      indexed: h.sniper?.indexed() ?? 0, lastVerdictAt: calls.reduce((a, c) => Math.max(a, c.at), 0) || null, stats: sniperStats(calls),
+    });
+    return true;
+  }
   if (p === "/api/sniper/dex" && req.method === "GET") {
     if (h.limited(req, "sniper", 120, 60_000)) { h.json(res, 429, { error: "slow down" }); return true; }
     const url = new URL(req.url ?? "/", "http://x");

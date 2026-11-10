@@ -1,4 +1,3 @@
-import { WAYS } from "../nx/map";
 import { useEffect, useState } from "react";
 import { Icon } from "../Icon";
 import { Link } from "../router";
@@ -17,16 +16,6 @@ export function useStation(): StationData | null {
     fetch("/api/station").then((r) => (r.ok ? r.json() : null)).then((x: StationData | null) => { if (x) { stationCache = { at: Date.now(), d: x }; setD(x); } }).catch(() => {});
   }, []);
   return d;
-}
-
-/** The same three doors on the story page. */
-export function StationDoors() {
-  return <section id="station" className="st-doors" aria-label="Three doors">
-    <picture className="st-doors-bg" aria-hidden="true"><img src="/art/station/station-hero-1920x1080.webp" alt="" loading="lazy" /></picture>
-    <div className="st-doors-in"><span className="eyebrow">NIGHTSHIFT</span><h2>Three doors. <em>One night shift.</em></h2><p className="ns-intro">Choose what you want to do. <Link to="/how-it-works">See how it works →</Link></p>
-      <div className="st-door-grid">{WAYS.map((way) => <Link key={way.key} to={way.to} className="st-door" style={{ "--acc": way.accent } as React.CSSProperties}><span className="st-door-art"><img src={way.emblem} alt="" loading="lazy" /></span><b>{way.title}</b><p>{way.line}</p><span className="st-door-go">OPEN →</span></Link>)}</div>
-    </div>
-  </section>;
 }
 
 export function RoomHero({ id, children }: { id: RoomId; children?: React.ReactNode }) {

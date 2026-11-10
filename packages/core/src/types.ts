@@ -28,13 +28,22 @@ export interface Product {
   gumroad?: GumroadListing;
   /** Why it is never listed on Gumroad: one of Gumroad's prohibited categories. */
   gumroadBlocked?: string;
-  /** Made in-house by the NIGHTSHIFT studio, not ordered from the swarm: a hyperlinked planner. */
-  format?: "planner";
+  /**
+   * Made in-house, not ordered from the swarm (inhouse.ts): a hyperlinked planner, a fixed download
+   * (checklists and templates as a PDF), or a file made for each buyer from a short form ("custom").
+   */
+  format?: "planner" | "custom" | "download";
+  /** A made-for-you product: its recipe (the form, the writer's rules, the checks) and how many were delivered. */
+  custom?: { recipe: string; delivered: number; failed?: number };
+  /** A fixed download the studio wrote and rendered. */
+  download?: { pages: number; sections: number; items: number; files: string[]; bytes: number };
+  /** When the CEO last rewrote the listing (name and pitch), and how often: a listing is not rewritten for ever. */
+  listing?: { at: number; times: number };
   /** What the studio made: the pages and links in each PDF, the files in the download, and its listing images. */
   studio?: { pages: number; links: number; files: string[]; bytes: number; images: string[]; year: number; theme: string };
 }
 
-export type TaskKind = "research" | "build_product" | "build_site" | "improve_site" | "marketing" | "reprice" | "retire_product" | "post";
+export type TaskKind = "research" | "build_product" | "build_site" | "improve_site" | "marketing" | "reprice" | "retire_product" | "post" | "improve_listing" | "ask_owner";
 
 export type TaskStatus =
   | "planned"
@@ -77,7 +86,7 @@ export interface Task {
   /** What the work was about, in plain words (its brief, the product, the owner's direction then): the hard rules compare it with new moves. */
   about?: string;
   /** Built in-house by the studio (no swarm order): what it is making and since when. */
-  studio?: { format: "planner"; at: number; brief: string };
+  studio?: { format: "planner" | "custom" | "download"; at: number; brief: string; recipe?: string };
   /** Held for the owner: the price they were shown when it started waiting. An approval is for this price. */
   held?: { usd: number; imd?: number; via: "swarm" | "market"; at: number };
 }
@@ -185,6 +194,23 @@ export interface Policy {
   marketMaxUsd: number;
   /** USDC the CEO may spend on the strong model in 24 hours, paid from the company's own wallet. 0 = the free model only. */
   aiDailyUsd?: number;
+  /**
+   * The approval gate for posts on the NIGHTSHIFT project account: off (the default), every draft waits
+   * for the owner; on, drafts go out there on their own. The owner's own channels have their own switch.
+   */
+  autoPost?: boolean;
+}
+
+/** One concrete thing the CEO asks its owner to do, because it cannot do it itself. */
+export interface OwnerAsk {
+  id: string;
+  at: number;
+  /** What kind of help: so the same thing is not asked twice. */
+  topic: "connect_channel" | "connect_gumroad" | "share_link" | "fund" | "direction" | "other";
+  text: string;
+  taskId?: string;
+  status: "open" | "done" | "dismissed";
+  doneAt?: number;
 }
 
 /** One action the CEO offers under a chat answer: the owner presses it, the engine does it with these exact fields. */
@@ -237,7 +263,8 @@ export interface Company {
   products: Product[];
   tasks: Task[];
   journal: JournalEntry[];
-  marketing: { at: number; channel: string; text: string; status: "drafted" | "posted" | "failed"; url?: string; error?: string }[];
+  /** Posts drafted for the NIGHTSHIFT project account. A draft is public only after its owner approved it (or turned auto-approve on). */
+  marketing: { at: number; channel: string; text: string; status: "drafted" | "approved" | "posted" | "failed" | "rejected"; url?: string; error?: string }[];
   /** Created in simulation: never sells, spends or withdraws in live mode. */
   sim?: boolean;
   /** Run by NIGHTSHIFT itself (the house services): no CEO shifts, kept off the company boards. */
@@ -260,6 +287,19 @@ export interface Company {
   aiSpend?: { at: number; usdc: bigint; tx: string | null }[];
   /** Everything the company ever paid for the strong model (USDC base units). */
   aiSpentUsdc?: bigint;
+  /**
+   * Free shifts: a new company works at once, with no funding, on free resources only (free models and
+   * in-house production). `used` counts them; after the first few it keeps going at a slower pace.
+   */
+  free?: { used: number; lastAt?: number; queuedAt?: number };
+  /** Kept off every public list, shop and feed, and not run: refused by moderation, or hidden by an operator. Nothing is deleted. */
+  hidden?: { at: number; reason: string; by: "auto" | "admin" };
+  /** An operator looked and cleared it: the automatic screen leaves it alone. */
+  cleared?: { at: number };
+  /** What the CEO asked its owner to do, newest last. */
+  asks?: OwnerAsk[];
+  /** When the company was announced on the project account (once, when it first runs funded). */
+  announced?: number;
 }
 
 /** Where the company may post, on accounts its owner made and connected. */

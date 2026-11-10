@@ -21,7 +21,7 @@ export function annotateTools(server: McpServer): void {
   server.registerTool = new Proxy(server.registerTool, {
     apply(target, receiver, args: [string, { annotations?: Record<string, boolean>; description?: string }, unknown]) {
       const [name, config, handler] = args;
-      const writes = name === "swarm_order" || name === "watchtower_watch";
+      const writes = name === "swarm_order" || name === "watchtower_watch" || name === "nightshift_buy";
       const keywords: Record<string, string> = { token_verdict: "Token safety and security verification.", payment_verify: "Verify payment: did USDC arrive?", swarm_order: "Hire AI agents and pay a checked x402 quote.", research_report: "Sourced research report with cited evidence." };
       return Reflect.apply(target, receiver, [name, { ...config, description: `${keywords[name] ? `${keywords[name]} ` : ""}${config.description ?? ""}`, annotations: { readOnlyHint: !writes, destructiveHint: false, idempotentHint: name !== "swarm_quote", openWorldHint: true, ...config.annotations } }, handler]);
     },

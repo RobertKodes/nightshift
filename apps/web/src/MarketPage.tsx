@@ -7,9 +7,13 @@ import { NxIcon } from "./nx/icons";
 import { Link } from "./router";
 import { SiteLinks } from "./SiteLinks";
 import { CoFrog, HeroDots, Usd, useRich } from "./Home";
+import { formatLabel } from "./CompanyPage.api";
 import "./saas/pages/companies.css";
+import "./CompanyPage.v2.css";
 
-type Item = { site: string | null; siteBackup: string | null; id: string; name: string; kind: string; pitch: string; priceUsd: number; sales: number; b2bSales?: number; createdAt: number; words: number | null; sections: number | null; company: { name: string; slug: string; page: string; site: string | null; siteBackup: string | null }; preview: string; buy: { url: string; network: string } };
+type Item = { site: string | null; siteBackup: string | null; id: string; name: string; kind: string; format?: string; pitch: string; priceUsd: number; sales: number; b2bSales?: number; createdAt: number; words: number | null; sections: number | null; company: { name: string; slug: string; page: string; site: string | null; siteBackup: string | null }; preview: string; buy: { url: string; network: string }; delivery?: { type: string; what: string }; input?: { schema: { properties: Record<string, { description?: string }>; required: string[] } } };
+/** What the buyer receives, in a few words, from what the product is. */
+const gets = (p: Item) => (p.format === "custom" ? "Written for you from a short form · checked before you pay" : p.format === "download" ? "PDF pack with an editable copy · instant download" : p.format === "planner" ? "Hyperlinked PDF planner · instant download" : p.kind === "tool" ? "A web tool you open in your browser" : p.words ? `${p.words.toLocaleString("en-US")} words · ${p.sections} sections · Markdown` : "Markdown download");
 type Detail = Item & { description: string; preview: { title: string; outline: string[]; opening: string; words: number; sections: number } | null; howToBuy: { steps: string[]; sim: string | null } };
 type Totals = { people: { sales: number; revenueUsd: number }; b2b: { sales: number; revenueUsd: number } };
 type Result = { mode: string; chainId: number; count: number; kinds: string[]; items: Item[]; totals?: Totals };
@@ -47,7 +51,7 @@ export function MarketPage() {
         title="What the companies"
         accent="make."
         bg={rich ? <HeroDots /> : undefined}
-        lead="Reports, guides and templates written and checked by NIGHTSHIFT's AI companies with the IMD swarm. Peek inside for free; pay in USDC on Base and the file is yours. AI agents buy the same products over x402."
+        lead="Finished digital goods from $2, made by NIGHTSHIFT's AI companies: files written for you from a short form, printable PDF packs, planners and small tools. Peek inside for free; a made-for-you file is written before you pay. Pay in USDC on Base and it is yours; AI agents buy the same products over x402."
         aside={
           <PxPanel title="SEARCH THE MARKET" state="live" right={r ? `${r.count} found` : "…"} className="cx3-mkbar">
             <label className="cx3-mksearch">
@@ -79,8 +83,9 @@ export function MarketPage() {
             <li>Find products: <code>GET {base}/api/market/search?q=&amp;kind=&amp;maxUsd=</code>, or the full catalog with payment terms at <a href="/api/market/catalog" target="_blank" rel="noreferrer"><code>/api/market/catalog</code></a>.</li>
             <li>Read before paying: <code>GET {base}/api/market/&lt;company&gt;/&lt;product&gt;</code> returns the outline, the opening and the size.</li>
             <li>Pay: <code>GET</code> the product's buy URL, answer the 402 with any x402 v2 client (USDC, EIP-3009), and receive a signed download link.</li>
+            <li>Made-to-order products take your answers: <code>POST</code> the buy URL with <code>{'{"input": {...}}'}</code> (the JSON Schema is in the product). The file is written and checked before your payment settles; if it cannot be made, nothing is charged.</li>
           </ol>
-          <p>Over MCP, no key: <code>claude mcp add --transport http nightshift-public {base}/mcp/public</code> then <code>nightshift_products</code> and <code>nightshift_product</code>. <Link to="/mcp">All MCP options</Link></p>
+          <p>Over MCP, no key: <code>claude mcp add --transport http nightshift-public {base}/mcp/public</code> then <code>nightshift_products</code>, <code>nightshift_product</code> and <code>nightshift_buy</code> (buy and receive in one call). Every product is also in <a href="/openapi.json" target="_blank" rel="noreferrer"><code>/openapi.json</code></a>. <Link to="/mcp">All MCP options</Link></p>
         </PxPanel>
       )}
 
@@ -91,12 +96,12 @@ export function MarketPage() {
           {r.totals && (
             <div className="cx3-mktotals">
               <PxStats cols={4}>
-                <PxStat label="Sold to people and agents" value={<PxNum value={r.totals.people.sales} />} />
+                <PxStat label={r.mode === "sim" ? "Demo sales" : "Verified sales"} value={<PxNum value={r.totals.people.sales} />} sub="to people and agents, from the ledger" />
                 <PxStat label="Their revenue" tone="lime" value={<Usd value={r.totals.people.revenueUsd} />} sub="USDC" />
                 <PxStat label="Sold between companies" value={<PxNum value={r.totals.b2b.sales} />} sub="B2B" />
                 <PxStat label="B2B revenue" value={<Usd value={r.totals.b2b.revenueUsd} />} sub="USDC" />
               </PxStats>
-              <p className="cx3-faint cx3-fine">Counted apart: a company buying research from another is never added to the sales above.</p>
+              <p className="cx3-faint cx3-fine">Every number here is counted from settled payments. A company buying from another is counted apart, never added to the sales above. No reviews are shown, because none are collected or invented.</p>
             </div>
           )}
           <p className="cx3-count">{r.count} product{r.count === 1 ? "" : "s"}</p>
@@ -104,18 +109,18 @@ export function MarketPage() {
             {r.items.map((p) => (
               <SpotlightCard key={`${p.company.slug}/${p.id}`} className="cx3-mkcard" theme="dark" spotlightColor="rgba(184, 255, 61, 0.16)" spotlightSize={340} borderGlow={0.5} grain={0} style={{ "--spotlight-card-surface": "#0a0f0b", "--spotlight-card-border": "rgba(184, 255, 61, 0.15)", "--spotlight-card-shadow": "none" } as React.CSSProperties}>
                 <article className="cx3-mkcard-in">
-                  <div className="cx3-prod-top"><PxTag tone="lime">{p.kind}</PxTag>{(p.sales > 0 || (p.b2bSales ?? 0) > 0) && <span className="cx3-faint cx3-mono">{p.sales} sold{p.b2bSales ? ` · ${p.b2bSales} to companies` : ""}</span>}</div>
-                  <h3>{p.name}</h3>
+                  <div className="cx3-prod-top"><PxTag tone="lime">{formatLabel(p)}</PxTag>{p.sales > 0 ? <span className="cv2-verified" title="Counted from payments settled to the company's wallet"><PxIcon name="shield" size={11} />{p.sales} {r.mode === "sim" ? "demo" : "verified"} sale{p.sales === 1 ? "" : "s"}{p.b2bSales ? ` · ${p.b2bSales} to companies` : ""}</span> : <span className="cv2-verified none">new</span>}</div>
+                  <h3><Link to={`/c/${p.company.slug}#${p.id}`}>{p.name}</Link></h3>
                   <p className="cx3-prod-p">{p.pitch}</p>
                   <div className="cx3-mkby">
                     <CoFrog k={p.company.slug} size={24} />
-                    <span>{p.words ? `${p.words.toLocaleString("en-US")} words · ${p.sections} sections` : "Markdown"} · by <Link to={`/c/${p.company.slug}`}>{p.company.name}</Link></span>
+                    <span>{gets(p)} · by <Link to={`/c/${p.company.slug}`}>{p.company.name}</Link></span>
                   </div>
                   <div className="cx3-mkmeta"><SiteLinks site={p.site ?? p.company.site} backup={p.site ? p.siteBackup : p.company.siteBackup} /></div>
                   <div className="cx3-buy">
                     <span className="cx3-price-big">${p.priceUsd.toFixed(2)}</span>
                     <button className="px-btn ghost small" onClick={() => void peek(p)}>Peek inside</button>
-                    <Link to={`/c/${p.company.slug}`} className="px-btn primary small">Buy</Link>
+                    <Link to={`/c/${p.company.slug}#${p.id}`} className="px-btn primary small">{p.format === "custom" ? "Start my order" : "Buy"}</Link>
                   </div>
                 </article>
               </SpotlightCard>
@@ -128,19 +133,21 @@ export function MarketPage() {
         <div className="nx-shell mk-drawer cx3-dw" data-room="economy" style={{ "--acc": "#b8ff3d", "--acc2": "#d8ffa0" } as React.CSSProperties} role="dialog" aria-modal="true" aria-label={`${open.name}: preview`} onClick={(e) => { if (e.target === e.currentTarget) setOpen(null); }}>
           <div className="mk-panel">
             <button className="mk-x" onClick={() => setOpen(null)} aria-label="Close"><NxIcon name="close" size={18} /></button>
-            <span className="eyebrow">{open.kind} · {open.company.name}</span>
+            <span className="eyebrow">{formatLabel(open)} · {open.company.name}</span>
             <h2>{open.name}</h2>
             <p className="mk-pitch">{open.pitch}</p>
             <p><SiteLinks site={open.site ?? open.company.site} backup={open.site ? open.siteBackup : open.company.siteBackup} /></p>
+            {open.delivery && <p className="cx3-hint"><b>What you receive:</b> {open.delivery.what}.</p>}
+            {open.input && (<><h4>What you fill in</h4><ul className="mk-outline">{Object.entries(open.input.schema.properties).map(([k, f]) => <li key={k}>{(f.description ?? k).split(". ")[0]}{open.input!.schema.required.includes(k) ? "" : " (optional)"}</li>)}</ul></>)}
             {open.preview ? (
               <>
-                <div className="mk-facts"><span><b>{open.preview.words.toLocaleString("en-US")}</b> words</span><span><b>{open.preview.sections}</b> sections</span><span><b>${open.priceUsd.toFixed(2)}</b> USDC</span></div>
+                <div className="mk-facts"><span><b>{open.preview.words.toLocaleString("en-US")}</b> words{open.format === "custom" ? " on its page" : ""}</span><span><b>{open.preview.sections}</b> sections</span><span><b>${open.priceUsd.toFixed(2)}</b> USDC</span></div>
                 {open.preview.outline.length > 0 && (<><h4>Inside</h4><ul className="mk-outline">{open.preview.outline.map((h) => <li key={h}>{h}</li>)}</ul></>)}
                 <h4>How it opens</h4>
                 <blockquote>{open.preview.opening}</blockquote>
               </>
             ) : <p className="dim">This product is being packaged.</p>}
-            <div className="mk-buy"><Link to={`/c/${open.company.slug}`} className="px-btn primary">Buy for ${open.priceUsd.toFixed(2)}</Link><a className="mk-peek" href={`/api/market/${open.company.slug}/${open.id}`} target="_blank" rel="noreferrer">As JSON</a></div>
+            <div className="mk-buy"><Link to={`/c/${open.company.slug}#${open.id}`} className="px-btn primary">{open.format === "custom" ? `Start my order · $${open.priceUsd.toFixed(2)}` : `Buy for $${open.priceUsd.toFixed(2)}`}</Link><a className="mk-peek" href={`/api/market/${open.company.slug}/${open.id}`} target="_blank" rel="noreferrer">As JSON</a></div>
           </div>
         </div>, document.body,
       )}

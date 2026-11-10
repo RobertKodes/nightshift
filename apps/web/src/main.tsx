@@ -1,82 +1,84 @@
-import { Component, type ReactNode, StrictMode, Suspense, lazy, useEffect, useState } from "react";
+// the shared stylesheets, in their fixed order, before any module brings its own
+import "./styles-order";
+import { Component, type ComponentType, type ReactNode, StrictMode, Suspense, lazy, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { type Health, api, noteFirstTouch } from "./api";
-import { CompanyPage } from "./CompanyPage";
-import { Home } from "./Home";
-import { type Active } from "./landing/chrome";
-import { RoomShell } from "./nx/Shell";
-import { roomOf } from "./nx/map";
-import { Landing } from "./landing/Landing";
+import { PageShell } from "./nx/Shell";
 import { SxHome } from "./saas/Home";
-import { SxIndex, SxSection } from "./saas/SectionPage";
-import { findSection } from "./site/sitemap";
-
-import "./landing/app.css";
-import { McpPage } from "./McpPage";
-import { PublicPage } from "./PublicPage";
 import { useRoute } from "./router";
 import { webOnly } from "./store";
-import { WebOnlyPage } from "./StoreNote";
 import { SessionProvider } from "./session";
-import { SetupPage } from "./SetupPage";
-import { MarketPage } from "./MarketPage";
-import { OwnerDesk } from "./OwnerDesk";
-import { TokenPage } from "./TokenPage";
-import { FrogsPage } from "./FrogsPage";
-import { ForgePage } from "./ForgePage";
-import { WatchPage } from "./WatchPage";
-import { SwapPage } from "./SwapPage";
-import { StakePage } from "./StakePage";
-import { ImpactPage } from "./ImpactPage";
-import { GuidePage } from "./GuidePage";
-import { TermsPage } from "./TermsPage";
-import { PrivacyPage } from "./PrivacyPage";
-import { DeleteAccountPage } from "./DeleteAccountPage";
-import { SecurityPage } from "./SecurityPage";
-import { TokenomicsPage } from "./TokenomicsPage";
-import { GameRoomPage } from "./GameRoomPage";
-import { PinballPage } from "./PinballPage";
-import { WaitingBanner } from "./games/lounge";
-import { StakedBanner } from "./games/staked";
-import "./styles.css";
 import "./lite"; // marks <html data-lite> before the first paint
-import "./landing/landing.css";
-import "./clarity.css";
-import { HowItWorksPage } from "./HowItWorksPage";
-import "./saas/saas.css";
 
 // where this visitor first came from, kept for the company they may start
 noteFirstTouch();
 
-const StartPage = lazy(() => import("./StartPage").then((x) => ({ default: x.StartPage })));
-const ShipDeckPage = lazy(() => import("./ship3d/ShipDeckPage").then((x) => ({ default: x.ShipDeckPage })));
-const LaunchpadPage = lazy(() => import("./launchpad/LaunchpadPage").then((x) => ({ default: x.LaunchpadPage })));
-const ArenaPage = lazy(() => import("./ArenaPage").then((x) => ({ default: x.ArenaPage })));
-const ChessPage = lazy(() => import("./ChessPage").then((x) => ({ default: x.ChessPage })));
-const PoolPage = lazy(() => import("./pool/PoolPage").then((x) => ({ default: x.PoolPage })));
-const PokerPage = lazy(() => import("./poker/PokerPage").then((x) => ({ default: x.PokerPage })));
-const LeaguePage = lazy(() => import("./station/LeaguePage").then((x) => ({ default: x.LeaguePage })));
-const WhitepaperPage = lazy(() => import("./WhitepaperPage").then((x) => ({ default: x.WhitepaperPage })));
-const ChangelogPage = lazy(() => import("./ChangelogPage").then((x) => ({ default: x.ChangelogPage })));
-const CommandPage = lazy(() => import("./station/EconomyCommand").then((x) => ({ default: x.CommandPage })));
-const LivePage = lazy(() => import("./LivePage").then((x) => ({ default: x.LivePage })));
-const NightshiftLivePage = lazy(() => import("./live/LivePage").then((x) => ({ default: x.LivePage })));
-const TgMoved = lazy(() => import("./TgMoved").then((x) => ({ default: x.TgMoved })));
-const ServicesPage = lazy(() => import("./station/Services").then((x) => ({ default: x.ServicesPage })));
-const MindPage = lazy(() => import("./station/Mind").then((x) => ({ default: x.MindPage })));
-const LastspawnPage = lazy(() => import("./lastspawn/LastspawnPage").then((x) => ({ default: x.LastspawnPage })));
-const VerdictPage = lazy(() => import("./station/Services").then((x) => ({ default: x.VerdictPage })));
-const HookPage = lazy(() => import("./station/Services").then((x) => ({ default: x.HookPage })));
-const FeedPage = lazy(() => import("./station/Services").then((x) => ({ default: x.FeedPage })));
-const SniperPage = lazy(() => import("./station/Sniper").then((x) => ({ default: x.SniperPage })));
-const CrewsPage = lazy(() => import("./crews/CrewsPage").then((x) => ({ default: x.CrewsPage })));
-const CrewPage = lazy(() => import("./crews/CrewsPage").then((x) => ({ default: x.CrewPage })));
-const WatchtowerPage = lazy(() => import("./crews/WatchtowerPage").then((x) => ({ default: x.WatchtowerPage })));
-const ConnectAgentPage = lazy(() => import("./crews/ConnectAgentPage").then((x) => ({ default: x.ConnectAgentPage })));
-const PartnersPage = lazy(() => import("./site/PartnersPage").then((x) => ({ default: x.PartnersPage })));
-const DealsPage = lazy(() => import("./site/DealsPage").then((x) => ({ default: x.DealsPage })));
-const ProofPage = lazy(() => import("./crews/ProofPage").then((x) => ({ default: x.ProofPage })));
-const LeaderboardPage = lazy(() => import("./LeaderboardPage").then((x) => ({ default: x.LeaderboardPage })));
+/**
+ * Every page but the front door is its own chunk: the front page loads the feed and nothing else.
+ * `page` turns a module's named export into a lazy component.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const page = <M, K extends keyof M>(load: () => Promise<M>, name: K) => lazy(() => load().then((m) => ({ default: m[name] as ComponentType<any> })));
+
+const Home = page(() => import("./Home"), "Home");
+const CompanyPage = page(() => import("./CompanyPage"), "CompanyPage");
+const PublicPage = page(() => import("./PublicPage"), "PublicPage");
+const MarketPage = page(() => import("./MarketPage"), "MarketPage");
+const OwnerDesk = page(() => import("./OwnerDesk"), "OwnerDesk");
+const SetupPage = page(() => import("./SetupPage"), "SetupPage");
+const McpPage = page(() => import("./McpPage"), "McpPage");
+const TokenPage = page(() => import("./TokenPage"), "TokenPage");
+const FrogsPage = page(() => import("./FrogsPage"), "FrogsPage");
+const ForgePage = page(() => import("./ForgePage"), "ForgePage");
+const WatchPage = page(() => import("./WatchPage"), "WatchPage");
+const SwapPage = page(() => import("./SwapPage"), "SwapPage");
+const StakePage = page(() => import("./StakePage"), "StakePage");
+const ImpactPage = page(() => import("./ImpactPage"), "ImpactPage");
+const GuidePage = page(() => import("./GuidePage"), "GuidePage");
+const TermsPage = page(() => import("./TermsPage"), "TermsPage");
+const PrivacyPage = page(() => import("./PrivacyPage"), "PrivacyPage");
+const DeleteAccountPage = page(() => import("./DeleteAccountPage"), "DeleteAccountPage");
+const SecurityPage = page(() => import("./SecurityPage"), "SecurityPage");
+const TokenomicsPage = page(() => import("./TokenomicsPage"), "TokenomicsPage");
+const HowItWorksPage = page(() => import("./HowItWorksPage"), "HowItWorksPage");
+const WebOnlyPage = page(() => import("./StoreNote"), "WebOnlyPage");
+const StartPage = page(() => import("./StartPage"), "StartPage");
+const ObservatoryPage = page(() => import("./saas/Observatory"), "ObservatoryPage");
+const SxIndex = page(() => import("./saas/SectionPage"), "SxIndex");
+const WhitepaperPage = page(() => import("./WhitepaperPage"), "WhitepaperPage");
+const ChangelogPage = page(() => import("./ChangelogPage"), "ChangelogPage");
+const LeaderboardPage = page(() => import("./LeaderboardPage"), "LeaderboardPage");
+// the games
+const GameRoomPage = page(() => import("./GameRoomPage"), "GameRoomPage");
+const PinballPage = page(() => import("./PinballPage"), "PinballPage");
+const ChessPage = page(() => import("./ChessPage"), "ChessPage");
+const PoolPage = page(() => import("./pool/PoolPage"), "PoolPage");
+const PokerPage = page(() => import("./poker/PokerPage"), "PokerPage");
+const LivePage = page(() => import("./LivePage"), "LivePage");
+const WaitingBanner = page(() => import("./games/lounge"), "WaitingBanner");
+const StakedBanner = page(() => import("./games/staked"), "StakedBanner");
+// the AI and agent pages: off the menu, shown and linked from the Observatory
+const ServicesPage = page(() => import("./station/Services"), "ServicesPage");
+const VerdictPage = page(() => import("./station/Services"), "VerdictPage");
+const HookPage = page(() => import("./station/Services"), "HookPage");
+const FeedPage = page(() => import("./station/Services"), "FeedPage");
+const MindPage = page(() => import("./station/Mind"), "MindPage");
+const SniperPage = page(() => import("./station/Sniper"), "SniperPage");
+const LeaguePage = page(() => import("./station/LeaguePage"), "LeaguePage");
+const ArenaPage = page(() => import("./ArenaPage"), "ArenaPage");
+const CrewsPage = page(() => import("./crews/CrewsPage"), "CrewsPage");
+const CrewPage = page(() => import("./crews/CrewsPage"), "CrewPage");
+const WatchtowerPage = page(() => import("./crews/WatchtowerPage"), "WatchtowerPage");
+const ConnectAgentPage = page(() => import("./crews/ConnectAgentPage"), "ConnectAgentPage");
+const ProofPage = page(() => import("./crews/ProofPage"), "ProofPage");
+// parked: out of the menus and off the front page, still open by address
+const ShipDeckPage = page(() => import("./ship3d/ShipDeckPage"), "ShipDeckPage");
+const LaunchpadPage = page(() => import("./launchpad/LaunchpadPage"), "LaunchpadPage");
+const CommandPage = page(() => import("./station/EconomyCommand"), "CommandPage");
+const NightshiftLivePage = page(() => import("./live/LivePage"), "LivePage");
+const LastspawnPage = page(() => import("./lastspawn/LastspawnPage"), "LastspawnPage");
+const PartnersPage = page(() => import("./site/PartnersPage"), "PartnersPage");
+const DealsPage = page(() => import("./site/DealsPage"), "DealsPage");
 
 /** Retired addresses land on the page that replaced them. */
 function Redirect({ to }: { to: string }) {
@@ -85,6 +87,10 @@ function Redirect({ to }: { to: string }) {
   return null;
 }
 
+/** What shows while a page's own chunk arrives: the page's height, so the footer does not jump up. */
+const Wait = ({ className = "st-room" }: { className?: string }) => <div className={className} style={{ minHeight: "70vh" }} />;
+const Screen = ({ bg }: { bg: string }) => <div style={{ position: "fixed", inset: 0, background: bg }} />;
+
 function App() {
   const path = useRoute();
   const [health, setHealth] = useState<Health | null>(null);
@@ -92,95 +98,85 @@ function App() {
   const seg = path.split("/").filter(Boolean);
   const oldDoors: Record<string, string> = { breakroom: "games", geek: "services", info: "token", economy: "proof", hr: "proof" };
   if (seg[0] && oldDoors[seg[0]]) seg[0] = oldDoors[seg[0]]!;
-  // The front door: what this is, the six things to do, every page one click away.
+  // The front door: the promise, one button and the live feed.
   if (seg.length === 0) return <SxHome />;
-  // Existing room URLs open the matching door; the story keeps its art.
-  if (seg[0] === "story") return <Landing />;
-  // Start here: the whole station in plain words, for visitors new to crypto
-  if (seg[0] === "start") { document.title = "Start here · NIGHTSHIFT"; return <RoomShell room={null} path={path} title="Start here"><Suspense fallback={<div className="st-room" />}><StartPage /></Suspense></RoomShell>; }
-  // The index: every section, or every page of one section.
-  if (seg[0] === "new") {
-    if (!seg[1]) { document.title = "Every page · NIGHTSHIFT"; return <RoomShell room={null} path={path}><SxIndex /></RoomShell>; }
-    const section = findSection(seg[1] ?? "");
-    if (!section) return <Redirect to={NEW_ROUTES[seg[1] ?? ""] ?? "/"} />;
-    document.title = `${section.name} · NIGHTSHIFT`;
-    return <RoomShell room={null} path={path}><SxSection section={section} /></RoomShell>;
-  }
-  if (seg[0] === "live") return <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#040611" }} />}><NightshiftLivePage /></Suspense>;
-  // Where the Telegram Mini App was: the games are on the website and its app now. Outside Telegram
-  // this sends the visitor to the same place on the site; inside a Mini App it says the Game Room moved.
-  if (seg[0] === "tg") { document.title = "NIGHTSHIFT Game Room"; return <Suspense fallback={<div style={{ minHeight: "100dvh", background: "#070a0b" }} />}><TgMoved /></Suspense>; }
-  // Space Pinball is a full-screen arcade with its own bar, like the landing.
-  if (seg[0] === "games" && seg[1] === "pinball") return <PinballPage />;
-  // NIGHT CHESS brings three.js: its own chunk, loaded only on this page.
+  // The old story landing and the page where the Telegram Mini App was: both are the front page now.
+  if (seg[0] === "story" || seg[0] === "tg") return <Redirect to="/" />;
+  // The index: every page in the menus, on one page. The old section hubs open the page that replaced them.
+  if (seg[0] === "new" && seg[1]) return <Redirect to={NEW_ROUTES[seg[1]] ?? "/new"} />;
+  // Full-screen pages with their own bars.
+  if (seg[0] === "live") return <Suspense fallback={<Screen bg="#040611" />}><NightshiftLivePage /></Suspense>;
+  if (seg[0] === "games" && seg[1] === "pinball") return <Suspense fallback={<div className="arc-boot" />}><PinballPage /></Suspense>;
+  // NIGHT CHESS and NIGHT POOL bring three.js: their own chunks, loaded only on their pages.
   if (seg[0] === "games" && seg[1] === "chess") return <Suspense fallback={<div className="arc-boot" />}><ChessPage /></Suspense>;
-  // NIGHT POOL brings its own three.js table and its own bar, like NIGHT CHESS
   if (seg[0] === "games" && seg[1] === "pool") return <Suspense fallback={<div className="arc-boot" />}><PoolPage /></Suspense>;
-  // NIGHT POKER: its own page and bar, the cards drawn in code (no three.js)
-  // THE SHIP: the crew at work on the 3D operations deck, inside the $SHIFT room
-  if (seg[0] === "ship") { document.title = "The Ship · NIGHTSHIFT"; return <RoomShell room="info" path={path}><Suspense fallback={<div className="st-room" />}><div className="pv pv-inroom"><ShipDeckPage /></div></Suspense></RoomShell>; }
+  if (seg[0] === "games" && seg[1] === "poker") return <Suspense fallback={<div className="arc-boot" />}><PokerPage /></Suspense>;
   // NIGHT SNIPER: an app screen of its own (iOS layout: its own bars, its own tabs)
   if (seg[0] === "sniper") return <Suspense fallback={<div className="arc-boot" />}><SniperPage /></Suspense>;
-  if (seg[0] === "games" && seg[1] === "poker") return <Suspense fallback={<div className="arc-boot" />}><PokerPage /></Suspense>;
   // LASTSPAWN: the MMORPG, full screen with its own three.js world (its own chunk)
-  if (seg[0] === "play") return <Suspense fallback={<div style={{ position: "fixed", inset: 0, background: "#05070c" }} />}><LastspawnPage /></Suspense>;
-  let page: React.ReactNode = <Home health={health} />;
-  if (seg[0] === "co" && seg[1]) page = <CompanyPage id={seg[1]} health={health} />;
-  if (seg[0] === "c" && seg[1]) page = <PublicPage slug={seg[1]} health={health} />;
-  if (seg[0] === "how-it-works") page = <HowItWorksPage />;
-  if (seg[0] === "mcp") page = <McpPage health={health} />;
-  if (seg[0] === "terms") page = <TermsPage health={health} />;
-  if (seg[0] === "privacy") page = <PrivacyPage />;
-  if (seg[0] === "delete-account") page = <DeleteAccountPage />;
-  if (seg[0] === "security") page = <SecurityPage />;
-  if (seg[0] === "setup") page = <SetupPage />;
-  if (seg[0] === "market") page = <MarketPage />;
-  if (seg[0] === "my") page = <OwnerDesk health={health} />;
-  if (seg[0] === "whitepaper") page = <Suspense fallback={<div className="docs" />}><WhitepaperPage /></Suspense>;
-  if (seg[0] === "changelog") page = <Suspense fallback={<div className="docs" />}><ChangelogPage /></Suspense>;
-  if (seg[0] === "token") page = <TokenPage />;
-  if (seg[0] === "frogs") page = <FrogsPage />;
-  if (seg[0] === "forge") page = <ForgePage />;
-  if (seg[0] === "watch") page = <WatchPage />;
-  if (seg[0] === "swap") page = <SwapPage />;
-  if (seg[0] === "stake" || seg[0] === "staking") page = <StakePage />;
-  if (seg[0] === "impact") page = <ImpactPage />;
-  if (seg[0] === "leaderboard") page = <Suspense fallback={<div className="sh" />}><LeaderboardPage /></Suspense>;
-  if (seg[0] === "guide") page = <GuidePage />;
-  if (seg[0] === "tokenomics") page = <TokenomicsPage />;
-  if (seg[0] === "games") page = seg[1] === "live" ? <Suspense fallback={null}><LivePage /></Suspense> : <GameRoomPage />;
-  if (seg[0] === "launchpad") page = <Suspense fallback={<div className="st-room" />}><LaunchpadPage seg={seg} /></Suspense>;
-  if (seg[0] === "command") page = <Suspense fallback={<div className="st-room" />}><CommandPage /></Suspense>;
-  if (seg[0] === "league") page = <Suspense fallback={<div className="st-room" />}><LeaguePage id={seg[1]} /></Suspense>;
-  if (seg[0] === "mind") page = <Suspense fallback={<div className="st-room" />}><MindPage /></Suspense>;
-  if (seg[0] === "services") page = <Suspense fallback={<div className="st-room" />}>{seg[1] === "verdict" ? <VerdictPage /> : seg[1] === "hook" ? <HookPage /> : seg[1] === "imd-feed" ? <FeedPage /> : <ServicesPage />}</Suspense>;
+  if (seg[0] === "play") return <Suspense fallback={<Screen bg="#05070c" />}><LastspawnPage /></Suspense>;
+
+  let body: ReactNode = <Home health={health} />;
+  let wait = "st-room";
+  const docs = (node: ReactNode) => { wait = "docs"; return node; };
+  if (seg[0] === "co" && seg[1]) body = <CompanyPage id={seg[1]} health={health} />;
+  if (seg[0] === "c" && seg[1]) body = <PublicPage slug={seg[1]} health={health} />;
+  if (seg[0] === "observatory") body = <ObservatoryPage />;
+  if (seg[0] === "start") body = <StartPage />;
+  if (seg[0] === "new") body = <SxIndex />;
+  if (seg[0] === "how-it-works") body = <HowItWorksPage />;
+  if (seg[0] === "mcp") body = <McpPage health={health} />;
+  if (seg[0] === "terms") body = <TermsPage health={health} />;
+  if (seg[0] === "privacy") body = <PrivacyPage />;
+  if (seg[0] === "delete-account") body = <DeleteAccountPage />;
+  if (seg[0] === "security") body = <SecurityPage />;
+  if (seg[0] === "setup") body = <SetupPage />;
+  if (seg[0] === "market") body = <MarketPage />;
+  if (seg[0] === "my") body = <OwnerDesk health={health} />;
+  if (seg[0] === "whitepaper") body = docs(<WhitepaperPage />);
+  if (seg[0] === "changelog") body = docs(<ChangelogPage />);
+  if (seg[0] === "token") body = <TokenPage />;
+  if (seg[0] === "frogs") body = <FrogsPage />;
+  if (seg[0] === "forge") body = <ForgePage />;
+  if (seg[0] === "watch") body = <WatchPage />;
+  if (seg[0] === "swap") body = <SwapPage />;
+  if (seg[0] === "stake" || seg[0] === "staking") body = <StakePage />;
+  if (seg[0] === "impact") body = <ImpactPage />;
+  if (seg[0] === "leaderboard") body = <LeaderboardPage />;
+  if (seg[0] === "guide") body = <GuidePage />;
+  if (seg[0] === "tokenomics") body = <TokenomicsPage />;
+  if (seg[0] === "games") body = seg[1] === "live" ? <LivePage /> : <GameRoomPage />;
+  if (seg[0] === "launchpad") body = <LaunchpadPage seg={seg} />;
+  if (seg[0] === "command") body = <CommandPage />;
+  if (seg[0] === "league") body = <LeaguePage id={seg[1]} />;
+  if (seg[0] === "mind") body = <MindPage />;
+  if (seg[0] === "services") body = seg[1] === "verdict" ? <VerdictPage /> : seg[1] === "hook" ? <HookPage /> : seg[1] === "imd-feed" ? <FeedPage /> : <ServicesPage />;
   // NIGHTSHIFT Crews: the crews, one crew, Watchtower, connecting an agent, and the proof page
-  if (seg[0] === "crews") page = <Suspense fallback={<div className="st-room" />}>{seg[1] ? <CrewPage id={seg[1]} health={health} /> : <CrewsPage health={health} />}</Suspense>;
-  if (seg[0] === "watchtower") page = <Suspense fallback={<div className="st-room" />}><WatchtowerPage health={health} /></Suspense>;
-  if (seg[0] === "agents" && (!seg[1] || seg[1] === "start")) page = <Suspense fallback={<div className="st-room" />}><ConnectAgentPage /></Suspense>;
-  if (seg[0] === "partners") page = <Suspense fallback={<div className="st-room" />}><PartnersPage /></Suspense>;
-  if (seg[0] === "deals") page = <Suspense fallback={<div className="st-room" />}><DealsPage /></Suspense>;
-  if (seg[0] === "proof") page = <Suspense fallback={<div className="st-room" />}><ProofPage health={health} /></Suspense>;
-  if (seg[0] === "arena") page = <Suspense fallback={<div className="docs"><p className="dim">Loading the arena…</p></div>}><ArenaPage /></Suspense>;
+  if (seg[0] === "crews") body = seg[1] ? <CrewPage id={seg[1]} health={health} /> : <CrewsPage health={health} />;
+  if (seg[0] === "watchtower") body = <WatchtowerPage health={health} />;
+  if (seg[0] === "agents" && (!seg[1] || seg[1] === "start")) body = <ConnectAgentPage />;
+  if (seg[0] === "partners") body = <PartnersPage />;
+  if (seg[0] === "deals") body = <DealsPage />;
+  if (seg[0] === "proof") body = <ProofPage health={health} />;
+  if (seg[0] === "arena") body = docs(<ArenaPage />);
+  // THE SHIP: the crew at work on the 3D operations deck
+  if (seg[0] === "ship") body = <div className="pv pv-inroom"><ShipDeckPage /></div>;
   // the Play Store app leaves what moves money to the website
-  if (webOnly(path)) page = <WebOnlyPage path={path} />;
-  const named: Active[] = ["mcp", "terms", "market", "token", "frogs", "swap", "stake", "guide", "tokenomics", "games", "impact", "launchpad", "arena", "breakroom", "geek", "info", "economy", "command", "league", "forge", "watch"];
-  const key = seg[0] === "staking" ? "stake" : seg[0] === "hr" ? "economy" : seg[0];
-  const active: Active = seg[0] === "co" ? "company" : named.includes(key as Active) ? (key as Active) : "companies";
+  if (webOnly(path)) body = <WebOnlyPage path={path} />;
+  const key = seg[0] === "staking" ? "stake" : seg[0];
   // Each page names itself in the tab; pages that know more (a company, a product) set their own.
   document.title = `${seg[0] === "games" && seg[1] === "live" ? "Watch games" : TITLES[key ?? ""] ?? "Companies"} · NIGHTSHIFT`;
-  void active;
-  return <RoomShell room={roomOf(path) ?? "geek"} path={path} lean={seg[0] === "games"}>{page}</RoomShell>;
+  return <PageShell path={path} lean={seg[0] === "games"} title={seg[0] === "start" ? "Start here" : undefined}><Suspense fallback={<Wait className={wait} />}>{body}</Suspense></PageShell>;
 }
 
-/** The station preview's sections and pages, now rooms of the station. */
-const NEW_ROUTES: Record<string, string> = { "": "/", companies: "/companies", tools: "/services", play: "/games", shift: "/token", frogs: "/frogs", proof: "/proof", ship: "/ship" };
+/** The old /new/:section hubs, and where each one's pages live now. */
+const NEW_ROUTES: Record<string, string> = { companies: "/companies", tools: "/observatory", play: "/games", shift: "/token", frogs: "/frogs", proof: "/proof", ship: "/ship" };
 
 const TITLES: Record<string, string> = {
-  companies: "Companies", launch: "Start a business", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
-  market: "Market", token: "$SHIFT", frogs: "Frogs", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide",
-  tokenomics: "Tokenomics", leaderboard: "Leaderboard", games: "Play", launchpad: "Launch a token", arena: "Agent Arena",
-  "how-it-works": "How it works", deals: "Token Deals", partners: "Partners", services: "AI tools", crews: "Crews", watchtower: "Token monitor", agents: "Connect an agent", proof: "Proof", breakroom: "Play", geek: "AI tools", info: "$SHIFT", economy: "Activity & receipts", command: "Frog missions", league: "The Night League", forge: "Upgrade Frogs", watch: "Run a keeper", ship: "The Ship",
+  companies: "Companies", launch: "Found a company", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
+  market: "Market", token: "$SHIFT", frogs: "Frogs", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide", observatory: "Observatory", start: "Start here", new: "Every page",
+  tokenomics: "Tokenomics", leaderboard: "Leaderboard", games: "Games", launchpad: "Launch a token", arena: "Agent Arena", privacy: "Privacy", security: "Safety", "delete-account": "Delete account",
+  "how-it-works": "How it works", deals: "Token Deals", partners: "Partners", services: "AI tools", crews: "Crews", watchtower: "Token monitor", agents: "Connect an agent", proof: "Proof", mind: "SWARM MIND", command: "Frog missions", league: "The Night League", forge: "Upgrade Frogs", watch: "Run a keeper", ship: "The Ship",
 };
 
 // The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.
@@ -210,10 +206,11 @@ class Crash extends Component<{ children: ReactNode }, { error: Error | null }> 
   }
 }
 
-/** The banners that follow you across the site (a waiting table, a staked game): never on /tg, where the Mini App was. */
+/** The banners that follow you across the site (a waiting table, a staked game): never on the front page or the live screen. */
 function Banners() {
   const path = useRoute();
-  return path === "/" || path === "/new" || path.startsWith("/new/") || path === "/live" || path.startsWith("/live/") || path === "/tg" || path.startsWith("/tg/") ? null : <><WaitingBanner /><StakedBanner /></>;
+  const off = path === "/" || path === "/new" || path.startsWith("/new/") || path === "/live" || path.startsWith("/live/") || path === "/observatory";
+  return off ? null : <Suspense fallback={null}><WaitingBanner /><StakedBanner /></Suspense>;
 }
 
 createRoot(document.getElementById("root")!).render(<StrictMode><Crash><SessionProvider><App /><Banners /></SessionProvider></Crash></StrictMode>);

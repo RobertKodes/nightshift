@@ -1,4 +1,4 @@
-import type { Company, Product } from "@nightshift/core";
+import { type Company, type Product, RECIPES, inputSchema, recipeOf } from "@nightshift/core";
 import { type Offer, requirement } from "@nightshift/x402";
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { config } from "./config.js";
@@ -43,21 +43,29 @@ export const productIdOf = (seg: string) => (seg.startsWith("p-") && BARE_ID.tes
  * IPFS (the buyer gets a Markdown file with its address, to open in a browser); every other kind is a
  * Markdown document to download.
  */
-export function deliveryOf(kind: string): { type: "browser-tool" | "document"; callable: false; what: string } {
+export function deliveryOf(kind: string, format?: Product["format"]): { type: "browser-tool" | "document" | "made-to-order" | "download"; callable: boolean; what: string } {
+  if (format === "custom") return { type: "made-to-order", callable: true, what: "a Markdown file written for you from the answers you send (the input schema is with the product). It is written and checked before your payment settles; if it cannot be made, nothing is charged" };
+  if (format === "download") return { type: "download", callable: false, what: "a ZIP you download after payment: a printable PDF pack of checklists and templates, with an editable Markdown copy" };
+  if (format === "planner") return { type: "download", callable: false, what: "a ZIP you download after payment: a hyperlinked digital planner as PDFs (Monday and Sunday start)" };
   return kind === "tool"
     ? { type: "browser-tool", callable: false, what: "a small web tool hosted on IPFS: after payment you get a Markdown file with its address and a backup link when available, to open in a browser" }
     : { type: "document", callable: false, what: `a Markdown ${kind} you download after payment` };
 }
 const CLAIMS_API = /\b(callable|apis?|endpoints?|per[- ]call|one x402 call returns|returns? json)\b/i;
 /** The company's pitch as written, with a correction when it promises a callable API it does not deliver. */
-export function honestPitch(p: { kind: string; pitch: string }): string {
+export function honestPitch(p: { kind: string; pitch: string; format?: Product["format"] }): string {
+  // a made-to-order file is ordered with a request body: saying so is true
+  if (p.format === "custom") return p.pitch;
   return CLAIMS_API.test(p.pitch) ? `${p.pitch} [Correction: this is ${p.kind === "tool" ? "a browser tool you open yourself" : "a document"}, not a callable API.]` : p.pitch;
 }
 
 /** The CDP facilitator refuses a description over 500 characters. */
 const MAX_DESC = 480;
 export function describe(c: Company, p: Product, pv: Preview | null): string {
-  const what = p.kind === "tool" ? "A browser tool (you get its address in a Markdown file)" : pv ? `A ${pv.words.toLocaleString("en-US")}-word Markdown ${p.kind} (${pv.sections} sections)` : `A Markdown ${p.kind}`;
+  const what = p.format === "custom" ? `Made to order: POST your answers as JSON {"input": {...}} (schema in the product), and a Markdown ${RECIPES[recipeOf(p.custom?.recipe)?.id ?? "names"].label.toLowerCase()} is written for you and checked before the payment settles`
+    : p.format === "download" ? `A printable PDF pack${p.download ? ` (${p.download.pages} pages, ${p.download.sections} sheets)` : ""} with an editable Markdown copy, as a ZIP`
+    : p.format === "planner" ? "A hyperlinked digital planner as PDFs, in a ZIP"
+    : p.kind === "tool" ? "A browser tool (you get its address in a Markdown file)" : pv ? `A ${pv.words.toLocaleString("en-US")}-word Markdown ${p.kind} (${pv.sections} sections)` : `A Markdown ${p.kind}`;
   const d = `${p.name}: ${honestPitch(p)} ${what} by ${c.name}, an AI company on NIGHTSHIFT. Free preview: ${config.publicUrl}/api/market/${c.slug}/${p.id}`;
   return d.length > MAX_DESC ? `${d.slice(0, MAX_DESC - 1)}…` : d;
 }
@@ -70,6 +78,29 @@ const EXAMPLE_TX = "0x5f2c9d41b7e8a3c06f1d2e4b8a9c7d3e5f60718293a4b5c6d7e8f90a1b
  * input: the product is the URL. The output is what a paid request returns.
  */
 export function bazaar(c: Company, p: Product): { bazaar: Record<string, unknown> } {
+  const recipe = p.format === "custom" ? recipeOf(p.custom?.recipe) : null;
+  const path = new URL(buyUrl(c, p)).pathname;
+  if (recipe) {
+    // made to order: the buyer's answers are the request body, with the form as its schema and a made-up example
+    const { bazaar: declared } = declareDiscoveryExtension({
+      bodyType: "json",
+      input: { input: Object.fromEntries(Object.entries(recipe.sample).filter(([, v]) => v)) },
+      inputSchema: { properties: { input: inputSchema(recipe) }, required: ["input"] },
+      output: {
+        example: { ok: true, tx: EXAMPLE_TX, order: "q3VYb8Zr1Lx0Wm5Tn7Pc2H", deliverable: `${config.publicUrl}/download/${c.slug}/${p.id}/1793000000/kQ3vYb8Zr1Lx0Wm5Tn7Pc2Hd9Ja4Fs6E?ref=o-q3VYb8Zr1Lx0Wm5Tn7Pc2H` },
+        schema: {
+          properties: {
+            ok: { type: "boolean", description: "True once the file is written, checked and the payment is settled" },
+            tx: { type: "string", pattern: "^0x[0-9a-fA-F]{64}$", description: "The USDC settlement transaction on Base" },
+            order: { type: "string", description: "The order's id" },
+            deliverable: { type: "string", description: "Signed download link to your file (text/markdown), valid for 7 days" },
+          },
+          required: ["ok", "tx", "deliverable"],
+        },
+      },
+    });
+    return { bazaar: bazaarResourceServerExtension.enrichDeclaration!(declared, { method: "POST", adapter: { getPath: () => path } }) as Record<string, unknown> };
+  }
   const { bazaar: declared } = declareDiscoveryExtension({
     output: {
       example: { ok: true, tx: EXAMPLE_TX, deliverable: `${config.publicUrl}/download/${c.slug}/${p.id}/1793000000/kQ3vYb8Zr1Lx0Wm5Tn7Pc2Hd9Ja4Fs6E?ref=${EXAMPLE_TX}` },
@@ -77,13 +108,12 @@ export function bazaar(c: Company, p: Product): { bazaar: Record<string, unknown
         properties: {
           ok: { type: "boolean", description: "True once the payment is settled" },
           tx: { type: "string", pattern: "^0x[0-9a-fA-F]{64}$", description: "The USDC settlement transaction on Base" },
-          deliverable: { type: "string", description: `Signed download link to the ${p.kind} (text/markdown), valid for 7 days` },
+          deliverable: { type: "string", description: `Signed download link to the ${p.kind} (${p.format === "download" || p.format === "planner" ? "application/zip" : "text/markdown"}), valid for 7 days` },
         },
         required: ["ok", "tx", "deliverable"],
       },
     },
   });
-  const path = new URL(buyUrl(c, p)).pathname;
   return { bazaar: bazaarResourceServerExtension.enrichDeclaration!(declared, { method: "GET", adapter: { getPath: () => path } }) as Record<string, unknown> };
 }
 
@@ -97,7 +127,7 @@ export function offerFor(c: Company, p: Product, text: string | null): Offer {
     requirement: requirement(config.salesChainId, c.wallet, p.priceUsdc),
     resource: {
       url: buyUrl(c, p), description: describe(c, p, text ? previewOf(text) : null), mimeType: "application/json",
-      serviceName: "NIGHTSHIFT", tags: [...new Set([tag(p.kind), "markdown", "ai-company", "nightshift"].filter(Boolean))],
+      serviceName: "NIGHTSHIFT", tags: [...new Set([tag(p.format === "custom" ? `made-to-order` : p.format ?? p.kind), ...(p.custom ? [tag(p.custom.recipe)] : []), p.format === "download" || p.format === "planner" ? "pdf" : "markdown", "ai-company", "nightshift"].filter(Boolean))].slice(0, 5),
       ...(config.publicUrl.startsWith("https://") ? { iconUrl: `${config.publicUrl}/app/icon-512.png` } : {}),
     },
     extensions: bazaar(c, p),
@@ -121,7 +151,9 @@ export function search(all: Live[], f: Filters) {
 export function card({ c, p, text }: Live) {
   const pv = text ? previewOf(text) : null;
   return {
-    id: p.id, name: p.name, kind: p.kind, pitch: honestPitch(p), delivery: deliveryOf(p.kind), priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, b2bSales: p.b2bSales ?? 0, createdAt: p.createdAt,
+    id: p.id, name: p.name, kind: p.kind, ...(p.format ? { format: p.format } : {}), pitch: honestPitch(p), delivery: deliveryOf(p.kind, p.format), priceUsd: Number(p.priceUsdc) / 1e6, sales: p.sales, b2bSales: p.b2bSales ?? 0, createdAt: p.createdAt,
+    // made to order: what to send, as JSON Schema, with a made-up example
+    ...(recipeOf(p.custom?.recipe) && p.format === "custom" ? { input: { schema: inputSchema(recipeOf(p.custom!.recipe)!), example: Object.fromEntries(Object.entries(recipeOf(p.custom!.recipe)!.sample).filter(([, v]) => v)), send: `POST ${buyUrl(c, p)} with JSON {"input": {...}}` } } : {}),
     ...productSite(p),
     company: { name: c.name, slug: c.slug, page: `${config.publicUrl}/c/${c.slug}`, site: c.site?.url ?? null, siteBackup: backupUrl(c.site?.cid) },
     words: pv?.words ?? null, sections: pv?.sections ?? null,
@@ -137,6 +169,16 @@ export function detail(l: Live) {
 
 export function howToBuy(c: Company, p: Product) {
   const url = buyUrl(c, p);
+  if (p.format === "custom") return {
+    steps: [
+      `POST ${url} with the JSON body {"input": {...}} (the fields are in input.schema; a wrong field is answered with 400 and what to fix, free). The answer is 402 with the payment terms.`,
+      "Sign an EIP-3009 transferWithAuthorization for the amount in accepts[0], to payTo, on its network (USDC). Any x402 v2 client does this.",
+      `Repeat the same POST with the header PAYMENT-SIGNATURE: <base64 payment payload>. Your file is written and checked first (up to two minutes), then the payment settles: 200 with { ok, tx, order, deliverable }. If it cannot be written the answer is 503 and nothing is charged.`,
+      "Or in two steps: POST /api/orders {company, product, input}, poll GET /api/orders/<id> until it is ready (you see its sections and first lines), then pay at the buy URL with ?order=<id>.",
+      "Download the deliverable (markdown). The link is signed for you and valid for 7 days.",
+    ],
+    sim: config.mode === "sim" ? `Simulation: POST ${url}?sim=1 with {"input": {...}} writes the file, records a demo sale and returns a download link; no money moves.` : null,
+  };
   return {
     steps: [
       `GET ${url}: the answer is 402 with the payment terms (also base64 in the PAYMENT-REQUIRED header).`,
@@ -166,4 +208,39 @@ export function catalog(all: Live[]) {
       };
     }),
   };
+}
+
+/**
+ * The companies' part of /openapi.json: the market's free routes, and one paid operation per product on
+ * sale with its x402 price. A made-to-order product is a POST whose body schema is its order form, so a
+ * scanner or an agent reads what to send without opening a page.
+ */
+export function marketOpenapi(all: Live[]): Record<string, unknown> {
+  const free = (summary: string, extra: Record<string, unknown> = {}) => ({ summary, tags: ["Company products"], security: [], responses: { 200: { description: "JSON" } }, ...extra });
+  const str = (name: string, where: "path" | "query", description: string, required = where === "path") => ({ name, in: where, required, description, schema: { type: "string" } });
+  const paths: Record<string, unknown> = {
+    "/api/market/search": { get: free("Search every product the AI companies sell (free)", { parameters: [str("q", "query", "words to match"), str("kind", "query", "tool, template, dataset or report"), str("maxUsd", "query", "highest price in USD"), str("sort", "query", "best, new or price")] }) },
+    "/api/market/catalog": { get: free("Every product with its x402 payment terms, in the discovery format (free)") },
+    "/api/market/{company}/{product}": { get: free("One product with its free preview, its input schema when it is made to order, and how to buy it (free)", { parameters: [str("company", "path", "company slug"), str("product", "path", "product id")] }) },
+    "/api/orders": { post: free("Order a made-to-order file: it is written and checked first, and paid for only once it is ready (free to call)", { requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["company", "product", "input"], properties: { company: { type: "string" }, product: { type: "string" }, input: { type: "object", description: "the product's own fields: see its input.schema" } } } } } }, responses: { 201: { description: "The order, to poll" }, 400: { description: "What is wrong in the input, field by field" }, 503: { description: "Cannot be written right now; nothing is charged" } } }) },
+    "/api/orders/{id}": { get: free("An order's state: writing, ready (with its sections and first lines), failed, or paid (with the download link)", { parameters: [str("id", "path", "the order id"), str("wait", "query", "1: answer when it is written, or after 25 seconds")] }) },
+    "/api/feed": { get: free("What the companies did, newest first: founded, shift, product, sale, post, price (free)", { parameters: [str("limit", "query", "1 to 200, default 50")] }) },
+  };
+  for (const l of search(all, {}).slice(0, 300)) {
+    const { c, p } = l;
+    const o = offerFor(c, p, l.text);
+    const recipe = p.format === "custom" ? recipeOf(p.custom?.recipe) : null;
+    const op = {
+      summary: `${p.name} ($${(Number(p.priceUsdc) / 1e6).toFixed(2)}) by ${c.name}`, description: o.resource.description, tags: ["Company products"],
+      "x-payment-info": { protocols: ["x402"], price: { mode: "fixed", currency: "USD", amount: (Number(p.priceUsdc) / 1e6).toFixed(2) }, protocol: "x402", version: 2, scheme: "exact", network: o.requirement.network, asset: "USDC", amount: o.requirement.amount, priceUsd: Number(p.priceUsdc) / 1e6, payTo: o.requirement.payTo },
+      ...(recipe ? { requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["input"], properties: { input: inputSchema(recipe) } }, example: { input: Object.fromEntries(Object.entries(recipe.sample).filter(([, v]) => v)) } } } } } : {}),
+      responses: {
+        200: { description: "Paid and delivered (a PAYMENT-RESPONSE header carries the settlement)", content: { "application/json": { schema: { type: "object", required: ["ok", "tx", "deliverable"], properties: { ok: { type: "boolean" }, tx: { type: "string" }, deliverable: { type: "string", description: "signed download link, valid for 7 days" }, ...(recipe ? { order: { type: "string" } } : {}) } } } } },
+        ...(recipe ? { 400: { description: "What is wrong in the input, field by field (free)" }, 503: { description: "The file could not be written; nothing was charged" } } : {}),
+        402: { description: "Payment required: the x402 v2 challenge (also base64 in the PAYMENT-REQUIRED header), with extensions.bazaar" },
+      },
+    };
+    paths[new URL(o.resource.url).pathname] = recipe ? { post: op } : { get: op };
+  }
+  return paths;
 }

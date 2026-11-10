@@ -14,7 +14,8 @@ export interface Overview {
 
 const get = <T,>(url: string) => fetch(url).then((r) => (r.ok ? (r.json() as Promise<T>) : null)).catch(() => null);
 
-function usePoll<T>(url: string, pick: (json: unknown) => T | null, every = 60_000): T | null {
+/** One public JSON route, read again every `every` ms while the tab is in view. `pick` must be a stable function. */
+export function usePoll<T>(url: string, pick: (json: unknown) => T | null, every = 60_000): T | null {
   const [value, setValue] = useState<T | null>(null);
   useEffect(() => {
     let alive = true;

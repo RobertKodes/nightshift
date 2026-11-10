@@ -239,6 +239,12 @@ export class Connect {
     for (const p of c.products) {
       const l = p.gumroad;
       if (l && l.user !== g.user) continue;
+      // made for each buyer when they order: Gumroad hands every buyer the same file, so it cannot deliver this one
+      if (p.format === "custom") {
+        const why = "It is made for each buyer when they order, and Gumroad delivers one fixed file: it sells on the NIGHTSHIFT shop only. Downloads and planners are listed on Gumroad.";
+        if (p.gumroadBlocked !== why) { p.gumroadBlocked = why; this.#log(c, { channel: "gumroad", what: `Kept "${p.name}" off Gumroad`, result: "blocked", detail: why, taskId: p.taskId }); this.d.changed(c); }
+        continue;
+      }
       const bad = prohibited(p, this.d.files.read(c, p));
       if (bad) {
         const why = `${bad.label}: ${bad.why} (it says "${bad.matched}").`;
@@ -427,7 +433,8 @@ export class Connect {
     const x = this.of(c);
     const before = x.channels[kind];
     // a channel connected again is a new account: its first post waits for the owner again
-    const ch: Channel = { approveEach: before?.approveEach ?? false, dailyMax: before?.dailyMax ?? DEFAULT_DAILY, listed: before?.listed ?? true, ...v, kind, label: v.label.slice(0, 80), connectedAt: this.#now(), trusted: false };
+    // the approval gate: on a newly connected channel every post waits for its owner, until they switch that off themselves
+    const ch: Channel = { approveEach: before?.approveEach ?? true, dailyMax: before?.dailyMax ?? DEFAULT_DAILY, listed: before?.listed ?? true, ...v, kind, label: v.label.slice(0, 80), connectedAt: this.#now(), trusted: false };
     this.#drop(c, kind, "the channel was connected again");
     x.channels[kind] = ch;
     return ch;

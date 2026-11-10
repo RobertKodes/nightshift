@@ -1,15 +1,11 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { short } from "../api";
 import { BLUESKY_URL, DEV_X_URL, OPENSEA_URL, TELEGRAM_URL, X_COMMUNITY_URL, X_URL, useSwarm } from "../landing/chrome";
-import { ROOMS, type RoomId } from "../nx/map";
 import { Link, go } from "../router";
 import { useSession } from "../session";
-import { SECTIONS, sectionPath } from "../site/sitemap";
-import { NAV } from "./nav";
+import { FEED, FOUND, NAV, READING, SYSTEMS, groupOf, isOn, tabsOf, type NavId } from "./nav";
 import { PxIcon } from "./PxIcon";
 import "./saas.css";
-
-const isOn = (path: string, to: string) => path === to || (to !== "/" && path.startsWith(`${to}/`));
 
 function Wallet() {
   const { address, signIn, signOut, busy, error } = useSession();
@@ -33,15 +29,27 @@ function Wallet() {
   );
 }
 
-/** The protocol bar: the frog mark, five doors in plain words, two calls to action, the wallet. */
+/** The protocol bar: the frog mark, the short menu, one call to action, the wallet. */
 export function SxHeader({ path = "/", title }: { path?: string; title?: string }) {
   const [open, setOpen] = useState(false);
   const swarm = useSwarm();
+  const here = groupOf(path);
   useEffect(() => setOpen(false), [path]);
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [open]);
+  // an open menu closes when the pointer goes elsewhere, or when one of its links is followed
+  useEffect(() => {
+    const away = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      for (const d of document.querySelectorAll<HTMLDetailsElement>(".px-head details[open]")) {
+        if (!d.contains(target) || target.closest(".px-menu a")) d.removeAttribute("open");
+      }
+    };
+    document.addEventListener("click", away);
+    return () => document.removeEventListener("click", away);
+  }, []);
   return (
     <>
       <header className="px-head">
@@ -52,22 +60,25 @@ export function SxHeader({ path = "/", title }: { path?: string; title?: string 
             <em>PROTOCOL</em>
           </Link>
           <nav className="px-nav" aria-label="Main">
-            {NAV.map((group) => (
-              <details key={group.id}>
+            {NAV.map((group) => group.links.length === 1 ? (
+              <Link key={group.id} to={group.to} className={here === group.id ? "px-nav-a on" : "px-nav-a"} title={group.line}>
+                {group.id === "live" && <i className="px-nav-live" aria-hidden="true" />}{group.label}
+              </Link>
+            ) : (
+              <details key={group.id} className={here === group.id ? "on" : undefined}>
                 <summary>{group.label}<span aria-hidden="true">▾</span></summary>
                 <div className="px-menu">
                   {group.links.map((link) => (
                     <Link key={link.to} to={link.to}><b>{link.label}</b>{link.line && <span>{link.line}</span>}</Link>
                   ))}
-                  <div className="px-menu-foot"><span>{group.line}</span><Link to={group.to}>OPEN →</Link></div>
+                  <div className="px-menu-foot"><span>{group.line}</span></div>
                 </div>
               </details>
             ))}
           </nav>
           <div className="px-actions">
             <span className="px-readout" title="IMD agents online, from api.imd.fun"><i />{swarm?.n ? `${swarm.n.toLocaleString("en-US")} AGENTS` : "AGENTS —"}</span>
-            <Link to="/stake" className="px-btn ghost small px-ghost"><PxIcon name="stake" size={13} />STAKE</Link>
-            <Link to="/launch" className="px-btn primary small px-cta">START A COMPANY</Link>
+            <Link to={FOUND} className="px-btn primary small px-cta">FOUND A COMPANY</Link>
             <Wallet />
             <button className="px-burger" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
               <PxIcon name={open ? "close" : "menu"} size={16} />
@@ -76,59 +87,44 @@ export function SxHeader({ path = "/", title }: { path?: string; title?: string 
         </div>
         {title && <span className="px-sr" aria-live="polite">{title}</span>}
       </header>
-      <div className={open ? "px-drawer on" : "px-drawer"} aria-hidden={!open}>
+      <div className={open ? "px-drawer on" : "px-drawer"} aria-hidden={!open} onClick={(e) => { if ((e.target as HTMLElement).closest("a")) setOpen(false); }}>
         <div className="px-drawer-cta">
-          <Link to="/launch" className="px-btn primary">START A COMPANY</Link>
-          <Link to="/stake" className="px-btn">STAKE $SHIFT</Link>
+          <Link to={FOUND} className="px-btn primary">FOUND A COMPANY</Link>
+          <Link to={FEED} className="px-btn">WATCH LIVE</Link>
         </div>
         {NAV.map((group) => (
-          <div key={group.id}>
-            <h4>{group.label}</h4>
+          <div key={group.id} className={group.links.length === 1 ? "px-drawer-solo" : undefined}>
+            {group.links.length > 1 && <h4>{group.label}</h4>}
             {group.links.map((link) => <Link key={link.to} to={link.to}>{link.label}{link.line && <span>{link.line}</span>}</Link>)}
           </div>
         ))}
-        <h4>Every section</h4>
-        {SECTIONS.map((section) => <Link key={section.id} to={sectionPath(section)}>{section.name}<span>{section.line}</span></Link>)}
-        <h4>Protocol</h4>
-        <Link to="/partners">Partners</Link>
-        <Link to="/changelog">Changelog</Link>
-        <Link to="/terms">Terms &amp; risks</Link>
-        <Link to="/privacy">Privacy</Link>
-        <Link to="/delete-account">Delete account</Link>
+        <h4>More</h4>
+        {READING.map((link) => <Link key={link.to} to={link.to}>{link.label}{link.line && <span>{link.line}</span>}</Link>)}
+        <Link to="/new">Every page<span>The whole site, one list</span></Link>
       </div>
     </>
   );
 }
 
-/** The old station icon names, folded onto the pixel set. */
-const PIXEL_ICON: Record<string, string> = {
-  build: "blocks", security: "shield", agent: "bot", play: "play", live: "pulse", arena: "bolt", league: "pulse",
-  money: "coin", command: "bot", info: "doc", token: "coin", swap: "swap", stake: "stake", frogs: "bot",
-  market: "market", crew: "blocks", sniper: "pulse", mcp: "link", companies: "blocks", key: "lock",
-  founder: "blocks", guide: "doc", missions: "pulse", forge: "bolt", story: "doc", tokenomics: "coin",
-  way: "grid", pulse: "pulse", wallet: "wallet",
-};
-const pixel = (name: string) => PIXEL_ICON[name] ?? "blocks";
-
-/** The page tabs of one door. */
-export function SxSectionBar({ room, path }: { room: RoomId; path: string }) {
-  const r = ROOMS[room];
+/** The page tabs of one menu group: its own pages, the one in view lit. */
+export function SxSectionBar({ group, path }: { group: NavId | null; path: string }) {
+  const tabs = tabsOf(group);
+  if (tabs.length < 2) return null;
+  const label = NAV.find((g) => g.id === group)?.label ?? "Section";
+  // the longest matching address wins, so /games/chess lights "Night Chess" and not "All games" too
+  const lit = tabs.filter((n) => isOn(path, n.to)).sort((a, b) => b.to.length - a.to.length)[0]?.to;
   return (
-    <nav className="px-strip" aria-label={`${r.name} pages`} style={{ "--acc": r.accent } as CSSProperties}>
+    <nav className="px-strip" aria-label={`${label} pages`}>
       <div className="px-strip-in">
-        {r.nav.map((n) => (
-          <Link key={n.to} to={n.to} className={isOn(path, n.to) ? "on" : ""}>
-            <PxIcon name={pixel(n.icon)} size={12} /><span>{n.label}</span>
-          </Link>
-        ))}
-        <Link to="/new" className="px-strip-all">ALL SECTIONS</Link>
+        {tabs.map((n) => <Link key={n.to} to={n.to} className={n.to === lit ? "on" : ""}><span>{n.label}</span></Link>)}
       </div>
     </nav>
   );
 }
 
 /** Phones: five places worth a thumb. */
-export function SxTabs({ room }: { room: RoomId | null }) {
+export function SxTabs({ path }: { path?: string }) {
+  const here = groupOf(path ?? location.pathname);
   const tab = (to: string, label: string, icon: string, on: boolean) => (
     <a href={to} className={on ? "on" : ""} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(to); }}>
       <PxIcon name={icon} size={17} /><span>{label}</span>
@@ -136,22 +132,24 @@ export function SxTabs({ room }: { room: RoomId | null }) {
   );
   return (
     <nav className="px-tabs" aria-label="NIGHTSHIFT">
-      {tab("/", "HOME", "grid", room === null)}
-      {tab("/companies", "BUILD", "blocks", room === "geek")}
-      {tab("/token", "$SHIFT", "coin", room === "info")}
-      {tab("/games", "PLAY", "play", room === "breakroom")}
-      {tab("/my", "DESK", "wallet", false)}
+      {tab("/", "LIVE", "pulse", here === "live")}
+      {tab("/companies", "COMPANIES", "blocks", here === "companies")}
+      {tab("/market", "MARKET", "market", here === "market")}
+      {tab("/games", "GAMES", "play", here === "games")}
+      {tab("/token", "$SHIFT", "coin", here === "shift")}
     </nav>
   );
 }
 
-/** The footer: the whole protocol, four columns, one honest line. */
+/** The footer: the same groups as the menu, the AI systems, the reading, one honest line. */
 export function SxFooter() {
+  const pick = (...ids: NavId[]) => NAV.filter((g) => ids.includes(g.id)).flatMap((g) => g.links);
+  const systems = ["/observatory", "/services", "/mind", "/crews", "/mcp", "/agents/start"];
   const cols: { name: string; links: { to: string; label: string }[] }[] = [
-    { name: "BUILD", links: [{ to: "/launch", label: "Start a company" }, { to: "/companies", label: "Browse companies" }, { to: "/my", label: "Owner desk" }, { to: "/market", label: "Marketplace" }, { to: "/crews", label: "Crews" }] },
-    { name: "MONEY", links: [{ to: "/token", label: "About $SHIFT" }, { to: "/stake", label: "Stake" }, { to: "/leaderboard", label: "Leaderboard" }, { to: "/swap", label: "Swap" }, { to: "/deals", label: "Token Deals" }, { to: "/tokenomics", label: "Tokenomics" }, { to: "/frogs", label: "NIGHT FROGS" }] },
-    { name: "TOOLS / PLAY", links: [{ to: "/services", label: "AI tools" }, { to: "/watchtower", label: "Token monitor" }, { to: "/mind", label: "Research" }, { to: "/mcp", label: "Connect an agent" }, { to: "/games", label: "Games" }, { to: "/arena", label: "Agent Arena" }] },
-    { name: "TRUST", links: [{ to: "/proof", label: "Proof & receipts" }, { to: "/security", label: "Safety" }, { to: "/how-it-works", label: "How it works" }, { to: "/whitepaper", label: "Whitepaper" }, { to: "/changelog", label: "Changelog" }, { to: "/terms", label: "Terms & risks" }] },
+    { name: "COMPANIES", links: [...pick("companies", "market"), { to: FEED, label: "Live feed" }, { to: "/games", label: "Games" }] },
+    { name: "$SHIFT", links: pick("shift") },
+    { name: "OBSERVATORY", links: SYSTEMS.filter((l) => systems.includes(l.to)) },
+    { name: "TRUST", links: [...pick("learn"), ...READING.filter((l) => ["/whitepaper", "/changelog", "/terms"].includes(l.to))] },
   ];
   return (
     <footer className="px-foot">
@@ -179,6 +177,7 @@ export function SxFooter() {
           <a href="https://github.com/RobertKodes/nightshift" target="_blank" rel="noreferrer">GitHub</a>
           <a href="/llms.txt">llms.txt</a>
           <Link to="/privacy">Privacy</Link>
+          <Link to="/new">Every page</Link>
         </nav>
         <span className="px-foot-legal">NOT FINANCIAL ADVICE · CONTRACTS ARE PUBLIC · BUILT BY <a href={DEV_X_URL} target="_blank" rel="noreferrer">@probert_mihai</a></span>
       </div>

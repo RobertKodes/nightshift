@@ -6,9 +6,9 @@ import { inputHash, keywords } from "imd-mcp/lib";
 import { imdOrder } from "./catalog.js";
 import { type MarketDeps, type MarketReceipt, type Scored, RELEVANT, candidate, keywordScore, marketLimits, marketReserved, marketRule, marketSpentToday, modelScores, relevantByKeywords, terms } from "./market.js";
 import { aboutOf, repeatOf, siteWithoutAddress } from "./memory.js";
-import { type CompanyStats, type Decision, llmDecision, playbook } from "./planner.js";
-import { budgetFreesAt, canSpend } from "./policy.js";
-import type { Company, JournalEntry, MarketSearch, Product, Task } from "./types.js";
+import { type CompanyStats, type Decision, freePlaybook, isFreeMove, llmDecision, playbook } from "./planner.js";
+import { approvalGate, budgetFreesAt, canSpend } from "./policy.js";
+import type { Company, JournalEntry, MarketSearch, OwnerAsk, Product, Task } from "./types.js";
 import { fromImd, fromUsdc, usdc } from "./types.js";
 
 export interface ShiftDeps {
@@ -20,7 +20,7 @@ export interface ShiftDeps {
   stats: (c: Company) => CompanyStats;
   /** Public URL prefix of a company's buy links, e.g. https://host/buy/acme */
   buyBase: (c: Company) => string;
-  emit: (c: Company, type: "task" | "journal" | "company" | "approval", payload: unknown) => void;
+  emit: (c: Company, type: "task" | "journal" | "company" | "approval" | "ask", payload: unknown) => void;
   /** The saver's first rule: look for shipped public work before paying for research. */
   findExisting?: (query: string) => Promise<{ title: string; url: string } | null>;
   now?: () => number;
@@ -37,8 +37,17 @@ export interface ShiftDeps {
    * pay today (no USDC, or its AI limit for the day is spent): the CEO then thinks with the free model.
    */
   brain?: (c: Company) => Promise<Brain | null>;
-  /** The NIGHTSHIFT studio: makes a planner in-house and calls finishStudio when it is done. */
+  /** The NIGHTSHIFT studio: makes a product in-house (a planner, a download, a made-for-you file's form and sample) and calls finishStudio when it is done. */
   studio?: { build: (c: Company, t: Task, p: Product, decision: Decision) => void };
+  /**
+   * A free shift: the company has no money to spend, so only moves that cost nothing are made (in-house
+   * products, the listing, a question to the owner), with the free model or the free playbook.
+   */
+  free?: boolean;
+  /** Moves the CEO may make in one shift, one after the other, while none of them is left in progress (default 1). */
+  movesPerShift?: number;
+  /** Moves the CEO may make in 24 hours, the owner's own orders not counted (default: no limit). */
+  movesPerDay?: number;
 }
 
 export interface Brain {
@@ -86,12 +95,19 @@ export function mark(t: Task, at: number): void {
   trail.splice(i > 0 ? i : 1, 1);
 }
 
+/** The CEO's own moves in the last 24 hours (work the owner ordered by hand is not counted). */
+export function movesToday(c: Company, at = Date.now()): number {
+  return c.tasks.filter((t) => at - t.createdAt < DAY && t.mind?.by !== "owner").length;
+}
+
 /**
- * One shift: the CEO looks at the numbers, picks one move and starts it. Paid moves are checked
- * for free first, then held to the owner's limits, and only then bought from the IMD swarm.
+ * One shift: the CEO looks at the numbers, picks a move and starts it; when that move is finished at
+ * once (a listing rewritten, a question to the owner, a price), it may make another, up to the cap, and
+ * stops as soon as one is left in progress or waiting for the owner. Paid moves are checked for free
+ * first, then held to the owner's limits, and only then bought from the IMD swarm. Returns the last move.
  */
 export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
-  if (c.status !== "active") return null;
+  if (c.status !== "active" || c.hidden) return null;
   if (c.tasks.some((t) => ACTIVE.has(t.status))) {
     note(c, d, "note", "Work from an earlier shift is still in progress; checking on it instead of starting more.");
     return null;
@@ -100,7 +116,29 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
   if (c.restUntil && now(d) < c.restUntil) return null;
   delete c.restUntil;
   delete c.restReason;
+  if (d.movesPerDay !== undefined && movesToday(c, now(d)) >= d.movesPerDay) {
+    const oldest = Math.min(...c.tasks.filter((t) => now(d) - t.createdAt < DAY && t.mind?.by !== "owner").map((t) => t.createdAt));
+    c.restUntil = oldest + DAY;
+    c.restReason = `it made its ${d.movesPerDay} moves for the day`;
+    return null;
+  }
   c.cycle += 1;
+  const max = Math.max(1, Math.floor(d.movesPerShift ?? 1));
+  let last: Task | null = null;
+  for (let i = 0; i < max; i++) {
+    if (i > 0 && d.movesPerDay !== undefined && movesToday(c, now(d)) >= d.movesPerDay) break;
+    const t = await move(c, d, i === 0);
+    if (!t) break;
+    last = t;
+    // left in progress, waiting for the owner, or failed: the shift ends here
+    if (t.status !== "done") break;
+  }
+  return last;
+}
+
+/** One move of a shift. `first`: the shift's first move; with nothing new to do then, the company rests. */
+async function move(c: Company, d: ShiftDeps, first: boolean): Promise<Task | null> {
+  const free = d.free === true;
   const context = d.context ? await d.context(c).catch(() => ({})) : {};
   const stats: CompanyStats = { ...d.stats(c), ...context };
   let decision: Decision | null = null;
@@ -110,16 +148,16 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
   // for the flight recorder, and the next move that is new is made instead.
   const avoided: string[] = [];
   const isNew = (x: Decision) => {
-    const why = repeatOf(c, x, imdOrder(c, x, d.buyBase(c)), now(d));
+    const why = free && !isFreeMove(x) ? "it costs money, and the company runs on free shifts until it is funded" : repeatOf(c, x, imdOrder(c, x, d.buyBase(c)), now(d), stats);
     if (why) avoided.push(`${x.title}: ${why}`);
     return !why;
   };
   // the strong model when the company pays for it, else the free one; the playbook when neither answers
-  const brain = d.brain ? await d.brain(c).catch(() => null) : null;
+  const brain = d.brain && !free ? await d.brain(c).catch(() => null) : null;
   const minds: Brain[] = [...(brain ? [brain] : []), ...(d.llm ? [{ llm: d.llm, model: d.model, paid: () => null }] : [])];
   for (const [i, m] of minds.entries()) {
     try {
-      const r = await llmDecision(m.llm, m.model, c, stats);
+      const r = await llmDecision(m.llm, m.model, c, stats, { free });
       const paid = m.paid();
       if (r && isNew(r.decision)) { decision = r.decision; mind = { by: "model", model: r.servedModel, costUsd: r.costUsd, saw, ...(paid ? { paid } : {}) }; }
       else mind.fallback = r ? `the model's move repeats earlier work (${avoided[0]!.slice(r.decision.title.length + 2)})` : "the model's answer was not a usable move";
@@ -127,11 +165,14 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
     } catch (err) {
       if (i < minds.length - 1) { note(c, d, "note", `The strong model could not answer (${(err as Error).message.slice(0, 120)}); thinking with the free model this shift.`); continue; }
       mind.fallback = "the model could not be reached";
-      note(c, d, "warning", "The CEO could not think this shift; using the playbook.");
+      // a busy free model is routine, not a problem for the operator: the playbook decides, and the log says so
+      note(c, d, free ? "note" : "warning", free ? "The free model is busy; the playbook picks this move." : "The CEO could not think this shift; using the playbook.");
     }
   }
-  decision ??= playbook(c, stats, now(d)).find(isNew) ?? null;
+  decision ??= (free ? freePlaybook : playbook)(c, stats, now(d)).find(isNew) ?? null;
   if (avoided.length) mind.avoided = avoided.slice(0, 8);
+  // after the first move, nothing new simply ends the shift
+  if (!decision && !first) return null;
   if (!decision) {
     // Everything it would do next was done, is owned, or failed twice: no task, no spend, and the
     // owner desk says why. It rests for a day, or until the owner gives a direction or runs a shift.
@@ -142,7 +183,7 @@ export async function runShift(c: Company, d: ShiftDeps): Promise<Task | null> {
     return null;
   }
   const order = imdOrder(c, decision, d.buyBase(c));
-  note(c, d, "decision", `Shift ${c.cycle}: ${decision.title}. ${decision.why}${avoided.length ? ` (Passed over ${avoided.length} move${avoided.length === 1 ? "" : "s"} that would repeat earlier work.)` : ""}`);
+  note(c, d, "decision", `Shift ${c.cycle}${first ? "" : ", next move"}: ${decision.title}. ${decision.why}${avoided.length ? ` (Passed over ${avoided.length} move${avoided.length === 1 ? "" : "s"} that would repeat earlier work.)` : ""}`);
   return start(c, d, decision, mind, order, false);
 }
 
@@ -224,17 +265,26 @@ async function start(c: Company, d: ShiftDeps, decision: Decision, mind: Task["m
     if ((await shopFirst(c, t, decision.brief || decision.title, d, approved)) !== "none") return t;
   }
 
-  if (decision.kind === "build_product" && decision.product?.format === "planner" && d.studio) {
+  if (decision.kind === "build_product" && decision.product?.format && d.studio) {
+    const f = decision.product.format, recipe = f === "custom" ? decision.product.recipe : undefined;
     const p: Product = {
-      id: randomUUID(), name: decision.product.name, kind: "template", format: "planner", pitch: decision.product.pitch, priceUsdc: usdc(decision.product.priceUsd),
+      id: randomUUID(), name: decision.product.name, kind: "template", format: f, pitch: decision.product.pitch, priceUsdc: usdc(decision.product.priceUsd),
       status: "building", deliverableUrl: null, taskId: t.id, sales: 0, revenueUsdc: 0n, createdAt: now(d),
+      ...(recipe ? { custom: { recipe, delivered: 0 } } : {}),
     };
     c.products.push(p);
     t.productId = p.id;
-    t.studio = { format: "planner", at: now(d), brief: decision.brief };
-    touch(c, t, d, { status: "building", activity: "the studio is designing the planner" });
-    note(c, d, "decision", `Making "${p.name}" in the NIGHTSHIFT studio: a hyperlinked planner, designed for ${c.audience}. No swarm order, so no IMD is spent.`);
+    t.studio = { format: f, at: now(d), brief: decision.brief, ...(recipe ? { recipe } : {}) };
+    touch(c, t, d, { status: "building", activity: f === "planner" ? "the studio is designing the planner" : f === "download" ? "the studio is writing the pack" : "the studio is setting up the order form and a sample" });
+    note(c, d, "decision", f === "planner" ? `Making "${p.name}" in the NIGHTSHIFT studio: a hyperlinked planner, designed for ${c.audience}. No swarm order, so no IMD is spent.`
+      : f === "download" ? `Making "${p.name}" in the NIGHTSHIFT studio: a printable pack of checklists and templates for ${c.audience}. No swarm order, so nothing is spent.`
+      : `Setting up "${p.name}": a file made for each buyer from a short form, written when they buy and checked before they pay. No swarm order, so nothing is spent.`);
     d.studio.build(c, t, p, decision);
+    return t;
+  }
+  // a free shift never falls through to a swarm order
+  if (d.free || decision.product?.format) {
+    touch(c, t, d, { status: "failed", error: decision.product?.format ? "the studio is not available on this engine" : "that move needs funding", activity: null });
     return t;
   }
 
@@ -728,9 +778,37 @@ async function postMove(c: Company, t: Task, decision: Decision, d: ShiftDeps): 
 function doInHouse(c: Company, t: Task, decision: Decision, d: ShiftDeps): void {
   if (decision.kind === "marketing") {
     const text = (decision.post || decision.brief || `${c.name}: ${c.mission}`).slice(0, 280);
-    c.marketing.push({ at: now(d), channel: "x", text, status: "drafted" });
+    // the approval gate: a draft is public only once its owner says so, unless they turned auto-post on
+    const gate = approvalGate(c, { kind: "project_post" });
+    c.marketing.push({ at: now(d), channel: "x", text, status: gate.wait ? "drafted" : "approved" });
+    if (c.marketing.length > 200) c.marketing.splice(0, c.marketing.length - 200);
     touch(c, t, d, { status: "done", result: { note: text } });
-    note(c, d, "result", `Drafted a post: "${text}"`);
+    note(c, d, "result", `Drafted a post: "${text}"${gate.wait ? " It waits for your approval before anyone sees it." : ""}`);
+  } else if (decision.kind === "improve_listing") {
+    const p = c.products.find((x) => x.id === decision.productId && x.status === "live");
+    const l = decision.listing;
+    if (!p || !l?.pitch) touch(c, t, d, { status: "failed", error: "no such product on sale, or no new listing" });
+    else {
+      const before = p.pitch;
+      if (l.name) p.name = l.name;
+      p.pitch = l.pitch;
+      p.listing = { at: now(d), times: (p.listing?.times ?? 0) + 1 };
+      t.productId = p.id;
+      touch(c, t, d, { status: "done", result: { note: `"${before}" → "${p.pitch}"` } });
+      note(c, d, "result", `Rewrote the listing of ${p.name}: "${p.pitch}"`);
+    }
+  } else if (decision.kind === "ask_owner") {
+    const a = decision.ask;
+    if (!a?.text) touch(c, t, d, { status: "failed", error: "nothing to ask" });
+    else {
+      const ask: OwnerAsk = { id: randomUUID(), at: now(d), topic: a.topic, text: a.text, taskId: t.id, status: "open" };
+      const asks = (c.asks ??= []);
+      asks.push(ask);
+      if (asks.length > 40) asks.splice(0, asks.length - 40);
+      touch(c, t, d, { status: "done", result: { note: a.text } });
+      note(c, d, "note", `Asked the owner one thing: ${a.text}`);
+      d.emit(c, "ask", ask);
+    }
   } else if (decision.kind === "reprice") {
     const p = c.products.find((x) => x.id === decision.productId);
     if (p?.priceByOwner) {

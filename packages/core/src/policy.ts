@@ -1,4 +1,4 @@
-import type { Company, Policy } from "./types.js";
+import type { ChannelKind, Company, Policy } from "./types.js";
 import { fromImd } from "./types.js";
 
 export const DEFAULT_POLICY: Policy = {
@@ -59,6 +59,7 @@ export function validatePolicy(p: Partial<Policy>): Policy {
     dailyBudgetUsd: Number(m.dailyBudgetUsd), approvalOverUsd: Number(m.approvalOverUsd), autopilot: yes(m.autopilot), shiftMinutes: Number(m.shiftMinutes),
     marketBuy: yes(m.marketBuy), marketDailyUsd: Number(m.marketDailyUsd), marketMaxUsd: Number(m.marketMaxUsd),
     aiDailyUsd: Number(m.aiDailyUsd ?? DEFAULT_POLICY.aiDailyUsd),
+    autoPost: yes(m.autoPost),
   };
   if (!(out.dailyBudgetUsd >= 0 && out.dailyBudgetUsd <= 10_000)) throw new Error("dailyBudgetUsd must be between 0 and 10000");
   if (!(out.approvalOverUsd >= 0)) throw new Error("approvalOverUsd must be 0 or more");
@@ -67,6 +68,40 @@ export function validatePolicy(p: Partial<Policy>): Policy {
   if (!(out.marketMaxUsd >= 0 && out.marketMaxUsd <= 500)) throw new Error("marketMaxUsd must be between 0 and 500");
   if (!(out.aiDailyUsd! >= 0 && out.aiDailyUsd! <= 20)) throw new Error("aiDailyUsd must be between 0 and 20");
   return out;
+}
+
+/**
+ * What a company founded now starts with: nothing public and nothing paid happens without its owner.
+ * Every purchase waits (the owner raises "ask me over" to let small ones through), the strong model is
+ * off until the owner gives it a daily amount, and drafts for the project account wait for a yes.
+ * Companies founded before keep the limits their owners set.
+ */
+export const FOUNDING_POLICY: Partial<Policy> = { approvalOverUsd: 0, aiDailyUsd: 0, autoPost: false };
+
+export type GateAction =
+  /** A post on the owner's own connected account. */
+  | { kind: "post"; channel: ChannelKind }
+  /** A drafted post on the NIGHTSHIFT project account. */
+  | { kind: "project_post" }
+  /** Money leaving the company: a swarm order, a market purchase. */
+  | { kind: "spend"; usd: number };
+
+/**
+ * The approval gate, in one place: anything public or paid waits for the owner unless the owner turned
+ * auto-approve on for exactly that (a channel's "post on its own" switch, auto-post for the project
+ * account, an "ask me over" amount for spending). `wait` says so, `why` says it in the owner's words.
+ */
+export function approvalGate(c: Company, a: GateAction): { wait: boolean; why: string } {
+  if (a.kind === "spend") {
+    const over = a.usd > c.policy.approvalOverUsd + 1e-9;
+    return { wait: over, why: over ? (c.policy.approvalOverUsd > 0 ? `$${a.usd.toFixed(2)} is over the $${c.policy.approvalOverUsd} you approve by hand` : `every purchase waits for you ($${a.usd.toFixed(2)}); raise "ask me over" to let small ones through`) : `within the $${c.policy.approvalOverUsd} you let through` };
+  }
+  if (a.kind === "project_post") return c.policy.autoPost ? { wait: false, why: "you turned auto-post on for the project account" } : { wait: true, why: "a draft goes public only after you approve it" };
+  const ch = c.connections?.channels[a.channel];
+  if (!ch) return { wait: true, why: "that channel is not connected" };
+  // auto-approve is the owner's own switch; even then the very first post on a channel is shown to them
+  if (ch.approveEach) return { wait: true, why: "every post on this channel waits for you" };
+  return ch.trusted ? { wait: false, why: "you let posts on this channel go out on their own" } : { wait: true, why: "the first post on this channel waits for you" };
 }
 
 /**

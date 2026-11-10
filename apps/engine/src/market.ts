@@ -7,8 +7,9 @@ import type { Metrics } from "./store.js";
  * simulated sale is marked `sim` everywhere it shows.
  */
 export function simulateTraffic(c: Company, m: Metrics, dtMs: number, now: number): { visits: number; sales: { productId: string; usdc: bigint }[] } {
-  if (!c.site) return { visits: 0, sales: [] };
   const live = c.products.filter((p) => p.status === "live");
+  // a company on free shifts has no site of its own: its shop page is where the simulated visitors go
+  if (!c.site && !live.length) return { visits: 0, sales: [] };
   const posts = c.marketing.filter((p) => now - p.at < 3 * 24 * 3600_000).length;
   const perMinute = 0.6 + posts * 0.5 + live.length * 0.3;
   const visits = poisson((perMinute * dtMs) / 60_000);

@@ -1,0 +1,99 @@
+/* Companies v2: the founding form without a funding step, the live company page, and the shop.
+   Built on the same tokens as saas/pages/companies.css (the cx3 family); only what v2 adds is here. */
+
+/* ---------------------------------------------------------------- founding: surprise me, and the three promises */
+.px .cx3 .cx3-examples .cv2-surprise {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--px-lime); border-style: solid; color: var(--px-lime);
+  background: rgba(184, 255, 61, .06); font: 500 11.5px/1.35 var(--px-mono); letter-spacing: .02em;
+}
+.px .cx3 .cx3-examples .cv2-surprise:hover:not(:disabled) { background: rgba(184, 255, 61, .14); color: var(--px-text); }
+.px .cx3 .cx3-examples .cv2-surprise:disabled { opacity: .6; cursor: progress; }
+.px .cx3 .cv2-promise { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.px .cx3 .cv2-promise li { position: relative; padding-left: 14px; color: var(--px-dim); font: 400 12px/1.5 var(--px-sans); }
+.px .cx3 .cv2-promise li::before { content: ""; position: absolute; left: 0; top: .52em; width: 6px; height: 6px; background: var(--px-lime); }
+.px .cx3 .cv2-promise b { color: var(--px-text); font-weight: 600; }
+
+/* ---------------------------------------------------------------- the owner's page: live status */
+.px .cx3 .cv2-live .pk-panel-b { display: grid; gap: 12px; }
+.px .cx3 .cv2-live-now { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px; border-left: 3px solid var(--px-lime); background: rgba(184, 255, 61, .04); color: var(--px-lime); }
+.px .cx3 .cv2-live-now b { display: block; font: 400 9.5px/1 var(--px-pixel); letter-spacing: .07em; color: var(--px-lime); }
+.px .cx3 .cv2-live-now p { margin: 6px 0 0; color: var(--px-text); font: 500 14px/1.45 var(--px-display); letter-spacing: -.01em; overflow-wrap: anywhere; }
+.px .cx3 .cv2-meter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.px .cx3 .cv2-meter i { width: 34px; height: 8px; border: 1px solid var(--px-line2); background: transparent; }
+.px .cx3 .cv2-meter i.on { background: var(--px-lime); border-color: var(--px-lime); }
+.px .cx3 .cv2-meter i.cur { border-color: var(--px-lime); animation: cv2-pulse 1.1s steps(2) infinite; }
+.px .cx3 .cv2-meter span { margin-left: 6px; color: var(--px-dim); font: 400 11.5px/1.4 var(--px-mono); }
+@keyframes cv2-pulse { 50% { background: rgba(184, 255, 61, .45); } }
+.px .cx3 .cv2-share { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 12px; border: 1px dashed var(--px-line2); }
+.px .cx3 .cv2-share > span { color: var(--px-faint); font: 400 9px/1 var(--px-pixel); letter-spacing: .06em; }
+.px .cx3 .cv2-share a { flex: 1 1 200px; min-width: 0; color: var(--px-lime); font: 500 12.5px/1.3 var(--px-mono); text-decoration: none; overflow-wrap: anywhere; }
+.px .cx3 .cv2-share a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.px .cx3 .cv2-upgrade { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid rgba(141, 182, 255, .28); background: rgba(141, 182, 255, .04); }
+.px .cx3 .cv2-upgrade > div { display: grid; gap: 4px; flex: 1 1 280px; min-width: 0; }
+.px .cx3 .cv2-upgrade b { color: var(--px-text); font: 600 13.5px/1.3 var(--px-display); }
+.px .cx3 .cv2-upgrade span { color: var(--px-dim); font: 400 12px/1.55 var(--px-sans); }
+
+/* the CEO's question, the moderation notice */
+.px .cx3 .cv2-asks { margin-top: 14px; border: 1px solid rgba(242, 193, 78, .4); background: linear-gradient(90deg, rgba(242, 193, 78, .06), var(--px-panel) 46%); }
+.px .cx3 .cv2-asks > header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 14px; border-bottom: 1px solid rgba(242, 193, 78, .22); color: var(--px-gold); }
+.px .cx3 .cv2-asks > header b { font: 400 10px/1 var(--px-pixel); letter-spacing: .07em; }
+.px .cx3 .cv2-asks > header span { margin-left: auto; color: var(--px-dim); font: 400 11px/1.3 var(--px-mono); }
+.px .cx3 .cv2-ask { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; }
+.px .cx3 .cv2-ask + .cv2-ask { border-top: 1px dashed rgba(242, 193, 78, .2); }
+.px .cx3 .cv2-ask p { flex: 1 1 340px; min-width: 0; margin: 0; color: var(--px-text); font: 400 13.5px/1.6 var(--px-sans); overflow-wrap: anywhere; }
+.px .cx3 .cv2-hidden { display: grid; gap: 4px; margin-top: 14px; padding: 12px 14px; border: 1px solid rgba(255, 107, 125, .5); border-left: 3px solid var(--px-red); background: rgba(255, 107, 125, .05); }
+.px .cx3 .cv2-hidden b { color: var(--px-text); font: 600 14px/1.3 var(--px-display); }
+.px .cx3 .cv2-hidden span { color: var(--px-dim); font: 400 12.5px/1.55 var(--px-sans); }
+
+/* drafts that wait for a yes, the limits' gate line, and the way out */
+.px .cx3 .cv2-drafts { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
+.px .cx3 .cv2-drafts li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid rgba(242, 193, 78, .3); background: rgba(242, 193, 78, .03); }
+.px .cx3 .cv2-drafts li > span { flex: 1 1 260px; min-width: 0; color: var(--px-text); font: 400 12.5px/1.55 var(--px-sans); overflow-wrap: anywhere; }
+.px .cx3 .cv2-gate { align-items: flex-start; font: 400 12.5px/1.5 var(--px-sans); color: var(--px-text); }
+.px .cx3 .cv2-gate span { color: var(--px-faint); }
+.px .cx3 .cv2-out .pk-panel-b { display: grid; gap: 12px; }
+.px .cx3 .cv2-out-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.px .cx3 .cv2-out-row > span { flex: 1 1 220px; min-width: 0; color: var(--px-dim); font: 400 12px/1.5 var(--px-sans); }
+
+/* ---------------------------------------------------------------- the shop: what you get, the order form, your file */
+.px .cx3 .cv2-verified { display: inline-flex; align-items: center; gap: 5px; color: var(--px-lime); font: 500 11px/1 var(--px-mono); white-space: nowrap; }
+.px .cx3 .cv2-verified.none { color: var(--px-faint); }
+.px .cx3 .cv2-card.is-open { grid-column: 1 / -1; }
+.px .cx3 .cv2-card h3 a { color: inherit; text-decoration: none; }
+.px .cx3 .cx3-mkcard h3 a { color: inherit; text-decoration: none; }
+.px .cx3 .cx3-mkcard h3 a:hover { color: var(--px-lime); }
+.px .cx3 .cv2-what { display: grid; gap: 6px; }
+.px .cx3 .cv2-what p { margin: 0; color: var(--px-dim); font: 400 12.5px/1.6 var(--px-sans); }
+.px .cx3 .cv2-what p b { color: var(--px-text); font-weight: 600; }
+.px .cx3 .cv2-what .cx3-link { justify-self: start; padding: 4px 0; background: none; border: 0; cursor: pointer; }
+.px .cx3 .cv2-sample { margin: 0; max-height: 320px; overflow: auto; padding: 12px; border: 1px solid var(--px-line); background: #050806; color: var(--px-dim); font: 400 12px/1.6 var(--px-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.px .cx3 .cv2-sample i { color: var(--px-gold); font-style: normal; }
+.px .cx3 .cv2-outline { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 5px; }
+.px .cx3 .cv2-outline li { padding: 4px 8px; border: 1px solid var(--px-line); color: var(--px-dim); font: 400 11px/1.3 var(--px-mono); }
+.px .cx3 .cv2-form { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--px-line2); background: rgba(184, 255, 61, .02); }
+.px .cx3 .cv2-field { display: grid; gap: 6px; }
+.px .cx3 .cv2-field > span { color: var(--px-text); font: 500 12.5px/1.3 var(--px-sans); }
+.px .cx3 .cv2-field .field { width: 100%; min-height: 40px; padding: 9px 11px; font: 400 13.5px/1.5 var(--px-sans); }
+.px .cx3 .cv2-field textarea.field { resize: vertical; }
+.px .cx3 .cv2-field small { color: var(--px-faint); font: 400 11.5px/1.4 var(--px-sans); }
+.px .cx3 .cv2-order { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--px-line2); }
+.px .cx3 .cv2-order.ready { border-color: var(--px-lime); background: rgba(184, 255, 61, .04); }
+.px .cx3 .cv2-order.writing { grid-template-columns: auto minmax(0, 1fr); align-items: start; color: var(--px-lime); }
+.px .cx3 .cv2-order.writing b { color: var(--px-text); font: 600 14px/1.3 var(--px-display); }
+.px .cx3 .cv2-order.writing p { margin: 4px 0 0; color: var(--px-dim); font: 400 12.5px/1.55 var(--px-sans); }
+.px .cx3 .cv2-order-k { display: inline-flex; align-items: center; gap: 6px; color: var(--px-lime); font: 400 10px/1 var(--px-pixel); letter-spacing: .07em; }
+.px .cx3 .cv2-order-facts { margin: 0; color: var(--px-dim); font: 400 11.5px/1.4 var(--px-mono); }
+.px .cx3 .cv2-order blockquote { margin: 0; padding: 10px 12px; border-left: 2px solid var(--px-lime); background: #050806; color: var(--px-text); font: 400 13px/1.65 var(--px-sans); overflow-wrap: anywhere; }
+.px .cx3 .cv2-trust { display: flex; gap: 8px; align-items: flex-start; margin: 16px 0 0; max-width: 92ch; color: var(--px-faint); font: 400 12px/1.55 var(--px-sans); }
+.px .cx3 .cv2-trust svg { flex: none; margin-top: 3px; color: var(--px-lime); }
+
+@media (max-width: 720px) {
+  .px .cx3 .cv2-asks > header span { margin-left: 0; }
+  .px .cx3 .cv2-ask .cx3-row, .px .cx3 .cv2-drafts .cx3-row { width: 100%; }
+  .px .cx3 .cv2-ask .cx3-row .px-btn, .px .cx3 .cv2-drafts .cx3-row .px-btn { flex: 1; justify-content: center; }
+  .px .cx3 .cv2-upgrade .px-btn { width: 100%; justify-content: center; }
+  .px .cx3 .cv2-form, .px .cx3 .cv2-order { padding: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .px .cx3 .cv2-meter i.cur { animation: none; background: rgba(184, 255, 61, .3); }
+}

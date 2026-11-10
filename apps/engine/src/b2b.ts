@@ -52,7 +52,7 @@ export class MarketDesk implements MarketDeps {
 
   /** Every product on sale and packaged (the agent market's search), with its free preview. Hosted tools are not files, so not research. */
   async offers(_buyer: Company): Promise<MarketOffer[]> {
-    const live = [...this.h.companies()].flatMap((c) => c.products.filter((p) => p.status === "live" && p.kind !== "tool" && this.h.files.has(c, p)).map((p) => ({ c, p, text: this.h.files.read(c, p) })));
+    const live = [...this.h.companies()].flatMap((c) => c.products.filter((p) => p.status === "live" && p.kind !== "tool" && p.format !== "custom" && this.h.files.has(c, p)).map((p) => ({ c, p, text: this.h.files.read(c, p) })));
     return search(live, {}).map(({ c, p, text }) => {
       const pv = text ? previewOf(text) : null;
       return {
