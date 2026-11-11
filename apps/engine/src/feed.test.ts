@@ -91,7 +91,7 @@ describe("the public live feed", () => {
     const { input, acme, other } = world();
     const f = buildFeed(input("live"), 200);
     // the owner's, another owner's, another company's, a NIGHTSHIFT wallet's, a testnet and an unsettled payment are not sales
-    expect(f.stats).toEqual({ companies: 2, sales: 2, salesUsd: 6.5, earned: 14.5 });
+    expect(f.stats).toEqual({ companies: 2, sales: 2, salesUsd: 6.5, earned: 14.5, earners: 1 });
     const text = JSON.stringify(f);
     for (const wallet of [OUTSIDE, acme.owner!, other.owner!, other.wallet, acme.wallet]) expect(text.toLowerCase()).not.toContain(wallet.toLowerCase());
     expect(text).not.toContain("0x2222");
@@ -110,7 +110,7 @@ describe("the public live feed", () => {
     expect(sales).toHaveLength(1);
     expect(sales[0]).toMatchObject({ text: '[sim] sold "Ward CV" for $4.00', amountUsd: 4 });
     expect(sales[0]).not.toHaveProperty("tx");
-    expect(f.stats).toEqual({ companies: 3, sales: 1, salesUsd: 4, earned: 4 });
+    expect(f.stats).toEqual({ companies: 3, sales: 1, salesUsd: 4, earned: 4, earners: 1 });
   });
 
   it("holds to the limit and is the same answer for every visitor for a few seconds", () => {

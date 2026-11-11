@@ -16,7 +16,7 @@ describe("the engine's feed", () => {
         { at: 250, kind: "shift", company: { slug: "", name: "" }, text: "x" },
         { kind: "post", company, text: "no time" },
       ],
-      stats: { companies: 14, earned: 2, salesUsd: 18, sales: 2 },
+      stats: { companies: 14, earned: 18, earners: 2, salesUsd: 18, sales: 2 },
     });
     expect(feed?.source).toBe("feed");
     expect(feed?.items.map((i) => i.at)).toEqual([300, 100]);

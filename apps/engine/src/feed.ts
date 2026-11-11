@@ -33,6 +33,8 @@ export interface Feed {
     companies: number;
     /** Everything the companies earned, in USD: the USDC sales below plus what their owners' Gumroad accounts took by card. */
     earned: number;
+    /** How many of the companies shown have earned anything: a counted sale, or a real sale on Gumroad. */
+    earners: number;
     /** USDC paid by outside buyers (people and agents), and how many such payments. */
     salesUsd: number;
     sales: number;
@@ -67,10 +69,11 @@ function counted(cls: PayerClass, s: Metrics["sales"][number], mode: "sim" | "li
 export function buildFeed(i: FeedInput, limit = 50): Feed {
   const shown = i.all.filter((c) => i.listed(c) && !c.house);
   const items: FeedItem[] = [];
-  let sales = 0, salesUnits = 0n, gumroadCents = 0;
+  let sales = 0, salesUnits = 0n, gumroadCents = 0, earners = 0;
   for (const c of shown) {
     const company = { id: c.id, slug: c.slug, name: c.name };
     const page = `/c/${c.slug}`;
+    let took = false;
     items.push({ at: c.createdAt, kind: "founded", company, text: one(`was founded: ${c.mission}`, 220), href: page });
     for (const t of c.tasks) {
       if (t.status !== "done") continue;
@@ -84,6 +87,7 @@ export function buildFeed(i: FeedInput, limit = 50): Feed {
     }
     for (const p of c.products) {
       gumroadCents += p.gumroad && !p.gumroad.sim ? p.gumroad.revenueCents : 0;
+      if (i.mode === "live" && p.gumroad && !p.gumroad.sim && p.gumroad.revenueCents > 0) took = true;
       if (p.status !== "live") continue;
       const made = c.tasks.find((t) => t.id === p.taskId && t.status === "done");
       items.push({ at: made?.updatedAt ?? p.createdAt, kind: "product", company, text: one(`put "${p.name}" on sale`, 200), amountUsd: fromUsdc(p.priceUsdc), href: `${page}#${p.id}` });
@@ -93,10 +97,12 @@ export function buildFeed(i: FeedInput, limit = 50): Feed {
       if (!counted(cls, s, i.mode)) continue;
       const usd = Number(BigInt(s.usdc)) / 1e6;
       sales += 1;
+      took = true;
       salesUnits += BigInt(s.usdc);
       const name = c.products.find((p) => p.id === s.productId)?.name;
       items.push({ at: s.at, kind: "sale", company, text: one(`${i.mode === "sim" ? "[sim] " : ""}sold ${name ? `"${name}"` : "a product"} for ${money(usd)}`, 200), amountUsd: usd, ...(s.tx ? { tx: s.tx, chainId: i.chainId } : {}), href: name ? `${page}#${s.productId}` : page });
     }
+    if (took) earners += 1;
     // posts that went out: on the owner's own channels they chose to show, and approved drafts on the project account
     for (const p of c.connections?.posts ?? []) {
       const ch = c.connections!.channels[p.channel];
@@ -113,7 +119,7 @@ export function buildFeed(i: FeedInput, limit = 50): Feed {
   const salesUsd = round(Number(salesUnits) / 1e6);
   return {
     items: items.filter((x) => x.at <= now + 60_000).slice(0, Math.min(200, Math.max(1, Math.floor(limit) || 50))),
-    stats: { companies: shown.length, earned: round(salesUsd + (i.mode === "live" ? gumroadCents / 100 : 0)), salesUsd, sales },
+    stats: { companies: shown.length, earned: round(salesUsd + (i.mode === "live" ? gumroadCents / 100 : 0)), earners, salesUsd, sales },
   };
 }
 

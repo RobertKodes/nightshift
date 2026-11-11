@@ -19,6 +19,16 @@
       return h.slice(0, 4).join("") + "-" + h.slice(4, 6).join("") + "-" + h.slice(6, 8).join("") + "-" + h.slice(8, 10).join("") + "-" + h.slice(10).join("");
     };
   }
+  // iOS before 16: fetch timeouts on the live, staking and leaderboard pages
+  if (window.AbortSignal && !AbortSignal.timeout && window.AbortController) {
+    AbortSignal.timeout = function (ms) {
+      var c = new AbortController();
+      setTimeout(function () { try { c.abort(new DOMException("The operation timed out.", "TimeoutError")); } catch (e) { c.abort(); } }, ms);
+      return c.signal;
+    };
+  }
+  // iOS before 15.4: plain data only, which is all the app copies
+  if (!window.structuredClone) window.structuredClone = function (v) { return v === undefined ? v : JSON.parse(JSON.stringify(v)); };
   if (!String.prototype.replaceAll) String.prototype.replaceAll = function (a, b) { return a instanceof RegExp ? this.replace(a, b) : this.split(a).join(b); };
 
   // Never a white screen while the app loads.

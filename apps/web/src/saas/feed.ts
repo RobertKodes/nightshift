@@ -51,7 +51,7 @@ export function parseFeed(json: unknown): Feed | null {
   const j = obj(json), s = obj(j?.stats);
   if (!j || !Array.isArray(j.items) || !s) return null;
   const items = j.items.map(parseItem).filter((x): x is FeedItem => x !== null).sort((a, b) => b.at - a.at);
-  return { items, stats: { companies: num(s.companies) ?? 0, earned: num(s.earned) ?? 0, salesUsd: num(s.salesUsd) ?? 0, sales: num(s.sales) ?? 0 }, source: "feed" };
+  return { items, stats: { companies: num(s.companies) ?? 0, earned: num(s.earners) ?? 0, salesUsd: num(s.salesUsd) ?? 0, sales: num(s.sales) ?? 0 }, source: "feed" };
 }
 
 const EXPLORERS: Record<number, string> = { 1: "https://etherscan.io/tx/", 8453: "https://basescan.org/tx/", 84532: "https://sepolia.basescan.org/tx/" };
