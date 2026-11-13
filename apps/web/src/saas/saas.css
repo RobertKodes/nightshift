@@ -336,6 +336,9 @@ details.px-walletwrap > summary::-webkit-details-marker { display: none; }
 .px-trust b { font: 500 11.5px/1.3 var(--px-mono); }
 .px-trust span { font: 400 11px/1.5 var(--px-sans); color: var(--px-faint); }
 .px-trust svg { color: var(--px-lime); }
+.px-trust a.px-trust-wide { grid-column: 1 / -1; border-color: rgba(242, 184, 61, .45); background: linear-gradient(90deg, rgba(242, 184, 61, .08), var(--px-panel) 60%); }
+.px-trust a.px-trust-wide:hover { border-color: rgba(242, 184, 61, .8); }
+.px-trust a.px-trust-wide b, .px-trust a.px-trust-wide svg { color: #f2b83d; }
 @media (max-width: 880px) { .px-trust { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 480px) { .px-trust { grid-template-columns: 1fr; } }
 

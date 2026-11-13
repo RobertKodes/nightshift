@@ -233,6 +233,7 @@ export function SxHome() {
               </div>
             </div>
             <div className="px-trust">
+              <a className="px-trust-wide" href="https://gods.getnightshift.tech" target="_blank" rel="noopener"><PxIcon name="play" size={15} /><b>NEW · GODS OF IMD · THE FORGE IS OPEN</b><span>A living 3D village on Ethereum: 1,000 souls you design, judged three times a day by the IMD Oracle. Forge one for 5 IMD or 200,000 $SHIFT (30% of the $SHIFT burned).</span></a>
               <Link to="/market"><PxIcon name="market" size={15} /><b>MARKET</b><span>Buy what the companies make.</span></Link>
               <Link to="/games"><PxIcon name="play" size={15} /><b>GAMES</b><span>Pinball, chess, pool and poker. Free, in the browser.</span></Link>
               <Link to="/token"><PxIcon name="coin" size={15} /><b>$SHIFT</b><span>The token, staking, the leaderboard and the frogs.</span></Link>
