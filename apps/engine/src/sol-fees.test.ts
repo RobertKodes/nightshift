@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Keypair } from "@solana/web3.js";
@@ -61,9 +61,9 @@ function setup(over: Partial<FeeSettings> = {}) {
 }
 
 describe("the split", () => {
-  it("is 10 / 35 / 10 / 45 and every lamport goes somewhere", () => {
+  it("is 45 dev / 10 IMD / 45 $SHIFT (ADAM's 10% went to the dev wallet) and every lamport goes somewhere", () => {
     const p = splitLamports(1_000_000_000n);
-    expect(p).toEqual({ adam: 100_000_000n, dev: 350_000_000n, imd: 100_000_000n, shift: 450_000_000n });
+    expect(p).toEqual({ adam: 0n, dev: 450_000_000n, imd: 100_000_000n, shift: 450_000_000n });
     const q = splitLamports(1_000_000_007n);
     expect(q.adam + q.dev + q.imd + q.shift).toBe(1_000_000_007n);
   });
@@ -98,14 +98,15 @@ describe("the fee wallet", () => {
 });
 
 describe("a run", () => {
-  it("claims every pool, pays ADAM 10% and the dev wallet 35%, and burns 10% as IMD and 45% as $SHIFT", async () => {
+  it("claims every pool, pays the dev wallet 45%, and burns 10% as IMD and 45% as $SHIFT", async () => {
     const { fees, c } = setup();
     c.balance = RESERVE;
     const r = await fees.run();
     expect(r).toEqual({ ran: true });
     const got = 14n * SOL + 50_000_000n - 20_000n; // two pools, the launch fee once, net of the claim fees
     const p = splitLamports(got);
-    expect(c.paid).toMatchObject([{ address: ADAM, lamports: p.adam }, { address: DEV, lamports: p.dev }]);
+    expect(c.paid).toMatchObject([{ address: DEV, lamports: p.dev }]);
+    expect(c.paid).toHaveLength(1);
     expect(c.deposits).toEqual([{ burn: "imd", lamports: p.imd }, { burn: "shift", lamports: MAX_BURN }]);
     // the $SHIFT burn above the per-burn cap waits for the next run
     const a = await fees.adminInfo();
@@ -115,18 +116,13 @@ describe("a run", () => {
     expect(a.totals.claimedSol).toBeCloseTo(Number(got) / 1e9, 9);
   });
 
-  it("runs without ADAM's wallet: keeps ADAM's 10% in the fee wallet and pays it once the wallet is set", async () => {
-    const { fees, c, set } = setup();
-    set({ adam: null });
-    c.balance = RESERVE;
-    expect(await fees.run()).toEqual({ ran: true });
-    const p = splitLamports(14n * SOL + 50_000_000n - 20_000n);
-    expect(c.paid).toMatchObject([{ address: DEV, lamports: p.dev }]);
-    expect((await fees.adminInfo()).owedSol.adam).toBeCloseTo(Number(p.adam) / 1e9, 9);
-    set({ adam: ADAM });
-    await fees.run();
-    expect(c.paid.at(-1)).toMatchObject({ address: ADAM, lamports: p.adam });
-    expect((await fees.adminInfo()).owedSol.adam).toBe(0);
+  it("moves what was kept for ADAM to the dev wallet when it loads (ADAM's share ended 2026-11-16)", async () => {
+    const d = mkdtempSync(join(tmpdir(), "solfees-"));
+    writeFileSync(join(d, "sol-fees.json"), JSON.stringify({ owed: { adam: "11311464", dev: "5", imd: "0", shift: "0" } }));
+    const again = new SolFees(d, () => fakeChain().port, () => ({ on: false, adam: null, dev: null, partner: null, network: "mainnet" }), () => []);
+    const o = (await again.adminInfo()).owedSol;
+    expect(o.adam).toBe(0);
+    expect(o.dev).toBeCloseTo(11_311_469 / 1e9, 9);
   });
 
   it("claims a pool's launch fee only once", async () => {

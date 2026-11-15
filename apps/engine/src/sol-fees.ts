@@ -9,7 +9,8 @@ import { writeAtomic } from "./atomic.js";
  * The launch partner on every Meteora curve is a Solana wallet the engine created for itself (the "fee
  * wallet"); its key is made on the server and never leaves it. Every few hours the engine claims the
  * partner's trading fees and launch fees from every pool, all in SOL, and splits what came in:
- *   10% ADAM · 20% dev · 15% marketing (the dev wallet) · 10% bought as IMD and burned · 45% bought as $SHIFT and burned.
+ *   45% the dev wallet (dev + marketing) · 10% bought as IMD and burned · 45% bought as $SHIFT and burned.
+ * (Until 2026-11-16, 10% went to ADAM: the owner moved it to the dev wallet; what was kept for ADAM went there too.)
  * The two burns go through Relay in one Solana transaction each: SOL in on Solana, IMD or $SHIFT out on
  * Ethereum, delivered straight to the burn address (IMD to IMD's BurnExecutor, $SHIFT to 0x…dEaD). The
  * engine never holds an Ethereum key, and the fee wallet can only pay the two wallets named in /setup and
@@ -22,11 +23,10 @@ export const IMD_BURN_EXECUTOR = "0xe29386719c155b6847ad5a4e97c6674f10ffc750";
 export const DEAD = "0x000000000000000000000000000000000000dead";
 
 /** The split, in basis points of every lamport claimed. Fixed in code, the same on the public page. */
-export const SPLIT = { adam: 1_000, dev: 3_500, imd: 1_000, shift: 4_500 } as const;
+export const SPLIT = { adam: 0, dev: 4_500, imd: 1_000, shift: 4_500 } as const;
 export type Bucket = keyof typeof SPLIT;
 export const SPLIT_LABELS: { key: Bucket; label: string; pct: number }[] = [
-  { key: "adam", label: "ADAM", pct: 10 },
-  { key: "dev", label: "Dev 20% + marketing 15%", pct: 35 },
+  { key: "dev", label: "Dev + marketing", pct: 45 },
   { key: "imd", label: "Bought as IMD and burned", pct: 10 },
   { key: "shift", label: "Bought as $SHIFT and burned", pct: 45 },
 ];
@@ -146,6 +146,8 @@ export class SolFees {
     this.file = join(dir, "sol-fees.json");
     this.keyFile = join(dir, "sol-fee-wallet.json");
     this.l = existsSync(this.file) ? { ...structuredClone(EMPTY), ...(JSON.parse(readFileSync(this.file, "utf8")) as Ledger) } : structuredClone(EMPTY);
+    // ADAM's share ended 2026-11-16 (the owner's call): what was kept for ADAM goes to the dev wallet
+    if (big(this.l.owed.adam) > 0n) { this.l.owed.dev = add(this.l.owed.dev, big(this.l.owed.adam)); this.l.owed.adam = "0"; }
     if (existsSync(this.keyFile)) this.kp = Keypair.fromSecretKey(Buffer.from(JSON.parse(readFileSync(this.keyFile, "utf8")).secret as string, "base64"));
     else {
       this.kp = Keypair.generate();
@@ -164,7 +166,6 @@ export class SolFees {
     if (s.network !== "mainnet") return "The launchpad is on devnet: fees are only split on mainnet.";
     if (!s.on) return "Turned off in the launchpad admin.";
     if (s.partner !== this.address) return "The fee wallet is not the launch partner yet: launches still pay another wallet.";
-    // ADAM's wallet may come later: until it is set, ADAM's 10% is kept in the fee wallet and paid once it is
     if (!s.dev) return "The dev wallet is not set.";
     if (s.adam === this.address || s.dev === this.address) return "ADAM and the dev wallet must be other wallets than the fee wallet.";
     return null;
