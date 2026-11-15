@@ -7,7 +7,7 @@ import { PxHero, PxPanel, PxSection, PxStat, PxStats, PxTag } from "../../saas/k
 import { PxIcon } from "../../saas/PxIcon";
 import { chooseSolana } from "../../wallet";
 import { Logo, useRich } from "../LaunchpadPage";
-import { actText, adminToken, ago, type Discovered, imageOf, loadChain, logoData, mine, pct, type Pulse, shortKey, sol, solApi, type SolInfo, type SolLaunch, solscan, type SwarmStep, usd, usdOf } from "./net";
+import { actText, adminToken, ago, type Discovered, imageOf, loadChain, logoData, mine, pct, type Pulse, shortKey, sol, solApi, type SolFeesAdmin, type SolFeesInfo, type SolInfo, type SolLaunch, solscan, type SwarmStep, usd, usdOf } from "./net";
 import { CLIFF_DAYS, CURVES, DEV_PCTS, FEES, feeSplit, isStandard, LAUNCH, type LaunchOptions, MCAP_LIMITS, optionProblem, PAY_NAMES, type PayChain, SNIPER, type Sniper, STANDARD, SWARM, SWARM_ORDER, type SwarmPick, VEST_DAYS } from "./options";
 import "./sol.css";
 import "./sol-board.css";
@@ -164,6 +164,8 @@ function SolHome() {
               ))}</div>}
         </>
       ) : <Discover />}
+
+      <FeesPanel />
 
       <PxSection kicker="HOW AN IMD LAUNCH WORKS" title={<>The swarm does the work. <em>The chain keeps the promises.</em></>}>
         <ol className="sl3-how">
@@ -699,40 +701,80 @@ function TradeBox({ pool, mint, symbol, net, solUsd }: { pool: string; mint: str
 
 // ---------------------------------------------------------------- the admin
 
-/** NIGHTSHIFT's share of every launch's trading fees, waiting in each pool until the partner wallet claims it. */
-function PartnerFees({ partner, solUsd }: { partner: string | null; solUsd: number | null }) {
-  const [rows, setRows] = useState<{ pool: string; sol: number; tokens: number; name: string }[] | null>(null);
+const etherscan = (tx: string) => `https://etherscan.io/tx/${tx}`;
+const num = (v: number, d = 0) => v.toLocaleString("en-US", { maximumFractionDigits: d });
+
+/** Public: where NIGHTSHIFT's share of every launch's fees goes, and the burns with their transactions. */
+function FeesPanel() {
+  const [f, setF] = useState<SolFeesInfo | null>(null);
+  useEffect(() => { solApi.fees().then(setF).catch(() => {}); }, []);
+  if (!f) return null;
+  const t = f.totals;
+  const done = f.burns.filter((b) => b.state === "done");
+  const waiting = f.waitingSol.imd + f.waitingSol.shift;
+  return (
+    <PxSection kicker="WHERE NIGHTSHIFT'S FEES GO" title={<>Split by the server. <em>Burned on Ethereum.</em></>}>
+      <div className="sl3-fees">
+        <PxPanel title="EVERY LAMPORT, EVERY TIME" right="fixed in code" state={f.running ? "live" : "idle"}>
+          <ul className="sl3-split">{f.split.map((p) => <li key={p.key} className={p.key === "imd" || p.key === "shift" ? "burn" : ""}><b>{p.pct}%</b><span>{p.label}</span></li>)}</ul>
+          <p className="sl3-dim">NIGHTSHIFT's share of every launch's trading fees, and its launch fee, is claimed every 6 hours by NIGHTSHIFT's fee wallet <a href={solscan("account", f.wallet, "mainnet")} target="_blank" rel="noreferrer">{shortKey(f.wallet)} ↗</a>. The burns go through Relay: SOL in on Solana, IMD and $SHIFT bought on Ethereum and sent straight to the burn address (IMD to IMD's BurnExecutor, $SHIFT to 0x…dEaD).</p>
+        </PxPanel>
+        <PxPanel title="BURNED SO FAR" tone="imd" right={f.lastRun ? `updated ${ago(f.lastRun)}` : "starting"}>
+          <PxStats cols={2}>
+            <PxStat label="IMD BURNED" value={num(t.imdBurned, 2)} sub={`${sol(t.imdBurnSol, 3)} SOL spent`} tone="imd" />
+            <PxStat label="$SHIFT BURNED" value={num(t.shiftBurned)} sub={`${sol(t.shiftBurnSol, 3)} SOL spent`} tone="lime" />
+          </PxStats>
+          {done.length
+            ? <ul className="sl3-adm">{done.slice(0, 6).map((b) => <li key={b.solTx}><span><b>{b.amount != null ? num(b.amount, b.token === "IMD" ? 2 : 0) : "…"} {b.token}</b><small>{sol(b.sol, 3)} SOL · {ago(b.at)} · <a href={solscan("tx", b.solTx, "mainnet")} target="_blank" rel="noreferrer">Solana ↗</a>{b.ethTx && <> · <a href={etherscan(b.ethTx)} target="_blank" rel="noreferrer">burn on Ethereum ↗</a></>}</small></span></li>)}</ul>
+            : <p className="sl3-dim">No burn yet: each burn goes out once its share reaches 0.25 SOL{waiting > 0 ? ` (waiting now: ${sol(f.waitingSol.imd, 3)} SOL for IMD, ${sol(f.waitingSol.shift, 3)} SOL for $SHIFT)` : ""}.</p>}
+        </PxPanel>
+      </div>
+    </PxSection>
+  );
+}
+
+/** The admin: the engine's fee wallet as the launch partner, ADAM's and the dev wallet, on or off, a run now. */
+function FeesAdmin({ token, partner, reload }: { token: string; partner: string | null; reload: () => Promise<void> }) {
+  const [f, setF] = useState<SolFeesAdmin | null>(null);
+  const [adam, setAdam] = useState("");
+  const [dev, setDev] = useState("");
   const [busy, setBusy] = useState(false);
-  const [say, setSay] = useState("");
   const [msg, setMsg] = useState("");
-  const read = async () => {
-    const { launches } = await solApi.list("new");
-    const live = launches.filter((l) => l.pool && l.status === "live");
-    const c = await loadChain();
-    const fees = await c.partnerFees(live.map((l) => l.pool!));
-    setRows(fees.map((f) => ({ ...f, name: live.find((l) => l.pool === f.pool)?.name ?? f.pool })));
-  };
-  useEffect(() => { void read().catch(() => setRows([])); }, []);
-  const total = (rows ?? []).reduce((a, r) => a + r.sol, 0);
-  const claim = async () => {
+  useEffect(() => { solApi.adminFees(token).then(setF).catch((e) => setMsg((e as Error).message)); }, [token]);
+  const act = async (fn: () => Promise<SolFeesAdmin | { ran: boolean; why?: string; info: SolFeesAdmin }>) => {
     setBusy(true); setMsg("");
     try {
-      const who = await wallet();
-      if (who.address !== partner) throw new Error("Connect the partner wallet: only it can claim NIGHTSHIFT's fees.");
-      const c = await loadChain();
-      const n = await c.claimPartnerFees(who, (rows ?? []).map((r) => r.pool), setSay);
-      setMsg(n ? `Claimed from ${n} pool${n > 1 ? "s" : ""} into the partner wallet.` : "Nothing to claim yet.");
-      await read();
-    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); setSay(""); }
+      const r = await fn();
+      if ("ran" in r) { setF(r.info); setMsg(r.why ?? "Ran: claimed, paid and burned what was due."); } else { setF(r); setAdam(""); setDev(""); }
+      await reload();
+    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   };
+  if (!f) return <PxPanel title="3 · NIGHTSHIFT'S FEES">{msg ? <p className="sl3-err">{msg}</p> : <p className="sl3-dim">Reading…</p>}</PxPanel>;
+  const isPartner = partner === f.wallet;
+  const off = !f.settings.on;
+  const saved = (a: string | null) => a ? <em>now {shortKey(a)}</em> : <em className="no">not set</em>;
   return (
-    <PxPanel title="3 · NIGHTSHIFT'S FEES" right={rows ? `${sol(total, 4)} SOL${solUsd ? ` ≈ ${usd(total * solUsd)}` : ""}` : "…"} state={total > 0 ? "live" : "idle"}>
-      <p className="sl3-dim">The partner's share of every trade on the curves (40% of the fee at 1%), and each launch's fee, wait in their pools until the partner wallet claims them. Graduated pools pay through Meteora's DAMM v2 position instead.</p>
-      {rows === null ? <p className="sl3-dim">Reading the pools…</p> : !rows.length ? <p className="sl3-dim">No live launches yet.</p> : (
-        <ul className="sl3-adm">{rows.map((r) => <li key={r.pool}><span><b>{r.name}</b><small>{sol(r.sol, 6)} SOL waiting{r.tokens > 0 ? ` · ${r.tokens.toLocaleString("en-US", { maximumFractionDigits: 0 })} tokens` : ""}</small></span></li>)}</ul>
-      )}
-      <button className="px-btn primary" disabled={busy || !partner || !rows?.length} onClick={() => void claim()}><PxIcon name="coin" size={14} />CLAIM INTO THE PARTNER WALLET</button>
-      {say && <p className="sl3-say" aria-live="polite">{say}</p>}
+    <PxPanel title="3 · NIGHTSHIFT'S FEES · AUTOMATIC" state={f.running ? "live" : "idle"} right={f.balanceSol != null ? `${sol(f.balanceSol, 4)} SOL in the fee wallet` : undefined}>
+      <p className="sl3-dim">Fee wallet <a href={solscan("account", f.wallet, "mainnet")} target="_blank" rel="noreferrer">{f.wallet}</a>. Its key was made on the server and never leaves it. Every 6 hours it claims every pool, pays ADAM 10% and the dev wallet 35% (dev 20% + marketing 15%), and burns 10% as IMD and 45% as $SHIFT through Relay. Send it about 0.02 SOL once for network fees ({f.limits.reserveSol} SOL always stays in it).</p>
+      <ul className="sl3-adm">
+        <li><span><b>{isPartner ? "It is the launch partner" : "Not the launch partner yet"}</b><small>{isPartner ? "every launch pays NIGHTSHIFT's fees here" : partner ? `launches pay ${shortKey(partner)} now` : "launches stay closed until a partner is set"}</small></span>
+          {!isPartner && <button className="px-btn primary" disabled={busy} onClick={() => void act(() => solApi.adminFeesSet(token, { partner: true }))}>MAKE IT THE PARTNER</button>}</li>
+      </ul>
+      <label className="sl3-lbl">ADAM's Solana wallet · 10% {saved(f.settings.adam)}<div className="sl3-row"><input className="field" value={adam} onChange={(e) => setAdam(e.target.value.trim())} placeholder="ADAM's Solana address" /><button className="px-btn" disabled={busy || !adam} onClick={() => void act(() => solApi.adminFeesSet(token, { adam }))}>SAVE</button></div></label>
+      <label className="sl3-lbl">Dev wallet · 35% (dev + marketing) {saved(f.settings.dev)}<div className="sl3-row"><input className="field" value={dev} onChange={(e) => setDev(e.target.value.trim())} placeholder="your Solana dev wallet" /><button className="px-btn" disabled={busy || !dev} onClick={() => void act(() => solApi.adminFeesSet(token, { dev }))}>SAVE</button></div></label>
+      <div className="sl3-row">
+        <button className={`px-btn${off ? "" : " primary"}`} disabled={busy} onClick={() => void act(() => solApi.adminFeesSet(token, { on: off }))}>{off ? "OFF · TURN ON" : "ON · TURN OFF"}</button>
+        <button className="px-btn" disabled={busy || !f.running} onClick={() => void act(() => solApi.adminFeesRun(token))}>RUN NOW</button>
+      </div>
+      <p className={f.blocked ? "sl3-err" : "sl3-ok"}>{f.blocked ?? `Running. Last run ${f.lastRun ? ago(f.lastRun) : "not yet"}.`}</p>
+      {f.lastError && <p className="sl3-err">Last problem: {f.lastError}</p>}
+      <PxStats cols={4}>
+        <PxStat label="CLAIMED" value={sol(f.totals.claimedSol, 3)} sub="SOL, all time" />
+        <PxStat label="ADAM + DEV" value={sol(f.totals.adamSol + f.totals.devSol, 3)} sub={`SOL paid · owed ${sol((f.owedSol.adam ?? 0) + (f.owedSol.dev ?? 0), 3)}`} />
+        <PxStat label="IMD BURN" value={sol(f.totals.imdBurnSol, 3)} sub={`SOL · waiting ${sol(f.owedSol.imd ?? 0, 3)}`} tone="imd" />
+        <PxStat label="$SHIFT BURN" value={sol(f.totals.shiftBurnSol, 3)} sub={`SOL · waiting ${sol(f.owedSol.shift ?? 0, 3)}`} tone="lime" />
+      </PxStats>
+      {busy && <p className="sl3-say" aria-live="polite">Working…</p>}
       {msg && <p className="sl3-dim" role="status">{msg}</p>}
     </PxPanel>
   );
@@ -751,10 +793,10 @@ function SolAdmin() {
 
   return (
     <>
-      <PxHero kicker="IMD LAUNCH · SOLANA · SETUP" title="Open IMD Launch on Solana." accent="One wallet." lead="NIGHTSHIFT's Solana partner wallet receives the partner share of every launch's fees and the curve's leftover. Set it, and launches open. Creators pay the IMD swarm themselves, in IMD, straight to IMD. A shared config key is optional: standard launches then skip creating their own config." />
+      <PxHero kicker="IMD LAUNCH · SOLANA · SETUP" title="Open IMD Launch on Solana." accent="One wallet." lead="NIGHTSHIFT's fee wallet, made on the server, is the partner on every launch: it claims NIGHTSHIFT's share of the fees, pays ADAM and the dev wallet, and burns IMD and $SHIFT, on its own. Make it the partner in step 3 and launches open. Creators pay the IMD swarm themselves, in IMD, straight to IMD. A shared config key is optional: standard launches then skip creating their own config." />
       <PxPanel title="ADMIN TOKEN"><div className="sl3-row"><input className="field" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="the admin token from /setup" /><button className="px-btn" onClick={() => void load()}>READ</button></div></PxPanel>
       {state && <>
-        <PxPanel title="1 · PARTNER WALLET" state={state.partner ? "live" : "idle"} right={state.network.toUpperCase()}>
+        <PxPanel title="1 · PARTNER WALLET (BY HAND)" state={state.partner ? "live" : "idle"} right={state.network.toUpperCase()}>
           <div className="sl3-row"><input className="field" value={partner} onChange={(e) => setPartner(e.target.value.trim())} placeholder="NIGHTSHIFT's Solana wallet address" />
             <button className="px-btn" disabled={busy} onClick={() => void act(async () => { const w = await wallet(); setPartner(w.address); })}>USE MY WALLET</button>
             <button className="px-btn primary" disabled={busy || !partner} onClick={() => void act(() => solApi.adminPartner(token, partner))}>SAVE</button></div>
@@ -771,19 +813,18 @@ function SolAdmin() {
             ))}</ul>
           )}
         </PxPanel>
-        <PartnerFees partner={state.partner} solUsd={state.info.solUsd} />
+        <FeesAdmin token={token} partner={state.partner} reload={load} />
         <PxPanel title="4 · SHARED CONFIG KEY" right="optional" state={state.config ? "live" : "idle"}>
           {state.config
             ? <p>Standard launches use <a href={solscan("account", state.config, state.network)} target="_blank" rel="noreferrer">{state.config}</a>.</p>
             : <>
-              <p className="sl3-dim">Creates the standard launch config ($5K → $75K at today's SOL price, 1% fee, standard anti-sniper), owned by the wallet you connect, which must be the partner wallet. About 0.01 SOL.</p>
+              <p className="sl3-dim">Creates the standard launch config ($5K → $75K at today's SOL price, 1% fee, standard anti-sniper). Its fees and leftover go to the partner; the wallet you connect only pays its rent, about 0.01 SOL.</p>
               <button className="px-btn" disabled={busy || !state.partner} onClick={() => void act(async () => {
                 const who = await wallet();
-                if (who.address !== state.partner) throw new Error("Connect the partner wallet to create the shared config.");
                 const c = await loadChain();
-                const r = await c.createConfig(who, state.info.solUsd ?? 0, setSay);
+                const r = await c.createConfig(who, state.partner!, state.info.solUsd ?? 0, setSay);
                 setSay("Checking it on chain…");
-                await solApi.adminConfig(token, r.config, who.address);
+                await solApi.adminConfig(token, r.config, state.partner!);
               })}><PxIcon name="lock" size={14} />CREATE THE SHARED CONFIG</button>
             </>}
           {say && <p className="sl3-say" aria-live="polite">{say}</p>}

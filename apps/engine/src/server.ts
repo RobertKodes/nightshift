@@ -72,7 +72,7 @@ import { joinRoutes } from "./agent-join-routes.js";
 import { liveStakeHistory } from "./stake-history.js";
 import { partnerRoutes } from "./partner-routes.js";
 import { dealRoutes } from "./deal-routes.js";
-import { solRoutes } from "./sol-routes.js";
+import { solFees, solRoutes } from "./sol-routes.js";
 import { leagueRoutes } from "./league-routes.js";
 import { HIDDEN_PAGES, stationRoutes, withPageHead } from "./station-routes.js";
 import { buyUrl, card, catalog, deliveryOf, detail, honestPitch, marketOpenapi, offerFor, previewOf, productIdOf, search } from "./agentmarket.js";
@@ -1718,6 +1718,8 @@ export function serve(engine: Engine) {
   // LASTSPAWN: the MMORPG's world, one WebSocket on this same server (LASTSPAWN=0 turns it off)
   if (process.env.LASTSPAWN !== "0") attachLastspawn(server, { dataDir: config.dataDir, wallet: (req) => engine.auth.caller(req)?.addr ?? null, ip: (req) => clientIp(req), savedName, log: (s) => console.error(s) });
   server.once("close", stopLive);
+  // the Solana launchpad's fee split and burns run on their own timer, off until the admin turns them on
+  try { solFees(); } catch (e) { console.error("sol fees:", (e as Error).message); }
   server.listen(config.port, () => console.log(`NIGHTSHIFT engine on ${config.publicUrl} (${config.mode} mode${engine.llm ? `, CEO model ${config.model}` : ", playbook CEO: set OPENROUTER_API_KEY for the model"})`));
   return server;
 }

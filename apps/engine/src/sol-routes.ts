@@ -3,7 +3,10 @@ import { liveSolChain } from "./sol-chain.js";
 import { discover } from "./sol-discover.js";
 import { liveImd } from "./sol-imd.js";
 import { BASE58_KEY, proxyRpc, SolInputError, SolLaunchpad, solSettings } from "./sol-launch.js";
-import { writeSettings } from "./settings.js";
+import { config } from "./config.js";
+import { readSettings, writeSettings } from "./settings.js";
+import { SolFees } from "./sol-fees.js";
+import { liveFeePort } from "./sol-fees-live.js";
 
 type Context = {
   json(res: ServerResponse, status: number, body: unknown, headers?: Record<string, string>): void;
@@ -27,6 +30,21 @@ export function solPad(): SolLaunchpad {
   return pad;
 }
 
+// NIGHTSHIFT's partner fees: claimed, split and burned by the engine's own fee wallet (sol-fees.ts)
+let fees: SolFees | null = null;
+export function solFees(): SolFees {
+  if (fees) return fees;
+  const g = (k: string) => String((readSettings() as Record<string, string | undefined>)[k] ?? "").trim();
+  fees = new SolFees(
+    config.dataDir,
+    () => liveFeePort(solSettings().rpc, g("RELAY_API_KEY") || undefined),
+    () => { const s = solSettings(); return { on: g("SOL_FEE_ON") === "1", adam: BASE58_KEY.test(g("SOL_FEE_ADAM")) ? g("SOL_FEE_ADAM") : null, dev: BASE58_KEY.test(g("SOL_FEE_DEV")) ? g("SOL_FEE_DEV") : null, partner: s.partner, network: s.network }; },
+    () => solPad().list("new").map((l) => l.pool).filter((p): p is string => !!p),
+  );
+  fees.start();
+  return fees;
+}
+
 const OPEN = { "Access-Control-Allow-Origin": "*" };
 const KEY = "([1-9A-HJ-NP-Za-km-z]{32,44})";
 
@@ -43,6 +61,7 @@ export async function solRoutes(req: IncomingMessage, res: ServerResponse, p: st
       const list = pad.list(sort === "mcap" || sort === "progress" || sort === "movers" ? sort : "new").slice(0, 200);
       return reply(200, { launches: list.map((l) => ({ ...l, spark: pad.spark(l.mint) })), waiting: pad.waiting().slice(0, 30) }, "public, max-age=15");
     }
+    if (req.method === "GET" && p === "/api/sol/fees") return reply(200, solFees().info(), "public, max-age=60");
     if (req.method === "GET" && p === "/api/sol/discover") return reply(200, await discover(await pad.solUsd()), "public, max-age=60");
     const chart = m(`launches/${KEY}/chart`);
     if (req.method === "GET" && chart) return reply(200, { points: pad.chart(chart[1]!) }, "public, max-age=30");
@@ -94,6 +113,21 @@ export async function solRoutes(req: IncomingMessage, res: ServerResponse, p: st
         writeSettings({ SOL_DBC_CONFIG: String(b.config), SOL_PARTNER: String(b.partner) });
         return reply(200, { ok: true, info: await pad.info() });
       }
+      if (req.method === "GET" && p === "/api/sol/admin/fees") return reply(200, await solFees().adminInfo());
+      if (req.method === "POST" && p === "/api/sol/admin/fees") {
+        const b = await ctx.body(req, 1_000);
+        const f = solFees();
+        const addr = (v: unknown, who: string) => { const s = String(v ?? "").trim(); if (s && !BASE58_KEY.test(s)) throw new SolInputError(`${who} is not a Solana address.`); if (s === f.address) throw new SolInputError(`${who} cannot be the fee wallet itself.`); return s; };
+        const patch: Record<string, string> = {};
+        if ("adam" in b) patch.SOL_FEE_ADAM = addr(b.adam, "ADAM's wallet");
+        if ("dev" in b) patch.SOL_FEE_DEV = addr(b.dev, "The dev wallet");
+        if ("on" in b) patch.SOL_FEE_ON = b.on ? "1" : "";
+        // the fee wallet becomes the launch partner: a shared config made for another partner no longer fits
+        if (b.partner === true) { patch.SOL_PARTNER = f.address; if (solSettings().partner !== f.address) patch.SOL_DBC_CONFIG = ""; }
+        writeSettings(patch);
+        return reply(200, await f.adminInfo());
+      }
+      if (req.method === "POST" && p === "/api/sol/admin/fees/run") return reply(200, { ...(await solFees().run()), info: await solFees().adminInfo() });
       if (req.method === "POST" && p === "/api/sol/admin/launch") {
         const b = await ctx.body(req, 1_000);
         return reply(200, await pad.adminAct(String(b.mint ?? ""), b.action));

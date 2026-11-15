@@ -67,11 +67,12 @@ async function sendTx(tx: Transaction, who: SolSigner, extra: Keypair[], units: 
   return sig;
 }
 
-/** The admin: the shared NIGHTSHIFT config key (the standard launch), owned by the partner wallet that signs it. */
-export async function createConfig(who: SolSigner, solUsd: number, say: (s: string) => void): Promise<{ config: string; signature: string }> {
+/** The admin: the shared NIGHTSHIFT config key (the standard launch). Any wallet pays its rent; its fees and leftover go to the partner. */
+export async function createConfig(who: SolSigner, partner: string, solUsd: number, say: (s: string) => void): Promise<{ config: string; signature: string }> {
   const config = Keypair.generate();
   const me = new PublicKey(who.address);
-  const tx = await client.partner.createConfig2({ payer: me, config: config.publicKey, feeClaimer: me, leftoverReceiver: me, quoteMint: NATIVE_MINT, ...launchConfig(STANDARD, solUsd) });
+  const p = new PublicKey(partner);
+  const tx = await client.partner.createConfig2({ payer: me, config: config.publicKey, feeClaimer: p, leftoverReceiver: p, quoteMint: NATIVE_MINT, ...launchConfig(STANDARD, solUsd) });
   const signature = await sendTx(tx, who, [config], 200_000, say);
   return { config: config.publicKey.toBase58(), signature };
 }

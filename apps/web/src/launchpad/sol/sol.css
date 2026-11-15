@@ -93,3 +93,16 @@
   .sl3-tok-h .lp-logo { width: 56px !important; height: 56px !important; }
 }
 @media (min-width: 900px) and (max-width: 1100px) { .sl3-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sl3-terms-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* where NIGHTSHIFT's fees go (public) and the automatic fee split (admin) */
+.sl3-fees { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 860px) { .sl3-fees { grid-template-columns: minmax(0, 1fr); } }
+.sl3-split { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.sl3-split li { display: flex; align-items: baseline; gap: 12px; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .02); }
+.sl3-split li b { min-width: 3.2em; font-size: 1.15em; color: #f2efff; }
+.sl3-split li.burn { border-color: rgba(184, 255, 61, .25); }
+.sl3-split li.burn b { color: #b8ff3d; }
+.sl3-lbl { display: block; margin: 10px 0; font-size: .85em; color: #a9b5ad; }
+.sl3-lbl em { font-style: normal; margin-left: 6px; color: #738878; }
+.sl3-lbl .sl3-row { margin-top: 6px; }
+.sl3-lbl em.no { color: #ff6b7d; }

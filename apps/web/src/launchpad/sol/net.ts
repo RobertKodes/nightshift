@@ -65,7 +65,25 @@ export const solApi = {
   adminPartner: (admin: string, partner: string) => call<{ ok: true }>("/api/sol/admin/partner", { method: "POST", admin, body: JSON.stringify({ partner }) }),
   adminConfig: (admin: string, config: string, partner: string) => call<{ ok: true }>("/api/sol/admin/config", { method: "POST", admin, body: JSON.stringify({ config, partner }) }),
   adminLaunch: (admin: string, mint: string, action: "release" | "cancel") => call<SolLaunch>("/api/sol/admin/launch", { method: "POST", admin, body: JSON.stringify({ mint, action }) }),
+  fees: () => call<SolFeesInfo>("/api/sol/fees"),
+  adminFees: (admin: string) => call<SolFeesAdmin>("/api/sol/admin/fees", { admin }),
+  adminFeesSet: (admin: string, b: { adam?: string; dev?: string; on?: boolean; partner?: true }) => call<SolFeesAdmin>("/api/sol/admin/fees", { method: "POST", admin, body: JSON.stringify(b) }),
+  adminFeesRun: (admin: string) => call<{ ran: boolean; why?: string; info: SolFeesAdmin }>("/api/sol/admin/fees/run", { method: "POST", admin }),
   adminNetwork: (admin: string, network: "mainnet" | "devnet") => call<{ ok: true }>("/api/sol/admin/network", { method: "POST", admin, body: JSON.stringify({ network }) }),
+};
+
+/** NIGHTSHIFT's partner fees on the Solana launchpad: the fixed split and the burns, with their transactions. */
+export type SolFeesInfo = {
+  wallet: string; running: boolean; lastRun: number | null;
+  split: { key: string; label: string; pct: number }[];
+  totals: { claimedSol: number; adamSol: number; devSol: number; imdBurnSol: number; shiftBurnSol: number; imdBurned: number; shiftBurned: number };
+  waitingSol: { imd: number; shift: number };
+  burns: { at: number; token: "IMD" | "SHIFT"; sol: number; amount: number | null; state: "sent" | "done" | "refunded"; solTx: string; ethTx: string | null; to: string }[];
+};
+export type SolFeesAdmin = SolFeesInfo & {
+  balanceSol: number | null; blocked: string | null; settings: { on: boolean; adam: string | null; dev: string | null }; lastError: string | null; owedSol: Record<string, number>;
+  pays: { at: number; to: "adam" | "dev"; lamports: string; tx: string }[];
+  limits: { reserveSol: number; minBurnSol: number; maxBurnSol: number };
 };
 
 /** The words a creator's wallet signs to act on a waiting launch (the engine checks the same text). */
