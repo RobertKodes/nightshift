@@ -68,7 +68,7 @@ export function liveSolChain(rpc: string): SolChain {
     async holders(mint) {
       if (indexedRefused) return null;
       const r = await conn.getTokenLargestAccounts(new PublicKey(mint)).catch((e: Error) => { if (/personal token|403/.test(e.message)) indexedRefused = true; throw e; });
-      const accounts = r.value.slice(0, 12);
+      const accounts = r.value.slice(0, 20);
       const owners: (string | null)[] = [];
       for (let i = 0; i < accounts.length; i += 10) {
         const infos = await conn.getMultipleParsedAccounts(accounts.slice(i, i + 10).map((a) => a.address));

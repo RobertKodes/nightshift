@@ -8,6 +8,7 @@ import { readSettings, writeSettings } from "./settings.js";
 import { SolFees } from "./sol-fees.js";
 import { liveFeePort } from "./sol-fees-live.js";
 import { liveRelayPay } from "./sol-relay.js";
+import { isTimeframe, type SolMarket, solMarket } from "./sol-market.js";
 import { swapSettings } from "./swap.js";
 import { providerFee } from "@nightshift/swap";
 
@@ -17,6 +18,7 @@ type Context = {
   limited(req: IncomingMessage, key: string, max: number, windowMs: number): boolean;
   isAdmin(req: IncomingMessage): boolean;
   pad?: SolLaunchpad;
+  market?: SolMarket;
 };
 
 // one launchpad per RPC: changing SOL_RPC or SOL_NETWORK in /setup starts a fresh reader
@@ -69,6 +71,21 @@ export async function solRoutes(req: IncomingMessage, res: ServerResponse, p: st
     if (req.method === "GET" && p === "/api/sol/discover") return reply(200, await discover(await pad.solUsd()), "public, max-age=60");
     const chart = m(`launches/${KEY}/chart`);
     if (req.method === "GET" && chart) return reply(200, { points: pad.chart(chart[1]!) }, "public, max-age=30");
+    // the token page's market, like pump.fun's: candles and trades from GeckoTerminal (cached, one budget), holders from the RPC
+    const market = m(`launches/${KEY}/(candles|trades|holders)`);
+    if (req.method === "GET" && market) {
+      if (ctx.limited(req, "sol-market", 120, 60_000)) return reply(429, { error: "Too many requests. Wait a minute." });
+      const [, mint, what] = market;
+      const l = pad.one(mint!);
+      if (!l || (l.status !== "live" && l.status !== "graduated")) return reply(404, { error: "No live launch with that address here." });
+      if (what === "holders") return reply(200, (await pad.holders(mint!)) ?? { holders: null, at: 0 }, "public, max-age=30");
+      const mk = ctx.market ?? solMarket();
+      const at = { mint: mint!, pool: l.pool, graduated: l.status === "graduated" };
+      if (what === "trades") return reply(200, await mk.trades(at), "public, max-age=10");
+      const tf = new URL(req.url ?? "", "http://x").searchParams.get("tf") ?? "5m";
+      if (!isTimeframe(tf)) return reply(400, { error: "tf is 1m, 5m, 15m, 1h, 4h or 1d." });
+      return reply(200, await mk.candles({ ...at, tf }), "public, max-age=15");
+    }
     const one = m(`launches/${KEY}`);
     if (req.method === "GET" && one) { const l = pad.one(one[1]!); return l ? reply(200, l, "no-store") : reply(404, { error: "No launch with that address here." }); }
     if (req.method === "GET" && p === "/api/sol/swarm/price") {

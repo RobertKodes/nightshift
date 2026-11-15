@@ -207,6 +207,22 @@ describe("the creator's signed launch", () => {
 });
 
 describe("a launch without the swarm", () => {
+  it("lists its top holders, labelled, read at most once a minute", async () => {
+    let reads = 0;
+    const buyer = Keypair.generate().publicKey.toBase58();
+    const { chain } = fakeChain({ holders: async () => { reads++; return [{ account: VAULT, owner: "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM", amount: (SUPPLY * 8n) / 10n }, { account: Keypair.generate().publicKey.toBase58(), owner: CREATOR, amount: SUPPLY / 50n }, { account: Keypair.generate().publicKey.toBase58(), owner: buyer, amount: SUPPLY / 100n }]; } });
+    const pad = make({ chain });
+    const r = await pad.prepare(input);
+    expect(await pad.holders(r.mint)).toBeNull();
+    await pad.signed(r.mint, { tx: b64(launchTx(r.mint)), config: CONFIG });
+    const before = reads; // the launch's safety checks read them once
+    const h = await pad.holders(r.mint);
+    expect(h?.holders?.map((x) => [x.label, x.pct])).toEqual([["bonding curve", 80], ["dev", 2], [null, 1]]);
+    expect(h?.holders?.[2]?.owner).toBe(buyer);
+    await pad.holders(r.mint);
+    expect(reads).toBe(before);
+  });
+
   it("is sent at once with NIGHTSHIFT's signature for the address, and listed", async () => {
     const { chain, sent } = fakeChain();
     const pad = make({ chain });

@@ -8,6 +8,7 @@ import { PxIcon } from "../../saas/PxIcon";
 import { chooseSolana } from "../../wallet";
 import { Logo, useRich } from "../LaunchpadPage";
 import { actText, adminToken, ago, type Discovered, imageOf, loadChain, logoData, mine, pct, type Pulse, shortKey, sol, solApi, type SolFeesAdmin, type SolFeesInfo, type SolInfo, type SolLaunch, solscan, type SwarmStep, usd, usdOf } from "./net";
+import { HoldersList, MarketChart, TokenLinks, TradesList } from "./Market";
 import { CLIFF_DAYS, CURVES, DEV_PCTS, FEES, feeSplit, isStandard, LAUNCH, type LaunchOptions, MCAP_LIMITS, minutes, optionProblem, PAY_NAMES, type PayChain, SNIPER, type Sniper, STANDARD, SWARM, SWARM_ORDER, type SwarmPick, swarmTime, VEST_DAYS } from "./options";
 import "./sol.css";
 import "./sol-board.css";
@@ -564,28 +565,6 @@ function SolNew() {
 
 // ---------------------------------------------------------------- one token
 
-function Chart({ mint, solUsd }: { mint: string; solUsd: number | null }) {
-  const [pts, setPts] = useState<[number, number][] | null>(null);
-  useEffect(() => { let alive = true; const load = () => solApi.chart(mint).then((p) => alive && setPts(p)).catch(() => alive && setPts([])); load(); const t = setInterval(load, 30_000); return () => { alive = false; clearInterval(t); }; }, [mint]);
-  const W = 640, H = 200;
-  if (!pts || pts.length < 2) return <div className="sl3-chart empty"><p className="sl3-dim">{pts ? "The chart fills in as the token trades (a point a minute)." : "Reading the chart…"}</p></div>;
-  const ys = pts.map((p) => p[1] * (solUsd ?? 1)), lo = Math.min(...ys), hi = Math.max(...ys), span = hi - lo || hi || 1;
-  const t0 = pts[0]![0], t1 = pts[pts.length - 1]![0] || t0 + 1;
-  const xy = pts.map((p, i) => [((p[0] - t0) / (t1 - t0 || 1)) * W, H - 8 - ((ys[i]! - lo) / span) * (H - 24)] as const);
-  const line = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  const up = ys[ys.length - 1]! >= ys[0]!;
-  return (
-    <div className="sl3-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Price over the last day">
-        <defs><linearGradient id="slg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={up ? "#b8ff3d" : "#ff6b7d"} stopOpacity=".35" /><stop offset="1" stopColor={up ? "#b8ff3d" : "#ff6b7d"} stopOpacity="0" /></linearGradient></defs>
-        <polygon points={`0,${H} ${line} ${W},${H}`} fill="url(#slg)" />
-        <polyline points={line} fill="none" stroke={up ? "#b8ff3d" : "#ff6b7d"} strokeWidth="2" vectorEffect="non-scaling-stroke" />
-      </svg>
-      <div className="sl3-chart-k"><span>{solUsd ? usd(hi) : sol(hi, 8)} high</span><span>{solUsd ? usd(lo) : sol(lo, 8)} low</span><span>{Math.round((t1 - t0) / 60000)} min</span></div>
-    </div>
-  );
-}
-
 const STEP_MARK: Record<SwarmStep["state"], "pending" | "running" | "done" | "failed"> = { waiting: "pending", working: "running", done: "done", failed: "failed" };
 
 /** The swarm's work on a launch: each picked step, its files, the job on IMD's explorer. */
@@ -762,7 +741,7 @@ function CreatorBox({ l, reload, info }: { l: SolLaunch; reload: () => void; inf
   const shown = mine.all().includes(l.mint) || waiting || l.status === "failed" || (fees ?? 0) > 0;
   if (!shown) return null;
   return (
-    <PxPanel title="FOR THE CREATOR" right={shortKey(l.creator)}>
+    <PxPanel title="FOR THE CREATOR" right={shortKey(l.creator)} className="sl3-creator">
       {onCurve && fees !== null && <>
         <p className="sl3-dim">Your share of the trading fees, waiting in the pool: <b>{sol(fees, 4)} SOL</b>{info?.solUsd ? ` (≈ ${usd(fees * info.solUsd)})` : ""}. Only the creator's wallet can claim it; it goes straight to that wallet.</p>
         <button className="px-btn primary sl3-go" disabled={busy || fees <= 0} onClick={() => void claim()}><PxIcon name="coin" size={14} />CLAIM MY FEES</button>
@@ -829,11 +808,6 @@ function SolToken({ mint }: { mint: string }) {
           <h1 className="pk-h1">{l.name} <em>${l.symbol}</em></h1>
           <div className="sl3-tok-links">
             <button className="pk-tag" onClick={() => void navigator.clipboard?.writeText(l.mint)} title="Copy the token address"><PxIcon name="doc" size={11} />{shortKey(l.mint)}</button>
-            {launched && <a className="pk-tag" href={solscan("token", l.mint, net)} target="_blank" rel="noreferrer">SOLSCAN ↗</a>}
-            {l.website && <a className="pk-tag" href={l.website} target="_blank" rel="noreferrer nofollow">SITE ↗</a>}
-            {l.swarm?.site && <a className="pk-tag" href={l.swarm.site} target="_blank" rel="noreferrer">IMD SITE ↗</a>}
-            {l.twitter && <a className="pk-tag" href={l.twitter} target="_blank" rel="noreferrer nofollow">X ↗</a>}
-            {l.telegram && <a className="pk-tag" href={l.telegram} target="_blank" rel="noreferrer nofollow">TELEGRAM ↗</a>}
             {l.swarm?.verdict?.launch && <PxTag tone="imd">IMD REVIEWED</PxTag>}
             {l.dev && <PxTag tone="gold">{l.dev.pct}% CREATOR LOCKED</PxTag>}
           </div>
@@ -841,6 +815,7 @@ function SolToken({ mint }: { mint: string }) {
           {l.note && !launched && <p className={l.status === "refused" || l.status === "failed" ? "sl3-err" : "sl3-dim"}>{l.note}</p>}
         </div>
       </div>
+      <TokenLinks l={l} net={net} />
 
       {launched ? <>
         <PxStats cols={4}>
@@ -859,10 +834,11 @@ function SolToken({ mint }: { mint: string }) {
         </PxStats>
       )}
 
-      <div className="sl3-tok">
+      <div className={`sl3-tok${launched ? " mkt" : ""}`}>
         <div className="sl3-side">
-          {launched && <PxPanel title="PRICE · LAST 24H" right="USD"><Chart mint={l.mint} solUsd={solUsd} /></PxPanel>}
-          <PxPanel title="THE IMD SWARM" tone="imd" state={l.status === "waiting" ? "live" : "idle"} right={l.swarm ? `${l.swarm.picks.length} STEP${l.swarm.picks.length > 1 ? "S" : ""}` : undefined}>
+          {launched && <MarketChart l={l} solUsd={solUsd} />}
+          {launched && <TradesList l={l} net={net} />}
+          <PxPanel className="sl3-swarm" title="THE IMD SWARM" tone="imd" state={l.status === "waiting" ? "live" : "idle"} right={l.swarm ? `${l.swarm.picks.length} STEP${l.swarm.picks.length > 1 ? "S" : ""}` : undefined}>
             {l.swarm ? <SwarmFlow l={l} net={net} info={info} /> : <p className="sl3-dim">Launched without the swarm: the creator chose to go live at once.</p>}
             {(l.swarm?.bannerHosted || l.swarm?.banner) && <img className="sl3-banner" src={(l.swarm.bannerHosted || l.swarm.banner)!} alt={`${l.name} X banner by the IMD swarm`} loading="lazy" />}
           </PxPanel>
@@ -871,13 +847,14 @@ function SolToken({ mint }: { mint: string }) {
           {l.status === "ready" && <ReadyPanel l={l} info={info} reload={() => setTick((t) => t + 1)} />}
           <CreatorBox l={l} info={info} reload={() => setTick((t) => t + 1)} />
           {launched && (graduated
-            ? <PxPanel title="TRADE" state="live"><p className="sl3-dim">It graduated: its liquidity is locked in a Meteora DAMM v2 pool for good. Trade it anywhere Solana tokens trade.</p><a className="px-btn primary" href={`https://jup.ag/swap/SOL-${l.mint}`} target="_blank" rel="noreferrer"><PxIcon name="swap" size={14} />TRADE ON JUPITER ↗</a></PxPanel>
+            ? <PxPanel title="TRADE" state="live" className="sl3-trade-g"><p className="sl3-dim">It graduated: its liquidity is locked in a Meteora DAMM v2 pool for good. Trade it anywhere Solana tokens trade.</p><a className="px-btn primary" href={`https://jup.ag/swap/SOL-${l.mint}`} target="_blank" rel="noreferrer"><PxIcon name="swap" size={14} />TRADE ON JUPITER ↗</a></PxPanel>
             : l.pool ? <TradeBox pool={l.pool} mint={l.mint} symbol={l.symbol} net={net} solUsd={solUsd} /> : <PxPanel title="TRADE"><p className="sl3-dim">The pool is being read from Solana…</p></PxPanel>)}
           {l.dev && (
-            <PxPanel title="CREATOR ALLOCATION" tone="gold" right="locked by Meteora">
+            <PxPanel title="CREATOR ALLOCATION" tone="gold" right="locked by Meteora" className="sl3-alloc">
               <p className="sl3-lock"><b>{l.dev.pct}%</b> of the supply is the creator's, held by Meteora's program, not by the creator. None of it moves before the token graduates; then {l.dev.cliffDays ? `${l.dev.cliffDays} days later ` : ""}it unlocks a little each day for {l.dev.vestDays} days.</p>
             </PxPanel>
           )}
+          {launched && <HoldersList l={l} net={net} />}
           {launched && (
             <PxPanel title="SAFETY CHECKS" right="free, from the chain" className="sl3-checks">
               <ul>{l.checks.length ? l.checks.map((c) => <li key={c.key} className={c.ok === false ? "bad" : c.ok ? "ok" : ""}><StatusMark status={c.ok === false ? "failed" : c.ok ? "done" : "pending"} size={16} color="#738878" doneColor="#b8ff3d" errorColor="#ff6b7d" /><span>{c.says}</span></li>) : <li>Checks are being read…</li>}</ul>
@@ -946,10 +923,9 @@ function TradeBox({ pool, mint, symbol, net, solUsd }: { pool: string; mint: str
 // ---------------------------------------------------------------- the admin
 
 
-/** The admin: the engine's fee wallet as the launch partner, ADAM's and the dev wallet, on or off, a run now. */
+/** The admin: the engine's fee wallet as the launch partner, the dev wallet, on or off, a run now. */
 function FeesAdmin({ token, partner, reload }: { token: string; partner: string | null; reload: () => Promise<void> }) {
   const [f, setF] = useState<SolFeesAdmin | null>(null);
-  const [adam, setAdam] = useState("");
   const [dev, setDev] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -958,7 +934,7 @@ function FeesAdmin({ token, partner, reload }: { token: string; partner: string 
     setBusy(true); setMsg("");
     try {
       const r = await fn();
-      if ("ran" in r) { setF(r.info); setMsg(r.why ?? "Ran: claimed, paid and burned what was due."); } else { setF(r); setAdam(""); setDev(""); }
+      if ("ran" in r) { setF(r.info); setMsg(r.why ?? "Ran: claimed, paid and burned what was due."); } else { setF(r); setDev(""); }
       await reload();
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   };
@@ -968,13 +944,12 @@ function FeesAdmin({ token, partner, reload }: { token: string; partner: string 
   const saved = (a: string | null) => a ? <em>now {shortKey(a)}</em> : <em className="no">not set</em>;
   return (
     <PxPanel title="3 · NIGHTSHIFT'S FEES · AUTOMATIC" state={f.running ? "live" : "idle"} right={f.balanceSol != null ? `${sol(f.balanceSol, 4)} SOL in the fee wallet` : undefined}>
-      <p className="sl3-dim">Fee wallet <a href={solscan("account", f.wallet, "mainnet")} target="_blank" rel="noreferrer">{f.wallet}</a>. Its key was made on the server and never leaves it. Every 6 hours it claims every pool, pays ADAM 10% and the dev wallet 35% (dev 20% + marketing 15%), and burns 10% as IMD and 45% as $SHIFT through Relay. Send it about 0.02 SOL once for network fees ({f.limits.reserveSol} SOL always stays in it).</p>
+      <p className="sl3-dim">Fee wallet <a href={solscan("account", f.wallet, "mainnet")} target="_blank" rel="noreferrer">{f.wallet}</a>. Its key was made on the server and never leaves it. Every 6 hours it claims every pool, pays the dev wallet 60% (dev + marketing), and burns 20% as IMD and 20% as $SHIFT through Relay. Send it about 0.02 SOL once for network fees ({f.limits.reserveSol} SOL always stays in it).</p>
       <ul className="sl3-adm">
         <li><span><b>{isPartner ? "It is the launch partner" : "Not the launch partner yet"}</b><small>{isPartner ? "every launch pays NIGHTSHIFT's fees here" : partner ? `launches pay ${shortKey(partner)} now` : "launches stay closed until a partner is set"}</small></span>
           {!isPartner && <button className="px-btn primary" disabled={busy} onClick={() => void act(() => solApi.adminFeesSet(token, { partner: true }))}>MAKE IT THE PARTNER</button>}</li>
       </ul>
-      <label className="sl3-lbl">ADAM's Solana wallet · 10% {saved(f.settings.adam)}{!f.settings.adam && <small> · until it is set, ADAM's 10% stays in the fee wallet ({sol(f.owedSol.adam ?? 0, 3)} SOL) and is paid on the first run after</small>}<div className="sl3-row"><input className="field" value={adam} onChange={(e) => setAdam(e.target.value.trim())} placeholder="ADAM's Solana address" /><button className="px-btn" disabled={busy || !adam} onClick={() => void act(() => solApi.adminFeesSet(token, { adam }))}>SAVE</button></div></label>
-      <label className="sl3-lbl">Dev wallet · 35% (dev + marketing) {saved(f.settings.dev)}<div className="sl3-row"><input className="field" value={dev} onChange={(e) => setDev(e.target.value.trim())} placeholder="your Solana dev wallet" /><button className="px-btn" disabled={busy || !dev} onClick={() => void act(() => solApi.adminFeesSet(token, { dev }))}>SAVE</button></div></label>
+      <label className="sl3-lbl">Dev wallet · 60% (dev + marketing) {saved(f.settings.dev)}<div className="sl3-row"><input className="field" value={dev} onChange={(e) => setDev(e.target.value.trim())} placeholder="your Solana dev wallet" /><button className="px-btn" disabled={busy || !dev} onClick={() => void act(() => solApi.adminFeesSet(token, { dev }))}>SAVE</button></div></label>
       <div className="sl3-row">
         <button className={`px-btn${off ? "" : " primary"}`} disabled={busy} onClick={() => void act(() => solApi.adminFeesSet(token, { on: off }))}>{off ? "OFF · TURN ON" : "ON · TURN OFF"}</button>
         <button className="px-btn" disabled={busy || !f.running} onClick={() => void act(() => solApi.adminFeesRun(token))}>RUN NOW</button>
@@ -983,7 +958,7 @@ function FeesAdmin({ token, partner, reload }: { token: string; partner: string 
       {f.lastError && <p className="sl3-err">Last problem: {f.lastError}</p>}
       <PxStats cols={4}>
         <PxStat label="CLAIMED" value={sol(f.totals.claimedSol, 3)} sub="SOL, all time" />
-        <PxStat label="ADAM + DEV" value={sol(f.totals.adamSol + f.totals.devSol, 3)} sub={`SOL paid · owed ${sol((f.owedSol.adam ?? 0) + (f.owedSol.dev ?? 0), 3)}`} />
+        <PxStat label="DEV WALLET" value={sol(f.totals.adamSol + f.totals.devSol, 3)} sub={`SOL paid · owed ${sol(f.owedSol.dev ?? 0, 3)}`} />
         <PxStat label="IMD BURN" value={sol(f.totals.imdBurnSol, 3)} sub={`SOL · waiting ${sol(f.owedSol.imd ?? 0, 3)}`} tone="imd" />
         <PxStat label="$SHIFT BURN" value={sol(f.totals.shiftBurnSol, 3)} sub={`SOL · waiting ${sol(f.owedSol.shift ?? 0, 3)}`} tone="lime" />
       </PxStats>
@@ -1006,7 +981,7 @@ function SolAdmin() {
 
   return (
     <>
-      <PxHero kicker="IMD LAUNCH · SOLANA · SETUP" title="Open IMD Launch on Solana." accent="One wallet." lead="NIGHTSHIFT's fee wallet, made on the server, is the partner on every launch: it claims NIGHTSHIFT's share of the fees, pays ADAM and the dev wallet, and burns IMD and $SHIFT, on its own. Make it the partner in step 3 and launches open. Creators pay the IMD swarm themselves, in SOL through NIGHTSHIFT Swap or in IMD; the IMD goes straight to IMD. A shared config key is optional: standard launches then skip creating their own config." />
+      <PxHero kicker="IMD LAUNCH · SOLANA · SETUP" title="Open IMD Launch on Solana." accent="One wallet." lead="NIGHTSHIFT's fee wallet, made on the server, is the partner on every launch: it claims NIGHTSHIFT's share of the fees, pays the dev wallet, and burns IMD and $SHIFT, on its own. Make it the partner in step 3 and launches open. Creators pay the IMD swarm themselves, in SOL through NIGHTSHIFT Swap or in IMD; the IMD goes straight to IMD. A shared config key is optional: standard launches then skip creating their own config." />
       <PxPanel title="ADMIN TOKEN"><div className="sl3-row"><input className="field" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="the admin token from /setup" /><button className="px-btn" onClick={() => void load()}>READ</button></div></PxPanel>
       {state && <>
         <PxPanel title="1 · PARTNER WALLET (BY HAND)" state={state.partner ? "live" : "idle"} right={state.network.toUpperCase()}>

@@ -81,11 +81,55 @@
 .sl3-lock { margin: 0; padding: 12px; border: 1px dashed rgba(242, 193, 78, .45); background: rgba(242, 193, 78, .05); color: #eadbb4; font: 400 13px/1.55 var(--px-sans); }
 .sl3-lock b { color: var(--px-gold); font-family: var(--px-mono); }
 
-/* ---- the token page: chart and the swarm's work */
-.sl3-chart { position: relative; }
-.sl3-chart svg { display: block; width: 100%; height: 200px; }
-.sl3-chart.empty { min-height: 120px; display: grid; place-items: center; text-align: center; }
-.sl3-chart-k { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font: 400 11px/1 var(--px-mono); color: var(--px-faint); }
+/* ---- the token page: links, chart, trades, holders (Market.tsx), and the swarm's work */
+.sl3-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.sl3-link { display: inline-flex; align-items: center; gap: 6px; padding: 8px 11px; border: 1px solid var(--px-line2); background: var(--px-panel); color: var(--px-text) !important; text-decoration: none; font: 400 9.5px/1 var(--px-pixel); letter-spacing: .06em; border-radius: 2px; transition: border-color .12s, background .12s, color .12s; }
+.sl3-link span { color: var(--px-faint); font-family: var(--px-mono); font-size: 11px; }
+.sl3-link:hover { border-color: var(--px-lime); color: var(--px-lime) !important; background: #0e1710; }
+.sl3-link.site { border-color: rgba(184, 255, 61, .55); color: var(--px-lime) !important; }
+.sl3-link.imd { border-color: rgba(47, 123, 255, .55); color: #8db6ff !important; background: #060a10; }
+.sl3-link.imd:hover { border-color: #2f7bff; color: #fff !important; background: rgba(47, 123, 255, .14); }
+.sl3-link.imd span { color: #5c7194; }
+
+.sl3-tok.mkt { grid-template-columns: minmax(0, 1.75fr) minmax(300px, 1fr); }
+.sl3-mkt .pk-panel-b { display: grid; gap: 8px; }
+.sl3-mkt-bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; }
+.sl3-mkt-tf, .sl3-mkt-mode { display: flex; gap: 0; border: 1px solid var(--px-line2); border-radius: 2px; overflow: hidden; }
+.sl3-mkt-tf button, .sl3-mkt-mode button { background: var(--px-panel); border: 0; border-right: 1px solid var(--px-line); color: var(--px-dim); padding: 7px 10px; cursor: pointer; font: 400 9.5px/1 var(--px-pixel); letter-spacing: .06em; min-width: 38px; }
+.sl3-mkt-tf button:last-child, .sl3-mkt-mode button:last-child { border-right: 0; }
+.sl3-mkt-tf button:hover, .sl3-mkt-mode button:hover { color: var(--px-text); }
+.sl3-mkt-tf button.on, .sl3-mkt-mode button.on { background: var(--px-lime); color: var(--px-ink); }
+.sl3-mkt-k { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-height: 16px; font: 400 11.5px/1.3 var(--px-mono); color: var(--px-text); }
+.sl3-mkt-k i { font-style: normal; color: var(--px-faint); margin-right: 4px; }
+.sl3-mkt-k b.up { color: var(--px-lime); } .sl3-mkt-k b.down { color: var(--px-red); }
+.sl3-mkt-k small { color: var(--px-faint); font-size: 11px; }
+.sl3-mkt-chart { position: relative; height: 420px; border: 1px solid var(--px-line); background: #060907; }
+.sl3-mkt-canvas { position: absolute; inset: 0; }
+.sl3-mkt-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px; background: rgba(6, 9, 7, .82); }
+.sl3-mkt-note { margin: 0; color: var(--px-faint); font: 400 11.5px/1.45 var(--px-mono); }
+
+.sl3-tr { display: grid; font: 400 12px/1.2 var(--px-mono); max-height: 520px; overflow-y: auto; scrollbar-width: thin; }
+.sl3-tr-r { display: grid; grid-template-columns: minmax(0, 1.25fr) 52px minmax(0, .9fr) minmax(0, 1fr) minmax(0, .9fr) 42px 52px; gap: 8px; align-items: center; padding: 8px 4px; border-top: 1px solid rgba(184, 255, 61, .07); color: var(--px-text); }
+.sl3-tr-r.head { position: sticky; top: 0; background: var(--px-panel); border-top: 0; color: var(--px-faint); font: 400 9px/1 var(--px-pixel); letter-spacing: .06em; padding-top: 2px; z-index: 1; }
+.sl3-tr-r > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl3-tr-r a { color: var(--px-dim) !important; text-decoration: none; }
+.sl3-tr-r a:hover { color: var(--px-lime) !important; }
+.sl3-tr-r b.buy, .sl3-tr-r b.sell { display: inline-block; padding: 3px 5px; font: 400 8.5px/1 var(--px-pixel); letter-spacing: .05em; border: 1px solid; }
+.sl3-tr-r b.buy { color: var(--px-lime); border-color: rgba(184, 255, 61, .45); background: rgba(184, 255, 61, .06); }
+.sl3-tr-r b.sell { color: var(--px-red); border-color: rgba(255, 107, 125, .45); background: rgba(255, 107, 125, .06); }
+.sl3-tr-r b.dev { color: var(--px-gold); font: 400 8.5px/1 var(--px-pixel); margin-right: 5px; }
+.sl3-tr-r.buy > span:nth-child(3) { color: var(--px-lime); } .sl3-tr-r.sell > span:nth-child(3) { color: var(--px-red); }
+.sl3-tr-r .age { color: var(--px-faint); }
+.sl3-tr-r .tx { text-align: right; }
+
+.sl3-hold { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font: 400 12px/1.2 var(--px-mono); }
+.sl3-hold li { position: relative; display: grid; grid-template-columns: 22px minmax(0, auto) auto 1fr; align-items: center; gap: 8px; padding: 7px 6px; }
+.sl3-hold li > i { position: absolute; inset: 0 auto 0 0; background: rgba(184, 255, 61, .07); border-right: 1px solid rgba(184, 255, 61, .25); pointer-events: none; }
+.sl3-hold .n { color: var(--px-faint); font-size: 11px; }
+.sl3-hold a { color: var(--px-text) !important; text-decoration: none; }
+.sl3-hold a:hover { color: var(--px-lime) !important; }
+.sl3-hold b { justify-self: end; color: var(--px-text); font-weight: 600; grid-column: 4; }
+.sl3-hold .pk-tag { padding: 3px 5px; font-size: 8px; }
 .sl3-work { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .sl3-work li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; color: #c6d4ea; font: 400 13px/1.5 var(--px-sans); }
 .sl3-work li b { display: block; color: #8db6ff; font: 400 9.5px/1.4 var(--px-pixel); letter-spacing: .06em; text-transform: uppercase; }
@@ -141,6 +185,19 @@
 .sl3-adm small { color: var(--px-faint); font: 400 11.5px/1.4 var(--px-mono); }
 
 @media (max-width: 899px) {
+  /* the token page on a phone, like pump.fun's: the chart, then the trade box, then the rest */
+  .sl3-tok.mkt { grid-template-columns: minmax(0, 1fr); }
+  .sl3-tok.mkt > .sl3-side { display: contents; }
+  .sl3-tok.mkt > .sl3-side > * { order: 9; }
+  .sl3-tok.mkt .sl3-ready { order: 0; } .sl3-tok.mkt .sl3-mkt { order: 1; } .sl3-tok.mkt .sl3-trade, .sl3-tok.mkt .sl3-trade-g { order: 2; }
+  .sl3-tok.mkt .sl3-creator { order: 3; } .sl3-tok.mkt .sl3-trades { order: 4; } .sl3-tok.mkt .sl3-holders { order: 5; } .sl3-tok.mkt .sl3-alloc { order: 6; }
+  .sl3-tok.mkt .sl3-checks { order: 7; } .sl3-tok.mkt .sl3-swarm { order: 8; }
+  .sl3-mkt-chart { height: 320px; }
+  .sl3-tr-r { grid-template-columns: minmax(0, 1.25fr) 42px minmax(0, 1fr) minmax(0, 1fr) 28px 44px; gap: 6px; font-size: 11.5px; }
+  .sl3-mkt-tf button, .sl3-mkt-mode button { padding: 7px 6px; min-width: 0; }
+  .sl3-mkt-tf button { min-width: 30px; }
+  .sl3-tr-r .usd { display: none; }
+  .sl3-link { padding: 8px 9px; }
   .sl3-picks, .sl3-caps { grid-template-columns: 1fr; }
   .sl3-cols, .sl3-how { grid-template-columns: 1fr; }
   .sl3-king { grid-template-columns: auto 1fr; }

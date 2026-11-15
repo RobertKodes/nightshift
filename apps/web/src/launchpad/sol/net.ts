@@ -57,6 +57,11 @@ export type Discovered = {
   priceUsd: number | null; mcapUsd: number | null; liquidityUsd: number | null; vol24: number | null; change1h: number | null; change24h: number | null;
   buys24: number; sells24: number; createdAt: number | null; url: string; boosted: boolean;
 };
+/** The token page's market (the engine's GeckoTerminal proxy): [unix s, open, high, low, close, volume USD], USD per whole token. */
+export type Candle = [number, number, number, number, number, number];
+export type Timeframe = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
+export type MarketTrade = { kind: "buy" | "sell"; account: string; sol: number; tokens: number; usd: number; priceUsd: number; at: number; tx: string };
+export type HolderRow = { owner: string; account: string; tokens: number; pct: number; label: "bonding curve" | "pool" | "dev" | null };
 export type Pulse = { agentsOnline?: number; jobsDoneLastDay?: number; launchesLive?: number; sites?: number; seatsEnrolled?: number };
 
 async function call<T>(path: string, init?: RequestInit & { admin?: string }): Promise<T> {
@@ -71,6 +76,9 @@ export const solApi = {
   list: (sort: "new" | "mcap" | "progress" | "movers") => call<{ launches: SolLaunch[]; waiting: SolLaunch[] }>(`/api/sol/launches?sort=${sort}`),
   one: (mint: string) => call<SolLaunch>(`/api/sol/launches/${mint}`),
   chart: (mint: string) => call<{ points: [number, number][] }>(`/api/sol/launches/${mint}/chart`).then((r) => r.points),
+  candles: (mint: string, tf: Timeframe) => call<{ candles: Candle[]; pools: string[]; at: number; note?: string }>(`/api/sol/launches/${mint}/candles?tf=${tf}`),
+  trades: (mint: string) => call<{ trades: MarketTrade[]; pool: string | null; at: number; note?: string }>(`/api/sol/launches/${mint}/trades`),
+  holders: (mint: string) => call<{ holders: HolderRow[] | null; at: number }>(`/api/sol/launches/${mint}/holders`),
   discover: () => call<{ at: number; items: Discovered[] }>("/api/sol/discover"),
   pulse: () => call<Pulse>("/api/swarm/pulse").catch(() => ({}) as Pulse),
   prepare: (b: Record<string, unknown>) => call<Prepared>("/api/sol/prepare", { method: "POST", body: JSON.stringify(b) }),

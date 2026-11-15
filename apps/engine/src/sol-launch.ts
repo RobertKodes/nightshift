@@ -4,6 +4,7 @@ import { writeAtomic } from "./atomic.js";
 import { config } from "./config.js";
 import { readSettings } from "./settings.js";
 import { IMD_PRICE, type ImdFile, type ImdPort, PAY_CHAINS, type PayChain } from "./sol-imd.js";
+import { holderRows, type HolderRow } from "./sol-market.js";
 import { MintKeys } from "./sol-mints.js";
 import { RH_CHAIN, type RelayPayPort, relayPayProblem } from "./sol-relay.js";
 import { launchMetadata, launchTxProblem, readTx, walletSigned } from "./sol-tx.js";
@@ -379,6 +380,9 @@ export class SolLaunchpad {
   private launches: Stored;
   private history: History;
   private configs = new Map<string, ConfigView>();
+  /** the last pool read per launch (its curve vault labels the holders list) and the holders lists, kept in memory */
+  private poolSeen = new Map<string, PoolView>();
+  private holderLists = new Map<string, { at: number; v: Holder[] | null; busy?: Promise<Holder[] | null> }>();
   private usd: { v: number | null; at: number } = { v: null, at: 0 };
   private file: string;
   private histFile: string;
@@ -707,6 +711,31 @@ export class SolLaunchpad {
   chart(mint: string): [number, number][] { return this.history[mint] ?? []; }
   spark(mint: string): number[] { const h = this.history[mint] ?? []; return h.slice(-48).map((p) => p[1]); }
 
+  /**
+   * A listed token's top holders (the RPC's 20 largest token accounts), labelled like pump.fun: bonding curve,
+   * pool, dev. Read at most once a minute per token (the safety checks' read fills it too); null when the RPC
+   * cannot answer indexed reads (the free public one).
+   */
+  async holders(mint: string): Promise<{ holders: HolderRow[] | null; at: number } | null> {
+    const l = BASE58_KEY.test(mint) ? this.launches[mint] : undefined;
+    if (!l || !LISTED.includes(l.status)) return null;
+    let e = this.holderLists.get(mint);
+    if (!e || Date.now() - e.at > 60_000) {
+      if (!e?.busy) {
+        const busy = this.chain.holders(mint).catch(() => e?.v ?? null);
+        e = { at: e?.at ?? 0, v: e?.v ?? null, busy };
+        this.holderLists.set(mint, e);
+        const v = await busy;
+        this.holderLists.set(mint, { at: Date.now(), v });
+      } else await e.busy;
+      e = this.holderLists.get(mint)!;
+    }
+    const c = l.config ? this.configs.get(l.config) : undefined;
+    const decimals = c?.tokenDecimal ?? 6;
+    const supply = c?.supply ?? 1_000_000_000n * 10n ** BigInt(decimals);
+    return { holders: e.v ? holderRows(e.v, { supply, decimals, creator: l.creator, baseVault: this.poolSeen.get(mint)?.baseVault ?? null }) : null, at: e.at };
+  }
+
   async info() {
     const s = this.settings();
     const usd = await this.solUsd();
@@ -732,6 +761,7 @@ export class SolLaunchpad {
   private async refreshOne(l: SolLaunch, pool: PoolView | null) {
     const c = l.config ? await this.configOf(l.config) : null;
     if (pool) {
+      this.poolSeen.set(l.mint, pool);
       const before = l.quoteReserve;
       l.pool = pool.pool; l.status = pool.migrated ? "graduated" : "live";
       l.quoteReserve = pool.quoteReserve.toString();
@@ -759,6 +789,7 @@ export class SolLaunchpad {
       const serial = Object.values(this.launches).filter((x) => LISTED.includes(x.status) && x.creator === l.creator).length;
       l.checks = safetyChecks(m, hs, pool, serial, l.dev);
       l.checkedAt = Date.now();
+      if (hs) this.holderLists.set(l.mint, { at: Date.now(), v: hs });
     }
   }
 
