@@ -61,9 +61,9 @@ function setup(over: Partial<FeeSettings> = {}) {
 }
 
 describe("the split", () => {
-  it("is 45 dev / 10 IMD / 45 $SHIFT (ADAM's 10% went to the dev wallet) and every lamport goes somewhere", () => {
+  it("is 60 dev / 20 IMD / 20 $SHIFT and every lamport goes somewhere", () => {
     const p = splitLamports(1_000_000_000n);
-    expect(p).toEqual({ adam: 0n, dev: 450_000_000n, imd: 100_000_000n, shift: 450_000_000n });
+    expect(p).toEqual({ adam: 0n, dev: 600_000_000n, imd: 200_000_000n, shift: 200_000_000n });
     const q = splitLamports(1_000_000_007n);
     expect(q.adam + q.dev + q.imd + q.shift).toBe(1_000_000_007n);
   });
@@ -98,7 +98,7 @@ describe("the fee wallet", () => {
 });
 
 describe("a run", () => {
-  it("claims every pool, pays the dev wallet 45%, and burns 10% as IMD and 45% as $SHIFT", async () => {
+  it("claims every pool, pays the dev wallet 60%, and burns 20% as IMD and 20% as $SHIFT", async () => {
     const { fees, c } = setup();
     c.balance = RESERVE;
     const r = await fees.run();
@@ -107,11 +107,13 @@ describe("a run", () => {
     const p = splitLamports(got);
     expect(c.paid).toMatchObject([{ address: DEV, lamports: p.dev }]);
     expect(c.paid).toHaveLength(1);
-    expect(c.deposits).toEqual([{ burn: "imd", lamports: p.imd }, { burn: "shift", lamports: MAX_BURN }]);
-    // the $SHIFT burn above the per-burn cap waits for the next run
+    // both shares are under the per-burn cap: burned in full this run
+    expect(p.shift).toBeLessThan(MAX_BURN);
+    // the $SHIFT burn is its share less the network fees already paid (payout + IMD burn), which it carries
+    expect(c.deposits).toEqual([{ burn: "imd", lamports: p.imd }, { burn: "shift", lamports: p.shift - 10_000n }]);
     const a = await fees.adminInfo();
-    // less the network fees of the payout and the two burns, which the $SHIFT share pays
-    expect(a.owedSol.shift).toBeCloseTo(Number(p.shift - MAX_BURN - 15_000n) / 1e9, 9);
+    // the network fees of the payout and the two burns come out of the $SHIFT share, never below zero
+    expect(a.owedSol.shift).toBe(0);
     expect(a.owedSol.adam).toBe(0);
     expect(a.totals.claimedSol).toBeCloseTo(Number(got) / 1e9, 9);
   });
@@ -143,8 +145,8 @@ describe("a run", () => {
     const [imdReq, shiftReq] = [...c.statuses.keys()];
     c.statuses.set(imdReq!, "done");
     c.statuses.set(shiftReq!, "refunded");
-    c.balance += MAX_BURN; // the refund lands back in the fee wallet
-    const owedBefore = (await fees.adminInfo()).owedSol.shift ?? 0;
+    const firstShift = c.deposits.find((d) => d.burn === "shift")!.lamports;
+    c.balance += firstShift; // the refund lands back in the fee wallet
     c.pools.clear();
     await fees.run();
     const info = fees.info();
@@ -154,8 +156,10 @@ describe("a run", () => {
     expect(info.totals.imdBurned).toBe(5);
     expect(info.burns.find((b) => b.token === "SHIFT" && b.state === "refunded")).toBeTruthy();
     // refunded, then burned again in the same run (it is over the minimum)
-    expect(c.deposits.filter((d) => d.burn === "shift")).toHaveLength(2);
-    expect((await fees.adminInfo()).owedSol.shift).toBeCloseTo(owedBefore - 0.000005, 9);
+    const shifts = c.deposits.filter((d) => d.burn === "shift");
+    expect(shifts).toHaveLength(2);
+    expect(shifts[1]!.lamports).toBeLessThanOrEqual(firstShift);
+    expect(shifts[1]!.lamports).toBeGreaterThan(firstShift - 100_000n);
   });
 
   it("never spends the reserve: a burn larger than what the wallet can spend waits", async () => {

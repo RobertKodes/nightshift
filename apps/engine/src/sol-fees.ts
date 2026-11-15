@@ -9,7 +9,7 @@ import { writeAtomic } from "./atomic.js";
  * The launch partner on every Meteora curve is a Solana wallet the engine created for itself (the "fee
  * wallet"); its key is made on the server and never leaves it. Every few hours the engine claims the
  * partner's trading fees and launch fees from every pool, all in SOL, and splits what came in:
- *   45% the dev wallet (dev + marketing) · 10% bought as IMD and burned · 45% bought as $SHIFT and burned.
+ *   60% the dev wallet (dev + marketing) · 20% bought as IMD and burned · 20% bought as $SHIFT and burned.
  * (Until 2026-11-16, 10% went to ADAM: the owner moved it to the dev wallet; what was kept for ADAM went there too.)
  * The two burns go through Relay in one Solana transaction each: SOL in on Solana, IMD or $SHIFT out on
  * Ethereum, delivered straight to the burn address (IMD to IMD's BurnExecutor, $SHIFT to 0x…dEaD). The
@@ -23,12 +23,12 @@ export const IMD_BURN_EXECUTOR = "0xe29386719c155b6847ad5a4e97c6674f10ffc750";
 export const DEAD = "0x000000000000000000000000000000000000dead";
 
 /** The split, in basis points of every lamport claimed. Fixed in code, the same on the public page. */
-export const SPLIT = { adam: 0, dev: 4_500, imd: 1_000, shift: 4_500 } as const;
+export const SPLIT = { adam: 0, dev: 6_000, imd: 2_000, shift: 2_000 } as const;
 export type Bucket = keyof typeof SPLIT;
 export const SPLIT_LABELS: { key: Bucket; label: string; pct: number }[] = [
-  { key: "dev", label: "Dev + marketing", pct: 45 },
-  { key: "imd", label: "Bought as IMD and burned", pct: 10 },
-  { key: "shift", label: "Bought as $SHIFT and burned", pct: 45 },
+  { key: "dev", label: "Dev + marketing", pct: 60 },
+  { key: "imd", label: "Bought as IMD and burned", pct: 20 },
+  { key: "shift", label: "Bought as $SHIFT and burned", pct: 20 },
 ];
 
 export const BURNS = {
@@ -269,8 +269,10 @@ export class SolFees {
     if (bad) throw new Error(`The ${BURNS[burn].symbol} burn waits: ${bad}.`);
     const before = await port.balance(this.address);
     const solTx = await port.deposit(this.kp, q, amount);
-    this.chargeFee(before - (await port.balance(this.address)) - amount);
+    const fee = before - (await port.balance(this.address)) - amount;
+    // the burn leaves its bucket first, then the network fee comes out of the $SHIFT share (never below zero)
     this.l.owed[burn] = add(this.l.owed[burn], -amount);
+    this.chargeFee(fee);
     this.l.burns = [{ at: this.now(), burn, lamports: amount.toString(), requestId: q.requestId, solTx, state: "sent" as const, out: q.outAmount, ethTx: null, usd: q.inUsd }, ...this.l.burns].slice(0, KEEP);
     this.save();
   }
