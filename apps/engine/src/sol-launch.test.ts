@@ -1,5 +1,5 @@
 import { createPrivateKey, sign } from "node:crypto";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ComputeBudgetProgram, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
@@ -84,9 +84,10 @@ const STD = { feeBps: 100, startMcapUsd: 5_000, graduateMcapUsd: 75_000, sniper:
 const input = { name: "Night Frog", symbol: "nfrog", description: "gm", website: "https://frog.test", twitter: "https://x.com/frog", telegram: "https://t.me/frog", image: PNG, creator: CREATOR, options: STD };
 
 /** A launch transaction the way the page builds one: compute budget, the first buy's SOL wrap and token account, Meteora's pool creation. */
-function launchTx(mint: string, o: { config?: string; nonce?: string | null; extra?: TransactionInstruction[]; uri?: string } = {}) {
+function launchTx(mint: string, o: { config?: string; nonce?: string | null; extra?: TransactionInstruction[]; first?: TransactionInstruction[]; uri?: string } = {}) {
   const tx = new Transaction();
   const me = creatorKp.publicKey, m = new PublicKey(mint);
+  for (const x of o.first ?? []) tx.add(x);
   if (o.nonce) tx.add(SystemProgram.nonceAdvance({ noncePubkey: nonceKp.publicKey, authorizedPubkey: me }));
   tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 450_000 }));
   tx.add(new TransactionInstruction({ programId: new PublicKey(DBC_PROGRAM), data: createPoolData("Night Frog", "NFROG", o.uri ?? `https://site.test/api/sol/meta/${mint}.json`), keys: [{ pubkey: new PublicKey(o.config ?? CONFIG), isSigner: false, isWritable: false }, { pubkey: m, isSigner: true, isWritable: true }, { pubkey: me, isSigner: true, isWritable: true }] }));
@@ -242,9 +243,8 @@ describe("a launch without the swarm", () => {
   });
 });
 
-describe("a launch that waits for the IMD swarm", () => {
+describe("a launch with the IMD swarm: paid first, signed when the swarm is done", () => {
   const swarmInput = { ...input, image: "", swarm: ["review", "logo", "website"], logoIdea: "a frog", chainId: 1 };
-  const NONCE = nonceKp.publicKey.toBase58();
 
   async function waiting() {
     const { chain, sent } = fakeChain();
@@ -252,54 +252,82 @@ describe("a launch that waits for the IMD swarm", () => {
     const pad = make({ chain, imd: imd.port });
     const r = await pad.prepare(swarmInput);
     imd.s.paidBody = r.swarm!.body;
-    const l = await pad.signed(r.mint, { tx: b64(launchTx(r.mint, { nonce: NONCE_VALUE })), config: CONFIG, nonce: NONCE });
-    return { pad, r, l, imd, sent };
+    return { pad, r, imd, sent };
   }
+  const complete = (imd: ReturnType<typeof fakeImd>) => {
+    imd.s.job = { state: "completed", nodes: [{ key: "research_report", state: "accepted" }, { key: "token_logo", state: "accepted" }, { key: "build_website", state: "accepted" }, { key: "design_critic", state: "accepted" }], site: "https://nfrog.imd.site" };
+    imd.s.files = [{ name: "verdict", url: "https://api.imd.fun/artifacts/v", mediaType: "application/json" }, { name: "logo", url: "https://api.imd.fun/artifacts/logo", mediaType: "image/png" }, { name: "report", url: "https://api.imd.fun/artifacts/r", mediaType: "text/markdown" }];
+  };
 
-  it("is checked by IMD for free, signed now, and nothing is sent", async () => {
-    const { r, l, imd, sent } = await waiting();
+  it("is checked by IMD for free and waits for its payment: no nonce, nothing signed, nothing sent", async () => {
+    const { pad, r, imd, sent } = await waiting();
     expect(imd.s.checked).toHaveLength(1);
     expect(r.swarm).toMatchObject({ chainId: 1, blockers: [], plan: ["Research and write the report"] });
     expect(JSON.parse(r.swarm!.body).objective).toContain(r.mint);
-    expect(l).toMatchObject({ status: "waiting", nonce: NONCE, swarm: { state: "unpaid", picks: ["review", "logo", "website"] } });
+    // the launch has its page at once, so the creator can pay and follow it
+    expect(pad.one(r.mint)).toMatchObject({ status: "waiting", nonce: null, uri: r.uri, swarm: { state: "unpaid", picks: ["review", "logo", "website"] } });
+    // and cannot be signed before the swarm is done
+    await expect(pad.signed(r.mint, { tx: b64(launchTx(r.mint)), config: CONFIG })).rejects.toThrow(/Pay the swarm's job first/);
     expect(sent).toHaveLength(0);
   });
 
-  it("needs the payment that carried its body, then follows the job and launches when it completes", async () => {
+  it("needs the payment that carried its body, follows the job, and is ready (not sent) when it completes", async () => {
     const { pad, r, imd, sent } = await waiting();
     await expect(pad.paid(r.mint, 1, `0x${"cd".repeat(32)}`)).rejects.toThrow(/not IMD's job/);
     expect((await pad.paid(r.mint, 1, PAY)).swarm).toMatchObject({ state: "paid", payTx: PAY });
     imd.s.job = { state: "executing", nodes: [{ key: "research_report", state: "accepted" }, { key: "token_logo", state: "running" }, { key: "build_website", state: "pending" }], site: null };
     await pad.work();
     expect(pad.one(r.mint)?.swarm?.steps.map((s) => s.state)).toEqual(["done", "working", "waiting"]);
-    expect(sent).toHaveLength(0);
+    await expect(pad.signed(r.mint, { tx: b64(launchTx(r.mint)), config: CONFIG })).rejects.toThrow(/still working/);
     expect(pad.waiting().map((x) => x.mint)).toEqual([r.mint]);
-    imd.s.job = { state: "completed", nodes: [{ key: "research_report", state: "accepted" }, { key: "token_logo", state: "accepted" }, { key: "build_website", state: "accepted" }, { key: "design_critic", state: "accepted" }], site: "https://nfrog.imd.site" };
-    imd.s.files = [{ name: "verdict", url: "https://api.imd.fun/artifacts/v", mediaType: "application/json" }, { name: "logo", url: "https://api.imd.fun/artifacts/logo", mediaType: "image/png" }, { name: "report", url: "https://api.imd.fun/artifacts/r", mediaType: "text/markdown" }];
+    complete(imd);
     await pad.work();
-    const l = pad.one(r.mint)!;
-    expect(l).toMatchObject({ status: "live", swarm: { state: "done", verdict: { launch: true }, site: "https://nfrog.imd.site", logo: "https://api.imd.fun/artifacts/logo" } });
-    expect(sent).toHaveLength(1);
-    expect(Transaction.from(Buffer.from(sent[0]!, "base64")).verifySignatures(true)).toBe(true);
-    // the token's metadata carries the swarm's logo; the creator's own website stays first
+    expect(pad.one(r.mint)).toMatchObject({ status: "ready", swarm: { state: "done", verdict: { launch: true }, site: "https://nfrog.imd.site", logo: "https://api.imd.fun/artifacts/logo" } });
+    expect(sent).toHaveLength(0);
+    // the work is in the metadata before the creator signs; the creator's own website stays first
     expect(pad.meta(r.mint)).toMatchObject({ image: "https://api.imd.fun/artifacts/logo", extensions: { website: "https://frog.test/" } });
-    expect(await pad.info()).toMatchObject({ counts: { live: 1, reviewed: 1, swarm: 1, waiting: 0 } });
+    expect(pad.metaCache(r.mint)).toBe("no-store");
+    expect(pad.waiting().map((x) => x.mint)).toEqual([r.mint]);
   });
 
-  it("never launches when the review says no, unless the owner overrules it", async () => {
+  it("is signed when ready, on a recent blockhash, checked and sent at once with the address's signature", async () => {
+    const { pad, r, imd, sent } = await waiting();
+    await pad.paid(r.mint, 1, PAY);
+    complete(imd);
+    await pad.work();
+    // a launch built on a durable nonce is refused now: the steps are named in the refusal
+    await expect(pad.signed(r.mint, { tx: b64(launchTx(r.mint, { nonce: NONCE_VALUE })), config: CONFIG })).rejects.toThrow(/its steps: 11111111 > ComputeB > dbcij3LW > ATokenGP > 11111111\)/);
+    // its metadata must be NIGHTSHIFT's: the swarm's work is in it
+    await expect(pad.signed(r.mint, { tx: b64(launchTx(r.mint, { uri: "https://evil.test/meta.json" })), config: CONFIG })).rejects.toThrow(/metadata to NIGHTSHIFT/);
+    // Phantom's Lighthouse checks may sit anywhere, the first step included
+    const lh = new TransactionInstruction({ programId: new PublicKey(LIGHTHOUSE), keys: [{ pubkey: creatorKp.publicKey, isSigner: false, isWritable: false }], data: Buffer.from([9]) });
+    const tx = launchTx(r.mint, { first: [lh], extra: [lh] });
+    const l = await pad.signed(r.mint, { tx: b64(tx), config: CONFIG });
+    expect(l).toMatchObject({ status: "live", signature: SIG, pool: POOL, nonce: null });
+    expect(sent).toHaveLength(1);
+    expect(Transaction.from(Buffer.from(sent[0]!, "base64")).verifySignatures(true)).toBe(true);
+    expect(pad.mints.keypair(r.mint)).toBeNull();
+    expect(pad.metaCache(r.mint)).toBe("public, max-age=300");
+    expect(await pad.info()).toMatchObject({ counts: { live: 1, reviewed: 1, swarm: 1, waiting: 0 } });
+    await expect(pad.signed(r.mint, { tx: b64(tx), config: CONFIG })).rejects.toThrow(/already signed/);
+  });
+
+  it("never launches when the review says no, unless the owner overrules it; then the creator signs", async () => {
     const { pad, r, imd, sent } = await waiting();
     await pad.paid(r.mint, 1, PAY);
     imd.s.verdict = '{"launch": false, "reason": "It copies an existing project."}';
     imd.s.files = [{ name: "verdict", url: "https://api.imd.fun/artifacts/v", mediaType: "application/json" }];
     await pad.work();
     expect(pad.one(r.mint)).toMatchObject({ status: "refused", note: expect.stringMatching(/copies an existing project/) });
-    expect(sent).toHaveLength(0);
+    await expect(pad.signed(r.mint, { tx: b64(launchTx(r.mint)), config: CONFIG })).rejects.toThrow(/review said no/);
     await expect(pad.act(r.mint, "release", walletSign(creatorKp, actText("release", r.mint)))).rejects.toThrow(/not waiting/);
-    expect((await pad.adminAct(r.mint, "release")).status).toBe("live");
+    expect((await pad.adminAct(r.mint, "release")).status).toBe("ready");
+    expect(sent).toHaveLength(0);
+    expect((await pad.signed(r.mint, { tx: b64(launchTx(r.mint)), config: CONFIG })).status).toBe("live");
     expect(sent).toHaveLength(1);
   });
 
-  it("lets the creator launch without the swarm only once the swarm failed, and cancel any time", async () => {
+  it("lets the creator launch without the swarm only once the swarm failed (then sign), and cancel any time", async () => {
     const { pad, r, imd, sent } = await waiting();
     await pad.paid(r.mint, 1, PAY);
     const release = walletSign(creatorKp, actText("release", r.mint));
@@ -309,12 +337,57 @@ describe("a launch that waits for the IMD swarm", () => {
     await pad.work();
     expect(pad.one(r.mint)?.swarm?.state).toBe("failed");
     await expect(pad.act(r.mint, "release", walletSign(Keypair.generate(), actText("release", r.mint)))).rejects.toThrow(/creator's wallet/);
-    expect((await pad.act(r.mint, "release", release)).status).toBe("live");
+    expect((await pad.act(r.mint, "release", release)).status).toBe("ready");
+    expect((await pad.signed(r.mint, { tx: b64(launchTx(r.mint)), config: CONFIG })).status).toBe("live");
     expect(sent).toHaveLength(1);
 
     const w = await waiting();
     expect((await w.pad.act(w.r.mint, "cancel", walletSign(creatorKp, actText("cancel", w.r.mint)))).status).toBe("cancelled");
     expect(w.pad.mints.keypair(w.r.mint)).toBeNull();
+  });
+
+  it("is signed again after Solana refuses the send", async () => {
+    let fail = true;
+    const box: { sent: string[] } = { sent: [] };
+    const { chain, sent } = fakeChain({ send: async (b64tx) => { if (fail) { fail = false; throw new Error("Blockhash not found"); } box.sent.push(b64tx); return SIG; } });
+    box.sent = sent;
+    const imd = fakeImd();
+    const pad = make({ chain, imd: imd.port });
+    const r = await pad.prepare(swarmInput);
+    imd.s.paidBody = r.swarm!.body;
+    await pad.paid(r.mint, 1, PAY);
+    complete(imd);
+    await pad.work();
+    expect(await pad.signed(r.mint, { tx: b64(launchTx(r.mint)), config: CONFIG })).toMatchObject({ status: "failed", note: expect.stringMatching(/Blockhash not found/) });
+    expect((await pad.signed(r.mint, { tx: b64(launchTx(r.mint)), config: CONFIG })).status).toBe("live");
+    expect(sent).toHaveLength(1);
+  });
+
+  it("still sends a launch signed on a durable nonce before v0.377 when its job completes, and makes old unsigned ones payable", async () => {
+    const { chain, sent } = fakeChain();
+    const imd = fakeImd();
+    const d = dir();
+    const mints = new MintKeys(d, "", 0);
+    const pad = new SolLaunchpad(chain, settings(), d, "https://site.test", imd.port, mints);
+    const r = await pad.prepare(swarmInput);
+    const r2 = await pad.prepare(swarmInput);
+    // what v0.376 stored: a held launch on a nonce, and one left "prepared" when its signing failed
+    const store = JSON.parse(readFileSync(join(d, "sol-launches.json"), "utf8"));
+    const held = launchTx(r.mint, { nonce: NONCE_VALUE });
+    store[r.mint].held = { tx: b64(held), nonce: nonceKp.publicKey.toBase58() };
+    store[r.mint].config = CONFIG;
+    store[r2.mint].status = "prepared";
+    writeFileSync(join(d, "sol-launches.json"), JSON.stringify(store));
+    const again = new SolLaunchpad(chain, settings(), d, "https://site.test", imd.port, mints);
+    expect(again.one(r.mint)).toMatchObject({ status: "waiting", nonce: nonceKp.publicKey.toBase58() });
+    expect(again.one(r2.mint)).toMatchObject({ status: "waiting", swarm: { state: "unpaid" } });
+    imd.s.paidBody = r.swarm!.body;
+    await again.paid(r.mint, 1, PAY);
+    complete(imd);
+    await again.work();
+    expect(again.one(r.mint)?.status).toBe("live");
+    expect(sent).toHaveLength(1);
+    expect((await again.act(r2.mint, "cancel", walletSign(creatorKp, actText("cancel", r2.mint)))).status).toBe("cancelled");
   });
 
   it("is not prepared when IMD's check would refuse the job", async () => {
@@ -329,7 +402,6 @@ describe("a launch that waits for the IMD swarm", () => {
 });
 
 describe("the swarm paid in SOL, and its work in the token", () => {
-  const NONCE = nonceKp.publicKey.toBase58();
   const FEE_WALLET = "0x3322a0b8e8c0b6c4b2b2c2a3c6d8e9f0a1b2c3d4";
   const REQ = `0x${"17".repeat(32)}`;
   const SOLTX = "4".repeat(88);
@@ -362,7 +434,6 @@ describe("the swarm paid in SOL, and its work in the token", () => {
     const pad = new SolLaunchpad(chain, settings({ network: o.net ?? "mainnet" }), d, "https://site.test", imd.port, new MintKeys(d, "", 0), pay.port);
     const r = await pad.prepare({ ...input, image: o.image ?? "", swarm: o.picks ?? ["review", "logo", "banner", "website"], logoIdea: "a frog", chainId: 1 });
     imd.s.paidBody = r.swarm!.body;
-    await pad.signed(r.mint, { tx: b64(launchTx(r.mint, { nonce: NONCE_VALUE })), config: CONFIG, nonce: NONCE });
     return { pad, r, imd, pay, sent, d };
   }
 
@@ -410,11 +481,10 @@ describe("the swarm paid in SOL, and its work in the token", () => {
     expect(v.swarm).toMatchObject({ state: "unpaid", payTx: null, relay: { state: "failed", note: expect.stringMatching(/swap wallet/) } });
   });
 
-  it("must point the signed launch's metadata to NIGHTSHIFT", async () => {
+  it("reads the metadata link the signed launch writes into the token", async () => {
     const imd = fakeImd();
     const pad = make({ imd: imd.port });
     const r = await pad.prepare({ ...input, swarm: ["website"], chainId: 1 });
-    await expect(pad.signed(r.mint, { tx: b64(launchTx(r.mint, { nonce: NONCE_VALUE, uri: "https://evil.test/meta.json" })), config: CONFIG, nonce: NONCE })).rejects.toThrow(/metadata to NIGHTSHIFT/);
     expect(launchMetadata(launchTx(r.mint))).toEqual({ name: "Night Frog", symbol: "NFROG", uri: `https://site.test/api/sol/meta/${r.mint}.json` });
     // a launch without the swarm is not held to it
     const plain = await make().prepare(input);
@@ -436,6 +506,10 @@ describe("the swarm paid in SOL, and its work in the token", () => {
     const send = (pad as unknown as { chain: SolChain }).chain.send;
     (pad as unknown as { chain: SolChain }).chain.send = async (b) => { atSend = pad.meta(r.mint); return send(b); };
     await pad.work();
+    // ready: the work is in the token before the creator signs; then it is sent at once
+    expect(sent).toHaveLength(0);
+    expect(pad.one(r.mint)?.status).toBe("ready");
+    await pad.signed(r.mint, { tx: b64(launchTx(r.mint)), config: CONFIG });
     expect(sent).toHaveLength(1);
     const logo = `https://site.test/api/sol/img/${r.mint}-logo.png`, banner = `https://site.test/api/sol/img/${r.mint}-banner.png`;
     // no upload: the swarm's logo is the token's image

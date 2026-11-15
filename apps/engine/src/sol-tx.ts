@@ -8,8 +8,9 @@ export const DBC_PROGRAM = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN";
  * The creator's signed launch, checked before NIGHTSHIFT adds the one signature it holds (the token's
  * mint address) and sends it. The creator signs in their own wallet; NIGHTSHIFT's mint signature must
  * only ever create that token on Meteora's bonding curve, so the transaction may contain nothing else:
- * the durable nonce advance (for a launch that waits for the IMD swarm), compute budget, Meteora DBC,
- * and the token-account and SOL-wrapping steps of the creator's own first buy.
+ * compute budget, Meteora DBC, and the token-account and SOL-wrapping steps of the creator's own first
+ * buy, plus the checks a wallet adds (Phantom's Lighthouse), in any order. Launches are signed on a recent
+ * blockhash since v0.377; the durable nonce check stays for launches signed before.
  */
 
 const ATA = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
@@ -31,8 +32,19 @@ export function readTx(b64: string): Transaction {
   return Transaction.from(Buffer.from(b64, "base64"));
 }
 
-/** Why this transaction may not be sent with NIGHTSHIFT's mint signature, or null when it is exactly a launch. */
+/** The transaction's steps as their programs' first 8 characters, in order: what a wallet did to it, readable in an error. */
+export const programOrder = (tx: Transaction) => tx.instructions.map((ix) => ix.programId.toBase58().slice(0, 8)).join(" > ") || "none";
+
+/**
+ * Why this transaction may not be sent with NIGHTSHIFT's mint signature, or null when it is exactly a launch.
+ * A refusal names the steps the transaction had, in order, so a wallet that rewrites what it signs is diagnosable.
+ */
 export function launchTxProblem(tx: Transaction, e: LaunchTxExpect): string | null {
+  const problem = launchProblemOf(tx, e);
+  return problem && `${problem} (its steps: ${programOrder(tx)})`;
+}
+
+function launchProblemOf(tx: Transaction, e: LaunchTxExpect): string | null {
   const msg = tx.compileMessage();
   if (tx.feePayer?.toBase58() !== e.creator) return "The launch must be paid by the creator's wallet.";
   const signers = msg.accountKeys.slice(0, msg.header.numRequiredSignatures).map((k) => k.toBase58());

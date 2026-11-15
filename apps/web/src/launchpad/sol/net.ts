@@ -25,7 +25,7 @@ export type RelayPay = {
 export type RelayQuote = { tx: string; requestId: string; lamports: string; quotedLamports: string; usd: number | null; seconds: number; imd: number; chain: string };
 /** How long the swarm takes, in minutes [typical, slow], from IMD's own recent jobs. */
 export type SwarmEta = { steps: Record<SwarmPick, [number, number]>; start: [number, number]; basis: string };
-export type SolStatus = "prepared" | "waiting" | "launching" | "live" | "graduated" | "refused" | "failed" | "cancelled";
+export type SolStatus = "prepared" | "waiting" | "ready" | "launching" | "live" | "graduated" | "refused" | "failed" | "cancelled";
 export type SolLaunch = {
   mint: string; name: string; symbol: string; description: string; website: string; twitter: string; telegram: string; image: string;
   config: string; pool: string | null; creator: string; signature: string | null; createdAt: number; launchedAt: number | null;
@@ -79,6 +79,7 @@ export const solApi = {
   relayQuote: (mint: string) => call<RelayQuote>(`/api/sol/launches/${mint}/relay`, { method: "POST", body: JSON.stringify({ action: "quote" }) }),
   relaySent: (mint: string, signature: string) => call<SolLaunch>(`/api/sol/launches/${mint}/relay`, { method: "POST", body: JSON.stringify({ action: "sent", signature }) }),
   relayCheck: (mint: string) => call<SolLaunch>(`/api/sol/launches/${mint}/relay`, { method: "POST", body: JSON.stringify({ action: "check" }) }),
+  nonces: (owner: string) => call<{ nonces: { account: string; lamports: number }[] }>(`/api/sol/nonces/${owner}`).then((r) => r.nonces),
   swarmPrice: () => call<{ price: { lamports: string; usd: number | null; seconds: number } | null }>("/api/sol/swarm/price").then((r) => r.price).catch(() => null),
   act: (mint: string, action: "release" | "cancel", signature: string) => call<SolLaunch>(`/api/sol/launches/${mint}/act`, { method: "POST", body: JSON.stringify({ action, signature }) }),
   adminState: (admin: string) => call<{ network: string; config: string | null; partner: string | null; mintsReady: number; pending: SolLaunch[]; info: SolInfo }>("/api/sol/admin/state", { admin }),

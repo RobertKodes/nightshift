@@ -33,7 +33,7 @@ async function paySol(mint: string, who: Sign, say: (s: string) => void): Promis
   const c = await loadChain();
   let sig: string;
   try { sig = await c.payInSol(who, q.tx, say); } catch (e) {
-    if (/reject|declin|denied|cancel/i.test((e as Error).message)) throw new Error("You declined in the wallet. Nothing was paid; your signed launch keeps waiting.");
+    if (/reject|declin|denied|cancel/i.test((e as Error).message)) throw new Error("You declined in the wallet. Nothing was paid; your launch keeps waiting for its payment.");
     throw e;
   }
   say("Paid. NIGHTSHIFT Swap is buying the IMD on Robinhood Chain and sending IMD the job…");
@@ -46,6 +46,26 @@ async function paySol(mint: string, who: Sign, say: (s: string) => void): Promis
     v = await solApi.relayCheck(mint);
   }
   return v;
+}
+
+/** A stored launch's curve, as the page's Meteora settings (for a config made when the creator signs). */
+const optionsOf = (l: SolLaunch): LaunchOptions => ({
+  feeBps: l.options.feeBps as LaunchOptions["feeBps"], startMcapUsd: l.options.startMcapUsd, graduateMcapUsd: l.options.graduateMcapUsd,
+  sniper: l.options.sniper as Sniper, dev: l.dev && l.dev.pct > 0 ? { ...STANDARD.dev, ...l.dev } as LaunchOptions["dev"] : STANDARD.dev,
+});
+
+/**
+ * Sign the launch now and NIGHTSHIFT sends it at once: a normal transaction on a recent blockhash, signed by the
+ * creator's wallet only (no durable nonce). The launch's own Meteora config is made first when it needs one (a
+ * custom curve), with NIGHTSHIFT's fee wallet as partner; a standard launch uses the shared config.
+ */
+async function signAndSend(o: { mint: string; name: string; symbol: string; uri: string; options: LaunchOptions; devBuySol: number; config?: string | null }, who: Sign, info: SolInfo, say: (s: string) => void): Promise<SolLaunch> {
+  if (!info.partner || !info.solUsd) throw new Error("The launchpad cannot be read right now. Try again in a moment.");
+  const chain = await loadChain();
+  const config = o.config || (await chain.prepareChain({ who, partner: info.partner, shared: info.config, standard: isStandard(o.options), options: o.options, solUsd: info.solUsd, nonce: false, say })).config;
+  const tx = await chain.signLaunch({ who, config, mint: o.mint, name: o.name, symbol: o.symbol, uri: o.uri, devBuySol: o.devBuySol, nonce: null, say });
+  say("NIGHTSHIFT is checking your signed launch and sending it to Solana…");
+  return solApi.signed(o.mint, { tx, config, nonce: null });
 }
 
 /** The swarm's time for these picks, from IMD's recent jobs, as the page says it. */
@@ -104,7 +124,7 @@ function ImdPanel({ info }: { info: SolInfo | null }) {
       <ul className="sl3-imd-l">
         <li><PxIcon name="shield" size={13} />Pick what the swarm does before you launch: a review that decides if it goes live, the logo, an X banner, the website.</li>
         <li><PxIcon name="coin" size={13} />One IMD job, {info?.imd.price ?? 0.5} IMD, paid from your own Ethereum or Robinhood Chain wallet straight to IMD.</li>
-        <li><PxIcon name="lock" size={13} />You sign the launch first; it waits, and goes live on Solana the moment the swarm finishes. Or launch at once, without the swarm.</li>
+        <li><PxIcon name="lock" size={13} />You pay the swarm first. When it is done, its work is already in your token: you sign once and it goes live on Solana. Or launch at once, without the swarm.</li>
       </ul>
     </PxPanel>
   );
@@ -149,7 +169,7 @@ function SolHome() {
     <>
       <PxHero
         kicker="IMD LAUNCH · SOLANA" live={!!info?.open} title="IMD launches on Solana." accent="Through NIGHTSHIFT."
-        lead={<>The <b>IMD swarm</b> launches tokens on Ethereum and Robinhood Chain. Through NIGHTSHIFT it launches them on <b>Solana</b>: the swarm reviews your token, draws its logo and banner and builds its website, and your launch goes live on a Meteora bonding curve the moment it finishes. Curves priced in dollars, liquidity locked forever at graduation, your own allocation locked on chain. Your wallets sign everything.</>}
+        lead={<>The <b>IMD swarm</b> launches tokens on Ethereum and Robinhood Chain. Through NIGHTSHIFT it launches them on <b>Solana</b>: the swarm reviews your token, draws its logo and banner and builds its website, and when it is done you sign once and the token goes live on a Meteora bonding curve, its work already in it. Curves priced in dollars, liquidity locked forever at graduation, your own allocation locked on chain. Your wallets sign everything.</>}
         bg={rich ? <DotGrid dotSize={3} gap={18} baseColor="#10254a" activeColor="#2f7bff" proximity={120} shockRadius={180} shockStrength={3} shape="square" /> : undefined}
         actions={<>
           {info?.open
@@ -164,7 +184,7 @@ function SolHome() {
       <PxStats cols={4}>
         <PxStat label="ON THE CURVE" value={info ? String(info.counts.live) : "—"} sub="trading now" tone="lime" />
         <PxStat label="GRADUATED" value={info ? String(info.counts.graduated) : "—"} sub="locked on Meteora DAMM v2" />
-        <PxStat label="WITH THE SWARM" value={info ? String(info.counts.waiting) : "—"} sub="signed, launching when it finishes" tone="imd" />
+        <PxStat label="WITH THE SWARM" value={info ? String(info.counts.waiting) : "—"} sub="paid, launching when it is done" tone="imd" />
         <PxStat label="SOL" value={solUsd ? `$${solUsd.toFixed(2)}` : "—"} sub={info?.network === "devnet" ? "devnet" : "mainnet"} />
       </PxStats>
 
@@ -177,11 +197,11 @@ function SolHome() {
         <>
           {waiting.length > 0 && (
             <section className="sl3-wait" aria-label="Launches with the IMD swarm">
-              <header><b>WITH THE IMD SWARM</b><span>signed, going live when the swarm finishes</span></header>
+              <header><b>WITH THE IMD SWARM</b><span>paid for, going live when the swarm is done and the creator signs</span></header>
               <div className="sl3-wait-r">{waiting.map((l) => (
                 <Link key={l.mint} to={`/launchpad/sol/${l.mint}`} className="sl3-wait-c">
                   <Logo src={imageOf(l) || null} symbol={l.symbol} size={36} />
-                  <span><b>{l.name}</b><small>${l.symbol} · {stepsDone(l)} of {l.swarm?.steps.length ?? 0} done</small></span>
+                  <span><b>{l.name}</b><small>${l.symbol} · {l.status === "ready" ? "ready: the creator signs" : `${stepsDone(l)} of ${l.swarm?.steps.length ?? 0} done`}</small></span>
                   <StatusMark status="running" size={16} color="#8db6ff" doneColor="#2f7bff" errorColor="#ff6b7d" />
                 </Link>
               ))}</div>
@@ -206,7 +226,7 @@ function SolHome() {
         <ol className="sl3-how">
           <li><b>01 · Describe it</b><span>Name, ticker, links, and Meteora's settings: the market caps it starts and graduates at, in dollars; the fee; the anti-sniper fee; your own locked allocation.</span></li>
           <li className="imd"><b>02 · Pick the swarm's work</b><span>A review that decides if it launches, the logo, an X banner, the website. One IMD job, 0.5 IMD, checked by IMD for free first, paid in SOL from your Solana wallet (NIGHTSHIFT Swap converts it) or in IMD. Or skip it and launch now.</span></li>
-          <li className="imd"><b>03 · Sign, and the swarm launches it</b><span>Your wallet signs the launch now; it waits. When the swarm finishes, the swarm's logo, banner and site are added to the token, then NIGHTSHIFT sends it.</span></li>
+          <li className="imd"><b>03 · The swarm works, then you sign</b><span>Follow the swarm on your token's page, with the time it usually takes. When it is done, its logo, banner and site are already in your token: you sign once and it goes live.</span></li>
           <li><b>04 · Graduation</b><span>At the target the curve becomes a Meteora DAMM v2 pool with 100% of its liquidity locked forever. Your allocation then unlocks on the schedule you set.</span></li>
         </ol>
       </PxSection>
@@ -336,7 +356,7 @@ function SolNew() {
   const solOff = inSol && info?.network !== "mainnet";
   const ready = info?.open && !!info.partner && f.name.trim().length >= 2 && /^[A-Za-z0-9]{2,10}$/.test(f.symbol.trim()) && logoOk && agree && !busy && !problem && solUsd > 0 && !solOff;
   const swarmSol = inSol && solPrice ? Number(solPrice.lamports) / 1e9 : 0;
-  const totalSol = LAUNCH.createFeeSol + (own ? LAUNCH.configRentSol : 0) + (swarm ? LAUNCH.nonceRentSol : 0) + buy + 0.02 + swarmSol;
+  const totalSol = LAUNCH.createFeeSol + (own ? LAUNCH.configRentSol : 0) + buy + 0.02 + swarmSol;
   const imdUsd = info ? info.imd.price * info.imd.imdUsd : null;
   const eta = timeText(picks, info);
   useEffect(() => { if (!info) return; if (info.imd.solPay) void solApi.swarmPrice().then((p) => setSolPrice(p)); else setPayMode("evm"); }, [info]);
@@ -359,7 +379,10 @@ function SolNew() {
   async function run() {
     if (!info?.partner) return;
     setBusy(true); setErr(""); setLeft(null);
-    const labels = ["Connect your Solana wallet", swarm ? "IMD checks the swarm's job (free)" : "Save the token's details", own || swarm ? `Your launch's Meteora settings${swarm ? " and nonce" : ""}` : null, swarm ? "Sign the launch: it waits for the swarm" : "Sign the launch", swarm ? (inSol ? "Pay the swarm in SOL: NIGHTSHIFT Swap buys the IMD" : `Pay ${info.imd.price} IMD on ${PAY_NAMES[payChain]}`) : "Live on Solana"].filter(Boolean) as string[];
+    // with the swarm: pay now, sign the launch when the swarm is done (on the token's page). Without: sign now.
+    const labels = (swarm
+      ? ["Connect your Solana wallet", "IMD checks the swarm's job (free)", inSol ? "Pay the swarm in SOL: NIGHTSHIFT Swap buys the IMD" : `Pay ${info.imd.price} IMD on ${PAY_NAMES[payChain]}`, "The swarm works: you sign the launch when it is done"]
+      : ["Connect your Solana wallet", "Save the token's details", own ? "Your launch's Meteora settings" : null, "Sign the launch", "Live on Solana"]).filter(Boolean) as string[];
     const st: Step[] = labels.map((label, i) => ({ label, status: i ? "pending" : "running" }));
     const mark = (s: Step["status"]) => { const i = st.findIndex((x) => x.status === "running"); if (i < 0) return; st[i]!.status = s; if (s === "done" && st[i + 1]) st[i + 1]!.status = "running"; setSteps([...st]); };
     setSteps([...st]);
@@ -377,14 +400,8 @@ function SolNew() {
       mint = prep.mint;
       mine.add(mint);
       mark("done");
-      const chain = await loadChain();
-      const pc = await chain.prepareChain({ who, partner: info.partner, shared: info.config, standard: isStandard(opts), options: opts, solUsd, nonce: swarm, say: setSay });
-      if (own || swarm) mark("done");
-      const tx = await chain.signLaunch({ who, config: pc.config, mint, name: f.name.trim(), symbol, uri: prep.uri, devBuySol: buy, nonce: pc.nonce, say: setSay });
-      setSay(swarm ? "NIGHTSHIFT is checking your signed launch…" : "Sending it to Solana…");
-      await solApi.signed(mint, { tx, config: pc.config, nonce: pc.nonce });
-      mark("done");
       if (swarm && prep.swarm) {
+        // pay the swarm now; the launch is signed on its page when the swarm is done (nothing to sign before)
         setLeft(mint);
         if (inSol) await paySol(mint, who, setSay);
         else {
@@ -392,8 +409,17 @@ function SolNew() {
           setSay("Checking the payment…");
           await reportPaid(mint, payChain, hash, setSay);
         }
+        mark("done");
+      } else {
+        const chain = await loadChain();
+        const pc = await chain.prepareChain({ who, partner: info.partner, shared: info.config, standard: isStandard(opts), options: opts, solUsd, nonce: false, say: setSay });
+        if (own) mark("done");
+        const tx = await chain.signLaunch({ who, config: pc.config, mint, name: f.name.trim(), symbol, uri: prep.uri, devBuySol: buy, nonce: null, say: setSay });
+        setSay("Sending it to Solana…");
+        await solApi.signed(mint, { tx, config: pc.config, nonce: null });
+        mark("done");
+        mark("done");
       }
-      mark("done");
       go(`/launchpad/sol/${mint}`);
     } catch (e) {
       mark("failed");
@@ -405,7 +431,7 @@ function SolNew() {
   const setDev = (d: Partial<LaunchOptions["dev"]>) => setO({ ...opts, dev: { ...opts.dev, ...d } });
   return (
     <>
-      <PxHero kicker="IMD LAUNCH · SOLANA · NEW" title="Launch on Solana" accent="with the IMD swarm." lead="Describe your token, set its bonding curve, pick what the IMD swarm does for it, and sign. With the swarm, your launch waits and goes live the moment the swarm finishes. Without it, it goes live now." />
+      <PxHero kicker="IMD LAUNCH · SOLANA · NEW" title="Launch on Solana" accent="with the IMD swarm." lead="Describe your token, set its bonding curve and pick what the IMD swarm does for it. With the swarm, you pay it now and sign the launch when it is done: its work is added to the token before it goes live. Without it, you sign now and it goes live now." />
       <div className="sl3-new">
         <div className="sl3-side">
           <PxPanel title="1 · THE TOKEN" className="sl3-form">
@@ -462,7 +488,7 @@ function SolNew() {
 
         <div className="sl3-side">
           <PxPanel title="4 · THE IMD SWARM" tone="imd" state={info?.imd.on ? "live" : "idle"} right={!picks.size ? "OFF" : inSol && solPrice ? `≈ ${sol(Number(solPrice.lamports) / 1e9, 4)} SOL` : `${info?.imd.price ?? 0.5} IMD${imdUsd ? ` ≈ ${usd(imdUsd)}` : ""}`}>
-            <p className="sl3-dim">Tick what the swarm does before your token goes live. Everything you tick is one IMD job, {info?.imd.price ?? 0.5} IMD, and your launch waits until the swarm finishes.</p>
+            <p className="sl3-dim">Tick what the swarm does before your token goes live. Everything you tick is one IMD job, {info?.imd.price ?? 0.5} IMD. You pay it now; when the swarm is done, you sign the launch.</p>
             <div className="sl3-picks">
               {SWARM_ORDER.map((p) => {
                 // the creator's own logo stays: with one uploaded, the swarm does not draw another
@@ -485,14 +511,18 @@ function SolNew() {
                     : <div><dt>You pay</dt><dd><b>{info?.imd.price ?? 0.5} IMD</b> <small>on {PAY_NAMES[payChain]}{imdUsd ? ` ≈ ${usd(imdUsd)}` : ""}, plus gas</small></dd></div>}
                   {eta && <div><dt>Time, approx.</dt><dd><b>about {eta.typical}</b> <small>up to {eta.slow} when IMD is busy</small></dd></div>}
                 </dl>
-                {payMode === "sol" && info?.imd.solPay
-                  ? <ol className="sl3-pay">
-                    <li><b>You pay in SOL</b><span>From your Solana wallet (Phantom or another): one signature, right after you sign the launch. Nothing else to buy or hold.</span></li>
-                    <li><b>NIGHTSHIFT Swap converts it</b><span>Our swap's Relay route buys exactly {info.imd.price} IMD on Robinhood Chain and pays IMD's Intake for the job, usually in under a minute. If Relay cannot fill it, it refunds your SOL to your wallet.</span></li>
-                    <li><b>The IMD swarm runs the job</b><span>{SWARM_ORDER.filter((p) => picks.has(p)).map((p) => ({ review: "the review", logo: "the logo", banner: "the X banner", website: "the website" })[p]).join(", ")}, one step after another. Follow it live on your token's page.</span></li>
-                    <li><b>Added to your token automatically</b><span>{[picks.has("logo") && "the logo becomes its image", picks.has("banner") && "the banner goes on its page and in its metadata", picks.has("website") && `the site becomes its website (or sits next to yours)${picks.has("review") || picks.has("banner") ? `, with ${[picks.has("review") && "the review", picks.has("banner") && "the banner"].filter(Boolean).join(" and ")} on it` : ""}`, picks.has("review") && "the review decides if it launches"].filter(Boolean).join("; ")}. All before it goes live: then NIGHTSHIFT sends your signed launch.</span></li>
-                  </ol>
-                  : <label>Pay IMD on<Seg v={payChain} set={setPayChain} opts={[[1, "ETHEREUM"], [4663, "ROBINHOOD CHAIN"]] as const} /><small>From your own EVM wallet, straight to IMD's Intake. {payChain === 4663 ? "Cents of gas." : "Where most IMD is held."} IMD checks the job for free first.</small></label>}
+                {!(payMode === "sol" && info?.imd.solPay) && <label>Pay IMD on<Seg v={payChain} set={setPayChain} opts={[[1, "ETHEREUM"], [4663, "ROBINHOOD CHAIN"]] as const} /><small>From your own EVM wallet, straight to IMD's Intake. {payChain === 4663 ? "Cents of gas." : "Where most IMD is held."}</small></label>}
+                <ol className="sl3-pay">
+                  {payMode === "sol" && info?.imd.solPay
+                    ? <>
+                      <li><b>You pay the swarm now, in SOL</b><span>From your Solana wallet (Phantom or another): one signature, after IMD checks the job for free. Nothing else to buy or hold.</span></li>
+                      <li><b>NIGHTSHIFT Swap converts it</b><span>Our swap's Relay route buys exactly {info.imd.price} IMD on Robinhood Chain and pays IMD's Intake for the job, usually in under a minute. If Relay cannot fill it, it refunds your SOL to your wallet.</span></li>
+                    </>
+                    : <li><b>You pay the swarm now, in IMD</b><span>{info?.imd.price ?? 0.5} IMD from your EVM wallet on {PAY_NAMES[payChain]}, straight to IMD's Intake, after IMD checks the job for free.</span></li>}
+                  <li><b>The IMD swarm runs the job</b><span>{SWARM_ORDER.filter((p) => picks.has(p)).map((p) => ({ review: "the review", logo: "the logo", banner: "the X banner", website: "the website" })[p]).join(", ")}, one step after another{eta ? `, about ${eta.typical} (up to ${eta.slow})` : ""}. Follow it live on your token's page.</span></li>
+                  <li><b>Added to your token automatically</b><span>{[picks.has("logo") && "the logo becomes its image", picks.has("banner") && "the banner goes on its page and in its metadata", picks.has("website") && `the site becomes its website (or sits next to yours)${picks.has("review") || picks.has("banner") ? `, with ${[picks.has("review") && "the review", picks.has("banner") && "the banner"].filter(Boolean).join(" and ")} on it` : ""}`, picks.has("review") && "the review decides if it launches"].filter(Boolean).join("; ")}. All before it goes live.</span></li>
+                  <li><b>You sign, it goes live</b><span>When the swarm is done, your token's page shows SIGN TO LAUNCH. One signature in your Solana wallet and NIGHTSHIFT sends it to Solana at once, with your first buy if you set one. Nothing is on Solana before.</span></li>
+                </ol>
                 {eta && <p className="sl3-dim sl3-eta">{info?.imd.eta?.basis}</p>}
                 {solOff && <p className="sl3-err">This launchpad is on devnet: paying in SOL works on Solana mainnet only. Use IN IMD to test.</p>}
               </>
@@ -502,29 +532,29 @@ function SolNew() {
           </PxPanel>
           <PxPanel title="5 · YOUR FIRST BUY" right="optional">
             <label>SOL to buy at launch<input className="field" inputMode="decimal" value={devBuy} onChange={(e) => setDevBuy(e.target.value.replace(/[^0-9.]/g, ""))} /></label>
-            <p className="sl3-dim">In the launch transaction itself, so nobody buys before you; it pays the normal fee. Up to {LAUNCH.devBuyMaxSol} SOL{solUsd && buy ? ` (about ${usd(buy * solUsd)})` : ""}, shown publicly.{swarm ? " Keep it in your wallet until the swarm finishes." : ""}</p>
+            <p className="sl3-dim">In the launch transaction itself, so nobody buys before you; it pays the normal fee. Up to {LAUNCH.devBuyMaxSol} SOL{solUsd && buy ? ` (about ${usd(buy * solUsd)})` : ""}, shown publicly.{swarm ? " With the swarm, it is bought when you sign the launch, after the swarm is done." : ""}</p>
           </PxPanel>
           <PxPanel title="LAUNCH">
             <dl className="sl3-terms">
               <div><dt>Launch fee</dt><dd>{LAUNCH.createFeeSol} SOL</dd></div>
               {own && <div><dt>Your Meteora config</dt><dd>~{LAUNCH.configRentSol} SOL <small>· rent</small></dd></div>}
-              {swarm && <div><dt>Nonce account</dt><dd>~{LAUNCH.nonceRentSol} SOL <small>· you get it back</small></dd></div>}
               <div><dt>First buy</dt><dd>{buy} SOL</dd></div>
               <div><dt>Network fees</dt><dd>~0.02 SOL</dd></div>
-              {inSol && <div><dt>The IMD swarm</dt><dd>{solPrice ? `≈ ${sol(swarmSol, 4)} SOL` : "priced when you pay"} <small>· {info?.imd.price} IMD through NIGHTSHIFT Swap</small></dd></div>}
-              <div><dt>On Solana</dt><dd><b>{sol(totalSol, 3)} SOL</b> <small>{solUsd ? `≈ ${usd(totalSol * solUsd)}` : ""}</small></dd></div>
-              {swarm && !inSol && <div><dt>The IMD swarm</dt><dd><b>{info?.imd.price} IMD</b> <small>on {PAY_NAMES[payChain]}{imdUsd ? ` ≈ ${usd(imdUsd)}` : ""}</small></dd></div>}
-              {swarm && eta && <div><dt>Goes live in</dt><dd>about {eta.typical} <small>· up to {eta.slow}, approx.</small></dd></div>}
+              {inSol && <div><dt>The IMD swarm, now</dt><dd>{solPrice ? `≈ ${sol(swarmSol, 4)} SOL` : "priced when you pay"} <small>· {info?.imd.price} IMD through NIGHTSHIFT Swap</small></dd></div>}
+              <div><dt>On Solana</dt><dd><b>{sol(totalSol, 3)} SOL</b> <small>{solUsd ? `≈ ${usd(totalSol * solUsd)}` : ""}{inSol ? " · the swarm now, the rest when you sign" : swarm ? " · when you sign" : ""}</small></dd></div>
+              {swarm && !inSol && <div><dt>The IMD swarm, now</dt><dd><b>{info?.imd.price} IMD</b> <small>on {PAY_NAMES[payChain]}{imdUsd ? ` ≈ ${usd(imdUsd)}` : ""}</small></dd></div>}
+              {swarm && eta && <div><dt>You sign in</dt><dd>about {eta.typical} <small>· up to {eta.slow}, approx.: then it goes live</small></dd></div>}
             </dl>
-            <label className="sl3-agree"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /> <span>I understand the token is frozen once launched (name, ticker, supply, settings), {swarm ? "that it launches only when the swarm finishes and never if its review says no, " : ""}and that tokens like this can lose all their value.</span></label>
+            <label className="sl3-agree"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /> <span>I understand the token is frozen once launched (name, ticker, supply, settings), {swarm ? "that with the swarm I sign the launch when the swarm is done, that it never launches if the review says no, " : ""}and that tokens like this can lose all their value.</span></label>
             {problem && <p className="sl3-err">{problem}</p>}
             {!logoOk && <p className="sl3-dim">Add a logo, or tick LOGO for the swarm.</p>}
-            <button className="px-btn primary sl3-go" disabled={!ready} onClick={() => void run()}><PxIcon name="bolt" size={14} />{busy ? "WORKING…" : swarm ? "SIGN, AND SEND IT TO THE SWARM" : "LAUNCH ON SOLANA NOW"}</button>
+            <button className="px-btn primary sl3-go" disabled={!ready} onClick={() => void run()}><PxIcon name="bolt" size={14} />{busy ? "WORKING…" : swarm ? "PAY THE SWARM AND START" : "LAUNCH ON SOLANA NOW"}</button>
             {say && <p className="sl3-say" aria-live="polite">{say}</p>}
             {steps.length > 0 && <ol className="sl3-steps">{steps.map((s) => <li key={s.label}><StatusMark status={s.status} size={18} color="#b8ff3d" doneColor="#b8ff3d" errorColor="#ff6b7d" /><span>{s.label}</span></li>)}</ol>}
             {err && <p className="sl3-err" role="alert">{err}</p>}
-            {left && err && <p className="sl3-dim">Your signed launch is saved and waiting. <Link to={`/launchpad/sol/${left}`}>Finish paying on its page</Link>.</p>}
+            {left && err && <p className="sl3-dim">Your launch is saved and waits for its payment. <Link to={`/launchpad/sol/${left}`}>Pay and follow it on its page</Link>.</p>}
           </PxPanel>
+          {Date.now() < Date.UTC(2026, 11, 31) && <PxPanel title="OLD NONCE RENT" right="before 16 november"><NonceRent /></PxPanel>}
         </div>
       </div>
     </>
@@ -595,7 +625,7 @@ function SwarmFlow({ l, net, info }: { l: SolLaunch; net: string; info: SolInfo 
   const left = info?.imd.eta && l.status === "waiting" ? swarmLeft(w, info.imd.eta, now) : null;
   return (
     <ol className="sl3-flow">
-      <li><StatusMark status="done" size={18} color="#8db6ff" doneColor="#2f7bff" errorColor="#ff6b7d" /><span><b>SIGNED</b>The creator's launch, held by NIGHTSHIFT until the swarm finishes. Nothing is on Solana before.</span></li>
+      {l.nonce && <li><StatusMark status="done" size={18} color="#8db6ff" doneColor="#2f7bff" errorColor="#ff6b7d" /><span><b>SIGNED EARLY</b>Signed before the swarm on a nonce account (launches before 16 November); NIGHTSHIFT sends it when the swarm finishes.</span></li>}
       <li><StatusMark status={paid ? "done" : r?.state === "sent" ? "running" : "pending"} size={18} color="#8db6ff" doneColor="#2f7bff" errorColor="#ff6b7d" />
         <span><b>{paid ? (inSol ? "PAID IN SOL · NIGHTSHIFT SWAP" : "PAID TO IMD") : r?.state === "sent" ? "PAYING: NIGHTSHIFT SWAP IS CONVERTING" : "WAITING FOR THE PAYMENT"}</b>
           {paid
@@ -609,14 +639,92 @@ function SwarmFlow({ l, net, info }: { l: SolLaunch; net: string; info: SolInfo 
             {links[s.pick] && s.state === "done" && <> <a href={links[s.pick]!} target="_blank" rel="noreferrer">{s.pick === "review" ? "Read the report ↗" : s.pick === "website" ? "Open the site ↗" : "Open the image ↗"}</a></>}</span></li>
       ))}
       {left && <li className="eta"><PxIcon name="pulse" size={14} /><span>{left}</span></li>}
-      <li><StatusMark status={launched ? "done" : l.status === "refused" || l.status === "cancelled" ? "failed" : l.status === "launching" ? "running" : "pending"} size={18} color="#b8ff3d" doneColor="#b8ff3d" errorColor="#ff6b7d" />
-        <span><b>{launched ? "LIVE ON SOLANA" : stopped ? "NOT LAUNCHED" : "LAUNCH ON SOLANA"}</b>{launched ? <>Sent by NIGHTSHIFT when the swarm finished{l.signature && <> · <a href={solscan("tx", l.signature, net)} target="_blank" rel="noreferrer">the transaction ↗</a></>}</> : l.status === "refused" ? "The review said no, so the signed launch was never sent." : l.status === "cancelled" ? "Cancelled before it was sent." : l.status === "launching" ? "Sending it to Solana now…" : "Goes live the moment the swarm finishes."}</span></li>
+      <li><StatusMark status={launched ? "done" : stopped ? "failed" : l.status === "launching" || l.status === "ready" ? "running" : "pending"} size={18} color="#b8ff3d" doneColor="#b8ff3d" errorColor="#ff6b7d" />
+        <span><b>{launched ? "LIVE ON SOLANA" : stopped ? "NOT LAUNCHED" : l.status === "ready" ? "READY: THE CREATOR SIGNS" : "THE CREATOR SIGNS, IT GOES LIVE"}</b>{launched ? <>Signed by the creator when the swarm was done, sent by NIGHTSHIFT at once{l.signature && <> · <a href={solscan("tx", l.signature, net)} target="_blank" rel="noreferrer">the transaction ↗</a></>}</> : l.status === "refused" ? "The review said no, so this token never launches." : l.status === "cancelled" ? "Cancelled before it launched." : l.status === "launching" ? "Sending it to Solana now…" : l.status === "ready" ? "The swarm is done and its work is in the token. It goes live the moment the creator signs." : l.status === "failed" ? "Solana did not take the launch: the creator signs again." : "When the swarm is done, the creator signs once and it goes live at once, its work already in it."}</span></li>
       {w.job && <li className="link"><a href={`https://explorer.imd.fun/jobs/${w.job}`} target="_blank" rel="noreferrer">The job on IMD's explorer ↗</a></li>}
     </ol>
   );
 }
 
-/** What the creator can do on a launch that is not live: pay, launch without the swarm, sign again, cancel, take the nonce rent back. */
+/**
+ * The launch is ready: the swarm is done (and its review says launch), its work is in the token's metadata. The
+ * creator signs now, a normal transaction on a recent blockhash, and NIGHTSHIFT sends it at once. Nothing pops up
+ * in the wallet before the creator clicks.
+ */
+function ReadyPanel({ l, info, reload }: { l: SolLaunch; info: SolInfo | null; reload: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [say, setSay] = useState("");
+  const [err, setErr] = useState("");
+  const w = l.swarm;
+  const opts = optionsOf(l);
+  const own = !(info?.config && isStandard(opts)) && !l.config;
+  const cost = LAUNCH.createFeeSol + (own ? LAUNCH.configRentSol : 0) + l.devBuySol + 0.02;
+  const added = [
+    w?.picks.includes("logo") && (w.logoHosted || w.logo) && "the swarm's logo is its image",
+    w?.picks.includes("banner") && (w.bannerHosted || w.banner) && "the banner is on its page and in its metadata",
+    w?.site && (l.website ? "the swarm's site is linked next to yours" : "the swarm's site is its website"),
+    w?.verdict?.launch && "the review said launch",
+  ].filter(Boolean) as string[];
+  async function sign() {
+    if (!info) return;
+    setBusy(true); setErr("");
+    try {
+      const who = await wallet();
+      if (who.address !== l.creator) throw new Error(`Connect the creator's wallet (${shortKey(l.creator)}): only it can sign this launch.`);
+      const v = await signAndSend({ mint: l.mint, name: l.name, symbol: l.symbol, uri: l.uri ?? `${location.origin}/api/sol/meta/${l.mint}.json`, options: opts, devBuySol: l.devBuySol, config: l.config || null }, who, info, setSay);
+      if (v.status === "failed") throw new Error(v.note ?? "Solana did not take the launch. Sign again.");
+      reload();
+    } catch (e) { setErr((e as Error).message); reload(); } finally { setBusy(false); setSay(""); }
+  }
+  return (
+    <PxPanel title="YOUR TOKEN IS READY · SIGN TO LAUNCH" tone="imd" state="live" className="sl3-ready">
+      <p className="sl3-ready-h"><b>{l.swarm?.state === "done" ? "The swarm is done." : "Ready to launch."}</b> {l.note ?? (added.length ? `Its work is already in your token: ${added.join("; ")}.` : "")}</p>
+      <p className="sl3-dim">Sign once with the creator's wallet ({shortKey(l.creator)}) and NIGHTSHIFT sends it to Solana at once{l.devBuySol ? `, with your first buy of ${l.devBuySol} SOL` : ""}. About {sol(cost, 3)} SOL from your wallet{info?.solUsd ? ` (≈ ${usd(cost * info.solUsd)})` : ""}: the launch fee{own ? ", your Meteora config's rent" : ""}{l.devBuySol ? ", the first buy" : ""} and network fees.</p>
+      <button className="px-btn primary sl3-go" disabled={busy || !info} onClick={() => void sign()}><PxIcon name="bolt" size={14} />{busy ? "SIGNING…" : "SIGN TO LAUNCH"}</button>
+      {say && <p className="sl3-say" aria-live="polite">{say}</p>}
+      {err && <p className="sl3-err" role="alert">{err}</p>}
+    </PxPanel>
+  );
+}
+
+/**
+ * Durable nonce accounts a wallet made for launches before v0.377 (they held a signed launch): found from the
+ * wallet's own recent transactions, each closed by the wallet so its rent comes back. Nothing is closed without a click.
+ */
+const NONCE_CUTOFF = Date.UTC(2026, 10, 16);
+function NonceRent({ creator }: { creator?: string }) {
+  const [busy, setBusy] = useState(false);
+  const [say, setSay] = useState("");
+  const [err, setErr] = useState("");
+  const [list, setList] = useState<{ account: string; lamports: number }[] | null>(null);
+  const [who, setWho] = useState<Sign | null>(null);
+  const find = async () => {
+    setBusy(true); setErr("");
+    try {
+      const w = await wallet();
+      if (creator && w.address !== creator) throw new Error(`Connect the creator's wallet (${shortKey(creator)}).`);
+      setWho(w);
+      setList(await solApi.nonces(w.address));
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
+  const close = async (account: string) => {
+    if (!who) return;
+    setBusy(true); setErr("");
+    try { const c = await loadChain(); await c.closeNonce(who, account, setSay); setList(await solApi.nonces(who.address)); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); setSay(""); }
+  };
+  return (
+    <div className="sl3-nonce">
+      {list === null
+        ? <><p className="sl3-dim">Started a swarm launch before 16 November? Its nonce account may still hold ~{LAUNCH.nonceRentSol} SOL of your rent.</p><button className="px-btn" disabled={busy} onClick={() => void find()}><PxIcon name="coin" size={14} />{busy ? "LOOKING…" : "FIND MY NONCE RENT"}</button></>
+        : !list.length ? <p className="sl3-dim">No open nonce accounts for {who ? shortKey(who.address) : "this wallet"} in its recent transactions: nothing to take back.</p>
+        : <ul>{list.map((n) => <li key={n.account}><span>{shortKey(n.account)} · {sol(n.lamports / 1e9, 5)} SOL</span><button className="px-btn" disabled={busy} onClick={() => void close(n.account)}>CLOSE, GET IT BACK</button></li>)}</ul>}
+      {say && <p className="sl3-say" aria-live="polite">{say}</p>}
+      {err && <p className="sl3-err" role="alert">{err}</p>}
+    </div>
+  );
+}
+
+/** What the creator can do on a launch that is not live: pay, launch without the swarm, sign again, cancel, take old nonce rent back. */
 function CreatorBox({ l, reload, info }: { l: SolLaunch; reload: () => void; info: SolInfo | null }) {
   const [busy, setBusy] = useState(false);
   const [say, setSay] = useState("");
@@ -634,9 +742,9 @@ function CreatorBox({ l, reload, info }: { l: SolLaunch; reload: () => void; inf
   };
   const decide = (action: "release" | "cancel") => act(async (who) => { const c = await loadChain(); await solApi.act(l.mint, action, await c.signText(who, actText(action, l.mint))); });
   const signAgain = act(async (who) => {
-    const c = await loadChain();
-    const tx = await c.signLaunch({ who, config: l.config, mint: l.mint, name: l.name, symbol: l.symbol, uri: l.uri ?? `${location.origin}/api/sol/meta/${l.mint}.json`, devBuySol: l.devBuySol, nonce: l.nonce, say: setSay });
-    await solApi.signed(l.mint, { tx, config: l.config, nonce: l.nonce });
+    if (!info) return;
+    const v = await signAndSend({ mint: l.mint, name: l.name, symbol: l.symbol, uri: l.uri ?? `${location.origin}/api/sol/meta/${l.mint}.json`, options: optionsOf(l), devBuySol: l.devBuySol, config: l.config || null }, who, info, setSay);
+    if (v.status === "failed") throw new Error(v.note ?? "Solana did not take the launch. Sign again.");
   });
   const pay = act(async () => { const hash = await payImd({ chainId: chain, body: w!.body, say: setSay }); await reportPaid(l.mint, chain, hash, setSay); });
   const payInSol = act(async (who) => { await paySol(l.mint, who, setSay); });
@@ -644,20 +752,18 @@ function CreatorBox({ l, reload, info }: { l: SolLaunch; reload: () => void; inf
   const check = async () => { setBusy(true); setErr(""); try { await solApi.relayCheck(l.mint); reload(); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); } };
   const relay = w?.relay;
   const onItsWay = relay?.state === "sent";
-  const closeNonce = act(async (who) => { const c = await loadChain(); await c.closeNonce(who, l.nonce!, setSay); });
-  const waiting = l.status === "waiting";
-  const over = l.status === "refused" || l.status === "cancelled" || l.status === "live" || l.status === "graduated";
+  const waiting = l.status === "waiting" || l.status === "ready";
   const shown = mine.all().includes(l.mint) || waiting || l.status === "failed";
   if (!shown) return null;
   return (
     <PxPanel title="FOR THE CREATOR" right={shortKey(l.creator)}>
-      {waiting && w?.state === "unpaid" && onItsWay && <>
+      {l.status === "waiting" && w?.state === "unpaid" && onItsWay && <>
         <p className="sl3-dim">Your SOL payment is on its way: {relay?.note ?? "NIGHTSHIFT Swap is buying the IMD on Robinhood Chain."} This page follows it.</p>
         <button className="px-btn" disabled={busy} onClick={() => void check()}><PxIcon name="pulse" size={14} />CHECK THE PAYMENT NOW</button>
       </>}
-      {waiting && w?.state === "unpaid" && !onItsWay && <>
+      {l.status === "waiting" && w?.state === "unpaid" && !onItsWay && <>
         {relay && (relay.state === "refunded" || relay.state === "failed") && relay.note && <p className="sl3-err">{relay.note}</p>}
-        <p className="sl3-dim">Your launch is signed and waiting. Pay the swarm's job to start it: in SOL from this wallet (NIGHTSHIFT Swap converts it to {info?.imd.price ?? 0.5} IMD), or in IMD from an EVM wallet.</p>
+        <p className="sl3-dim">Pay the swarm's job to start it: in SOL from your Solana wallet (NIGHTSHIFT Swap converts it to {info?.imd.price ?? 0.5} IMD), or in IMD from an EVM wallet. You sign the launch when the swarm is done.</p>
         {info?.imd.solPay && info.network === "mainnet" && !evm && <button className="px-btn primary sl3-go" disabled={busy} onClick={() => void payInSol()}><PxIcon name="coin" size={14} />PAY IN SOL WITH YOUR SOLANA WALLET</button>}
         {info?.imd.solPay && info.network === "mainnet" && !evm
           ? <button className="px-btn" disabled={busy} onClick={() => setEvm(true)}>OR PAY IN IMD FROM AN EVM WALLET</button>
@@ -666,8 +772,9 @@ function CreatorBox({ l, reload, info }: { l: SolLaunch; reload: () => void; inf
             <button className="px-btn primary sl3-go" disabled={busy} onClick={() => void pay()}><PxIcon name="coin" size={14} />PAY 0.5 IMD ON {PAY_NAMES[chain].toUpperCase()}</button>
           </>}
       </>}
-      {waiting && w?.state === "failed" && <>
-        <p className="sl3-dim">{w.note ?? "The swarm's job did not finish."} You can launch now without the swarm's work (no IMD badge), or cancel.</p>
+      {l.status === "waiting" && w && w.state !== "unpaid" && w.state !== "failed" && <p className="sl3-dim">The swarm is working. When it is done this page shows SIGN TO LAUNCH: keep it open, or come back.</p>}
+      {l.status === "waiting" && w?.state === "failed" && <>
+        <p className="sl3-dim">{w.note ?? "The swarm's job did not finish."} You can launch without the swarm's work (no IMD badge): confirm here, then sign the launch. Or cancel.</p>
         <button className="px-btn primary sl3-go" disabled={busy} onClick={() => void decide("release")()}><PxIcon name="bolt" size={14} />LAUNCH WITHOUT THE SWARM'S WORK</button>
       </>}
       {l.status === "failed" && <>
@@ -675,9 +782,9 @@ function CreatorBox({ l, reload, info }: { l: SolLaunch; reload: () => void; inf
         <button className="px-btn primary sl3-go" disabled={busy} onClick={() => void signAgain()}><PxIcon name="bolt" size={14} />SIGN THE LAUNCH AGAIN</button>
       </>}
       {waiting && <button className="px-btn" disabled={busy} onClick={() => void decide("cancel")()}>CANCEL THIS LAUNCH</button>}
-      {over && l.nonce && <><p className="sl3-dim">The nonce account that held your signed launch keeps ~{LAUNCH.nonceRentSol} SOL of rent. Take it back:</p><button className="px-btn" disabled={busy} onClick={() => void closeNonce()}><PxIcon name="coin" size={14} />GET THE NONCE RENT BACK</button></>}
       {say && <p className="sl3-say" aria-live="polite">{say}</p>}
       {err && <p className="sl3-err" role="alert">{err}</p>}
+      {(l.nonce || l.createdAt < NONCE_CUTOFF) && <NonceRent creator={l.creator} />}
     </PxPanel>
   );
 }
@@ -687,6 +794,8 @@ function SolToken({ mint }: { mint: string }) {
   const [l, setL] = useState<SolLaunch | null>(null);
   const [missing, setMissing] = useState(false);
   const [tick, setTick] = useState(0);
+  // a ready launch says so in the tab too: the creator may be waiting in another one
+  useEffect(() => { if (l?.status === "ready") document.title = `READY TO SIGN · ${l.name} · NIGHTSHIFT`; }, [l?.status, l?.name]);
   useEffect(() => {
     let alive = true;
     const load = () => solApi.one(mint).then((x) => alive && setL(x)).catch(() => alive && setMissing(true));
@@ -700,7 +809,7 @@ function SolToken({ mint }: { mint: string }) {
   const solUsd = info?.solUsd ?? null;
   const graduated = l.status === "graduated";
   const launched = l.status === "live" || graduated;
-  const kicker = { prepared: "", waiting: "WITH THE IMD SWARM", launching: "LAUNCHING", live: "LIVE", graduated: "GRADUATED", refused: "NOT LAUNCHED · THE SWARM SAID NO", failed: "NOT LAUNCHED YET", cancelled: "CANCELLED" }[l.status];
+  const kicker = { prepared: "", waiting: "WITH THE IMD SWARM", ready: "READY · THE CREATOR SIGNS", launching: "LAUNCHING", live: "LIVE", graduated: "GRADUATED", refused: "NOT LAUNCHED · THE SWARM SAID NO", failed: "NOT LAUNCHED YET", cancelled: "CANCELLED" }[l.status];
   return (
     <>
       <div className="sl3-tok-h">
@@ -749,6 +858,7 @@ function SolToken({ mint }: { mint: string }) {
           </PxPanel>
         </div>
         <div className="sl3-side">
+          {l.status === "ready" && <ReadyPanel l={l} info={info} reload={() => setTick((t) => t + 1)} />}
           <CreatorBox l={l} info={info} reload={() => setTick((t) => t + 1)} />
           {launched && (graduated
             ? <PxPanel title="TRADE" state="live"><p className="sl3-dim">It graduated: its liquidity is locked in a Meteora DAMM v2 pool for good. Trade it anywhere Solana tokens trade.</p><a className="px-btn primary" href={`https://jup.ag/swap/SOL-${l.mint}`} target="_blank" rel="noreferrer"><PxIcon name="swap" size={14} />TRADE ON JUPITER ↗</a></PxPanel>

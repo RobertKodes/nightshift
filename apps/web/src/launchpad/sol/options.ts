@@ -8,7 +8,7 @@ export const LAUNCH = {
   decimals: 6,
   createFeeSol: 0.04, // spam guard, paid to NIGHTSHIFT inside the launch
   configRentSol: 0.009, // a launch with its own settings creates its own Meteora config (the creator pays its rent)
-  nonceRentSol: 0.0015, // a launch that waits for the swarm is signed on a durable nonce; its rent comes back
+  nonceRentSol: 0.0015, // launches before v0.377 waited on a durable nonce account; its rent comes back when the creator closes it
   devBuyMaxSol: 5,
 } as const;
 

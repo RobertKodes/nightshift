@@ -146,3 +146,12 @@
   .sl3-king { grid-template-columns: auto 1fr; }
   .sl3-king-n { grid-column: 1 / -1; }
 }
+
+/* ---- a launch the swarm finished: the creator signs */
+.sl3-ready { border-color: #2f7bff; box-shadow: 0 0 0 1px rgba(47, 123, 255, .35), 0 0 28px rgba(47, 123, 255, .18); }
+.sl3-ready-h { margin: 0 0 8px; color: #c6d4ea; font: 400 14px/1.55 var(--px-sans); }
+.sl3-ready-h b { color: #8db6ff; }
+/* ---- old durable nonce accounts to close */
+.sl3-nonce { display: grid; gap: 8px; margin-top: 10px; }
+.sl3-nonce ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sl3-nonce li { display: flex; justify-content: space-between; align-items: center; gap: 8px; font: 400 12.5px/1.4 var(--px-mono); color: var(--px-dim); }

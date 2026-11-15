@@ -115,3 +115,31 @@ export function lockOf(v: Record<string, { toString(): string }> | undefined): {
   const periods = n("numberOfPeriod");
   return { devLocked: n("amountPerPeriod") * periods + n("cliffUnlockAmount"), devCliffSecs: Number(n("cliffDurationFromMigrationTime")), devPeriods: Number(periods), devPeriodSecs: Number(n("frequency")) };
 }
+
+/**
+ * The durable nonce accounts a wallet made for its launches and still holds (launches before v0.377 were signed on
+ * one): found in the wallet's recent transactions (an InitializeNonceAccount with the wallet as authority), each
+ * read back now, so the page can offer to close it and return its rent. Reads only; nothing is signed here.
+ */
+export async function openNonces(rpc: string, owner: string, recent = 40): Promise<{ account: string; lamports: number }[]> {
+  const conn = new Connection(rpc, "confirmed");
+  const me = new PublicKey(owner);
+  const sigs = await conn.getSignaturesForAddress(me, { limit: recent });
+  const found = new Set<string>();
+  // one transaction per call: public RPCs (publicnode) refuse batched getTransaction
+  for (const s of sigs.filter((x) => !x.err)) {
+    const t = await conn.getParsedTransaction(s.signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" }).catch(() => null);
+    for (const ix of t?.transaction.message.instructions ?? []) {
+      const p = (ix as { program?: string; parsed?: { type?: string; info?: { nonceAccount?: string; nonceAuthority?: string } } });
+      if (p.program === "system" && p.parsed?.type === "initializeNonce" && p.parsed.info?.nonceAuthority === owner && p.parsed.info.nonceAccount) found.add(p.parsed.info.nonceAccount);
+    }
+  }
+  const out: { account: string; lamports: number }[] = [];
+  for (const account of found) {
+    const n = await conn.getNonceAndContext(new PublicKey(account), "confirmed").catch(() => null);
+    if (!n?.value || n.value.authorizedPubkey.toBase58() !== owner) continue;
+    const lamports = await conn.getBalance(new PublicKey(account), "confirmed").catch(() => 0);
+    if (lamports > 0) out.push({ account, lamports });
+  }
+  return out;
+}

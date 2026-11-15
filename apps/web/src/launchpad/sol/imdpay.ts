@@ -29,7 +29,7 @@ export async function payImdJob(o: { chainId: PayChain; body: string; say: (s: s
     await w.switchChain({ id }).catch(() => { throw new Error(`Switch your wallet to ${PAY_NAMES[id]}.`); });
     const imd = chain.imd as Address;
     const bal = await rpc.readContract({ address: imd, abi: erc20Abi, functionName: "balanceOf", args: [me] });
-    if (bal < PRICE) throw new Error(`This wallet has ${(Number(bal) / 1e18).toFixed(3)} IMD on ${PAY_NAMES[id]}. The swarm's job costs 0.5 IMD there, plus a little ETH for gas. Buy IMD in the swap first; your signed launch keeps waiting.`);
+    if (bal < PRICE) throw new Error(`This wallet has ${(Number(bal) / 1e18).toFixed(3)} IMD on ${PAY_NAMES[id]}. The swarm's job costs 0.5 IMD there, plus a little ETH for gas. Buy IMD in the swap first; your launch keeps waiting for its payment.`);
     const allowance = await rpc.readContract({ address: imd, abi: erc20Abi, functionName: "allowance", args: [me, INTAKE] });
     const steps: Step[] = [];
     if (allowance < PRICE) steps.push({ call: { address: imd, abi: erc20Abi, functionName: "approve", args: [INTAKE, PRICE] }, sign: "1 of 2: allow IMD's Intake to take exactly 0.5 IMD…", wait: "Waiting for the approval…", fail: "The approval failed. Nothing was paid." });
@@ -44,7 +44,7 @@ export async function payImdJob(o: { chainId: PayChain; body: string; say: (s: s
     if (!sent.ok) throw new Error(`The payment reverted: ${sent.hash}. If IMD did not take it, only gas was spent.`);
     return sent.hash;
   } catch (e) {
-    if (rejected(e)) throw new Error("You declined in the wallet. Nothing was paid; your signed launch keeps waiting.");
+    if (rejected(e)) throw new Error("You declined in the wallet. Nothing was paid; your launch keeps waiting for its payment.");
     throw e;
   }
 }

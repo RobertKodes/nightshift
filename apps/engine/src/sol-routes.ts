@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { liveSolChain } from "./sol-chain.js";
+import { liveSolChain, openNonces } from "./sol-chain.js";
 import { discover } from "./sol-discover.js";
 import { liveImd } from "./sol-imd.js";
 import { BASE58_KEY, proxyRpc, SolInputError, SolLaunchpad, solSettings } from "./sol-launch.js";
@@ -75,6 +75,12 @@ export async function solRoutes(req: IncomingMessage, res: ServerResponse, p: st
     if (req.method === "GET" && p === "/api/sol/swarm/price") {
       if (ctx.limited(req, "sol-price", 30, 60_000)) return reply(429, { error: "Too many requests. Wait a minute." });
       return reply(200, { price: await pad.swarmPrice() }, "public, max-age=60");
+    }
+    // a wallet's leftover durable nonce accounts (launches before v0.377 were signed on one): the page closes them
+    const nonces = m(`nonces/${KEY}`);
+    if (req.method === "GET" && nonces) {
+      if (ctx.limited(req, "sol-nonces", 10, 600_000)) return reply(429, { error: "Too many requests. Wait a few minutes." });
+      return reply(200, { nonces: await openNonces(solSettings().rpc, nonces[1]!) });
     }
     const meta = m(`meta/${KEY}\\.json`);
     if (req.method === "GET" && meta) { const j = pad.meta(meta[1]!); return j ? reply(200, j, pad.metaCache(meta[1]!), OPEN) : reply(404, { error: "not found" }, "no-store", OPEN); }

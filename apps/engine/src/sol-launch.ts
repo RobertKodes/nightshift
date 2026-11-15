@@ -20,17 +20,18 @@ export { DBC_PROGRAM } from "./sol-tx.js";
  *  1. prepare: the creator's details, the Meteora settings and the swarm work they pick; NIGHTSHIFT
  *     gives the launch its address (ending in "imd") and, with swarm work, the exact IMD job body,
  *     checked by IMD for free.
- *  2. signed: the creator's wallet signs the launch. Without swarm work NIGHTSHIFT adds the address's
- *     signature and sends it at once. With swarm work the launch is signed on a durable nonce (it does
- *     not expire) and waits here: nothing is on Solana yet.
- *  3. paid: the creator pays the 0.5 IMD job. By default in SOL, with one signature in their Solana
+ *     Without swarm work the creator signs right away (step 4). With it the launch waits for its payment.
+ *  2. paid: the creator pays the 0.5 IMD job. By default in SOL, with one signature in their Solana
  *     wallet: NIGHTSHIFT Swap's Relay route buys the IMD on Robinhood Chain and sends IMD the job
  *     (sol-relay.ts). Or in IMD from their own Ethereum or Robinhood Chain wallet. Either way the
  *     payment is checked to carry exactly that body.
- *  4. The swarm works; this module follows the job. When it completes (and the review, if picked,
+ *  3. The swarm works; this module follows the job. When it completes (and the review, if picked,
  *     says launch), the swarm's logo and banner are copied into the token's metadata on NIGHTSHIFT
- *     (the link the signed launch points to) and the site becomes its website; then NIGHTSHIFT sends
- *     the signed launch. If the review says no, it never launches.
+ *     and the site becomes its website; the launch is then "ready". If the review says no, it never is.
+ *  4. signed: the creator's wallet signs the launch, a normal transaction on a recent blockhash (no
+ *     durable nonce: wallets like Phantom rewrite what they sign, and nonces are being retired). It
+ *     must point to NIGHTSHIFT's metadata; NIGHTSHIFT adds the address's signature and sends it at once.
+ * Launches signed on a durable nonce before v0.377 still go out as they were signed, when their job completes.
  * NIGHTSHIFT never holds a creator's key or funds: the one key it holds creates the token's address.
  */
 
@@ -284,7 +285,8 @@ export type SolChain = {
   solUsd(): Promise<number | null>;
 };
 
-export type SolStatus = "prepared" | "waiting" | "launching" | "live" | "graduated" | "refused" | "failed" | "cancelled";
+/** prepared: no swarm, not signed yet. waiting: the swarm is paid for or working. ready: the swarm is done, the creator signs. */
+export type SolStatus = "prepared" | "waiting" | "ready" | "launching" | "live" | "graduated" | "refused" | "failed" | "cancelled";
 export type SolLaunch = SolMeta & {
   config: string; pool: string | null; creator: string; signature: string | null; createdAt: number; launchedAt: number | null;
   status: SolStatus; note: string | null;
@@ -295,7 +297,7 @@ export type SolLaunch = SolMeta & {
   checks: SolCheck[]; checkedAt: number;
   change1h: number | null; change24h: number | null; movedAt: number | null;
   swarm: SwarmRun | null;
-  /** the creator's signed launch, waiting for the swarm: never shown */
+  /** the creator's signed launch: on its way to Solana, or signed on a durable nonce before v0.377 and waiting for the swarm. Never shown */
   held: { tx: string; nonce: string | null } | null;
 };
 export type SolCheck = { key: string; ok: boolean | null; says: string };
@@ -360,7 +362,9 @@ const PREPARED_TTL = 2 * 3600_000;
 const UNPAID_TTL = 48 * 3600_000;
 const DAY = 86_400_000;
 const LISTED: SolStatus[] = ["live", "graduated"];
-const WAITING: SolStatus[] = ["waiting", "launching"];
+const WAITING: SolStatus[] = ["waiting", "ready", "launching"];
+/** A launch the swarm finished but the creator never signed is dropped after this. */
+const READY_TTL = 14 * 86_400_000;
 
 export class SolLaunchpad {
   private launches: Stored;
@@ -380,6 +384,9 @@ export class SolLaunchpad {
     this.launches = existsSync(this.file) ? (JSON.parse(readFileSync(this.file, "utf8")) as Stored) : {};
     this.history = existsSync(this.histFile) ? (JSON.parse(readFileSync(this.histFile, "utf8")) as History) : {};
     this.mints = mints ?? new MintKeys(dir);
+    // before v0.377 a swarm launch was signed on a durable nonce before it was paid; one that never got signed
+    // (left "prepared") now waits for its payment like any new swarm launch, and is signed when the swarm is done
+    for (const l of Object.values(this.launches)) if (l.status === "prepared" && l.swarm?.state === "unpaid") l.status = "waiting";
   }
 
   private save() { writeAtomic(this.file, JSON.stringify(this.launches)); writeAtomic(this.histFile, JSON.stringify(this.history)); }
@@ -450,6 +457,7 @@ export class SolLaunchpad {
       l.swarm = { picks, chainId, body, state: "unpaid", payTx: null, payer: null, job: null, steps: picks.map((pick) => ({ pick, state: "waiting" })), verdict: null, report: null, logo: null, banner: null, site: null, note: null, paidAt: null };
       if (check.blockers.length) { this.mints.drop(mint); return { mint, uri: "", image: imageUrl, swarm }; }
     }
+    if (l.swarm) l.status = "waiting";
     this.launches[mint] = l;
     this.save();
     return { mint, uri: this.uriOf(mint), image: imageUrl, swarm };
@@ -468,43 +476,39 @@ export class SolLaunchpad {
   }
 
   /**
-   * Step 2: the creator's signed launch. It must be exactly a launch of this token on a config with
-   * NIGHTSHIFT's terms, and it must work on Solana right now. Without swarm work it is sent at once;
-   * with swarm work it waits here for the swarm (signed on a durable nonce, so it does not expire).
+   * The creator's signed launch: a normal transaction on a recent blockhash, sent at once. It must be exactly
+   * a launch of this token on a config with NIGHTSHIFT's terms, and it must work on Solana right now. Without
+   * the swarm it is signed right after prepare; with the swarm, only once the launch is ready (the job done,
+   * the review saying launch, its work in the token's metadata).
    */
   async signed(mint: string, b: Record<string, unknown>): Promise<SolView> {
     const s = this.settings();
     if (!s.partner) throw new SolInputError("The Solana launchpad is not open yet.", 503);
     const l = this.need(mint);
-    if (!(l.status === "prepared" || l.status === "failed" || (l.status === "waiting" && l.swarm?.state === "unpaid"))) throw new SolInputError("This launch is already signed.", 409);
+    if (l.swarm && l.status === "waiting") throw new SolInputError(l.swarm.state === "unpaid" ? "Pay the swarm's job first: you sign the launch when the swarm is done." : "The swarm is still working: you sign the launch when it is done.", 409);
+    if (!(l.status === "prepared" || l.status === "failed" || l.status === "ready")) throw new SolInputError(l.status === "refused" ? "The swarm's review said no: this launch cannot go live." : "This launch is already signed.", 409);
     const configKey = String(b.config ?? "") || s.config || "";
     if (!BASE58_KEY.test(configKey)) throw new SolInputError("The launch's Meteora config is missing.");
     const c = await this.configOf(configKey);
     if (!c) throw new SolInputError("That Meteora config is not on Solana yet. Wait a moment and sign again.", 409);
     const bad = termsProblems(c, s.partner);
     if (bad.length) throw new SolInputError(`That launch is not on NIGHTSHIFT terms: ${bad.join(", ")}.`, 409);
-    const nonceKey = l.swarm ? String(b.nonce ?? "") : "";
-    let nonce: { account: string; value: string } | null = null;
-    if (l.swarm) {
-      if (!BASE58_KEY.test(nonceKey)) throw new SolInputError("A launch that waits for the swarm needs its nonce account.");
-      const n = await this.chain.nonce(nonceKey).catch(() => null);
-      if (!n) throw new SolInputError("The nonce account is not on Solana yet. Wait a moment and sign again.", 409);
-      if (n.authority !== l.creator) throw new SolInputError("That nonce account belongs to another wallet.");
-      nonce = { account: nonceKey, value: n.value };
-    }
     let tx;
     try { tx = readTx(String(b.tx ?? "")); } catch { throw new SolInputError("That is not a Solana transaction."); }
-    const problem = launchTxProblem(tx, { creator: l.creator, mint, config: configKey, nonce });
-    if (problem) throw new SolInputError(problem);
+    // no durable nonce any more: the launch is signed when it can be sent, on a recent blockhash
+    const problem = launchTxProblem(tx, { creator: l.creator, mint, config: configKey, nonce: null });
+    if (problem) {
+      // what the wallet sent, for diagnosis: the steps' programs only (no keys, no signatures)
+      console.warn(`[sol] launch ${mint} refused: ${problem}`);
+      throw new SolInputError(problem);
+    }
     // the swarm's logo, banner and site are added to the token through its metadata link: it must be NIGHTSHIFT's
     if (l.swarm && launchMetadata(tx)?.uri !== this.uriOf(mint)) throw new SolInputError(`A launch with the swarm must point its metadata to NIGHTSHIFT (${this.uriOf(mint)}), so the swarm's work can be added before it goes live. Sign it again from this page.`);
     const txB64 = tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64");
     const sim = await this.chain.simulate(txB64);
     if (!sim.ok) throw new SolInputError(`This launch would fail on Solana right now: ${sim.why ?? "unknown error"}. Nothing was sent.`, 409);
-    Object.assign(l, { config: configKey, dev: devLock(c), graduateSol: Number(c.threshold) / 1e9, note: null, held: { tx: txB64, nonce: nonce?.account ?? null } });
-    if (!l.swarm) { await this.release(l); return this.view(l); }
-    l.status = "waiting";
-    this.save();
+    Object.assign(l, { config: configKey, dev: devLock(c), graduateSol: Number(c.threshold) / 1e9, note: null, held: { tx: txB64, nonce: null } });
+    await this.release(l);
     return this.view(l);
   }
 
@@ -640,9 +644,12 @@ export class SolLaunchpad {
       this.save();
       return this.view(l);
     }
-    if (!owner && l.swarm && l.swarm.state !== "failed") throw new SolInputError("The swarm is still working: the launch goes live when it finishes.", 409);
-    if (!l.held) throw new SolInputError("There is no signed launch to send. Sign it again.", 409);
-    await this.release(l);
+    if (l.status === "ready") throw new SolInputError("This launch is ready: sign it to launch.", 409);
+    if (!owner && l.swarm && l.swarm.state !== "failed") throw new SolInputError("The swarm is still working: you sign the launch when it is done.", 409);
+    // a launch signed on a durable nonce before v0.377 is sent as it is; any other becomes ready for the creator to sign
+    if (l.held) { await this.release(l); return this.view(l); }
+    Object.assign(l, { status: "ready", note: owner ? "NIGHTSHIFT overruled the review: the creator can sign the launch." : "Launching without the swarm's work: sign the launch." });
+    this.save();
     return this.view(l);
   }
 
@@ -790,7 +797,7 @@ export class SolLaunchpad {
     w.report = file("report") ?? w.report; w.logo = file("logo") ?? w.logo; w.banner = file("banner") ?? w.banner;
     if (w.picks.includes("review") && !w.verdict && file("verdict")) w.verdict = readVerdict(await this.imd!.text(file("verdict")!));
     if (w.verdict && !w.verdict.launch) {
-      // the signed launch is kept (never sent) so the owner can still overrule a mistaken verdict
+      // never launched; the owner can still overrule a mistaken verdict (then the creator signs)
       Object.assign(w, { state: "refused" });
       Object.assign(l, { status: "refused", note: `The IMD swarm's review said no: ${w.verdict.reason || "no reason given"}.` });
       return;
@@ -806,7 +813,9 @@ export class SolLaunchpad {
     await this.applyWork(l, w);
     w.state = "done";
     for (const st of w.steps) if (st.state !== "failed") st.state = "done";
-    await this.release(l);
+    // signed before v0.377 (on a durable nonce): sent now. Otherwise ready: the creator signs, and it is sent at once.
+    if (l.held) { await this.release(l); return; }
+    Object.assign(l, { status: "ready", note: null });
   }
 
   /**
@@ -834,7 +843,8 @@ export class SolLaunchpad {
     for (const [k, l] of Object.entries(this.launches)) {
       if (l.status === "prepared" && now - l.createdAt > PREPARED_TTL) { delete this.launches[k]; this.mints.drop(k); }
       else if (l.status === "waiting" && l.swarm?.state === "unpaid" && now - l.createdAt > UNPAID_TTL) { Object.assign(l, { status: "cancelled", held: null, note: "Not paid within two days." }); this.mints.drop(k); }
-      else if (l.status === "refused" && l.held && now - l.createdAt > 30 * DAY) { l.held = null; this.mints.drop(k); }
+      else if (l.status === "ready" && now - (l.swarm?.paidAt ?? l.createdAt) > READY_TTL) { Object.assign(l, { status: "cancelled", held: null, note: "Not signed within two weeks of the swarm finishing." }); this.mints.drop(k); }
+      else if (l.status === "refused" && now - l.createdAt > 30 * DAY && (l.held || this.mints.keypair(k))) { l.held = null; this.mints.drop(k); }
     }
     const listed = Object.values(this.launches).filter((l) => LISTED.includes(l.status) && l.config);
     const withPool = listed.filter((l) => l.pool);
