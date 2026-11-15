@@ -79,12 +79,11 @@ describe("the fee wallet", () => {
     if (process.platform !== "win32") expect(statSync(join(dir, "sol-fee-wallet.json")).mode & 0o077).toBe(0);
   });
 
-  it("does nothing until it is the partner, on mainnet, turned on, with ADAM and the dev wallet set", async () => {
+  it("does nothing until it is the partner, on mainnet, turned on, with the dev wallet set", async () => {
     const cases: [Partial<FeeSettings>, RegExp][] = [
       [{ partner: "someoneElse111111111111111111111111111111111" }, /not the launch partner/],
       [{ on: false }, /Turned off/],
       [{ network: "devnet" }, /devnet/],
-      [{ adam: null }, /ADAM/],
       [{ dev: null }, /dev wallet/],
     ];
     for (const [over, why] of cases) {
@@ -114,6 +113,20 @@ describe("a run", () => {
     expect(a.owedSol.shift).toBeCloseTo(Number(p.shift - MAX_BURN - 15_000n) / 1e9, 9);
     expect(a.owedSol.adam).toBe(0);
     expect(a.totals.claimedSol).toBeCloseTo(Number(got) / 1e9, 9);
+  });
+
+  it("runs without ADAM's wallet: keeps ADAM's 10% in the fee wallet and pays it once the wallet is set", async () => {
+    const { fees, c, set } = setup();
+    set({ adam: null });
+    c.balance = RESERVE;
+    expect(await fees.run()).toEqual({ ran: true });
+    const p = splitLamports(14n * SOL + 50_000_000n - 20_000n);
+    expect(c.paid).toMatchObject([{ address: DEV, lamports: p.dev }]);
+    expect((await fees.adminInfo()).owedSol.adam).toBeCloseTo(Number(p.adam) / 1e9, 9);
+    set({ adam: ADAM });
+    await fees.run();
+    expect(c.paid.at(-1)).toMatchObject({ address: ADAM, lamports: p.adam });
+    expect((await fees.adminInfo()).owedSol.adam).toBe(0);
   });
 
   it("claims a pool's launch fee only once", async () => {

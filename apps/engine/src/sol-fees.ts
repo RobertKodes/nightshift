@@ -164,7 +164,7 @@ export class SolFees {
     if (s.network !== "mainnet") return "The launchpad is on devnet: fees are only split on mainnet.";
     if (!s.on) return "Turned off in the launchpad admin.";
     if (s.partner !== this.address) return "The fee wallet is not the launch partner yet: launches still pay another wallet.";
-    if (!s.adam) return "ADAM's Solana wallet is not set.";
+    // ADAM's wallet may come later: until it is set, ADAM's 10% is kept in the fee wallet and paid once it is
     if (!s.dev) return "The dev wallet is not set.";
     if (s.adam === this.address || s.dev === this.address) return "ADAM and the dev wallet must be other wallets than the fee wallet.";
     return null;
@@ -240,7 +240,7 @@ export class SolFees {
   private async payout(port: FeePort, s: FeeSettings) {
     const adam = big(this.l.owed.adam), dev = big(this.l.owed.dev);
     const to: { address: string; lamports: bigint; who: "adam" | "dev" }[] = [];
-    if (adam >= MIN_PAYOUT) to.push({ address: s.adam!, lamports: adam, who: "adam" });
+    if (s.adam && adam >= MIN_PAYOUT) to.push({ address: s.adam!, lamports: adam, who: "adam" });
     if (dev >= MIN_PAYOUT) to.push({ address: s.dev!, lamports: dev, who: "dev" });
     if (!to.length) return;
     const moved = to.reduce((a, t) => a + t.lamports, 0n);
