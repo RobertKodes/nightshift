@@ -26,7 +26,19 @@ export type ImdPort = {
   job(id: string): Promise<ImdJob | null>;
   files(id: string): Promise<ImdFile[]>;
   text(url: string): Promise<string | null>;
+  /** an image the job made (its logo, its banner), as bytes, so NIGHTSHIFT can serve it with the token */
+  image?(url: string): Promise<{ bytes: Buffer; type: string } | null>;
 };
+
+/** The image types NIGHTSHIFT serves from a swarm job, by their first bytes (never by what a header claims). */
+export function imageType(b: Buffer): "png" | "jpg" | "webp" | "gif" | null {
+  if (b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "png";
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "jpg";
+  if (b.length > 12 && b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP") return "webp";
+  if (b.length > 6 && /^GIF8[79]a$/.test(b.subarray(0, 6).toString("latin1"))) return "gif";
+  return null;
+}
+export const SWARM_IMAGE_MAX = 6_000_000;
 
 const get = async <T>(url: string, ms = 12_000): Promise<T | null> => {
   const r = await fetch(url, { signal: AbortSignal.timeout(ms) }).catch(() => null);
@@ -70,6 +82,14 @@ export function liveImd(): ImdPort {
       if (!url.startsWith(`${IMD_API}/`)) return null;
       const r = await fetch(url, { signal: AbortSignal.timeout(12_000) }).catch(() => null);
       return r?.ok ? (await r.text()).slice(0, 20_000) : null;
+    },
+    async image(url) {
+      if (!url.startsWith(`${IMD_API}/`)) return null;
+      const r = await fetch(url, { signal: AbortSignal.timeout(30_000) }).catch(() => null);
+      if (!r?.ok || Number(r.headers.get("content-length") ?? 0) > SWARM_IMAGE_MAX) return null;
+      const bytes = Buffer.from(await r.arrayBuffer());
+      const t = bytes.length <= SWARM_IMAGE_MAX ? imageType(bytes) : null;
+      return t ? { bytes, type: t } : null;
     },
   };
 }

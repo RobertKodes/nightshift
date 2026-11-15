@@ -7,12 +7,15 @@ import { describe, expect, it } from "vitest";
 import { lockOf } from "./sol-chain.js";
 import { fromPairs, launchpadOf } from "./sol-discover.js";
 import type { ImdFile, ImdJob, ImdPort } from "./sol-imd.js";
+import { encodeAbiParameters } from "viem";
+import { NATIVE_SOL, RELAY_DEPOSITORY, SOLANA_RELAY_CHAIN } from "./sol-fees.js";
 import {
   actText, checkMeta, checkOptions, cleanText, type ConfigView, DBC_PROGRAM, devLock, priceFromSqrt, proxyRpc, readVerdict, safetyChecks, siteLabel,
-  type SolChain, SolInputError, SolLaunchpad, type SolSettings, swarmBody, termsProblems, WSOL,
+  type SolChain, SolInputError, SolLaunchpad, type SolSettings, swarmBody, swarmEta, type SwarmPick, termsProblems, WSOL,
 } from "./sol-launch.js";
 import { grind, MintKeys } from "./sol-mints.js";
-import { LIGHTHOUSE, launchTxProblem, walletSigned } from "./sol-tx.js";
+import { encodeCall, imdCalls, RH_IMD, type RelayPayPort, type RelayPayQuote, type RelayStatus } from "./sol-relay.js";
+import { LIGHTHOUSE, launchMetadata, launchTxProblem, walletSigned } from "./sol-tx.js";
 
 const CONFIG = "628VVs4Y3QSD3J6GnXncY9UQkdumy1CdZRGuibtaCDBa";
 const CUSTOM = "3rByufzjNhxy7JUg4C2BzCdZC5TYEdsDEz7onUVoDEp3";
@@ -81,12 +84,12 @@ const STD = { feeBps: 100, startMcapUsd: 5_000, graduateMcapUsd: 75_000, sniper:
 const input = { name: "Night Frog", symbol: "nfrog", description: "gm", website: "https://frog.test", twitter: "https://x.com/frog", telegram: "https://t.me/frog", image: PNG, creator: CREATOR, options: STD };
 
 /** A launch transaction the way the page builds one: compute budget, the first buy's SOL wrap and token account, Meteora's pool creation. */
-function launchTx(mint: string, o: { config?: string; nonce?: string | null; extra?: TransactionInstruction[] } = {}) {
+function launchTx(mint: string, o: { config?: string; nonce?: string | null; extra?: TransactionInstruction[]; uri?: string } = {}) {
   const tx = new Transaction();
   const me = creatorKp.publicKey, m = new PublicKey(mint);
   if (o.nonce) tx.add(SystemProgram.nonceAdvance({ noncePubkey: nonceKp.publicKey, authorizedPubkey: me }));
   tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 450_000 }));
-  tx.add(new TransactionInstruction({ programId: new PublicKey(DBC_PROGRAM), data: Buffer.from([1]), keys: [{ pubkey: new PublicKey(o.config ?? CONFIG), isSigner: false, isWritable: false }, { pubkey: m, isSigner: true, isWritable: true }, { pubkey: me, isSigner: true, isWritable: true }] }));
+  tx.add(new TransactionInstruction({ programId: new PublicKey(DBC_PROGRAM), data: createPoolData("Night Frog", "NFROG", o.uri ?? `https://site.test/api/sol/meta/${mint}.json`), keys: [{ pubkey: new PublicKey(o.config ?? CONFIG), isSigner: false, isWritable: false }, { pubkey: m, isSigner: true, isWritable: true }, { pubkey: me, isSigner: true, isWritable: true }] }));
   tx.add(new TransactionInstruction({ programId: new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"), data: Buffer.from([1]), keys: [{ pubkey: me, isSigner: true, isWritable: true }, { pubkey: m, isSigner: false, isWritable: false }] }));
   tx.add(SystemProgram.transfer({ fromPubkey: me, toPubkey: Keypair.generate().publicKey, lamports: 1000 }));
   for (const x of o.extra ?? []) tx.add(x);
@@ -94,6 +97,11 @@ function launchTx(mint: string, o: { config?: string; nonce?: string | null; ext
   tx.recentBlockhash = o.nonce ?? BLOCKHASH;
   tx.partialSign(creatorKp);
   return tx;
+}
+/** Meteora's pool creation data: the SPL-token discriminator, then name, ticker and metadata link as borsh strings. */
+function createPoolData(name: string, symbol: string, uri: string) {
+  const str = (x: string) => { const b = Buffer.from(x); const n = Buffer.alloc(4); n.writeUInt32LE(b.length); return Buffer.concat([n, b]); };
+  return Buffer.concat([Buffer.from([140, 85, 215, 176, 102, 54, 104, 79]), str(name), str(symbol), str(uri)]);
 }
 const b64 = (tx: Transaction) => tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64");
 /** The creator's wallet signing a short text, the way Phantom's signMessage does (ed25519). */
@@ -317,6 +325,156 @@ describe("a launch that waits for the IMD swarm", () => {
     expect(r.swarm?.blockers).toEqual(["The ticker is someone else's brand."]);
     expect(pad.one(r.mint)).toBeNull();
     await expect(pad.signed(r.mint, { tx: "x" })).rejects.toThrow(/No launch/);
+  });
+});
+
+describe("the swarm paid in SOL, and its work in the token", () => {
+  const NONCE = nonceKp.publicKey.toBase58();
+  const FEE_WALLET = "0x3322a0b8e8c0b6c4b2b2c2a3c6d8e9f0a1b2c3d4";
+  const REQ = `0x${"17".repeat(32)}`;
+  const SOLTX = "4".repeat(88);
+  const PNG_BYTES = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("logo pixels")]);
+
+  /** Relay through NIGHTSHIFT Swap, faked: a quote of exactly the job (or a tampered one), the built deposit, a status the test sets. */
+  function fakePay() {
+    const s = { tamper: false, status: { state: "waiting", destTx: null, destChain: null, inTx: null, why: null } as RelayStatus, quotes: 0 };
+    const quoteOf = (creator: string, body: string): RelayPayQuote => ({
+      requestId: REQ, steps: 1, items: 1, kind: "transaction",
+      instructions: [{ programId: RELAY_DEPOSITORY, keys: [{ pubkey: creator, isSigner: true, isWritable: true }], data: "00" }], lookupTables: [],
+      sender: creator, recipient: FEE_WALLET, inChain: SOLANA_RELAY_CHAIN, inCurrency: NATIVE_SOL, inLamports: "19950442", inUsd: 1.36,
+      outChain: 4663, outCurrency: RH_IMD, outAmount: "500000000000000000", outUsd: 1.24, timeEstimate: 1, orderChain: "robinhood",
+      calls: imdCalls(s.tamper ? body.replace("Night Frog", "Other Frog") : body).map((c) => encodeCall({ to: c.to, data: c.data, value: 0n })),
+      refunds: [{ chainId: "solana", recipient: creator }, { chainId: "robinhood", recipient: FEE_WALLET }],
+    });
+    const port: RelayPayPort = {
+      quote: async ({ creator, body }) => { s.quotes++; return { quote: quoteOf(creator, body), feeWallet: FEE_WALLET, feeBps: 25 }; },
+      build: async () => ({ tx: "AQID", lamports: 19_960_442n, blockhash: BLOCKHASH }),
+      status: async () => s.status,
+    };
+    return { port, s };
+  }
+
+  async function waitingPaidInSol(o: { picks?: string[]; image?: string; net?: "mainnet" | "devnet" } = {}) {
+    const { chain, sent } = fakeChain();
+    const imd = fakeImd();
+    const pay = fakePay();
+    const d = dir();
+    const pad = new SolLaunchpad(chain, settings({ network: o.net ?? "mainnet" }), d, "https://site.test", imd.port, new MintKeys(d, "", 0), pay.port);
+    const r = await pad.prepare({ ...input, image: o.image ?? "", swarm: o.picks ?? ["review", "logo", "banner", "website"], logoIdea: "a frog", chainId: 1 });
+    imd.s.paidBody = r.swarm!.body;
+    await pad.signed(r.mint, { tx: b64(launchTx(r.mint, { nonce: NONCE_VALUE })), config: CONFIG, nonce: NONCE });
+    return { pad, r, imd, pay, sent, d };
+  }
+
+  it("quotes the job in SOL, checked, and follows Relay until the destination transaction carries the job", async () => {
+    const { pad, r, imd, pay } = await waitingPaidInSol();
+    const q = await pad.relayQuote(r.mint);
+    expect(q).toMatchObject({ tx: "AQID", requestId: REQ, lamports: "19960442", quotedLamports: "19950442", usd: 1.36, imd: 0.5, chain: "Robinhood Chain" });
+    expect(pad.one(r.mint)?.swarm?.relay).toMatchObject({ state: "quoted", requestId: REQ });
+    await expect(pad.relaySent(r.mint, "not a signature")).rejects.toThrow(/signature/);
+    pay.s.status = { state: "pending", destTx: null, destChain: null, inTx: SOLTX, why: null };
+    expect((await pad.relaySent(r.mint, SOLTX)).swarm).toMatchObject({ state: "unpaid", relay: { state: "sent", solTx: SOLTX } });
+    // a second payment is never quoted while the first is on its way
+    await expect(pad.relayQuote(r.mint)).rejects.toThrow(/already on its way/);
+    // Relay delivered: the job is paid by the transaction Relay names for this request (its executor is the payer)
+    pay.s.status = { state: "success", destTx: PAY, destChain: 4663, inTx: SOLTX, why: null };
+    const v = await pad.relayCheck(r.mint);
+    expect(v.swarm).toMatchObject({ state: "working", payTx: PAY, chainId: 4663, relay: { state: "done", destTx: PAY } });
+    expect(imd.s.job.state).toBe("executing");
+  });
+
+  it("refuses a quote that is not exactly this launch's job, on devnet, and without the route", async () => {
+    const a = await waitingPaidInSol();
+    a.pay.s.tamper = true;
+    await expect(a.pad.relayQuote(a.r.mint)).rejects.toThrow(/route was refused \(the destination calls are not IMD's job/);
+    expect(a.pad.one(a.r.mint)?.swarm?.relay ?? null).toBeNull();
+    const dev = await waitingPaidInSol({ net: "devnet" });
+    await expect(dev.pad.relayQuote(dev.r.mint)).rejects.toThrow(/mainnet only/);
+    // the page offers SOL everywhere and says on devnet that it pays on mainnet only
+    expect((await dev.pad.info()).imd.solPay).toBe(true);
+    expect((await a.pad.info()).imd).toMatchObject({ solPay: true, eta: { steps: { website: [50, 95] } } });
+  });
+
+  it("lets the creator pay again when Relay refunds, and never counts a delivery that did not carry the job", async () => {
+    const { pad, r, imd, pay } = await waitingPaidInSol();
+    await pad.relayQuote(r.mint);
+    pay.s.status = { state: "refunded", destTx: null, destChain: null, inTx: SOLTX, why: "SOLVER_CAPACITY_EXCEEDED" };
+    expect((await pad.relaySent(r.mint, SOLTX)).swarm).toMatchObject({ state: "unpaid", relay: { state: "refunded" } });
+    await pad.relayQuote(r.mint);
+    expect(pay.s.quotes).toBe(2);
+    pay.s.status = { state: "pending", destTx: null, destChain: null, inTx: SOLTX, why: null };
+    await pad.relaySent(r.mint, SOLTX);
+    imd.s.paidBody = "another body";
+    pay.s.status = { state: "success", destTx: PAY, destChain: 4663, inTx: SOLTX, why: null };
+    const v = await pad.relayCheck(r.mint);
+    expect(v.swarm).toMatchObject({ state: "unpaid", payTx: null, relay: { state: "failed", note: expect.stringMatching(/swap wallet/) } });
+  });
+
+  it("must point the signed launch's metadata to NIGHTSHIFT", async () => {
+    const imd = fakeImd();
+    const pad = make({ imd: imd.port });
+    const r = await pad.prepare({ ...input, swarm: ["website"], chainId: 1 });
+    await expect(pad.signed(r.mint, { tx: b64(launchTx(r.mint, { nonce: NONCE_VALUE, uri: "https://evil.test/meta.json" })), config: CONFIG, nonce: NONCE })).rejects.toThrow(/metadata to NIGHTSHIFT/);
+    expect(launchMetadata(launchTx(r.mint))).toEqual({ name: "Night Frog", symbol: "NFROG", uri: `https://site.test/api/sol/meta/${r.mint}.json` });
+    // a launch without the swarm is not held to it
+    const plain = await make().prepare(input);
+    expect(launchMetadata(new Transaction())).toBeNull();
+    expect(plain.uri).toBe(`https://site.test/api/sol/meta/${plain.mint}.json`);
+  });
+
+  it("puts the swarm's logo, banner and site into the token before it is sent, served by NIGHTSHIFT", async () => {
+    const { pad, r, imd, pay, sent } = await waitingPaidInSol();
+    imd.port.image = async (url) => (url.endsWith("/logo") || url.endsWith("/banner") ? { bytes: PNG_BYTES, type: "png" } : null);
+    await pad.relayQuote(r.mint);
+    pay.s.status = { state: "success", destTx: PAY, destChain: 4663, inTx: SOLTX, why: null };
+    await pad.relaySent(r.mint, SOLTX);
+    expect(pad.metaCache(r.mint)).toBe("no-store");
+    imd.s.job = { state: "completed", nodes: ["research_report", "token_logo", "create_image", "build_website", "design_critic"].map((key) => ({ key, state: "accepted" })), site: "https://nfrog.imd.site" };
+    imd.s.files = [{ name: "verdict", url: "https://api.imd.fun/artifacts/v", mediaType: "application/json" }, { name: "report", url: "https://api.imd.fun/artifacts/r", mediaType: "text/markdown" }, { name: "logo", url: "https://api.imd.fun/artifacts/logo", mediaType: "image/png" }, { name: "banner", url: "https://api.imd.fun/artifacts/banner", mediaType: "image/png" }];
+    // what the metadata says at the moment the launch is sent
+    let atSend: ReturnType<SolLaunchpad["meta"]> = null;
+    const send = (pad as unknown as { chain: SolChain }).chain.send;
+    (pad as unknown as { chain: SolChain }).chain.send = async (b) => { atSend = pad.meta(r.mint); return send(b); };
+    await pad.work();
+    expect(sent).toHaveLength(1);
+    const logo = `https://site.test/api/sol/img/${r.mint}-logo.png`, banner = `https://site.test/api/sol/img/${r.mint}-banner.png`;
+    // no upload: the swarm's logo is the token's image
+    expect(atSend).toMatchObject({ image: logo, extensions: { website: "https://frog.test/", imd_site: "https://nfrog.imd.site", banner, imd_review: "https://api.imd.fun/artifacts/r" }, properties: { files: [{ uri: logo, type: "image/png" }, { uri: banner, type: "image/png" }] } });
+    expect(pad.image(`${r.mint}-logo.png`)?.bytes.equals(PNG_BYTES)).toBe(true);
+    expect(pad.image(`${r.mint}-banner.png`)?.type).toBe("image/png");
+    expect(pad.image(`${r.mint}-other.png`)).toBeNull();
+    expect(pad.one(r.mint)).toMatchObject({ status: "live", swarm: { logoHosted: logo, bannerHosted: banner } });
+    expect(pad.metaCache(r.mint)).toBe("public, max-age=300");
+  });
+
+  it("keeps the creator's uploaded logo: the swarm's logo step comes off the job", async () => {
+    const d = dir();
+    const pad = new SolLaunchpad(fakeChain().chain, settings({ network: "mainnet" }), d, "https://site.test", fakeImd().port, new MintKeys(d, "", 0), fakePay().port);
+    const r = await pad.prepare({ ...input, image: PNG, swarm: ["review", "logo", "website"], logoIdea: "a frog", chainId: 1 });
+    expect(r.swarm!.body).not.toMatch(/token-logo|artifacts\/logo\.png/);
+  });
+
+  it("does not launch a token the swarm left without any logo", async () => {
+    const { pad, r, imd, pay, sent } = await waitingPaidInSol({ picks: ["logo"] });
+    await pad.relayQuote(r.mint);
+    pay.s.status = { state: "success", destTx: PAY, destChain: 4663, inTx: SOLTX, why: null };
+    await pad.relaySent(r.mint, SOLTX);
+    imd.s.job = { state: "completed", nodes: [{ key: "token_logo", state: "accepted" }], site: null };
+    await pad.work();
+    expect(sent).toHaveLength(0);
+    expect(pad.one(r.mint)?.swarm).toMatchObject({ state: "failed", note: expect.stringMatching(/without the logo/) });
+  });
+
+  it("asks the swarm to put the review and the banner on the site, and estimates the time", () => {
+    const l = { mint: "Fr0gMint1111111111111111111111111111111imd", name: "Night Frog", symbol: "NFROG", description: "gm", website: "", twitter: "", telegram: "", image: "", creator: CREATOR, dev: null, logoIdea: "" };
+    const site = (picks: SwarmPick[]) => JSON.stringify(swarmBody(l, picks, "https://site.test").steps.find((s) => s.skill === "build-website"));
+    expect(site(["review", "website"])).toContain("Reviewed by the IMD swarm");
+    expect(site(["review", "website"])).not.toContain("banner.png");
+    expect(site(["banner", "website"])).toContain("artifacts/banner.png");
+    expect(site(["logo", "website"])).toContain("artifacts/logo.png");
+    expect(site(["website"])).not.toMatch(/Reviewed|banner\.png/);
+    expect(swarmEta(["review", "logo", "banner", "website"])).toEqual({ typical: 65, slow: 163 });
+    expect(swarmEta(["logo"])).toEqual({ typical: 4, slow: 15 });
   });
 });
 

@@ -79,6 +79,24 @@ export function launchTxProblem(tx: Transaction, e: LaunchTxExpect): string | nu
   return null;
 }
 
+/** Meteora DBC's pool creation (SPL token or Token-2022): the anchor discriminators of the two instructions. */
+const CREATE_POOL = [Buffer.from([140, 85, 215, 176, 102, 54, 104, 79]), Buffer.from([169, 118, 51, 78, 145, 110, 220, 155])];
+
+/**
+ * The name, ticker and metadata link the launch writes into the token: read from Meteora's pool creation step
+ * (InitializePoolParameters: three borsh strings). Null when the transaction has no such step or it cannot be read.
+ */
+export function launchMetadata(tx: Transaction): { name: string; symbol: string; uri: string } | null {
+  const ix = tx.instructions.find((i) => i.programId.toBase58() === DBC_PROGRAM && CREATE_POOL.some((d) => i.data.subarray(0, 8).equals(d)));
+  if (!ix) return null;
+  try {
+    let at = 8;
+    const str = () => { const n = ix.data.readUInt32LE(at); if (n > 400) throw new Error("too long"); const s = ix.data.subarray(at + 4, at + 4 + n).toString("utf8"); at += 4 + n; return s; };
+    const name = str(), symbol = str(), uri = str();
+    return { name, symbol, uri };
+  } catch { return null; }
+}
+
 /** An ed25519 signature by a Solana wallet over a short text (the creator's "launch without the swarm" or "cancel"). */
 export function walletSigned(address: string, text: string, signatureB64: string): boolean {
   try {

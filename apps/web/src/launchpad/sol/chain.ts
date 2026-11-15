@@ -53,7 +53,11 @@ async function sendTx(tx: Transaction, who: SolSigner, extra: Keypair[], units: 
   say("Confirm in your Solana wallet…");
   const signed = await who.wallet.signTransaction(tx);
   if (extra.length) signed.partialSign(...extra);
-  const raw = signed.serialize();
+  return land(signed.serialize(), blockhash, say);
+}
+
+/** Send a signed transaction through the proxy and follow it until it is confirmed, resending while it waits. */
+async function land(raw: Uint8Array, blockhash: string, say: (s: string) => void): Promise<string> {
   say("Sending…");
   const sig = await conn.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 });
   // resend every few seconds until confirmed or the blockhash expires: how Solana transactions land reliably
@@ -76,6 +80,20 @@ async function sendTx(tx: Transaction, who: SolSigner, extra: Keypair[], units: 
     await sleep(2000);
   }
   return sig;
+}
+
+/**
+ * The IMD swarm's job paid in SOL: the deposit NIGHTSHIFT built from NIGHTSHIFT Swap's Relay quote (checked and
+ * simulated by the engine). Only the creator signs it, here in their wallet and before anyone else; the wallet may
+ * add its own checks (Phantom's Lighthouse steps). Returns the signature once Solana confirms it.
+ */
+export async function payInSol(who: SolSigner, txB64: string, say: (s: string) => void): Promise<string> {
+  const tx = VersionedTransaction.deserialize(Buffer.from(txB64, "base64"));
+  const signers = tx.message.staticAccountKeys.slice(0, tx.message.header.numRequiredSignatures).map((k) => k.toBase58());
+  if (signers.length !== 1 || signers[0] !== who.address) throw new Error("That payment is not for this wallet. Nothing was signed.");
+  say("Confirm the payment in your Solana wallet…");
+  const signed = await who.wallet.signTransaction(tx);
+  return land(signed.serialize(), tx.message.recentBlockhash, say);
 }
 
 /** The admin: the shared NIGHTSHIFT config key (the standard launch). Any wallet pays its rent; its fees and leftover go to the partner. */

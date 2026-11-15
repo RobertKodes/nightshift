@@ -11,7 +11,20 @@ export type SwarmRun = {
   picks: SwarmPick[]; chainId: 1 | 4663; body: string; state: "unpaid" | "paid" | "working" | "done" | "refused" | "failed";
   payTx: string | null; payer: string | null; job: string | null; steps: SwarmStep[];
   verdict: { launch: boolean; reason: string } | null; report: string | null; logo: string | null; banner: string | null; site: string | null; note: string | null; paidAt: number | null;
+  /** paid in SOL through NIGHTSHIFT Swap (Relay) */
+  relay?: RelayPay | null;
+  /** NIGHTSHIFT's copies of the swarm's logo and banner, served with the token */
+  logoHosted?: string | null; bannerHosted?: string | null;
+  doneAt?: Partial<Record<SwarmPick, number>>;
 };
+export type RelayPay = {
+  requestId: string; lamports: string; usd: number | null; seconds: number; quotedAt: number; sentAt: number | null;
+  state: "quoted" | "sent" | "done" | "refunded" | "failed"; solTx: string | null; destTx: string | null; note: string | null;
+};
+/** The SOL deposit NIGHTSHIFT built for the creator to sign: checked and simulated from their wallet. */
+export type RelayQuote = { tx: string; requestId: string; lamports: string; quotedLamports: string; usd: number | null; seconds: number; imd: number; chain: string };
+/** How long the swarm takes, in minutes [typical, slow], from IMD's own recent jobs. */
+export type SwarmEta = { steps: Record<SwarmPick, [number, number]>; start: [number, number]; basis: string };
 export type SolStatus = "prepared" | "waiting" | "launching" | "live" | "graduated" | "refused" | "failed" | "cancelled";
 export type SolLaunch = {
   mint: string; name: string; symbol: string; description: string; website: string; twitter: string; telegram: string; image: string;
@@ -20,17 +33,20 @@ export type SolLaunch = {
   graduateSol: number | null; options: { feeBps: number; startMcapUsd: number; graduateMcapUsd: number; sniper: string };
   dev: { pct: number; cliffDays: number; vestDays: number } | null; devBuySol: number; logoIdea: string;
   checks: SolCheck[]; change1h: number | null; change24h: number | null; movedAt: number | null;
-  swarm: SwarmRun | null; nonce: string | null; spark?: number[];
+  swarm: SwarmRun | null; nonce: string | null; uri?: string; spark?: number[];
 };
 export type SolInfo = {
   network: "mainnet" | "devnet"; open: boolean; partner: string | null; config: string | null; solUsd: number | null;
   shared: { graduateSol: number; createFeeSol: number } | null;
-  imd: { on: boolean; price: number; imdUsd: number; chains: Record<"1" | "4663", string>; picks: SwarmPick[] };
+  imd: { on: boolean; price: number; imdUsd: number; chains: Record<"1" | "4663", string>; picks: SwarmPick[]; solPay?: boolean; eta?: SwarmEta };
   counts: { live: number; graduated: number; reviewed: number; swarm: number; waiting: number };
 };
 export type Prepared = { mint: string; uri: string; image: string; swarm: { body: string; chainId: 1 | 4663; blockers: string[]; plan: string[] } | null };
-/** The swarm's image when the creator had none, else the creator's. */
-export const imageOf = (l: SolLaunch) => l.image || l.swarm?.logo || "";
+/** The token's image: the swarm's logo when the creator asked for one (NIGHTSHIFT's copy first), else the creator's. */
+export const imageOf = (l: SolLaunch) => {
+  const w = l.swarm, swarmLogo = w?.logoHosted || w?.logo || "";
+  return (w?.picks.includes("logo") && swarmLogo) || l.image || swarmLogo || "";
+};
 /** Remember which launches this browser started (to show the creator's buttons and resume a payment). */
 export const mine = {
   all: (): string[] => { try { return JSON.parse(localStorage.getItem("ns_sol_mine") ?? "[]") as string[]; } catch { return []; } },
@@ -60,6 +76,10 @@ export const solApi = {
   prepare: (b: Record<string, unknown>) => call<Prepared>("/api/sol/prepare", { method: "POST", body: JSON.stringify(b) }),
   signed: (mint: string, b: { tx: string; config: string; nonce: string | null }) => call<SolLaunch>(`/api/sol/launches/${mint}/signed`, { method: "POST", body: JSON.stringify(b) }),
   paid: (mint: string, chainId: number, tx: string) => call<SolLaunch>(`/api/sol/launches/${mint}/paid`, { method: "POST", body: JSON.stringify({ chainId, tx }) }),
+  relayQuote: (mint: string) => call<RelayQuote>(`/api/sol/launches/${mint}/relay`, { method: "POST", body: JSON.stringify({ action: "quote" }) }),
+  relaySent: (mint: string, signature: string) => call<SolLaunch>(`/api/sol/launches/${mint}/relay`, { method: "POST", body: JSON.stringify({ action: "sent", signature }) }),
+  relayCheck: (mint: string) => call<SolLaunch>(`/api/sol/launches/${mint}/relay`, { method: "POST", body: JSON.stringify({ action: "check" }) }),
+  swarmPrice: () => call<{ price: { lamports: string; usd: number | null; seconds: number } | null }>("/api/sol/swarm/price").then((r) => r.price).catch(() => null),
   act: (mint: string, action: "release" | "cancel", signature: string) => call<SolLaunch>(`/api/sol/launches/${mint}/act`, { method: "POST", body: JSON.stringify({ action, signature }) }),
   adminState: (admin: string) => call<{ network: string; config: string | null; partner: string | null; mintsReady: number; pending: SolLaunch[]; info: SolInfo }>("/api/sol/admin/state", { admin }),
   adminPartner: (admin: string, partner: string) => call<{ ok: true }>("/api/sol/admin/partner", { method: "POST", admin, body: JSON.stringify({ partner }) }),

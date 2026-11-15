@@ -52,11 +52,25 @@ export const CREATOR_FEE_SHARE = 50;
 export type SwarmPick = "review" | "logo" | "banner" | "website";
 export const SWARM: Record<SwarmPick, { label: string; says: string; skill: string }> = {
   review: { label: "REVIEW", says: "A sourced check of the name, links and your wallet's history. If the swarm says no, the token never launches; if it says yes, the token carries IMD REVIEWED.", skill: "research-report" },
-  logo: { label: "LOGO", says: "The swarm draws the token's logo from your words. Skip the upload.", skill: "token-logo" },
-  banner: { label: "X BANNER", says: "A 1500 × 500 header for the token's X account, in the logo's style.", skill: "create-image" },
-  website: { label: "WEBSITE", says: "A one-page site built and checked by the swarm, hosted on IPFS at an imd.site address, with a Buy button to this launch.", skill: "build-website" },
+  logo: { label: "LOGO", says: "The swarm draws the token's logo from your words. It becomes the token's image. Upload your own logo and it stays: the swarm does not draw one.", skill: "token-logo" },
+  banner: { label: "X BANNER", says: "A 1500 × 500 header in the logo's style, for X; added to the token's page and metadata.", skill: "create-image" },
+  website: { label: "WEBSITE", says: "A one-page site built and checked by the swarm, hosted on IPFS at an imd.site address, with a Buy button. With REVIEW or BANNER ticked, they go on the site too.", skill: "build-website" },
 };
 export const SWARM_ORDER: SwarmPick[] = ["review", "logo", "banner", "website"];
+
+/** Minutes as people say them: "45 min", "1 h 20 min", "3 h". */
+export function minutes(m: number): string {
+  const r = Math.max(1, Math.round(m / 5) * 5 || Math.round(m));
+  if (r < 60) return `${r} min`;
+  const h = Math.floor(r / 60), rest = r % 60;
+  return rest ? `${h} h ${rest} min` : `${h} h`;
+}
+/** About how long the swarm takes for these picks, in minutes [typical, slow]: the payment, IMD admitting the job, then each step in turn. */
+export function swarmTime(picks: Iterable<SwarmPick>, eta: { steps: Record<SwarmPick, [number, number]>; start: [number, number] }): [number, number] {
+  let a = eta.start[0], b = eta.start[1];
+  for (const p of picks) { a += eta.steps[p][0]; b += eta.steps[p][1]; }
+  return [a, b];
+}
 /** Where the creator pays IMD for the swarm's job: IMD's Intake sells jobs on these chains. */
 export type PayChain = 1 | 4663;
 export const PAY_NAMES: Record<PayChain, string> = { 1: "Ethereum", 4663: "Robinhood Chain" };

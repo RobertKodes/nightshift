@@ -7,6 +7,9 @@ import { config } from "./config.js";
 import { readSettings, writeSettings } from "./settings.js";
 import { SolFees } from "./sol-fees.js";
 import { liveFeePort } from "./sol-fees-live.js";
+import { liveRelayPay } from "./sol-relay.js";
+import { swapSettings } from "./swap.js";
+import { providerFee } from "@nightshift/swap";
 
 type Context = {
   json(res: ServerResponse, status: number, body: unknown, headers?: Record<string, string>): void;
@@ -22,7 +25,9 @@ export function solPad(): SolLaunchpad {
   const { rpc } = solSettings();
   if (live?.rpc === rpc) return live.pad;
   if (live) clearInterval(live.timer);
-  const pad = new SolLaunchpad(liveSolChain(rpc), solSettings, undefined, undefined, liveImd());
+  // the swarm paid in SOL through NIGHTSHIFT Swap's Relay route: its key, fee wallet and fee, read on every quote
+  const pay = liveRelayPay(() => solSettings().rpc, () => { const s = swapSettings(); return { key: s.relayKey, feeWallet: s.feeWallet, feeBps: providerFee("relay", { bps: s.feeBps, waived: false, reason: "standard", note: "", holds: false, signedIn: null }, { lifiIntegrator: s.lifiIntegrator, feeWallet: s.feeWallet }).bps }; });
+  const pad = new SolLaunchpad(liveSolChain(rpc), solSettings, undefined, undefined, liveImd(), undefined, pay);
   const timer = setInterval(() => void pad.refresh().catch(() => {}), 60_000);
   timer.unref();
   void pad.refresh().catch(() => {});
@@ -67,9 +72,13 @@ export async function solRoutes(req: IncomingMessage, res: ServerResponse, p: st
     if (req.method === "GET" && chart) return reply(200, { points: pad.chart(chart[1]!) }, "public, max-age=30");
     const one = m(`launches/${KEY}`);
     if (req.method === "GET" && one) { const l = pad.one(one[1]!); return l ? reply(200, l, "no-store") : reply(404, { error: "No launch with that address here." }); }
+    if (req.method === "GET" && p === "/api/sol/swarm/price") {
+      if (ctx.limited(req, "sol-price", 30, 60_000)) return reply(429, { error: "Too many requests. Wait a minute." });
+      return reply(200, { price: await pad.swarmPrice() }, "public, max-age=60");
+    }
     const meta = m(`meta/${KEY}\\.json`);
-    if (req.method === "GET" && meta) { const j = pad.meta(meta[1]!); return j ? reply(200, j, "public, max-age=300", OPEN) : reply(404, { error: "not found" }, "no-store", OPEN); }
-    const img = m("img/([A-Za-z0-9]{32,44}\\.(?:webp|png|jpg|gif))");
+    if (req.method === "GET" && meta) { const j = pad.meta(meta[1]!); return j ? reply(200, j, pad.metaCache(meta[1]!), OPEN) : reply(404, { error: "not found" }, "no-store", OPEN); }
+    const img = m("img/([A-Za-z0-9]{32,44}(?:-logo|-banner)?\\.(?:webp|png|jpg|gif))");
     if (req.method === "GET" && img) {
       const f = pad.image(img[1]!);
       if (!f) return reply(404, { error: "not found" });
@@ -81,6 +90,19 @@ export async function solRoutes(req: IncomingMessage, res: ServerResponse, p: st
     if (req.method === "POST" && p === "/api/sol/prepare") {
       if (ctx.limited(req, "sol-prepare", 12, 3600_000)) return reply(429, { error: "Too many launches from here. Wait an hour." });
       return reply(200, await pad.prepare(await ctx.body(req, 260_000)));
+    }
+    // the swarm paid in SOL through NIGHTSHIFT Swap: quote (the deposit to sign), sent (its signature), check (follow Relay)
+    const relay = m(`launches/${KEY}/relay`);
+    if (req.method === "POST" && relay) {
+      const b = await ctx.body(req, 2_000);
+      if (b.action === "check") {
+        if (ctx.limited(req, "sol-relay-check", 40, 600_000)) return reply(429, { error: "Too many requests. Wait a minute." });
+        return reply(200, await pad.relayCheck(relay[1]!));
+      }
+      if (ctx.limited(req, "sol-relay", 20, 600_000)) return reply(429, { error: "Too many requests. Wait a few minutes." });
+      if (b.action === "quote") return reply(200, await pad.relayQuote(relay[1]!));
+      if (b.action === "sent") return reply(200, await pad.relaySent(relay[1]!, b.signature));
+      return reply(400, { error: "Unknown action." });
     }
     const step = m(`launches/${KEY}/(signed|paid|act)`);
     if (req.method === "POST" && step) {

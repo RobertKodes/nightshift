@@ -5,7 +5,8 @@ import { config } from "./config.js";
 import { readSettings } from "./settings.js";
 import { IMD_PRICE, type ImdFile, type ImdPort, PAY_CHAINS, type PayChain } from "./sol-imd.js";
 import { MintKeys } from "./sol-mints.js";
-import { launchTxProblem, readTx, walletSigned } from "./sol-tx.js";
+import { RH_CHAIN, type RelayPayPort, relayPayProblem } from "./sol-relay.js";
+import { launchMetadata, launchTxProblem, readTx, walletSigned } from "./sol-tx.js";
 
 export { DBC_PROGRAM } from "./sol-tx.js";
 
@@ -22,11 +23,14 @@ export { DBC_PROGRAM } from "./sol-tx.js";
  *  2. signed: the creator's wallet signs the launch. Without swarm work NIGHTSHIFT adds the address's
  *     signature and sends it at once. With swarm work the launch is signed on a durable nonce (it does
  *     not expire) and waits here: nothing is on Solana yet.
- *  3. paid: the creator pays the 0.5 IMD job from their own Ethereum or Robinhood Chain wallet; the
+ *  3. paid: the creator pays the 0.5 IMD job. By default in SOL, with one signature in their Solana
+ *     wallet: NIGHTSHIFT Swap's Relay route buys the IMD on Robinhood Chain and sends IMD the job
+ *     (sol-relay.ts). Or in IMD from their own Ethereum or Robinhood Chain wallet. Either way the
  *     payment is checked to carry exactly that body.
  *  4. The swarm works; this module follows the job. When it completes (and the review, if picked,
- *     says launch), NIGHTSHIFT sends the signed launch: the token goes live with the swarm's logo,
- *     banner and site. If the review says no, it never launches.
+ *     says launch), the swarm's logo and banner are copied into the token's metadata on NIGHTSHIFT
+ *     (the link the signed launch points to) and the site becomes its website; then NIGHTSHIFT sends
+ *     the signed launch. If the review says no, it never launches.
  * NIGHTSHIFT never holds a creator's key or funds: the one key it holds creates the token's address.
  */
 
@@ -86,17 +90,31 @@ export function checkMeta(b: Record<string, unknown>, logoBySwarm = false): { me
   return { meta: { name, symbol, description, website, twitter, telegram }, image };
 }
 
-/** The token's metadata JSON, in the shape wallets, explorers and Jupiter read. */
+/** The token's image: the creator's own logo when they uploaded one (it always stays), else the swarm's (NIGHTSHIFT's copy first). */
+export function imageOfLaunch(l: Pick<SolLaunch, "image" | "swarm">): string {
+  const w = l.swarm, swarmLogo = w?.logoHosted || w?.logo || "";
+  return l.image || swarmLogo || "";
+}
+const mediaType = (u: string) => (/\.png$|\/artifacts\//.test(u) ? "image/png" : u.endsWith(".gif") ? "image/gif" : u.endsWith(".jpg") ? "image/jpeg" : "image/webp");
+
+/** The token's metadata JSON, in the shape wallets, explorers and Jupiter read, with the swarm's work in it. */
 export function metaJson(l: SolLaunch, site: string) {
-  const image = l.image || l.swarm?.logo || "";
-  const type = /\.png$|\/artifacts\//.test(image) ? "image/png" : image.endsWith(".gif") ? "image/gif" : image.endsWith(".jpg") ? "image/jpeg" : "image/webp";
-  const website = l.website || l.swarm?.site || "";
+  const w = l.swarm;
+  const image = imageOfLaunch(l);
+  const banner = w?.bannerHosted || w?.banner || "";
+  const website = l.website || w?.site || "";
   const page = `${site}/launchpad/sol/${l.mint}`;
   return {
     name: l.name, symbol: l.symbol, description: l.description, image,
     external_url: website || page,
-    extensions: { website: website || undefined, twitter: l.twitter || undefined, telegram: l.telegram || undefined, launchpad: page },
-    properties: { category: "image", files: image ? [{ uri: image, type }] : [] },
+    extensions: {
+      website: website || undefined, twitter: l.twitter || undefined, telegram: l.telegram || undefined, launchpad: page,
+      // the swarm's banner (the X header it drew) and its site when the creator has a website of their own
+      banner: banner || undefined, imd_site: w?.site && w.site !== website ? w.site : undefined,
+      // a review is only named when the swarm wrote one and said launch
+      imd_review: w?.verdict?.launch && w.report ? w.report : undefined,
+    },
+    properties: { category: "image", files: [...(image ? [{ uri: image, type: mediaType(image) }] : []), ...(banner ? [{ uri: banner, type: mediaType(banner) }] : [])] },
   };
 }
 
@@ -128,13 +146,38 @@ export const SWARM_PICKS: readonly SwarmPick[] = ["review", "logo", "banner", "w
 const PICK_NODE: Record<SwarmPick, RegExp> = { review: /^research_report/, logo: /^token_logo/, banner: /^create_image/, website: /^(build_website|design_critic)/ };
 
 export type SwarmStep = { pick: SwarmPick; state: "waiting" | "working" | "done" | "failed" };
+/** The job paid in SOL through NIGHTSHIFT Swap's Relay route: the quote the creator signed, followed until IMD is paid. */
+export type RelayPay = {
+  requestId: string; lamports: string; usd: number | null; seconds: number; quotedAt: number; sentAt: number | null;
+  state: "quoted" | "sent" | "done" | "refunded" | "failed";
+  solTx: string | null; destTx: string | null; note: string | null;
+};
 export type SwarmRun = {
   picks: SwarmPick[]; chainId: PayChain; body: string;
   state: "unpaid" | "paid" | "working" | "done" | "refused" | "failed";
   payTx: string | null; payer: string | null; job: string | null; steps: SwarmStep[];
   verdict: { launch: boolean; reason: string } | null; report: string | null; logo: string | null; banner: string | null; site: string | null;
   note: string | null; paidAt: number | null;
+  /** paid in SOL: the Relay request */
+  relay?: RelayPay | null;
+  /** NIGHTSHIFT's copies of the swarm's logo and banner, served with the token (set before the launch is sent) */
+  logoHosted?: string | null; bannerHosted?: string | null;
+  /** when each picked step was first seen done, for the live time estimate */
+  doneAt?: Partial<Record<SwarmPick, number>>;
 };
+
+/**
+ * About how long the swarm takes, in minutes, per step: [typical, slow]. From IMD's own job records
+ * (api.imd.fun/jobs and each job's node times): the 151 most recent completed jobs with these steps,
+ * 6 to 15 November 2026; typical is the median, slow the 90th percentile. A chain runs its steps one
+ * after the other, so a job takes about their sum, plus the payment and IMD admitting the job.
+ */
+export const SWARM_ETA: Record<SwarmPick, [number, number]> = { review: [5, 26], logo: [2, 5], banner: [6, 27], website: [50, 95] };
+export const SWARM_ETA_START: [number, number] = [2, 10];
+export const SWARM_ETA_BASIS = "Approximate, from IMD's 151 most recent finished jobs with these steps (6-15 Nov 2026): typical is the median, slow the 90th percentile. Not a promise.";
+export function swarmEta(picks: SwarmPick[]): { typical: number; slow: number } {
+  return picks.reduce((a, p) => ({ typical: a.typical + SWARM_ETA[p][0], slow: a.slow + SWARM_ETA[p][1] }), { typical: SWARM_ETA_START[0], slow: SWARM_ETA_START[1] });
+}
 
 export function picksOf(v: unknown): SwarmPick[] {
   const a = Array.isArray(v) ? v.map(String) : [];
@@ -175,10 +218,15 @@ export function swarmBody(l: Pick<SolLaunch, "mint" | "name" | "symbol" | "descr
     objective: `An X (Twitter) header banner for ${l.name} ($${l.symbol}), exactly 1500 x 500 px, in the style of ${logo || "the token"}. The ticker large and readable; keep the lower-left corner clear for the profile picture. No promises of returns.`,
     outputs: [{ name: "banner", path: "artifacts/banner.png", mediaType: "image/png" }],
   });
-  if (picks.includes("website")) steps.push({
-    skill: "build-website",
-    objective: `A one-page website for the token: ${logo ? `its logo (${logo}), ` : ""}what it is, the mint address ${l.mint} with a copy button, a Buy button linking to ${page}, the creator's allocation as stated above, and the links (${links}). Dark, bold, readable on a phone. Static, no wallet connection, no promises of returns.`,
-  });
+  if (picks.includes("website")) {
+    // the site carries the job's other work: the banner as its header, and the review exactly as the swarm wrote it
+    const banner = picks.includes("banner") ? " Use the banner from this job's banner step (artifacts/banner.png) as the page's header image." : "";
+    const review = picks.includes("review") ? " Add a section titled \"Reviewed by the IMD swarm\" that shows this job's review as written: the verdict and its one-sentence reason from artifacts/verdict.json, and a short summary of what was checked from artifacts/report.md. Quote the verdict as it is, never change it." : "";
+    steps.push({
+      skill: "build-website",
+      objective: `A one-page website for the token: ${logo ? `its logo (${logo}), ` : ""}what it is, the mint address ${l.mint} with a copy button, a Buy button linking to ${page}, the creator's allocation as stated above, and the links (${links}).${banner}${review} Dark, bold, readable on a phone. Static, no wallet connection, no promises of returns.`,
+    });
+  }
   return {
     objective: objective.slice(0, 8000), shape: "chain", steps, github: false,
     ...(picks.includes("review") ? { minCitations: 3 } : {}),
@@ -252,7 +300,7 @@ export type SolLaunch = SolMeta & {
 };
 export type SolCheck = { key: string; ok: boolean | null; says: string };
 /** What the public sees of a launch: everything but the signed transaction. */
-export type SolView = Omit<SolLaunch, "held"> & { nonce: string | null };
+export type SolView = Omit<SolLaunch, "held"> & { nonce: string | null; uri: string };
 
 /** Price in SOL per whole token from a Q64.64 sqrt price (quote atoms per base atom, squared). */
 export function priceFromSqrt(sqrtPrice: bigint, baseDecimals: number, quoteDecimals = 9): number {
@@ -325,7 +373,7 @@ export class SolLaunchpad {
   private run: Promise<void> | null = null;
   readonly mints: MintKeys;
 
-  constructor(private chain: SolChain, private settings: () => SolSettings = solSettings, private dir = config.dataDir, private site = config.publicUrl, private imd: ImdPort | null = null, mints?: MintKeys) {
+  constructor(private chain: SolChain, private settings: () => SolSettings = solSettings, private dir = config.dataDir, private site = config.publicUrl, private imd: ImdPort | null = null, mints?: MintKeys, private pay: RelayPayPort | null = null) {
     this.file = join(dir, "sol-launches.json");
     this.histFile = join(dir, "sol-history.json");
     this.imgDir = join(dir, "sol-img");
@@ -355,8 +403,11 @@ export class SolLaunchpad {
 
   view(l: SolLaunch): SolView {
     const { held, ...rest } = l;
-    return { ...rest, nonce: held?.nonce ?? null };
+    return { ...rest, nonce: held?.nonce ?? null, uri: this.uriOf(l.mint) };
   }
+
+  /** The metadata link every launch writes into its token: NIGHTSHIFT's, so the swarm's work can be added before it goes live. */
+  uriOf(mint: string) { return `${this.site}/api/sol/meta/${mint}.json`; }
 
   /**
    * Step 1: the creator's details, settings and swarm picks. Returns the launch's address, its metadata
@@ -367,7 +418,9 @@ export class SolLaunchpad {
     if (!s.partner) throw new SolInputError("The Solana launchpad is not open yet.", 503);
     const creator = String(b.creator ?? "").trim();
     if (!BASE58_KEY.test(creator)) throw new SolInputError("Connect the creator's Solana wallet first.");
-    const picks = picksOf(b.swarm);
+    // an uploaded logo stays the token's image: the swarm does not draw another
+    const uploaded = !!(b.image || String(b.imageUrl ?? "").trim());
+    const picks = picksOf(b.swarm).filter((p) => !(p === "logo" && uploaded));
     if (picks.length && !this.imd) throw new SolInputError("The IMD swarm is not reachable from here right now. Launch without it, or try again later.", 503);
     const { meta, image } = checkMeta(b, picks.includes("logo"));
     const options = checkOptions(b.options);
@@ -399,17 +452,19 @@ export class SolLaunchpad {
     }
     this.launches[mint] = l;
     this.save();
-    return { mint, uri: `${this.site}/api/sol/meta/${mint}.json`, image: imageUrl, swarm };
+    return { mint, uri: this.uriOf(mint), image: imageUrl, swarm };
   }
 
   meta(mint: string) { const l = this.launches[mint]; return l ? metaJson(l, this.site) : null; }
+  /** Wallets and explorers keep what they read once a token is live: before that, the metadata is never cached. */
+  metaCache(mint: string) { const l = this.launches[mint]; return l && LISTED.includes(l.status) ? "public, max-age=300" : "no-store"; }
 
   image(file: string): { bytes: Buffer; type: string } | null {
-    const m = /^([1-9A-HJ-NP-Za-km-z]{32,44})\.(webp|png|jpg|gif)$/.exec(file);
+    const m = /^([1-9A-HJ-NP-Za-km-z]{32,44})(-logo|-banner)?\.(webp|png|jpg|gif)$/.exec(file);
     if (!m) return null;
     const f = join(this.imgDir, file);
     if (!existsSync(f)) return null;
-    return { bytes: readFileSync(f), type: m[2] === "jpg" ? "image/jpeg" : `image/${m[2]}` };
+    return { bytes: readFileSync(f), type: m[3] === "jpg" ? "image/jpeg" : `image/${m[3]}` };
   }
 
   /**
@@ -441,6 +496,8 @@ export class SolLaunchpad {
     try { tx = readTx(String(b.tx ?? "")); } catch { throw new SolInputError("That is not a Solana transaction."); }
     const problem = launchTxProblem(tx, { creator: l.creator, mint, config: configKey, nonce });
     if (problem) throw new SolInputError(problem);
+    // the swarm's logo, banner and site are added to the token through its metadata link: it must be NIGHTSHIFT's
+    if (l.swarm && launchMetadata(tx)?.uri !== this.uriOf(mint)) throw new SolInputError(`A launch with the swarm must point its metadata to NIGHTSHIFT (${this.uriOf(mint)}), so the swarm's work can be added before it goes live. Sign it again from this page.`);
     const txB64 = tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64");
     const sim = await this.chain.simulate(txB64);
     if (!sim.ok) throw new SolInputError(`This launch would fail on Solana right now: ${sim.why ?? "unknown error"}. Nothing was sent.`, 409);
@@ -468,6 +525,97 @@ export class SolLaunchpad {
     this.save();
     void this.work().catch(() => {});
     return this.view(l);
+  }
+
+  /**
+   * Step 3, in SOL: NIGHTSHIFT Swap's quote for the job (Relay, Solana to Robinhood Chain, exactly 0.5 IMD and
+   * the two Intake calls with this launch's body), checked, and the deposit built and simulated from the creator's
+   * wallet. The page has the creator sign it in their wallet (nobody signs before them) and sends it.
+   */
+  async relayQuote(mint: string): Promise<{ tx: string; requestId: string; lamports: string; quotedLamports: string; usd: number | null; seconds: number; imd: number; chain: string }> {
+    const l = this.need(mint);
+    const w = l.swarm;
+    if (!w || l.status !== "waiting" || w.state !== "unpaid") throw new SolInputError("This launch is not waiting for an IMD payment.", 409);
+    if (!this.pay) throw new SolInputError("Paying in SOL is not available right now. Pay with IMD from an EVM wallet, or try again later.", 503);
+    if (this.settings().network !== "mainnet") throw new SolInputError("Paying the swarm in SOL works on Solana mainnet only. On devnet, pay with IMD from an EVM wallet.", 409);
+    if (w.relay?.state === "sent") {
+      // a payment already on its way: never a second one while Relay may still deliver the first
+      await this.followRelay(l, w).catch(() => {});
+      if (w.relay?.state === "sent" || w.relay?.state === "done") throw new SolInputError("Your SOL payment is already on its way. Wait for it here.", 409);
+    }
+    const { quote, feeWallet } = await this.pay.quote({ creator: l.creator, body: w.body }).catch((e: Error) => { throw new SolInputError(e.message, 503); });
+    const bad = relayPayProblem(quote, { creator: l.creator, body: w.body, feeWallet });
+    if (bad) throw new SolInputError(`NIGHTSHIFT Swap's route was refused (${bad}). Nothing was asked of your wallet.`, 409);
+    const built = await this.pay.build(quote, l.creator).catch((e: Error) => { throw new SolInputError(e.message, 409); });
+    w.relay = { requestId: quote.requestId.toLowerCase(), lamports: quote.inLamports, usd: quote.inUsd || null, seconds: quote.timeEstimate, quotedAt: Date.now(), sentAt: null, state: "quoted", solTx: null, destTx: null, note: null };
+    this.save();
+    return { tx: built.tx, requestId: w.relay.requestId, lamports: built.lamports.toString(), quotedLamports: quote.inLamports, usd: quote.inUsd || null, seconds: quote.timeEstimate, imd: IMD_PRICE, chain: "Robinhood Chain" };
+  }
+
+  private price: { at: number; v: { lamports: string; usd: number | null; seconds: number } | null } = { at: 0, v: null };
+  /** What the job costs in SOL right now, before a launch exists (a live quote for a sample job, kept a minute). */
+  async swarmPrice(): Promise<{ lamports: string; usd: number | null; seconds: number } | null> {
+    const s = this.settings();
+    // a price only: Relay quotes mainnet SOL whatever network the launchpad is on
+    if (!this.pay || !s.partner) return null;
+    if (Date.now() - this.price.at < 60_000) return this.price.v;
+    const sample = { mint: "11111111111111111111111111111111", name: "Sample Token", symbol: "SAMPLE", description: "", website: "", twitter: "", telegram: "", image: "", creator: s.partner, dev: null, logoIdea: "" };
+    const body = JSON.stringify(swarmBody(sample, [...SWARM_PICKS], this.site));
+    const v = await this.pay.quote({ creator: s.partner, body }).then(({ quote, feeWallet }) =>
+      relayPayProblem(quote, { creator: s.partner!, body, feeWallet }) ? null : { lamports: quote.inLamports, usd: quote.inUsd || null, seconds: quote.timeEstimate }).catch(() => null);
+    this.price = { at: Date.now(), v };
+    return v;
+  }
+
+  /** The creator signed and sent the SOL deposit: follow Relay until IMD is paid. */
+  async relaySent(mint: string, signature: unknown): Promise<SolView> {
+    const l = this.need(mint);
+    const w = l.swarm;
+    const r = w?.relay;
+    if (!w || !r || w.state !== "unpaid" || (r.state !== "quoted" && r.state !== "sent")) throw new SolInputError("There is no SOL payment waiting for this launch.", 409);
+    const sig = String(signature ?? "");
+    if (!/^[1-9A-HJ-NP-Za-km-z]{64,90}$/.test(sig)) throw new SolInputError("That is not a Solana transaction signature.");
+    Object.assign(r, { state: "sent", solTx: sig, sentAt: Date.now(), note: null });
+    this.save();
+    await this.work().catch(() => {});
+    return this.view(l);
+  }
+
+  /** The page asks again while it waits: Relay followed now (rate-limited by the route). */
+  async relayCheck(mint: string): Promise<SolView> {
+    const l = this.need(mint);
+    if (l.swarm?.relay && l.swarm.state === "unpaid") await this.work().catch(() => {});
+    return this.view(l);
+  }
+
+  /** Relay's status for the launch's SOL payment; when it delivered, the destination transaction must carry the job. */
+  private async followRelay(l: SolLaunch, w: SwarmRun) {
+    const r = w.relay;
+    if (!r || !this.pay || w.state !== "unpaid" || (r.state !== "quoted" && r.state !== "sent")) return;
+    // a quote nobody signed is dropped from following after half an hour (Relay's quotes last minutes)
+    if (r.state === "quoted" && Date.now() - r.quotedAt > 30 * 60_000) return;
+    const st = await this.pay.status(r.requestId);
+    if (st.inTx && !r.solTx) r.solTx = st.inTx;
+    if (st.state === "waiting") { if (r.state === "sent") r.note = "Waiting for Solana to confirm your payment."; return; }
+    if (st.state === "pending") { r.state = "sent"; r.note = "NIGHTSHIFT Swap is buying the IMD on Robinhood Chain."; return; }
+    if (st.state === "refunded" || st.state === "failed") {
+      Object.assign(r, { state: st.state, note: st.state === "refunded" ? "Relay could not finish and sent your SOL back to your wallet. Nothing was paid: pay again." : `NIGHTSHIFT Swap could not finish${st.why ? ` (${st.why})` : ""}. Relay refunds to your wallet. Pay again.` });
+      return;
+    }
+    // success: the IMD was bought and the calls ran on Robinhood Chain in the transaction Relay names for this request
+    if (!st.destTx || st.destChain !== RH_CHAIN) { Object.assign(r, { state: "failed", note: "Relay finished on another chain than IMD's. Contact NIGHTSHIFT." }); return; }
+    r.destTx = st.destTx;
+    if (Object.values(this.launches).some((x) => x !== l && x.swarm?.payTx === st.destTx)) { Object.assign(r, { state: "failed", note: "That payment is already used by another launch." }); return; }
+    const p = await this.imd!.paid(RH_CHAIN, st.destTx, w.body);
+    if (!p.ok) {
+      if (/not confirmed yet/.test(p.why)) { r.note = "Reading the payment on Robinhood Chain."; return; }
+      // the calls did not carry the job: the IMD stayed with Relay's fallback, NIGHTSHIFT's swap wallet
+      Object.assign(r, { state: "failed", note: "Relay delivered, but IMD's job was not in it. The IMD went to NIGHTSHIFT's swap wallet: contact NIGHTSHIFT." });
+      return;
+    }
+    // the payer is Relay's executor on Robinhood Chain: accepted, because this transaction is the one Relay names for our request
+    Object.assign(w, { state: "paid", payTx: st.destTx, payer: p.payer, chainId: RH_CHAIN, paidAt: Date.now(), note: null });
+    Object.assign(r, { state: "done", note: null });
   }
 
   /** The creator's own decision on a launch that waits: launch without the swarm when the swarm failed, or cancel. */
@@ -551,7 +699,12 @@ export class SolLaunchpad {
     return {
       network: s.network, open: !!s.partner, partner: s.partner, config: shared ? s.config : null, solUsd: usd,
       shared: shared ? { graduateSol: Number(shared.threshold) / 1e9, createFeeSol: Number(shared.poolCreationFee) / 1e9 } : null,
-      imd: { on: !!this.imd, price: IMD_PRICE, imdUsd: config.imdUsd, chains: PAY_CHAINS, picks: SWARM_PICKS },
+      imd: {
+        on: !!this.imd, price: IMD_PRICE, imdUsd: config.imdUsd, chains: PAY_CHAINS, picks: SWARM_PICKS,
+        // in SOL through NIGHTSHIFT Swap (Relay): Solana mainnet only (the page says so on devnet)
+        solPay: !!this.pay && !!this.imd,
+        eta: { steps: SWARM_ETA, start: SWARM_ETA_START, basis: SWARM_ETA_BASIS },
+      },
       counts: {
         live: all.filter((l) => l.status === "live").length, graduated: all.filter((l) => l.status === "graduated").length,
         reviewed: all.filter((l) => LISTED.includes(l.status) && l.swarm?.verdict?.launch).length, swarm: all.filter((l) => LISTED.includes(l.status) && l.swarm?.state === "done").length,
@@ -606,6 +759,9 @@ export class SolLaunchpad {
     try {
       for (const l of Object.values(this.launches)) {
         const w = l.swarm;
+        if (w && l.status === "waiting" && w.state === "unpaid" && w.relay) {
+          try { await this.followRelay(l, w); } catch (e) { w.relay.note = `Checking the SOL payment: ${(e as Error).message.slice(0, 120)}`; }
+        }
         if (!w || l.status !== "waiting" || !w.payTx || w.state === "failed" || w.state === "refused") continue;
         try { await this.follow(l, w); } catch (e) { w.note = (e as Error).message.slice(0, 160); }
       }
@@ -626,6 +782,7 @@ export class SolLaunchpad {
     for (const st of w.steps) {
       const nodes = job.nodes.filter((n) => PICK_NODE[st.pick].test(n.key));
       if (nodes.length) st.state = nodes.every((n) => n.state === "accepted") ? "done" : nodes.some((n) => nodeState(n.state) === "failed") ? "failed" : nodes.some((n) => nodeState(n.state) !== "waiting") ? "working" : "waiting";
+      if (st.state === "done") (w.doneAt ??= {})[st.pick] ??= Date.now();
     }
     if (job.site) w.site = job.site;
     const files = await this.imd!.files(w.job).catch(() => [] as ImdFile[]);
@@ -644,9 +801,31 @@ export class SolLaunchpad {
     }
     if (!JOB_DONE.has(job.state)) return;
     if (w.picks.includes("review") && !w.verdict) { Object.assign(w, { state: "failed", note: "The swarm finished, but its verdict could not be read." }); return; }
+    if (w.picks.includes("logo") && !w.logo && !l.image) { Object.assign(w, { state: "failed", note: "The swarm finished without the logo, and the token has no other." }); return; }
+    // the swarm's work goes into the token before it is live: wallets and explorers keep what they first read
+    await this.applyWork(l, w);
     w.state = "done";
     for (const st of w.steps) if (st.state !== "failed") st.state = "done";
     await this.release(l);
+  }
+
+  /**
+   * The swarm's logo and banner copied from IMD to NIGHTSHIFT and served with the token (its metadata link is
+   * NIGHTSHIFT's, checked when the launch was signed); the site is the token's website when the creator has none.
+   * A copy that fails leaves IMD's own link in the metadata.
+   */
+  private async applyWork(l: SolLaunch, w: SwarmRun) {
+    if (!this.imd?.image) return;
+    for (const kind of ["logo", "banner"] as const) {
+      const url = w[kind];
+      if (!url || !w.picks.includes(kind) || w[`${kind}Hosted`]) continue;
+      const img = await this.imd.image(url).catch(() => null);
+      if (!img) continue;
+      mkdirSync(this.imgDir, { recursive: true });
+      for (const e of Object.values(IMAGE_TYPES)) { const f = join(this.imgDir, `${l.mint}-${kind}.${e}`); if (existsSync(f)) unlinkSync(f); }
+      writeFileSync(join(this.imgDir, `${l.mint}-${kind}.${img.type}`), img.bytes);
+      w[`${kind}Hosted`] = `${this.site}/api/sol/img/${l.mint}-${kind}.${img.type}`;
+    }
   }
 
   /** Every minute: pools re-read, unsigned and unpaid launches dropped, the swarm followed. */
