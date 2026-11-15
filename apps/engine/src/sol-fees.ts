@@ -8,7 +8,11 @@ import { writeAtomic } from "./atomic.js";
  *
  * The launch partner on every Meteora curve is a Solana wallet the engine created for itself (the "fee
  * wallet"); its key is made on the server and never leaves it. Every few hours the engine claims the
- * partner's trading fees and launch fees from every pool, all in SOL, and splits what came in:
+ * partner's trading fees and launch fees from every pool, all in SOL, and splits what came in.
+ * After a launch graduates the partner keeps earning: Meteora's migration hands the fee wallet the NFT of a
+ * permanently locked LP position in the token's DAMM v2 pool (half the pool's liquidity), whose trading fees
+ * the engine claims too, with the partner's share of the curve's surplus (and of a migration fee, if a
+ * config had one). Only SOL enters the split; a fee paid in the token stays in the fee wallet, counted as held:
  *   60% the dev wallet (dev + marketing) · 20% bought as IMD and burned · 20% bought as $SHIFT and burned.
  * (Until 2026-11-16, 10% went to ADAM: the owner moved it to the dev wallet; what was kept for ADAM went there too.)
  * The two burns go through Relay in one Solana transaction each: SOL in on Solana, IMD or $SHIFT out on
@@ -43,9 +47,14 @@ export const RESERVE = 15_000_000n; // 0.015 SOL
 /** Below this, a payout or a burn waits for the next run (a burn's fixed Relay costs are about $0.35-0.75). */
 export const MIN_PAYOUT = 10_000_000n; // 0.01 SOL
 export const MIN_BURN = 250_000_000n; // 0.25 SOL
+/** BURN NOW (the admin's call, e.g. when trading stopped): a bucket from this much, at a loss the owner accepts, never over the cap. */
+export const BURN_NOW_MIN = 5_000_000n; // 0.005 SOL
+export const BURN_NOW_MAX_LOSS_PCT = 40;
 /** One burn at most this big: $SHIFT's pool is thin, bigger buys move its price too much. */
 export const MAX_BURN = 5n * SOL;
 const EVERY_MS = 6 * 3600_000;
+/** An LP position, a surplus or a migration fee worth less than this waits (each claim costs a network fee). */
+export const MIN_EXTRA = 200_000n; // 0.0002 SOL
 
 /** Split what a claim brought in: every lamport goes somewhere, the rounding to the $SHIFT burn. */
 export function splitLamports(total: bigint): Record<Bucket, bigint> {
@@ -72,7 +81,7 @@ export type RelayQuote = {
 };
 
 /** Everything that must hold before a burn's Relay deposit is signed. Null when it is safe. */
-export function relayProblem(q: RelayQuote, o: { wallet: string; burn: BurnKey }): string | null {
+export function relayProblem(q: RelayQuote, o: { wallet: string; burn: BurnKey; maxLossPct?: number }): string | null {
   const b = BURNS[o.burn];
   if (q.sender !== o.wallet) return "the deposit is not from the fee wallet";
   if (q.recipient.toLowerCase() !== b.to) return `the ${b.symbol} would not go to the burn address`;
@@ -84,9 +93,41 @@ export function relayProblem(q: RelayQuote, o: { wallet: string; burn: BurnKey }
   }
   if (!(q.inUsd > 0) || !(q.outUsd > 0)) return "the quote has no dollar values";
   const loss = (1 - q.outUsd / q.inUsd) * 100;
-  if (loss > b.maxLossPct) return `the route costs ${loss.toFixed(1)}% (the limit is ${b.maxLossPct}%)`;
+  const cap = o.maxLossPct ?? b.maxLossPct;
+  if (loss > cap) return `the route costs ${loss.toFixed(1)}% (the limit is ${cap}%)`;
   if (BigInt(q.minOut) <= 0n) return "the quote has no minimum out";
   return null;
+}
+
+// ---------------------------------------------------------------- what a claim may touch
+
+/** The programs a claim transaction may call: Meteora's curve (DBC) and DAMM v2, the token programs, nothing else. */
+export const CLAIM_PROGRAMS = new Set([
+  COMPUTE_BUDGET, NATIVE_SOL, // the system program
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+  "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN", // Meteora Dynamic Bonding Curve
+  "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG", // Meteora DAMM v2
+]);
+
+/** Everything that must hold before a claim is signed: known programs only, and the fee wallet the only signer. Null when it is safe. */
+export function claimProblem(ixs: { programId: string; keys: { pubkey: string; isSigner: boolean }[] }[], wallet: string): string | null {
+  if (!ixs.length) return "the claim is empty";
+  for (const ix of ixs) {
+    if (!CLAIM_PROGRAMS.has(ix.programId)) return `an unknown program (${ix.programId}) is in the claim`;
+    for (const k of ix.keys) if (k.isSigner && k.pubkey !== wallet) return "the claim asks another signer";
+  }
+  return null;
+}
+
+/**
+ * The partner's part of a curve's migration fee (Meteora's DBC: the fee is the threshold less the quote that
+ * migrates, rounded up; the creator takes its percentage of it, rounded down; the partner the rest).
+ */
+export function partnerMigrationFee(threshold: bigint, feePct: number, creatorPct: number): bigint {
+  if (!(feePct > 0) || threshold <= 0n) return 0n;
+  const migrated = (threshold * BigInt(100 - feePct) + 99n) / 100n;
+  const fee = threshold - migrated;
+  return fee - (fee * BigInt(creatorPct)) / 100n;
 }
 
 // ---------------------------------------------------------------- the ledger
@@ -97,19 +138,23 @@ export type BurnRecord = {
   state: "sent" | "done" | "refunded"; out: string | null; ethTx: string | null; usd: number;
 };
 export type PayRecord = { at: number; to: "adam" | "dev"; lamports: Sol; tx: string };
-export type ClaimRecord = { at: number; lamports: Sol; pools: number; txs: string[] };
+export type ClaimRecord = { at: number; lamports: Sol; pools: number; txs: string[]; extras?: number };
 type Ledger = {
   owed: Record<Bucket, Sol>;
   totals: { claimed: Sol; adam: Sol; dev: Sol; imd: Sol; shift: Sol; imdOut: string; shiftOut: string };
   claims: ClaimRecord[]; pays: PayRecord[]; burns: BurnRecord[];
   /** pools whose launch fee was claimed (it is paid once) */
   creationDone: string[];
+  /** pools whose partner migration fee was withdrawn (it is paid once) */
+  migrationDone: string[];
+  /** fees that came in the launched token, not SOL (raw units by mint): kept in the fee wallet, never split */
+  tokensHeld: Record<string, string>;
   lastRun: number | null; lastError: string | null;
 };
 const EMPTY: Ledger = {
   owed: { adam: "0", dev: "0", imd: "0", shift: "0" },
   totals: { claimed: "0", adam: "0", dev: "0", imd: "0", shift: "0", imdOut: "0", shiftOut: "0" },
-  claims: [], pays: [], burns: [], creationDone: [], lastRun: null, lastError: null,
+  claims: [], pays: [], burns: [], creationDone: [], migrationDone: [], tokensHeld: {}, lastRun: null, lastError: null,
 };
 const KEEP = 200;
 
@@ -121,6 +166,10 @@ export type FeePort = {
   claimable(pools: string[]): Promise<{ pool: string; lamports: bigint; creation: bigint }[]>;
   /** Claims one pool's partner trading fees (and its launch fee, once) into the wallet. */
   claim(wallet: Keypair, pool: string, creation: boolean): Promise<{ sig: string; creationClaimed: boolean }>;
+  /** After graduation: the owner's LP positions in the launches' DAMM v2 pools, and the partner's surplus and migration fee on each curve. */
+  extras(pools: string[], owner: string): Promise<Extra[]>;
+  /** Claims one of them into the wallet (simulated first); `tokens` is what arrived in the launched token, if anything. */
+  claimExtra(wallet: Keypair, e: Extra): Promise<{ sig: string; tokens: bigint }>;
   /** Plain SOL transfers from the wallet, in one transaction. */
   pay(wallet: Keypair, to: { address: string; lamports: bigint }[]): Promise<string>;
   quote(o: { wallet: string; burn: BurnKey; lamports: bigint }): Promise<RelayQuote>;
@@ -128,6 +177,13 @@ export type FeePort = {
   deposit(wallet: Keypair, q: RelayQuote, lamports: bigint): Promise<string>;
   status(requestId: string): Promise<{ state: "pending" | "done" | "refunded"; ethTx: string | null; out: string | null }>;
 };
+
+/**
+ * Something else the partner is owed on a launch: `position` = the fee wallet's locked LP position in the
+ * graduated DAMM v2 pool (`ref` is the position, its fees `lamports` in SOL and `tokens` in the token);
+ * `surplus` / `migration` = the partner's share of the curve's surplus or migration fee (`ref` is the curve).
+ */
+export type Extra = { kind: "position" | "surplus" | "migration"; pool: string; ref: string; mint: string; lamports: bigint; tokens: bigint };
 
 export type FeeSettings = { on: boolean; adam: string | null; dev: string | null; partner: string | null; network: "mainnet" | "devnet" };
 
@@ -206,11 +262,16 @@ export class SolFees {
 
   private async claim(port: FeePort) {
     const done = new Set(this.l.creationDone);
-    const waiting = (await port.claimable(this.pools())).map((p) => ({ ...p, creation: done.has(p.pool) ? 0n : p.creation })).filter((p) => p.lamports > 0n || p.creation > 0n);
-    if (!waiting.length) return;
+    const pools = this.pools();
+    const waiting = (await port.claimable(pools)).map((p) => ({ ...p, creation: done.has(p.pool) ? 0n : p.creation })).filter((p) => p.lamports > 0n || p.creation > 0n);
+    // after graduation: the locked LP positions' fees, the surplus, the migration fee (a failed read never stops the curve claims)
+    const migDone = new Set(this.l.migrationDone);
+    const extras = (await port.extras(pools, this.address).catch(() => [] as Extra[]))
+      .filter((e) => e.lamports >= MIN_EXTRA && !(e.kind === "migration" && migDone.has(e.pool)));
+    if (!waiting.length && !extras.length) return;
     const before = await port.balance(this.address);
     const txs: string[] = [];
-    let most = 0n;
+    let most = 0n, n = 0;
     for (const p of waiting) {
       try {
         const r = await port.claim(this.kp, p.pool, p.creation > 0n);
@@ -219,16 +280,27 @@ export class SolFees {
         if (r.creationClaimed) this.l.creationDone.push(p.pool);
       } catch { /* the next run tries this pool again */ }
     }
+    for (const e of extras) {
+      try {
+        const r = await port.claimExtra(this.kp, e);
+        txs.push(r.sig);
+        n++;
+        most += e.lamports;
+        if (e.kind === "migration") this.l.migrationDone.push(e.pool);
+        // a fee paid in the token stays in the fee wallet: counted here, never split or sold
+        if (r.tokens > 0n) this.l.tokensHeld[e.mint] = (big(this.l.tokensHeld[e.mint] ?? "0") + r.tokens).toString();
+      } catch { /* the next run tries it again */ }
+    }
     if (!txs.length) return;
     // what actually arrived, net of the network fees the claims cost, and never more than the pools held
     // (a Relay refund landing in the same seconds is counted by follow(), not here)
     let got = (await port.balance(this.address)) - before;
     if (got > most) got = most;
-    if (got <= 0n) return;
+    if (got <= 0n) { this.save(); return; }
     const parts = splitLamports(got);
     for (const k of Object.keys(parts) as Bucket[]) this.l.owed[k] = add(this.l.owed[k], parts[k]);
     this.l.totals.claimed = add(this.l.totals.claimed, got);
-    this.l.claims = [{ at: this.now(), lamports: got.toString(), pools: txs.length, txs }, ...this.l.claims].slice(0, KEEP);
+    this.l.claims = [{ at: this.now(), lamports: got.toString(), pools: txs.length - n, txs, ...(n ? { extras: n } : {}) }, ...this.l.claims].slice(0, KEEP);
     this.save();
   }
 
@@ -257,15 +329,20 @@ export class SolFees {
     this.save();
   }
 
-  private async burn(port: FeePort, burn: BurnKey) {
+  /** How much of a bucket one burn takes now: what is owed, at most MAX_BURN, never the reserve. */
+  private async burnable(port: FeePort, burn: BurnKey): Promise<bigint> {
     let amount = big(this.l.owed[burn]);
     if (amount > MAX_BURN) amount = MAX_BURN;
     // the network fees came out of the wallet too (see chargeFee): never more than it can spend
     const can = await this.spendable(port);
-    if (amount > can) amount = can;
-    if (amount < MIN_BURN) return;
+    return amount > can ? can : amount;
+  }
+
+  private async burn(port: FeePort, burn: BurnKey, o: { min: bigint; maxLossPct?: number } = { min: MIN_BURN }): Promise<BurnRecord | null> {
+    const amount = await this.burnable(port, burn);
+    if (amount < o.min) return null;
     const q = await port.quote({ wallet: this.address, burn, lamports: amount });
-    const bad = relayProblem(q, { wallet: this.address, burn });
+    const bad = relayProblem(q, { wallet: this.address, burn, maxLossPct: o.maxLossPct });
     if (bad) throw new Error(`The ${BURNS[burn].symbol} burn waits: ${bad}.`);
     const before = await port.balance(this.address);
     const solTx = await port.deposit(this.kp, q, amount);
@@ -273,8 +350,52 @@ export class SolFees {
     // the burn leaves its bucket first, then the network fee comes out of the $SHIFT share (never below zero)
     this.l.owed[burn] = add(this.l.owed[burn], -amount);
     this.chargeFee(fee);
-    this.l.burns = [{ at: this.now(), burn, lamports: amount.toString(), requestId: q.requestId, solTx, state: "sent" as const, out: q.outAmount, ethTx: null, usd: q.inUsd }, ...this.l.burns].slice(0, KEEP);
+    const rec: BurnRecord = { at: this.now(), burn, lamports: amount.toString(), requestId: q.requestId, solTx, state: "sent" as const, out: q.outAmount, ethTx: null, usd: q.inUsd };
+    this.l.burns = [rec, ...this.l.burns].slice(0, KEEP);
     this.save();
+    return rec;
+  }
+
+  /**
+   * BURN NOW, the admin's call: each bucket holding at least BURN_NOW_MIN. Without `confirm` it only quotes
+   * (nothing is signed); with it, it burns through the same checked path as the scheduled run, at the loss the
+   * owner accepted (at most BURN_NOW_MAX_LOSS_PCT), never touching the reserve. Never while a run is going.
+   */
+  async burnNow(o: { confirm: boolean; maxLossPct?: number }) {
+    const s = this.settings();
+    if (s.network !== "mainnet") throw new Error("The launchpad is on devnet: nothing is burned there.");
+    const cap = o.maxLossPct ?? BURN_NOW_MAX_LOSS_PCT;
+    if (o.confirm && !(cap > 0 && cap <= BURN_NOW_MAX_LOSS_PCT)) throw new Error(`The accepted loss must be above 0% and at most ${BURN_NOW_MAX_LOSS_PCT}%.`);
+    if (this.running) throw new Error("A run is going: try again in a minute.");
+    this.running = true;
+    const port = this.port();
+    const sol = (v: bigint) => Number(v) / 1e9;
+    const out: { token: string; sol: number; inUsd: number | null; outUsd: number | null; out: number | null; lossPct: number | null; problem: string | null; sent: { solTx: string; requestId: string } | null; error: string | null }[] = [];
+    try {
+      if (o.confirm) await this.follow(port);
+      for (const burn of ["imd", "shift"] as const) {
+        const b = BURNS[burn];
+        const amount = await this.burnable(port, burn);
+        if (amount < BURN_NOW_MIN) { out.push({ token: b.symbol, sol: sol(amount), inUsd: null, outUsd: null, out: null, lossPct: null, problem: `under ${sol(BURN_NOW_MIN)} SOL to burn`, sent: null, error: null }); continue; }
+        if (!o.confirm) {
+          const q = await port.quote({ wallet: this.address, burn, lamports: amount }).catch((e: Error) => e);
+          if (q instanceof Error) { out.push({ token: b.symbol, sol: sol(amount), inUsd: null, outUsd: null, out: null, lossPct: null, problem: null, sent: null, error: q.message.slice(0, 200) }); continue; }
+          const lossPct = q.inUsd > 0 ? +((1 - q.outUsd / q.inUsd) * 100).toFixed(2) : null;
+          out.push({ token: b.symbol, sol: sol(amount), inUsd: q.inUsd, outUsd: q.outUsd, out: Number(big(q.outAmount) / 10n ** 12n) / 1e6, lossPct, problem: relayProblem(q, { wallet: this.address, burn, maxLossPct: BURN_NOW_MAX_LOSS_PCT }), sent: null, error: null });
+          continue;
+        }
+        try {
+          const r = await this.burn(port, burn, { min: BURN_NOW_MIN, maxLossPct: cap });
+          out.push({ token: b.symbol, sol: r ? sol(big(r.lamports)) : sol(amount), inUsd: r?.usd ?? null, outUsd: null, out: r?.out ? Number(big(r.out) / 10n ** 12n) / 1e6 : null, lossPct: null, problem: null, sent: r ? { solTx: r.solTx, requestId: r.requestId } : null, error: null });
+        } catch (e) {
+          out.push({ token: b.symbol, sol: sol(amount), inUsd: null, outUsd: null, out: null, lossPct: null, problem: null, sent: null, error: (e as Error).message.slice(0, 200) });
+        }
+      }
+    } finally {
+      this.save();
+      this.running = false;
+    }
+    return { confirm: o.confirm, maxLossPct: cap, burns: out };
   }
 
   /** Solana's network fees for the payouts and burns are paid from the $SHIFT burn's share (they are a few thousand lamports). */
@@ -329,7 +450,9 @@ export class SolFees {
       settings: (({ on, adam, dev }) => ({ on, adam, dev }))(this.settings()),
       owedSol: Object.fromEntries(Object.entries(this.l.owed).map(([k, v]) => [k, Number(big(v)) / 1e9])),
       pays: this.l.pays.slice(0, 20), claims: this.l.claims.slice(0, 20),
-      limits: { reserveSol: Number(RESERVE) / 1e9, minBurnSol: Number(MIN_BURN) / 1e9, maxBurnSol: Number(MAX_BURN) / 1e9 },
+      // fees paid in a launched token (raw units, 6 decimals): held in the fee wallet, not split, not sold
+      tokenFeesHeld: Object.entries(this.l.tokensHeld).filter(([, v]) => big(v) > 0n).map(([mint, raw]) => ({ mint, raw, amount: Number(big(raw)) / 1e6, note: "token fees held" })),
+      limits: { reserveSol: Number(RESERVE) / 1e9, minBurnSol: Number(MIN_BURN) / 1e9, maxBurnSol: Number(MAX_BURN) / 1e9, burnNowMinSol: Number(BURN_NOW_MIN) / 1e9, burnNowMaxLossPct: BURN_NOW_MAX_LOSS_PCT },
     };
   }
 }

@@ -97,6 +97,8 @@ export const solApi = {
   adminFees: (admin: string) => call<SolFeesAdmin>("/api/sol/admin/fees", { admin }),
   adminFeesSet: (admin: string, b: { adam?: string; dev?: string; on?: boolean; partner?: true }) => call<SolFeesAdmin>("/api/sol/admin/fees", { method: "POST", admin, body: JSON.stringify(b) }),
   adminFeesRun: (admin: string) => call<{ ran: boolean; why?: string; info: SolFeesAdmin }>("/api/sol/admin/fees/run", { method: "POST", admin }),
+  /** BURN NOW: a preview without `confirm` (nothing is signed), the burns with it at the accepted loss */
+  adminFeesBurn: (admin: string, b: { confirm?: true; maxLossPct?: number }) => call<BurnNow>("/api/sol/admin/fees/burn", { method: "POST", admin, body: JSON.stringify(b) }),
   adminNetwork: (admin: string, network: "mainnet" | "devnet") => call<{ ok: true }>("/api/sol/admin/network", { method: "POST", admin, body: JSON.stringify({ network }) }),
 };
 
@@ -111,7 +113,14 @@ export type SolFeesInfo = {
 export type SolFeesAdmin = SolFeesInfo & {
   balanceSol: number | null; blocked: string | null; settings: { on: boolean; adam: string | null; dev: string | null }; lastError: string | null; owedSol: Record<string, number>;
   pays: { at: number; to: "adam" | "dev"; lamports: string; tx: string }[];
-  limits: { reserveSol: number; minBurnSol: number; maxBurnSol: number };
+  limits: { reserveSol: number; minBurnSol: number; maxBurnSol: number; burnNowMinSol?: number; burnNowMaxLossPct?: number };
+  /** fees paid in a launched token: held in the fee wallet, not split */
+  tokenFeesHeld?: { mint: string; raw: string; amount: number; note: string }[];
+};
+/** BURN NOW's answer: per token, the quote (preview) or what was sent. */
+export type BurnNow = {
+  confirm: boolean; maxLossPct: number; info: SolFeesAdmin;
+  burns: { token: "IMD" | "SHIFT"; sol: number; inUsd: number | null; outUsd: number | null; out: number | null; lossPct: number | null; problem: string | null; sent: { solTx: string; requestId: string } | null; error: string | null }[];
 };
 
 /** The words a creator's wallet signs to act on a waiting launch (the engine checks the same text). */

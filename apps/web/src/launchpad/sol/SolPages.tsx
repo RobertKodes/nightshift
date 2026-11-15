@@ -7,7 +7,8 @@ import { PxHero, PxPanel, PxSection, PxStat, PxStats, PxTag } from "../../saas/k
 import { PxIcon } from "../../saas/PxIcon";
 import { chooseSolana } from "../../wallet";
 import { Logo, useRich } from "../LaunchpadPage";
-import { actText, adminToken, ago, type Discovered, imageOf, loadChain, logoData, mine, pct, type Pulse, shortKey, sol, solApi, type SolFeesAdmin, type SolFeesInfo, type SolInfo, type SolLaunch, solscan, type SwarmStep, usd, usdOf } from "./net";
+import { actText, adminToken, ago, type BurnNow, type Discovered, imageOf, loadChain, logoData, mine, pct, type Pulse, shortKey, sol, solApi, type SolFeesAdmin, type SolFeesInfo, type SolInfo, type SolLaunch, solscan, type SwarmStep, usd, usdOf } from "./net";
+import type { LpFees } from "./chain";
 import { HoldersList, MarketChart, TokenLinks, TradesList } from "./Market";
 import { CLIFF_DAYS, CURVES, DEV_PCTS, FEES, feeSplit, isStandard, LAUNCH, type LaunchOptions, MCAP_LIMITS, minutes, optionProblem, PAY_NAMES, type PayChain, SNIPER, type Sniper, STANDARD, SWARM, SWARM_ORDER, type SwarmPick, swarmTime, VEST_DAYS } from "./options";
 import "./sol.css";
@@ -735,16 +736,25 @@ function CreatorBox({ l, reload, info }: { l: SolLaunch; reload: () => void; inf
   const waiting = l.status === "waiting" || l.status === "ready";
   // the creator's share of the trading fees on the curve, read from the pool and claimed by the creator's wallet
   const [fees, setFees] = useState<number | null>(null);
-  const onCurve = !!l.pool && l.status === "live";
+  const graduated = !!l.pool && l.status === "graduated";
+  const onCurve = !!l.pool && (l.status === "live" || graduated);
   useEffect(() => { if (onCurve) void loadChain().then((c) => c.creatorFees(l.pool!)).then(setFees).catch(() => setFees(null)); }, [onCurve, l.pool]);
   const claim = act(async (who) => { const c = await loadChain(); await c.claimCreatorFees(who, l.pool!, setSay); setFees(await c.creatorFees(l.pool!).catch(() => 0)); });
-  const shown = mine.all().includes(l.mint) || waiting || l.status === "failed" || (fees ?? 0) > 0;
+  // after graduation: the creator's half of the DAMM v2 pool's liquidity, locked forever, keeps earning trading fees
+  const [lp, setLp] = useState<LpFees | null>(null);
+  useEffect(() => { if (graduated) void loadChain().then((c) => c.creatorLpFees(l.mint, l.creator)).then(setLp).catch(() => setLp(null)); }, [graduated, l.mint, l.creator]);
+  const claimLp = act(async (who) => { const c = await loadChain(); await c.claimCreatorLpFees(who, l.mint, setSay); setLp(await c.creatorLpFees(l.mint, l.creator).catch(() => null)); });
+  const shown = mine.all().includes(l.mint) || waiting || l.status === "failed" || (fees ?? 0) > 0 || (lp?.sol ?? 0) > 0;
   if (!shown) return null;
   return (
     <PxPanel title="FOR THE CREATOR" right={shortKey(l.creator)} className="sl3-creator">
-      {onCurve && fees !== null && <>
-        <p className="sl3-dim">Your share of the trading fees, waiting in the pool: <b>{sol(fees, 4)} SOL</b>{info?.solUsd ? ` (≈ ${usd(fees * info.solUsd)})` : ""}. Only the creator's wallet can claim it; it goes straight to that wallet.</p>
-        <button className="px-btn primary sl3-go" disabled={busy || fees <= 0} onClick={() => void claim()}><PxIcon name="coin" size={14} />CLAIM MY FEES</button>
+      {graduated && lp !== null && lp.positions > 0 && <>
+        <p className="sl3-dim">Since graduation your half of the Meteora pool's liquidity, locked forever, earns trading fees: <b>{sol(lp.sol, 4)} SOL</b>{info?.solUsd ? ` (≈ ${usd(lp.sol * info.solUsd)})` : ""}{lp.tokens > 0 ? ` and ${lp.tokens.toLocaleString("en-US")} $${l.symbol}` : ""} waiting. Only the wallet holding the position can claim it; it goes straight to that wallet.</p>
+        <button className="px-btn primary sl3-go" disabled={busy || (lp.sol <= 0 && lp.tokens <= 0)} onClick={() => void claimLp()}><PxIcon name="coin" size={14} />CLAIM MY LP FEES</button>
+      </>}
+      {onCurve && fees !== null && (!graduated || fees > 0) && <>
+        <p className="sl3-dim">{graduated ? "Left for you on the bonding curve (its trading fees and your share of its surplus)" : "Your share of the trading fees, waiting in the pool"}: <b>{sol(fees, 4)} SOL</b>{info?.solUsd ? ` (≈ ${usd(fees * info.solUsd)})` : ""}. Only the creator's wallet can claim it; it goes straight to that wallet.</p>
+        <button className="px-btn primary sl3-go" disabled={busy || fees <= 0} onClick={() => void claim()}><PxIcon name="coin" size={14} />{graduated ? "CLAIM WHAT IS LEFT ON THE CURVE" : "CLAIM MY FEES"}</button>
       </>}
       {l.status === "waiting" && w?.state === "unpaid" && onItsWay && <>
         <p className="sl3-dim">Your SOL payment is on its way: {relay?.note ?? "NIGHTSHIFT Swap is buying the IMD on Robinhood Chain."} This page follows it.</p>
@@ -938,6 +948,28 @@ function FeesAdmin({ token, partner, reload }: { token: string; partner: string 
       await reload();
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   };
+  // BURN NOW: the buckets under the usual minimum, burned at a loss the owner accepts (a preview first, nothing signed)
+  const [pv, setPv] = useState<BurnNow | null>(null);
+  const [accept, setAccept] = useState("");
+  const capPct = f?.limits.burnNowMaxLossPct ?? 40;
+  const preview = async () => {
+    setBusy(true); setMsg("");
+    try {
+      const r = await solApi.adminFeesBurn(token, {});
+      setPv(r); setF(r.info);
+      const worst = Math.max(0, ...r.burns.map((b) => b.lossPct ?? 0));
+      setAccept(String(Math.min(capPct, Math.ceil(worst + 1))));
+    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+  };
+  const burnAnyway = async () => {
+    setBusy(true); setMsg("");
+    try {
+      const r = await solApi.adminFeesBurn(token, { confirm: true, maxLossPct: Number(accept) });
+      setPv(null); setF(r.info);
+      setMsg(r.burns.map((b) => `${b.token}: ${b.sent ? `${sol(b.sol, 4)} SOL sent to Relay (${b.sent.solTx.slice(0, 10)}…), the burn follows` : b.error ?? b.problem ?? "nothing to burn"}`).join(" · "));
+      await reload();
+    } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+  };
   if (!f) return <PxPanel title="3 · NIGHTSHIFT'S FEES">{msg ? <p className="sl3-err">{msg}</p> : <p className="sl3-dim">Reading…</p>}</PxPanel>;
   const isPartner = partner === f.wallet;
   const off = !f.settings.on;
@@ -953,7 +985,23 @@ function FeesAdmin({ token, partner, reload }: { token: string; partner: string 
       <div className="sl3-row">
         <button className={`px-btn${off ? "" : " primary"}`} disabled={busy} onClick={() => void act(() => solApi.adminFeesSet(token, { on: off }))}>{off ? "OFF · TURN ON" : "ON · TURN OFF"}</button>
         <button className="px-btn" disabled={busy || !f.running} onClick={() => void act(() => solApi.adminFeesRun(token))}>RUN NOW</button>
+        <button className="px-btn" disabled={busy} onClick={() => void preview()}><PxIcon name="bolt" size={14} />BURN NOW</button>
       </div>
+      {pv && <div className="sl3-burnnow">
+        <p className="sl3-dim">Burn the IMD and $SHIFT buckets now, below the usual {f.limits.minBurnSol} SOL minimum. Relay's quotes right now (nothing is signed yet; the burn takes a fresh quote and refuses it if it costs more than the loss you accept):</p>
+        <ul className="sl3-adm">{pv.burns.map((b) => (
+          <li key={b.token}><span><b>{b.token === "SHIFT" ? "$SHIFT" : "IMD"}</b>
+            <small>{sol(b.sol, 4)} SOL{b.inUsd != null ? ` (${usd(b.inUsd)})` : ""}{b.out != null ? ` → ${b.out.toLocaleString("en-US", { maximumFractionDigits: 3 })} ${b.token} burned` : ""}{b.outUsd != null ? ` (${usd(b.outUsd)})` : ""}</small></span>
+            {b.lossPct != null && <b className="sl3-err">loss {b.lossPct.toFixed(1)}%</b>}
+            {(b.problem || b.error) && <small className="sl3-err">{b.error ?? b.problem}</small>}
+          </li>
+        ))}</ul>
+        <div className="sl3-row">
+          <label className="sl3-lbl">Loss I accept, % (at most {capPct})<input className="field" inputMode="decimal" value={accept} onChange={(e) => setAccept(e.target.value.replace(/[^0-9.]/g, ""))} /></label>
+          <button className="px-btn danger" disabled={busy || !(Number(accept) > 0 && Number(accept) <= capPct) || !pv.burns.some((b) => b.lossPct != null)} onClick={() => void burnAnyway()}>BURN ANYWAY</button>
+          <button className="px-btn" disabled={busy} onClick={() => setPv(null)}>CANCEL</button>
+        </div>
+      </div>}
       <p className={f.blocked ? "sl3-err" : "sl3-ok"}>{f.blocked ?? `Running. Last run ${f.lastRun ? ago(f.lastRun) : "not yet"}.`}</p>
       {f.lastError && <p className="sl3-err">Last problem: {f.lastError}</p>}
       <PxStats cols={4}>
@@ -962,6 +1010,7 @@ function FeesAdmin({ token, partner, reload }: { token: string; partner: string 
         <PxStat label="IMD BURN" value={sol(f.totals.imdBurnSol, 3)} sub={`SOL · waiting ${sol(f.owedSol.imd ?? 0, 3)}`} tone="imd" />
         <PxStat label="$SHIFT BURN" value={sol(f.totals.shiftBurnSol, 3)} sub={`SOL · waiting ${sol(f.owedSol.shift ?? 0, 3)}`} tone="lime" />
       </PxStats>
+      {!!f.tokenFeesHeld?.length && <p className="sl3-dim">Token fees held in the fee wallet (not split, not sold): {f.tokenFeesHeld.map((t) => `${t.amount.toLocaleString("en-US")} of ${shortKey(t.mint)}`).join(" · ")}.</p>}
       {busy && <p className="sl3-say" aria-live="polite">Working…</p>}
       {msg && <p className="sl3-dim" role="status">{msg}</p>}
     </PxPanel>

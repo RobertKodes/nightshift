@@ -5,7 +5,7 @@ import { liveImd } from "./sol-imd.js";
 import { BASE58_KEY, proxyRpc, SolInputError, SolLaunchpad, solSettings } from "./sol-launch.js";
 import { config } from "./config.js";
 import { readSettings, writeSettings } from "./settings.js";
-import { SolFees } from "./sol-fees.js";
+import { BURN_NOW_MAX_LOSS_PCT, SolFees } from "./sol-fees.js";
 import { liveFeePort } from "./sol-fees-live.js";
 import { liveRelayPay } from "./sol-relay.js";
 import { isTimeframe, type SolMarket, solMarket } from "./sol-market.js";
@@ -172,6 +172,16 @@ export async function solRoutes(req: IncomingMessage, res: ServerResponse, p: st
         return reply(200, await f.adminInfo());
       }
       if (req.method === "POST" && p === "/api/sol/admin/fees/run") return reply(200, { ...(await solFees().run()), info: await solFees().adminInfo() });
+      // BURN NOW: without confirm a preview (Relay quotes, nothing signed); with confirm the burns, at the loss the owner accepted (cap 40%)
+      if (req.method === "POST" && p === "/api/sol/admin/fees/burn") {
+        const b = await ctx.body(req, 500);
+        const confirm = b.confirm === true;
+        const maxLossPct = b.maxLossPct === undefined ? undefined : Number(b.maxLossPct);
+        if (confirm && !(typeof maxLossPct === "number" && maxLossPct > 0 && maxLossPct <= BURN_NOW_MAX_LOSS_PCT)) throw new SolInputError(`Say the loss you accept (above 0, at most ${BURN_NOW_MAX_LOSS_PCT}%).`);
+        let r;
+        try { r = await solFees().burnNow({ confirm, maxLossPct }); } catch (e) { throw new SolInputError((e as Error).message, 409); }
+        return reply(200, { ...r, info: await solFees().adminInfo() });
+      }
       if (req.method === "POST" && p === "/api/sol/admin/launch") {
         const b = await ctx.body(req, 1_000);
         return reply(200, await pad.adminAct(String(b.mint ?? ""), b.action));

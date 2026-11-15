@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@meteora-ag/cp-amm-sdk": "1.5.1",
     "@meteora-ag/dynamic-bonding-curve-sdk": "2.0.0",
     "@nightshift/lastspawn": "workspace:^",
     "@nightshift/launch": "workspace:*",

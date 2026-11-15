@@ -1,3 +1,4 @@
+import { CpAmm, derivePositionNftAccount, getTokenProgram, getUnClaimLpFee } from "@meteora-ag/cp-amm-sdk";
 import { DynamicBondingCurveClient, getCurrentPoint, SwapMode } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import { getAssociatedTokenAddressSync, NATIVE_MINT } from "@solana/spl-token";
 import {
@@ -23,6 +24,7 @@ export type SolSigner = {
 
 const conn = new Connection(`${location.origin}/api/sol/rpc`, { commitment: "confirmed" });
 const client = new DynamicBondingCurveClient(conn, "confirmed");
+const amm = new CpAmm(conn);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const COMPUTE = ComputeBudgetProgram.programId.toBase58();
 
@@ -187,19 +189,73 @@ export async function signText(who: SolSigner, text: string): Promise<string> {
   return Buffer.from(sig).toString("base64");
 }
 
-/** The creator's unclaimed share of the trading fees in their token's pool, in SOL (fees are collected in SOL). */
-export async function creatorFees(pool: string): Promise<number> {
+/** What the creator can still take from the curve: their share of its trading fees and, once it graduated, of its surplus (lamports). */
+async function curveShare(pool: string): Promise<{ fees: bigint; surplus: bigint }> {
   const p = await client.state.getPool(pool).catch(() => null);
-  if (!p) return 0;
-  const s = p.poolState as unknown as { creatorQuoteFee: BN };
-  return Number(s.creatorQuoteFee.toString()) / LAMPORTS_PER_SOL;
+  if (!p) return { fees: 0n, surplus: 0n };
+  const s = p.poolState as unknown as { creatorQuoteFee: BN; isMigrated: number };
+  const sp = Number(s.isMigrated) === 1 ? await client.state.getPoolSurplus(pool).catch(() => null) : null;
+  return { fees: BigInt(s.creatorQuoteFee.toString()), surplus: sp && !sp.creatorWithdrawn ? BigInt(sp.creator.toString()) : 0n };
 }
 
-/** The creator claims their share of the trading fees to their own wallet (signed by the creator, simulated first). */
+/** The creator's unclaimed share of the curve's trading fees (and of its surplus after graduation), in SOL (fees are collected in SOL). */
+export async function creatorFees(pool: string): Promise<number> {
+  const c = await curveShare(pool);
+  return Number(c.fees + c.surplus) / LAMPORTS_PER_SOL;
+}
+
+/** The creator claims their share of the curve's trading fees, then of its surplus, to their own wallet (signed by the creator, simulated first). */
 export async function claimCreatorFees(who: SolSigner, pool: string, say: (s: string) => void): Promise<string> {
   const me = new PublicKey(who.address);
-  const tx = await client.creator.claimCreatorTradingFee({ creator: me, payer: me, pool: new PublicKey(pool), maxBaseAmount: new BN("18446744073709551615"), maxQuoteAmount: new BN("18446744073709551615") });
-  return sendTx(tx, who, [], 200_000, say);
+  const c = await curveShare(pool);
+  let sig = "";
+  if (c.fees > 0n || c.surplus === 0n) {
+    const tx = await client.creator.claimCreatorTradingFee({ creator: me, payer: me, pool: new PublicKey(pool), maxBaseAmount: new BN("18446744073709551615"), maxQuoteAmount: new BN("18446744073709551615") });
+    sig = await sendTx(tx, who, [], 200_000, say);
+  }
+  if (c.surplus > 0n) sig = await sendTx(await client.creator.creatorWithdrawSurplus({ creator: me, pool: new PublicKey(pool) }), who, [], 200_000, (s) => say(`The curve's surplus: ${s}`));
+  return sig;
+}
+
+export type LpFees = { sol: number; tokens: number; positions: number };
+
+/**
+ * After graduation: the creator's locked LP position in the token's DAMM v2 pool. Meteora's migration gives the
+ * creator the NFT of half the pool's liquidity, locked forever; its trading fees (in SOL) keep coming to whoever
+ * holds that NFT. Read from the wallet's position NFTs, in pools of this token.
+ */
+export async function creatorLpFees(mint: string, owner: string): Promise<LpFees> {
+  const positions = await amm.getPositionsByUserAndTokenMint(new PublicKey(owner), new PublicKey(mint));
+  let lamports = 0n, tokens = 0n;
+  for (const p of positions) {
+    const ps = await amm.fetchPoolState(p.positionState.pool);
+    const f = getUnClaimLpFee(ps, p.positionState);
+    const solIsB = ps.tokenBMint.equals(NATIVE_MINT);
+    lamports += BigInt((solIsB ? f.feeTokenB : f.feeTokenA).toString());
+    tokens += BigInt((solIsB ? f.feeTokenA : f.feeTokenB).toString());
+  }
+  return { sol: Number(lamports) / LAMPORTS_PER_SOL, tokens: Number(tokens) / 10 ** LAUNCH.decimals, positions: positions.length };
+}
+
+/** The creator claims their LP positions' fees to their own wallet: one transaction per position with fees, simulated first, signed by the creator only. */
+export async function claimCreatorLpFees(who: SolSigner, mint: string, say: (s: string) => void): Promise<number> {
+  const me = new PublicKey(who.address);
+  const positions = await amm.getPositionsByUserAndTokenMint(me, new PublicKey(mint));
+  let sent = 0;
+  for (const [i, p] of positions.entries()) {
+    const ps = await amm.fetchPoolState(p.positionState.pool);
+    const f = getUnClaimLpFee(ps, p.positionState);
+    if (f.feeTokenA.isZero() && f.feeTokenB.isZero()) continue;
+    const tx = await amm.claimPositionFee({
+      owner: me, feePayer: me, position: p.position, pool: p.positionState.pool, positionNftAccount: derivePositionNftAccount(p.positionState.nftMint),
+      tokenAMint: ps.tokenAMint, tokenBMint: ps.tokenBMint, tokenAVault: ps.tokenAVault, tokenBVault: ps.tokenBVault,
+      tokenAProgram: getTokenProgram(ps.tokenAFlag), tokenBProgram: getTokenProgram(ps.tokenBFlag),
+    });
+    await sendTx(tx, who, [], 250_000, (s) => say(positions.length > 1 ? `Position ${i + 1} of ${positions.length}: ${s}` : s));
+    sent++;
+  }
+  if (!sent) throw new Error("No fees are waiting on your LP position right now. Nothing was sent.");
+  return sent;
 }
 
 /** NIGHTSHIFT's unclaimed trading fees in each launch's pool (the partner's share, collected in SOL). */

@@ -183,6 +183,11 @@
 .sl3-adm li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid rgba(47, 123, 255, .15); }
 .sl3-adm li > span { flex: 1; min-width: 220px; display: grid; gap: 2px; }
 .sl3-adm small { color: var(--px-faint); font: 400 11.5px/1.4 var(--px-mono); }
+/* BURN NOW's preview: a loss the owner has to accept, in red */
+.sl3-burnnow { margin: 12px 0; padding: 10px 12px; border: 1px dashed rgba(255, 107, 125, .45); }
+.sl3-burnnow .sl3-adm b.sl3-err, .sl3-burnnow .sl3-adm small.sl3-err { margin: 0; font-family: var(--px-mono); }
+.sl3-burnnow .sl3-row { align-items: flex-end; flex-wrap: wrap; gap: 8px; }
+.sl3-burnnow .sl3-lbl { margin: 0; }
 
 @media (max-width: 899px) {
   /* the token page on a phone, like pump.fun's: the chart, then the trade box, then the rest */
