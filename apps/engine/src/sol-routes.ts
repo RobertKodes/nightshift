@@ -66,7 +66,6 @@ export async function solRoutes(req: IncomingMessage, res: ServerResponse, p: st
       const list = pad.list(sort === "mcap" || sort === "progress" || sort === "movers" ? sort : "new").slice(0, 200);
       return reply(200, { launches: list.map((l) => ({ ...l, spark: pad.spark(l.mint) })), waiting: pad.waiting().slice(0, 30) }, "public, max-age=15");
     }
-    if (req.method === "GET" && p === "/api/sol/fees") return reply(200, solFees().info(), "public, max-age=60");
     if (req.method === "GET" && p === "/api/sol/discover") return reply(200, await discover(await pad.solUsd()), "public, max-age=60");
     const chart = m(`launches/${KEY}/chart`);
     if (req.method === "GET" && chart) return reply(200, { points: pad.chart(chart[1]!) }, "public, max-age=30");

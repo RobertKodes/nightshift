@@ -220,7 +220,6 @@ function SolHome() {
         </>
       ) : <Discover />}
 
-      <FeesPanel />
 
       <PxSection kicker="HOW AN IMD LAUNCH WORKS" title={<>The swarm does the work. <em>The chain keeps the promises.</em></>}>
         <ol className="sl3-how">
@@ -935,37 +934,6 @@ function TradeBox({ pool, mint, symbol, net, solUsd }: { pool: string; mint: str
 
 // ---------------------------------------------------------------- the admin
 
-const etherscan = (tx: string) => `https://etherscan.io/tx/${tx}`;
-const num = (v: number, d = 0) => v.toLocaleString("en-US", { maximumFractionDigits: d });
-
-/** Public: where NIGHTSHIFT's share of every launch's fees goes, and the burns with their transactions. */
-function FeesPanel() {
-  const [f, setF] = useState<SolFeesInfo | null>(null);
-  useEffect(() => { solApi.fees().then(setF).catch(() => {}); }, []);
-  if (!f) return null;
-  const t = f.totals;
-  const done = f.burns.filter((b) => b.state === "done");
-  const waiting = f.waitingSol.imd + f.waitingSol.shift;
-  return (
-    <PxSection kicker="WHERE NIGHTSHIFT'S FEES GO" title={<>Split by the server. <em>Burned on Ethereum.</em></>}>
-      <div className="sl3-fees">
-        <PxPanel title="EVERY LAMPORT, EVERY TIME" right="fixed in code" state={f.running ? "live" : "idle"}>
-          <ul className="sl3-split">{f.split.map((p) => <li key={p.key} className={p.key === "imd" || p.key === "shift" ? "burn" : ""}><b>{p.pct}%</b><span>{p.label}</span></li>)}</ul>
-          <p className="sl3-dim">NIGHTSHIFT's share of every launch's trading fees, and its launch fee, is claimed every 6 hours by NIGHTSHIFT's fee wallet <a href={solscan("account", f.wallet, "mainnet")} target="_blank" rel="noreferrer">{shortKey(f.wallet)} ↗</a>. The burns go through Relay: SOL in on Solana, IMD and $SHIFT bought on Ethereum and sent straight to the burn address (IMD to IMD's BurnExecutor, $SHIFT to 0x…dEaD).</p>
-        </PxPanel>
-        <PxPanel title="BURNED SO FAR" tone="imd" right={f.lastRun ? `updated ${ago(f.lastRun)}` : "starting"}>
-          <PxStats cols={2}>
-            <PxStat label="IMD BURNED" value={num(t.imdBurned, 2)} sub={`${sol(t.imdBurnSol, 3)} SOL spent`} tone="imd" />
-            <PxStat label="$SHIFT BURNED" value={num(t.shiftBurned)} sub={`${sol(t.shiftBurnSol, 3)} SOL spent`} tone="lime" />
-          </PxStats>
-          {done.length
-            ? <ul className="sl3-adm">{done.slice(0, 6).map((b) => <li key={b.solTx}><span><b>{b.amount != null ? num(b.amount, b.token === "IMD" ? 2 : 0) : "…"} {b.token}</b><small>{sol(b.sol, 3)} SOL · {ago(b.at)} · <a href={solscan("tx", b.solTx, "mainnet")} target="_blank" rel="noreferrer">Solana ↗</a>{b.ethTx && <> · <a href={etherscan(b.ethTx)} target="_blank" rel="noreferrer">burn on Ethereum ↗</a></>}</small></span></li>)}</ul>
-            : <p className="sl3-dim">No burn yet: each burn goes out once its share reaches 0.25 SOL{waiting > 0 ? ` (waiting now: ${sol(f.waitingSol.imd, 3)} SOL for IMD, ${sol(f.waitingSol.shift, 3)} SOL for $SHIFT)` : ""}.</p>}
-        </PxPanel>
-      </div>
-    </PxSection>
-  );
-}
 
 /** The admin: the engine's fee wallet as the launch partner, ADAM's and the dev wallet, on or off, a run now. */
 function FeesAdmin({ token, partner, reload }: { token: string; partner: string | null; reload: () => Promise<void> }) {

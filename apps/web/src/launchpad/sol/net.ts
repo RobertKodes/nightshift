@@ -86,7 +86,6 @@ export const solApi = {
   adminPartner: (admin: string, partner: string) => call<{ ok: true }>("/api/sol/admin/partner", { method: "POST", admin, body: JSON.stringify({ partner }) }),
   adminConfig: (admin: string, config: string, partner: string) => call<{ ok: true }>("/api/sol/admin/config", { method: "POST", admin, body: JSON.stringify({ config, partner }) }),
   adminLaunch: (admin: string, mint: string, action: "release" | "cancel") => call<SolLaunch>("/api/sol/admin/launch", { method: "POST", admin, body: JSON.stringify({ mint, action }) }),
-  fees: () => call<SolFeesInfo>("/api/sol/fees"),
   adminFees: (admin: string) => call<SolFeesAdmin>("/api/sol/admin/fees", { admin }),
   adminFeesSet: (admin: string, b: { adam?: string; dev?: string; on?: boolean; partner?: true }) => call<SolFeesAdmin>("/api/sol/admin/fees", { method: "POST", admin, body: JSON.stringify(b) }),
   adminFeesRun: (admin: string) => call<{ ran: boolean; why?: string; info: SolFeesAdmin }>("/api/sol/admin/fees/run", { method: "POST", admin }),
