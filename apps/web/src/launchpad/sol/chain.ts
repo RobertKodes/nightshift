@@ -187,6 +187,21 @@ export async function signText(who: SolSigner, text: string): Promise<string> {
   return Buffer.from(sig).toString("base64");
 }
 
+/** The creator's unclaimed share of the trading fees in their token's pool, in SOL (fees are collected in SOL). */
+export async function creatorFees(pool: string): Promise<number> {
+  const p = await client.state.getPool(pool).catch(() => null);
+  if (!p) return 0;
+  const s = p.poolState as unknown as { creatorQuoteFee: BN };
+  return Number(s.creatorQuoteFee.toString()) / LAMPORTS_PER_SOL;
+}
+
+/** The creator claims their share of the trading fees to their own wallet (signed by the creator, simulated first). */
+export async function claimCreatorFees(who: SolSigner, pool: string, say: (s: string) => void): Promise<string> {
+  const me = new PublicKey(who.address);
+  const tx = await client.creator.claimCreatorTradingFee({ creator: me, payer: me, pool: new PublicKey(pool), maxBaseAmount: new BN("18446744073709551615"), maxQuoteAmount: new BN("18446744073709551615") });
+  return sendTx(tx, who, [], 200_000, say);
+}
+
 /** NIGHTSHIFT's unclaimed trading fees in each launch's pool (the partner's share, collected in SOL). */
 export async function partnerFees(pools: string[]): Promise<{ pool: string; sol: number; tokens: number }[]> {
   const out: { pool: string; sol: number; tokens: number }[] = [];

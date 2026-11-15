@@ -752,10 +752,19 @@ function CreatorBox({ l, reload, info }: { l: SolLaunch; reload: () => void; inf
   const relay = w?.relay;
   const onItsWay = relay?.state === "sent";
   const waiting = l.status === "waiting" || l.status === "ready";
-  const shown = mine.all().includes(l.mint) || waiting || l.status === "failed";
+  // the creator's share of the trading fees on the curve, read from the pool and claimed by the creator's wallet
+  const [fees, setFees] = useState<number | null>(null);
+  const onCurve = !!l.pool && l.status === "live";
+  useEffect(() => { if (onCurve) void loadChain().then((c) => c.creatorFees(l.pool!)).then(setFees).catch(() => setFees(null)); }, [onCurve, l.pool]);
+  const claim = act(async (who) => { const c = await loadChain(); await c.claimCreatorFees(who, l.pool!, setSay); setFees(await c.creatorFees(l.pool!).catch(() => 0)); });
+  const shown = mine.all().includes(l.mint) || waiting || l.status === "failed" || (fees ?? 0) > 0;
   if (!shown) return null;
   return (
     <PxPanel title="FOR THE CREATOR" right={shortKey(l.creator)}>
+      {onCurve && fees !== null && <>
+        <p className="sl3-dim">Your share of the trading fees, waiting in the pool: <b>{sol(fees, 4)} SOL</b>{info?.solUsd ? ` (≈ ${usd(fees * info.solUsd)})` : ""}. Only the creator's wallet can claim it; it goes straight to that wallet.</p>
+        <button className="px-btn primary sl3-go" disabled={busy || fees <= 0} onClick={() => void claim()}><PxIcon name="coin" size={14} />CLAIM MY FEES</button>
+      </>}
       {l.status === "waiting" && w?.state === "unpaid" && onItsWay && <>
         <p className="sl3-dim">Your SOL payment is on its way: {relay?.note ?? "NIGHTSHIFT Swap is buying the IMD on Robinhood Chain."} This page follows it.</p>
         <button className="px-btn" disabled={busy} onClick={() => void check()}><PxIcon name="pulse" size={14} />CHECK THE PAYMENT NOW</button>

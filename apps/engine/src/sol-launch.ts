@@ -165,6 +165,8 @@ export type SwarmRun = {
   logoHosted?: string | null; bannerHosted?: string | null;
   /** when each picked step was first seen done, for the live time estimate */
   doneAt?: Partial<Record<SwarmPick, number>>;
+  /** when the finished job started waiting for IMD to publish its site */
+  siteWaitFrom?: number;
 };
 
 /**
@@ -252,6 +254,8 @@ const nodeState = (s: string): SwarmStep["state"] => s === "accepted" ? "done" :
 const JOB_DONE = new Set(["completed"]);
 const JOB_FAILED = new Set(["failed", "cancelled", "canceled", "refused", "expired", "rejected"]);
 const SWARM_TIMEOUT = 72 * 3600_000;
+/** how long a finished job waits for IMD to publish its site before the launch is ready without it */
+const SITE_WAIT = 20 * 60_000;
 
 // ---------------------------------------------------------------- what the chain says
 
@@ -769,6 +773,11 @@ export class SolLaunchpad {
         if (w && l.status === "waiting" && w.state === "unpaid" && w.relay) {
           try { await this.followRelay(l, w); } catch (e) { w.relay.note = `Checking the SOL payment: ${(e as Error).message.slice(0, 120)}`; }
         }
+        // a site IMD published after the launch went out: added to the token's metadata (the creator paid for it)
+        if (w && w.job && w.picks.includes("website") && !w.site && l.status !== "waiting" && Date.now() - (l.launchedAt ?? l.createdAt) < 7 * DAY) {
+          const job = await this.imd!.job(w.job).catch(() => null);
+          if (job?.site) w.site = job.site;
+        }
         if (!w || l.status !== "waiting" || !w.payTx || w.state === "failed" || w.state === "refused") continue;
         try { await this.follow(l, w); } catch (e) { w.note = (e as Error).message.slice(0, 160); }
       }
@@ -809,6 +818,12 @@ export class SolLaunchpad {
     if (!JOB_DONE.has(job.state)) return;
     if (w.picks.includes("review") && !w.verdict) { Object.assign(w, { state: "failed", note: "The swarm finished, but its verdict could not be read." }); return; }
     if (w.picks.includes("logo") && !w.logo && !l.image) { Object.assign(w, { state: "failed", note: "The swarm finished without the logo, and the token has no other." }); return; }
+    // IMD publishes the site a minute or two after the job completes: wait for its address (up to SITE_WAIT),
+    // so the website is in the token before the creator signs (seen 2026-11-16: ready before the site existed)
+    if (w.picks.includes("website") && !w.site) {
+      w.siteWaitFrom ??= Date.now();
+      if (Date.now() - w.siteWaitFrom < SITE_WAIT) { w.note = "IMD is publishing the swarm's site."; return; }
+    }
     // the swarm's work goes into the token before it is live: wallets and explorers keep what they first read
     await this.applyWork(l, w);
     w.state = "done";

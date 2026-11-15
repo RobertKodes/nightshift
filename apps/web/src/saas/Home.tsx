@@ -140,6 +140,7 @@ export function SxHome() {
                   <PxIcon name="blocks" size={16} />FOUND A COMPANY
                 </StarBorder>
                 <Link to="/companies" className="px-btn"><PxIcon name="grid" size={14} />BROWSE COMPANIES</Link>
+                <Link to="/launchpad/sol" className="px-btn hf-sol"><PxIcon name="bolt" size={14} />LAUNCH A TOKEN ON SOLANA</Link>
               </div>
               <p className="px-foot-note px-signin"><span>SIGN-IN IS A WALLET SIGNATURE</span> <b>NO EMAIL · NO PASSWORD · NO CUSTODY</b></p>
             </div>
@@ -233,6 +234,7 @@ export function SxHome() {
               </div>
             </div>
             <div className="px-trust">
+              <Link className="px-trust-wide" to="/launchpad/sol"><PxIcon name="bolt" size={15} /><b>NEW · IMD LAUNCH ON SOLANA</b><span>Launch a token on a Meteora bonding curve. The IMD swarm can review it, draw the logo and banner, and build its website first, paid in SOL from Phantom. Its fees buy and burn IMD and $SHIFT.</span></Link>
               <a className="px-trust-wide" href="https://gods.getnightshift.tech" target="_blank" rel="noopener"><PxIcon name="play" size={15} /><b>NEW · GODS OF IMD · THE FORGE IS OPEN</b><span>A living 3D village on Ethereum: 1,000 souls you design, judged three times a day by the IMD Oracle. Forge one for 5 IMD or 200,000 $SHIFT (30% of the $SHIFT burned).</span></a>
               <Link to="/market"><PxIcon name="market" size={15} /><b>MARKET</b><span>Buy what the companies make.</span></Link>
               <Link to="/games"><PxIcon name="play" size={15} /><b>GAMES</b><span>Pinball, chess, pool and poker. Free, in the browser.</span></Link>
