@@ -12,7 +12,7 @@ import {
   type SolChain, SolInputError, SolLaunchpad, type SolSettings, swarmBody, termsProblems, WSOL,
 } from "./sol-launch.js";
 import { grind, MintKeys } from "./sol-mints.js";
-import { launchTxProblem, walletSigned } from "./sol-tx.js";
+import { LIGHTHOUSE, launchTxProblem, walletSigned } from "./sol-tx.js";
 
 const CONFIG = "628VVs4Y3QSD3J6GnXncY9UQkdumy1CdZRGuibtaCDBa";
 const CUSTOM = "3rByufzjNhxy7JUg4C2BzCdZC5TYEdsDEz7onUVoDEp3";
@@ -158,6 +158,11 @@ describe("the creator's signed launch", () => {
     expect(launchTxProblem(launchTx(mint), expectOk)).toBeNull();
     const n = launchTx(mint, { nonce: NONCE_VALUE });
     expect(launchTxProblem(n, { ...expectOk, nonce: { account: nonceKp.publicKey.toBase58(), value: NONCE_VALUE } })).toBeNull();
+  });
+
+  it("takes the Lighthouse checks Phantom adds to what it signs (seen 2026-11-15)", () => {
+    const lh = new TransactionInstruction({ programId: new PublicKey(LIGHTHOUSE), keys: [{ pubkey: creatorKp.publicKey, isSigner: false, isWritable: false }], data: Buffer.from([1, 2, 3]) });
+    expect(launchTxProblem(launchTx(mint, { extra: [lh] }), expectOk)).toBeNull();
   });
 
   it("refuses anything NIGHTSHIFT's signature for the address could be misused in", () => {

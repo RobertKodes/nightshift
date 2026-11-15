@@ -15,7 +15,10 @@ export const DBC_PROGRAM = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN";
 const ATA = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 const TOKEN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const TOKEN22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PEnBqCXEpPxuEb";
-const ALLOWED = new Set([ComputeBudgetProgram.programId.toBase58(), SystemProgram.programId.toBase58(), DBC_PROGRAM, ATA, TOKEN, TOKEN22]);
+/** Phantom adds Lighthouse steps to what it signs: they only assert account state (the transaction fails if a
+ * balance is not what Phantom simulated) and cannot move funds or use the token address's signature. */
+export const LIGHTHOUSE = "L2TExMFKdjpN9kozasaurPirfHy9P8sbXoAN1qA3S95";
+const ALLOWED = new Set([LIGHTHOUSE, ComputeBudgetProgram.programId.toBase58(), SystemProgram.programId.toBase58(), DBC_PROGRAM, ATA, TOKEN, TOKEN22]);
 
 export type LaunchTxExpect = {
   creator: string; mint: string; config: string;
@@ -50,10 +53,11 @@ export function launchTxProblem(tx: Transaction, e: LaunchTxExpect): string | nu
   let created = false;
   for (const [i, ix] of ixs.entries()) {
     const program = ix.programId.toBase58();
-    if (!ALLOWED.has(program)) return "The launch contains a step that is not part of a launch.";
+    if (!ALLOWED.has(program)) return `The launch contains a step that is not part of a launch (${program.slice(0, 8)}…).`;
     // a decoded transaction marks an account signer everywhere it appears, so the rule is per program:
     // the token's address may appear in Meteora's steps and in creating the buyer's token account for it
     const hasMint = ix.keys.some((k) => k.pubkey.toBase58() === e.mint);
+    if (program === LIGHTHOUSE) continue;
     if (program === DBC_PROGRAM) {
       if (hasMint && ix.keys.some((k) => k.pubkey.toBase58() === e.config)) created = true;
       continue;
