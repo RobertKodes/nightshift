@@ -353,7 +353,9 @@ function SolNew() {
   // the swarm paid in SOL from the same wallet (NIGHTSHIFT Swap), unless the creator picks the EVM route
   const inSol = swarm && payMode === "sol" && !!info?.imd.solPay;
   const solOff = inSol && info?.network !== "mainnet";
-  const ready = info?.open && !!info.partner && f.name.trim().length >= 2 && /^[A-Za-z0-9]{2,10}$/.test(f.symbol.trim()) && logoOk && agree && !busy && !problem && solUsd > 0 && !solOff;
+  // wallets hide tokens with a web address in the name as spam (the name is frozen at launch)
+  const linkInName = /https?:|www\.|[a-z0-9-]\.[a-z]{2,}\b/i.test(f.name);
+  const ready = info?.open && !!info.partner && f.name.trim().length >= 2 && !linkInName && /^[A-Za-z0-9]{2,10}$/.test(f.symbol.trim()) && logoOk && agree && !busy && !problem && solUsd > 0 && !solOff;
   const swarmSol = inSol && solPrice ? Number(solPrice.lamports) / 1e9 : 0;
   const totalSol = LAUNCH.createFeeSol + (own ? LAUNCH.configRentSol : 0) + buy + 0.02 + swarmSol;
   const imdUsd = info ? info.imd.price * info.imd.imdUsd : null;
@@ -434,7 +436,7 @@ function SolNew() {
       <div className="sl3-new">
         <div className="sl3-side">
           <PxPanel title="1 · THE TOKEN" className="sl3-form">
-            <label>Name<input className="field" value={f.name} onChange={set("name")} maxLength={32} placeholder="Night Frog" /></label>
+            <label>Name<input className="field" value={f.name} onChange={set("name")} maxLength={32} placeholder="Night Frog" />{linkInName && <small className="sl3-err">No web addresses in the name (like imd.fun or a link): Phantom hides those tokens as spam. Put the link in Website.</small>}</label>
             <label>Ticker<input className="field" value={f.symbol} onChange={(e) => setF({ ...f, symbol: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} maxLength={10} placeholder="NFROG" /></label>
             <label>What it is <small>optional, the IMD swarm reads it too</small><textarea className="field" value={f.description} onChange={set("description")} maxLength={500} rows={3} placeholder="One or two lines people read before they buy." /></label>
             <div className="sl3-logo">

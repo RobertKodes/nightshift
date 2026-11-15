@@ -69,9 +69,14 @@ const httpsUrl = (v: unknown, host?: RegExp, label?: string): string => {
 };
 
 /** The creator's fields, checked; the image as bytes when uploaded. A launch without a logo needs the swarm to draw one. */
+/** a web address in a token name: "x.com", "imd.fun", "http…", "www…" */
+export const LINK_IN_NAME = /https?:|www\.|[a-z0-9-]\.[a-z]{2,}\b/i;
+
 export function checkMeta(b: Record<string, unknown>, logoBySwarm = false): { meta: Omit<SolMeta, "image" | "mint">; image: { ext: string; bytes: Buffer } | { url: string } | null } {
   const name = cleanText(String(b.name ?? "")).replace(/\s+/g, " ").trim();
   if (name.length < 2 || name.length > 32) throw new SolInputError("The name needs 2 to 32 characters.");
+  // wallets (Phantom) hide every token whose name holds a web address as spam, and the name is frozen at launch
+  if (LINK_IN_NAME.test(name)) throw new SolInputError("Leave web addresses out of the name (like imd.fun or a link): Phantom hides tokens with one as spam. Put the link in Website.");
   const symbol = String(b.symbol ?? "").trim().toUpperCase();
   if (!/^[A-Z0-9]{2,10}$/.test(symbol)) throw new SolInputError("The ticker needs 2 to 10 letters or digits.");
   const description = cleanText(String(b.description ?? "")).trim().slice(0, 500);

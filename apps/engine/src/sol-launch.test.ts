@@ -521,6 +521,11 @@ describe("the swarm paid in SOL, and its work in the token", () => {
     expect(pad.metaCache(r.mint)).toBe("public, max-age=300");
   });
 
+  it("refuses a web address in the name (Phantom hides those tokens as spam)", () => {
+    for (const name of ["first imd.fun sol launch", "Frog x.com", "www.frog", "https://frog"]) expect(() => checkMeta({ ...input, name })).toThrow(/web addresses/);
+    expect(checkMeta({ ...input, name: "Night Frog 2.0" }).meta.name).toBe("Night Frog 2.0");
+  });
+
   it("keeps the creator's uploaded logo: the swarm's logo step comes off the job", async () => {
     const d = dir();
     const pad = new SolLaunchpad(fakeChain().chain, settings({ network: "mainnet" }), d, "https://site.test", fakeImd().port, new MintKeys(d, "", 0), fakePay().port);
