@@ -18,12 +18,23 @@ export function liveFeePort(rpc: string, relayKey?: string): FeePort {
   const client = new DynamicBondingCurveClient(conn, "confirmed");
   const headers: Record<string, string> = { "content-type": "application/json", ...(relayKey ? { "x-api-key": relayKey } : {}) };
 
-  async function confirm(sig: string, lastValidBlockHeight: number): Promise<string> {
-    for (let i = 0; i < 45; i++) {
-      const { value: [s] } = await conn.getSignatureStatuses([sig]);
-      if (s?.err) throw new Error(`The transaction failed on Solana (${JSON.stringify(s.err).slice(0, 80)}).`);
-      if (s?.confirmationStatus === "confirmed" || s?.confirmationStatus === "finalized") return sig;
-      if ((await conn.getBlockHeight("confirmed")) > lastValidBlockHeight) throw new Error("Solana did not take the transaction in time.");
+  const landed = async (sig: string, history = false) => {
+    const { value: [s] } = await conn.getSignatureStatuses([sig], { searchTransactionHistory: history });
+    if (s?.err) throw new Error(`The transaction failed on Solana (${JSON.stringify(s.err).slice(0, 80)}).`);
+    return s?.confirmationStatus === "confirmed" || s?.confirmationStatus === "finalized";
+  };
+
+  // Expiry is read with isBlockhashValid, never getBlockHeight: some RPCs (publicnode, 2026-11-15) answer
+  // getBlockHeight with the slot, ~22M above the real height, so every transaction looked expired at once
+  // although it landed. A payout that looked failed but landed would be paid twice.
+  async function confirm(sig: string, blockhash: string): Promise<string> {
+    for (let i = 0; i < 90; i++) {
+      if (await landed(sig)) return sig;
+      if (i % 5 === 4 && !(await conn.isBlockhashValid(blockhash, { commitment: "confirmed" }).then((r) => r.value).catch(() => true))) {
+        await sleep(3000);
+        if (await landed(sig, true)) return sig;
+        throw new Error("Solana did not take the transaction in time.");
+      }
       await sleep(2000);
     }
     throw new Error("Solana did not confirm the transaction in time.");
@@ -38,7 +49,7 @@ export function liveFeePort(rpc: string, relayKey?: string): FeePort {
     const sim = await conn.simulateTransaction(t);
     if (sim.value.err) throw new Error(`would fail: ${JSON.stringify(sim.value.err).slice(0, 80)}`);
     const sig = await conn.sendRawTransaction(t.serialize(), { skipPreflight: true, maxRetries: 3 });
-    return confirm(sig, lastValidBlockHeight);
+    return confirm(sig, blockhash);
   }
 
   return {
@@ -101,7 +112,7 @@ export function liveFeePort(rpc: string, relayKey?: string): FeePort {
         keys: ix.keys.map((k) => ({ pubkey: new PublicKey(k.pubkey), isSigner: k.isSigner, isWritable: k.isWritable })),
       }));
       const tables = (await Promise.all(q.lookupTables.map((a) => conn.getAddressLookupTable(new PublicKey(a)).then((r) => r.value)))).filter((t): t is AddressLookupTableAccount => !!t);
-      const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+      const { blockhash } = await conn.getLatestBlockhash("confirmed");
       const msg = new TransactionMessage({
         payerKey: kp.publicKey, recentBlockhash: blockhash,
         instructions: [ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 20_000 }), ...ixs.filter((i) => !i.programId.equals(ComputeBudgetProgram.programId))],
@@ -115,7 +126,7 @@ export function liveFeePort(rpc: string, relayKey?: string): FeePort {
       const after = BigInt(sim.value.accounts?.[0]?.lamports ?? 0);
       if (before - after > lamports + 1_000_000n) throw new Error("The burn deposit would take more SOL than the burn.");
       const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true, maxRetries: 3 });
-      return confirm(sig, lastValidBlockHeight);
+      return confirm(sig, blockhash);
     },
 
     async status(requestId) {

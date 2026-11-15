@@ -39,7 +39,7 @@ async function priority(units: number, floor = 20_000) {
 async function sendTx(tx: Transaction, who: SolSigner, extra: Keypair[], units: number, say: (s: string) => void): Promise<string> {
   const payer = new PublicKey(who.address);
   tx.instructions = [...(await priority(units)), ...tx.instructions.filter((i) => i.programId.toBase58() !== COMPUTE)];
-  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+  const { blockhash } = await conn.getLatestBlockhash("confirmed");
   tx.recentBlockhash = blockhash;
   tx.feePayer = payer;
   say("Checking the transaction on Solana…");
@@ -48,18 +48,29 @@ async function sendTx(tx: Transaction, who: SolSigner, extra: Keypair[], units: 
     const why = (sim.value.logs ?? []).reverse().find((l) => /Error|insufficient|failed/i.test(l)) ?? JSON.stringify(sim.value.err);
     throw new Error(`This would fail right now on Solana: ${why.replace(/^Program log: /, "").slice(0, 160)}. Nothing was sent.`);
   }
-  if (extra.length) tx.partialSign(...extra);
+  // the wallet signs first and the page's own keys after: Phantom warns ("this dApp could be malicious")
+  // on a transaction that reaches it already signed by others (docs.phantom.com, domain and transaction warnings)
   say("Confirm in your Solana wallet…");
   const signed = await who.wallet.signTransaction(tx);
+  if (extra.length) signed.partialSign(...extra);
   const raw = signed.serialize();
   say("Sending…");
   const sig = await conn.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 });
   // resend every few seconds until confirmed or the blockhash expires: how Solana transactions land reliably
-  for (let i = 0; i < 40; i++) {
-    const s = (await conn.getSignatureStatuses([sig])).value[0];
+  const landed = async (history = false) => {
+    const s = (await conn.getSignatureStatuses([sig], { searchTransactionHistory: history })).value[0];
     if (s?.err) throw new Error("The transaction failed on Solana. Only the network fee was spent.");
-    if (s?.confirmationStatus === "confirmed" || s?.confirmationStatus === "finalized") return sig;
-    if ((await conn.getBlockHeight("confirmed")) > lastValidBlockHeight) throw new Error("Solana did not take the transaction in time. Nothing was spent; try again.");
+    return s?.confirmationStatus === "confirmed" || s?.confirmationStatus === "finalized";
+  };
+  // expiry from isBlockhashValid, never getBlockHeight: some RPCs answer getBlockHeight with the slot,
+  // which made every transaction look expired at once although it landed (2026-11-15)
+  for (let i = 0; i < 60; i++) {
+    if (await landed()) return sig;
+    if (i % 4 === 3 && !(await conn.isBlockhashValid(blockhash, { commitment: "confirmed" }).then((r) => r.value).catch(() => true))) {
+      await sleep(3000);
+      if (await landed(true)) return sig;
+      throw new Error("Solana did not take the transaction in time. Nothing was spent; try again.");
+    }
     if (i % 2 === 1) await conn.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 }).catch(() => {});
     say(i < 6 ? "Waiting for Solana…" : "Still waiting for Solana (busy network)…");
     await sleep(2000);
