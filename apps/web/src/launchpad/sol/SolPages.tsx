@@ -120,12 +120,12 @@ function ImdPanel({ info }: { info: SolInfo | null }) {
       <div className="sl3-imd-n">
         <div><b>{p.agentsOnline?.toLocaleString("en-US") ?? "—"}</b><span>AGENTS ONLINE</span></div>
         <div><b>{p.jobsDoneLastDay ?? "—"}</b><span>JOBS DONE TODAY</span></div>
-        <div><b>{info?.counts.waiting ?? "—"}</b><span>LAUNCHES WITH THE SWARM</span></div>
+        <div><b>{info?.counts.waiting ?? "—"}</b><span>WITH THE SWARM NOW</span></div>
         <div><b>{info?.counts.swarm ?? "—"}</b><span>SOLANA LAUNCHES BUILT BY IMD</span></div>
       </div>
       <ul className="sl3-imd-l">
         <li><PxIcon name="shield" size={13} />Pick what the swarm does before you launch: a review that decides if it goes live, the logo, an X banner, the website.</li>
-        <li><PxIcon name="coin" size={13} />One IMD job, {info?.imd.price ?? 0.5} IMD, paid from your own Ethereum or Robinhood Chain wallet straight to IMD.</li>
+        <li><PxIcon name="coin" size={13} />One IMD job, {info?.imd.price ?? 0.5} IMD, paid in SOL from your Solana wallet (NIGHTSHIFT Swap converts it), or in IMD from an EVM wallet.</li>
         <li><PxIcon name="lock" size={13} />You pay the swarm first. When it is done, its work is already in your token: you sign once and it goes live on Solana. Or launch at once, without the swarm.</li>
       </ul>
     </PxPanel>
