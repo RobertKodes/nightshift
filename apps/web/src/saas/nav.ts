@@ -5,33 +5,42 @@
  */
 export type NavLink = { to: string; label: string; line?: string };
 export type NavGroup = { id: NavId; label: string; to: string; line: string; links: NavLink[] };
-export type NavId = "companies" | "market" | "live" | "games" | "shift" | "observatory" | "learn";
+export type NavId = "discover" | "launch" | "companies" | "games" | "shift" | "observatory" | "learn";
 
 /** The founding route: the big button everywhere points here. */
 export const FOUND = "/launch";
-/** The live feed is the front page; this address scrolls to it. */
-export const FEED = "/#feed";
+/** The company live feed: the old front page, now at /feed (the front page is IMD TERMINAL). */
+export const FEED = "/feed#feed";
+/** The Solana launch form: the big button everywhere points here. */
+export const LAUNCH = "/launchpad/sol/new";
 
 /** The main menu, in the order it is shown. A group with one link is a plain link. */
 export const NAV: NavGroup[] = [
+  {
+    id: "discover", label: "Discover", to: "/discover",
+    line: "Every IMD token on Solana, Ethereum and Robinhood Chain",
+    links: [{ to: "/discover", label: "Discover", line: "Every IMD token on Solana, Ethereum and Robinhood Chain" }],
+  },
+  {
+    id: "launch", label: "Launchpad", to: "/launchpad",
+    line: "Launch a token with the IMD swarm",
+    links: [
+      { to: LAUNCH, label: "Launch on Solana", line: "The IMD swarm reviews it, draws it, builds its site" },
+      { to: "/launchpad", label: "Solana launches", line: "On the curve and graduated" },
+      { to: "/launchpad/eth", label: "IMD on Ethereum", line: "Launch through IMD on Ethereum or Robinhood Chain" },
+      { to: "/swap", label: "Swap", line: "Any token, from any chain" },
+    ],
+  },
   {
     id: "companies", label: "Companies", to: "/companies",
     line: "AI companies, founded in two minutes",
     links: [
       { to: FOUND, label: "Found a company", line: "Two minutes, free" },
       { to: "/companies", label: "Browse companies", line: "See what they make and sell" },
+      { to: "/market", label: "Market", line: "Buy what the companies make" },
+      { to: FEED, label: "Live feed", line: "What every company did, as it happens" },
       { to: "/my", label: "Owner desk", line: "Run yours, talk to its CEO" },
     ],
-  },
-  {
-    id: "market", label: "Market", to: "/market",
-    line: "Buy what the companies make",
-    links: [{ to: "/market", label: "Market", line: "Buy what the companies make" }],
-  },
-  {
-    id: "live", label: "Live", to: FEED,
-    line: "What every company did, as it happens",
-    links: [{ to: FEED, label: "Live", line: "What every company did, as it happens" }],
   },
   {
     id: "games", label: "Games", to: "/games",
@@ -105,8 +114,8 @@ export const READING: NavLink[] = [
 
 const first = (path: string) => path.split(/[?#]/)[0]!.split("/").filter(Boolean)[0] ?? "";
 const OWNER: Record<string, NavId> = {
-  companies: "companies", launch: "companies", my: "companies", co: "companies", c: "companies", guide: "companies",
-  market: "market",
+  discover: "discover", launchpad: "launch", swap: "launch",
+  companies: "companies", launch: "companies", my: "companies", co: "companies", c: "companies", guide: "companies", market: "companies", feed: "companies",
   games: "games",
   token: "shift", stake: "shift", staking: "shift", leaderboard: "shift", frogs: "shift", tokenomics: "shift", command: "shift", forge: "shift",
   observatory: "observatory", services: "observatory", mind: "observatory", watchtower: "observatory", crews: "observatory", mcp: "observatory",
@@ -114,12 +123,12 @@ const OWNER: Record<string, NavId> = {
   start: "learn", "how-it-works": "learn", proof: "learn", security: "learn",
 };
 
-/** Which menu group a page belongs to: null for the front page and for pages kept out of the menus. */
-export const groupOf = (path: string): NavId | null => (first(path) ? OWNER[first(path)] ?? null : "live");
+/** Which menu group a page belongs to: the front page is IMD TERMINAL (Discover); null for pages kept out of the menus. */
+export const groupOf = (path: string): NavId | null => (first(path) ? OWNER[first(path)] ?? null : "discover");
 
 /** The tabs under the header on a page of that group. */
 export function tabsOf(id: NavId | null): NavLink[] {
-  if (!id || id === "live" || id === "market") return [];
+  if (!id || id === "discover") return [];
   if (id === "observatory") return SYSTEMS;
   return NAV.find((group) => group.id === id)?.links ?? [];
 }
@@ -128,7 +137,7 @@ export function tabsOf(id: NavId | null): NavLink[] {
 export type Skin = "geek" | "breakroom" | "info" | "station";
 export function skinOf(path: string): Skin {
   const a = first(path);
-  if (["", "start", "new", "observatory"].includes(a)) return "station";
+  if (["", "start", "new", "observatory", "discover", "feed"].includes(a)) return "station";
   if (["games", "arena", "league", "play"].includes(a)) return "breakroom";
   if (["whitepaper", "token", "tokenomics", "frogs", "stake", "staking", "swap", "command", "forge", "watch", "ship", "deals", "partners", "leaderboard"].includes(a)) return "info";
   return "geek";

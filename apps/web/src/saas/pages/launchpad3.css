@@ -224,3 +224,10 @@
   .px .lp .lp-stage i, .px .lp .lp-steps li.go::before { animation: none; }
 }
 .px .st-room.lp .lp-form { align-items: start; }
+
+/* the Ethereum board points to Solana first (IMD TERMINAL, Phase 1) */
+.lp3-solband { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 14px; align-items: center; margin-top: 14px; padding: 12px 14px; border: 1px solid rgba(98, 217, 207, .42); background: #061011; color: var(--px-dim); text-decoration: none; font: 400 13px/1.5 var(--px-sans); }
+.lp3-solband b { display: inline-flex; align-items: center; gap: 7px; color: #62d9cf; font: 400 10px/1 var(--px-pixel); letter-spacing: .06em; white-space: nowrap; }
+.lp3-solband em { font-style: normal; color: var(--px-lime); font: 700 11px/1 var(--px-mono); white-space: nowrap; }
+.lp3-solband:hover { border-color: #62d9cf; color: var(--px-text); }
+@media (max-width: 760px) { .lp3-solband { grid-template-columns: 1fr; } }

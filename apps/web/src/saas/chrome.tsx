@@ -3,7 +3,7 @@ import { short } from "../api";
 import { BLUESKY_URL, DEV_X_URL, OPENSEA_URL, TELEGRAM_URL, X_COMMUNITY_URL, X_URL, useSwarm } from "../landing/chrome";
 import { Link, go } from "../router";
 import { useSession } from "../session";
-import { FEED, FOUND, NAV, READING, SYSTEMS, groupOf, isOn, tabsOf, type NavId } from "./nav";
+import { FOUND, LAUNCH, NAV, READING, SYSTEMS, groupOf, isOn, tabsOf, type NavId } from "./nav";
 import { PxIcon } from "./PxIcon";
 import "./saas.css";
 
@@ -62,7 +62,7 @@ export function SxHeader({ path = "/", title }: { path?: string; title?: string 
           <nav className="px-nav" aria-label="Main">
             {NAV.map((group) => group.links.length === 1 ? (
               <Link key={group.id} to={group.to} className={here === group.id ? "px-nav-a on" : "px-nav-a"} title={group.line}>
-                {group.id === "live" && <i className="px-nav-live" aria-hidden="true" />}{group.label}
+                {group.id === "discover" && <i className="px-nav-live" aria-hidden="true" />}{group.label}
               </Link>
             ) : (
               <details key={group.id} className={here === group.id ? "on" : undefined}>
@@ -78,7 +78,7 @@ export function SxHeader({ path = "/", title }: { path?: string; title?: string 
           </nav>
           <div className="px-actions">
             <span className="px-readout" title="IMD agents online, from api.imd.fun"><i />{swarm?.n ? `${swarm.n.toLocaleString("en-US")} AGENTS` : "AGENTS —"}</span>
-            <Link to={FOUND} className="px-btn primary small px-cta">FOUND A COMPANY</Link>
+            <Link to={LAUNCH} className="px-btn primary small px-cta">LAUNCH A TOKEN</Link>
             <Wallet />
             <button className="px-burger" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
               <PxIcon name={open ? "close" : "menu"} size={16} />
@@ -89,8 +89,8 @@ export function SxHeader({ path = "/", title }: { path?: string; title?: string 
       </header>
       <div className={open ? "px-drawer on" : "px-drawer"} aria-hidden={!open} onClick={(e) => { if ((e.target as HTMLElement).closest("a")) setOpen(false); }}>
         <div className="px-drawer-cta">
-          <Link to={FOUND} className="px-btn primary">FOUND A COMPANY</Link>
-          <Link to={FEED} className="px-btn">WATCH LIVE</Link>
+          <Link to={LAUNCH} className="px-btn primary">LAUNCH ON SOLANA</Link>
+          <Link to={FOUND} className="px-btn">FOUND A COMPANY</Link>
         </div>
         {NAV.map((group) => (
           <div key={group.id} className={group.links.length === 1 ? "px-drawer-solo" : undefined}>
@@ -124,7 +124,8 @@ export function SxSectionBar({ group, path }: { group: NavId | null; path: strin
 
 /** Phones: five places worth a thumb. */
 export function SxTabs({ path }: { path?: string }) {
-  const here = groupOf(path ?? location.pathname);
+  const at = path ?? location.pathname;
+  const here = groupOf(at);
   const tab = (to: string, label: string, icon: string, on: boolean) => (
     <a href={to} className={on ? "on" : ""} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(to); }}>
       <PxIcon name={icon} size={17} /><span>{label}</span>
@@ -132,10 +133,10 @@ export function SxTabs({ path }: { path?: string }) {
   );
   return (
     <nav className="px-tabs" aria-label="NIGHTSHIFT">
-      {tab("/", "LIVE", "pulse", here === "live")}
+      {tab("/", "TERMINAL", "pulse", at === "/")}
+      {tab("/discover", "DISCOVER", "grid", here === "discover" && at !== "/")}
+      {tab("/launchpad", "LAUNCH", "bolt", here === "launch")}
       {tab("/companies", "COMPANIES", "blocks", here === "companies")}
-      {tab("/market", "MARKET", "market", here === "market")}
-      {tab("/games", "GAMES", "play", here === "games")}
       {tab("/token", "$SHIFT", "coin", here === "shift")}
     </nav>
   );
@@ -146,7 +147,8 @@ export function SxFooter() {
   const pick = (...ids: NavId[]) => NAV.filter((g) => ids.includes(g.id)).flatMap((g) => g.links);
   const systems = ["/observatory", "/services", "/mind", "/crews", "/mcp", "/agents/start"];
   const cols: { name: string; links: { to: string; label: string }[] }[] = [
-    { name: "COMPANIES", links: [...pick("companies", "market"), { to: FEED, label: "Live feed" }, { to: "/games", label: "Games" }] },
+    { name: "IMD TERMINAL", links: [{ to: "/", label: "Terminal" }, ...pick("discover", "launch")] },
+    { name: "COMPANIES", links: [...pick("companies"), { to: "/games", label: "Games" }] },
     { name: "$SHIFT", links: pick("shift") },
     { name: "OBSERVATORY", links: SYSTEMS.filter((l) => systems.includes(l.to)) },
     { name: "TRUST", links: [...pick("learn"), ...READING.filter((l) => ["/whitepaper", "/changelog", "/terms"].includes(l.to))] },
@@ -156,7 +158,7 @@ export function SxFooter() {
       <div className="px-foot-in">
         <div className="px-foot-brand">
           <Link to="/" className="px-logo" aria-label="NIGHTSHIFT home"><img src="/brand/pepe-pixel.svg" alt="" width={26} height={26} /><b>NIGHTSHIFT</b><em>PROTOCOL</em></Link>
-          <p>AI companies that run while you sleep. Work bought from the IMD agent swarm, sold for USDC, recorded on chain.</p>
+          <p>IMD TERMINAL: discover, launch and trade IMD tokens. And AI companies that run while you sleep, their work bought from the IMD agent swarm.</p>
           <a className="px-foot-note" href="https://imd.fun" target="_blank" rel="noreferrer"><PxIcon name="bot" size={12} />POWERED BY IMD · IMD.FUN</a>
         </div>
         {cols.map((col) => (

@@ -4,7 +4,7 @@ import { Component, type ComponentType, type ReactNode, StrictMode, Suspense, la
 import { createRoot } from "react-dom/client";
 import { type Health, api, noteFirstTouch } from "./api";
 import { PageShell } from "./nx/Shell";
-import { SxHome } from "./saas/Home";
+import { TerminalHome } from "./terminal/TerminalHome";
 import { useRoute } from "./router";
 import { webOnly } from "./store";
 import { SessionProvider } from "./session";
@@ -14,13 +14,16 @@ import "./lite"; // marks <html data-lite> before the first paint
 noteFirstTouch();
 
 /**
- * Every page but the front door is its own chunk: the front page loads the feed and nothing else.
+ * Every page but the front door is its own chunk: the front page (IMD TERMINAL) loads its token rows and nothing else.
  * `page` turns a module's named export into a lazy component.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const page = <M, K extends keyof M>(load: () => Promise<M>, name: K) => lazy(() => load().then((m) => ({ default: m[name] as ComponentType<any> })));
 
 const Home = page(() => import("./Home"), "Home");
+// the company live feed: the front page before IMD TERMINAL, now at /feed
+const FeedHome = page(() => import("./saas/Home"), "SxHome");
+const DiscoverPage = page(() => import("./terminal/Discover"), "DiscoverPage");
 const CompanyPage = page(() => import("./CompanyPage"), "CompanyPage");
 const PublicPage = page(() => import("./PublicPage"), "PublicPage");
 const MarketPage = page(() => import("./MarketPage"), "MarketPage");
@@ -98,8 +101,9 @@ function App() {
   const seg = path.split("/").filter(Boolean);
   const oldDoors: Record<string, string> = { breakroom: "games", geek: "services", info: "token", economy: "proof", hr: "proof" };
   if (seg[0] && oldDoors[seg[0]]) seg[0] = oldDoors[seg[0]]!;
-  // The front door: the promise, one button and the live feed.
-  if (seg.length === 0) return <SxHome />;
+  // The front door: IMD TERMINAL (discover, launch, trade). The company feed that was here is at /feed.
+  if (seg.length === 0) return <TerminalHome />;
+  if (seg[0] === "feed") return <Suspense fallback={<Screen bg="#050706" />}><FeedHome /></Suspense>;
   // The old story landing and the page where the Telegram Mini App was: both are the front page now.
   if (seg[0] === "story" || seg[0] === "tg") return <Redirect to="/" />;
   // The index: every page in the menus, on one page. The old section hubs open the page that replaced them.
@@ -122,6 +126,7 @@ function App() {
   if (seg[0] === "co" && seg[1]) body = <CompanyPage id={seg[1]} health={health} />;
   if (seg[0] === "c" && seg[1]) body = <PublicPage slug={seg[1]} health={health} />;
   if (seg[0] === "observatory") body = <ObservatoryPage />;
+  if (seg[0] === "discover") body = <DiscoverPage />;
   if (seg[0] === "start") body = <StartPage />;
   if (seg[0] === "new") body = <SxIndex />;
   if (seg[0] === "how-it-works") body = <HowItWorksPage />;
@@ -176,7 +181,7 @@ const TITLES: Record<string, string> = {
   companies: "Companies", launch: "Found a company", co: "Your company", my: "Owner desk", whitepaper: "Whitepaper", changelog: "Changelog", c: "Shop", mcp: "MCP", terms: "Terms & risks", setup: "Setup",
   market: "Market", token: "$SHIFT", frogs: "Frogs", swap: "Swap", stake: "Staking", impact: "IMD impact", guide: "Guide", observatory: "Observatory", start: "Start here", new: "Every page",
   tokenomics: "Tokenomics", leaderboard: "Leaderboard", games: "Games", launchpad: "Launch a token", arena: "Agent Arena", privacy: "Privacy", security: "Safety", "delete-account": "Delete account",
-  "how-it-works": "How it works", deals: "Token Deals", partners: "Partners", services: "AI tools", crews: "Crews", watchtower: "Token monitor", agents: "Connect an agent", proof: "Proof", mind: "SWARM MIND", command: "Frog missions", league: "The Night League", forge: "Upgrade Frogs", watch: "Run a keeper", ship: "The Ship",
+  "how-it-works": "How it works", discover: "Discover", deals: "Token Deals", partners: "Partners", services: "AI tools", crews: "Crews", watchtower: "Token monitor", agents: "Connect an agent", proof: "Proof", mind: "SWARM MIND", command: "Frog missions", league: "The Night League", forge: "Upgrade Frogs", watch: "Run a keeper", ship: "The Ship",
 };
 
 // The app shell for phones and the installed app; the game keeps its own worker under /games/pinball.
@@ -209,7 +214,7 @@ class Crash extends Component<{ children: ReactNode }, { error: Error | null }> 
 /** The banners that follow you across the site (a waiting table, a staked game): never on the front page or the live screen. */
 function Banners() {
   const path = useRoute();
-  const off = path === "/" || path === "/new" || path.startsWith("/new/") || path === "/live" || path.startsWith("/live/") || path === "/observatory";
+  const off = path === "/" || path === "/feed" || path === "/new" || path.startsWith("/new/") || path === "/live" || path.startsWith("/live/") || path === "/observatory";
   return off ? null : <Suspense fallback={null}><WaitingBanner /><StakedBanner /></Suspense>;
 }
 

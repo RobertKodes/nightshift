@@ -1,4 +1,4 @@
-import { FEED, NAV, READING, SYSTEMS, type NavLink } from "../saas/nav";
+import { NAV, READING, SYSTEMS, type NavLink } from "../saas/nav";
 
 /**
  * The "every page" index (/new): the menus, laid out as one list. It is made from the one
@@ -11,8 +11,12 @@ const group = (id: string) => NAV.find((g) => g.id === id)!;
 
 export const SECTIONS: SiteSection[] = [
   {
+    id: "terminal", name: "IMD TERMINAL", line: "Discover IMD tokens, launch one on Solana, trade.",
+    items: [{ to: "/", label: "Terminal", line: "Trending, new, about to graduate, live activity" }, ...group("discover").links, ...group("launch").links],
+  },
+  {
     id: "companies", name: "Companies", line: "Found an AI company, watch it work, buy what it makes.",
-    items: [...group("companies").links, ...group("market").links, { to: FEED, label: "Live feed", line: group("live").line }, { to: "/guide", label: "Business guide", line: "Run a company well" }],
+    items: [...group("companies").links, { to: "/guide", label: "Business guide", line: "Run a company well" }],
   },
   { id: "games", name: group("games").label, line: group("games").line, items: group("games").links },
   { id: "shift", name: group("shift").label, line: group("shift").line, items: group("shift").links },

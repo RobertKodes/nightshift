@@ -176,7 +176,7 @@ html, body { overflow-x: clip; }
 
 /* -------------------------------------------------------------------- footer */
 .px-foot { margin-top: 64px; border-top: 1px solid var(--px-line); background: #060a07; }
-.px-foot-in { max-width: 1240px; margin: 0 auto; padding: 34px clamp(14px, 4vw, 26px) 22px; display: grid; grid-template-columns: minmax(200px, 1.4fr) repeat(4, minmax(0, 1fr)); gap: 24px 18px; }
+.px-foot-in { max-width: 1240px; margin: 0 auto; padding: 34px clamp(14px, 4vw, 26px) 22px; display: grid; grid-template-columns: minmax(200px, 1.4fr) repeat(5, minmax(0, 1fr)); gap: 24px 18px; }
 .px-foot-brand { display: grid; gap: 10px; align-content: start; }
 .px-foot-brand p { margin: 0; color: var(--px-faint); font: 400 12px/1.6 var(--px-sans); max-width: 34ch; }
 .px-foot-note { display: inline-flex; align-items: center; gap: 7px; font: 400 9px/1.4 var(--px-pixel); color: var(--px-gold); border: 1px dashed rgba(242, 193, 78, .35); padding: 7px 8px; width: fit-content; text-decoration: none; }

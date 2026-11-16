@@ -106,7 +106,7 @@ export function SolPages({ seg }: { seg: string[] }) {
   useEffect(() => { document.title = `${sub === "new" ? "Launch a token on Solana" : sub === "admin" ? "Solana launch setup" : "IMD Launch on Solana"} · NIGHTSHIFT`; }, [sub]);
   return (
     <div className="sl3">
-      <nav className="lp3-crumb" aria-label="Where you are"><Link to="/launchpad">LAUNCHPAD</Link><i aria-hidden="true">/</i><Link to="/launchpad/sol">SOLANA</Link><i aria-hidden="true">/</i><span className="imd">BUILT ON IMD</span></nav>
+      <nav className="lp3-crumb" aria-label="Where you are"><Link to="/">IMD TERMINAL</Link><i aria-hidden="true">/</i><Link to="/launchpad">LAUNCHPAD · SOLANA</Link><i aria-hidden="true">/</i><span className="imd">BUILT ON IMD</span></nav>
       {!sub ? <SolHome /> : sub === "new" ? <SolNew /> : sub === "admin" ? <SolAdmin /> : <SolToken key={sub} mint={sub} />}
     </div>
   );
@@ -177,7 +177,7 @@ function SolHome() {
           {info?.open
             ? <StarBorder as="a" href="/launchpad/sol/new" onClick={(e: React.MouseEvent) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go("/launchpad/sol/new"); }} className="sl3-star" color="#b8ff3d" duration={5} thickness={1} radius={2} backgroundColor="#b8ff3d" textColor="#031007" borderColor="rgba(184,255,61,.6)"><PxIcon name="bolt" size={14} />LAUNCH A TOKEN</StarBorder>
             : <span className="px-btn" aria-disabled="true"><PxIcon name="pulse" size={14} />OPENING SOON</span>}
-          <Link to="/launchpad" className="px-btn imd"><PxIcon name="blocks" size={14} />IMD LAUNCHES ON ETHEREUM</Link>
+          <Link to="/launchpad/eth" className="px-btn imd"><PxIcon name="blocks" size={14} />IMD LAUNCHES ON ETHEREUM</Link>
         </>}
         aside={<ImdPanel info={info} />}
       />

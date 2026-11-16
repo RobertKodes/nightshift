@@ -6,7 +6,10 @@
  * errors when GeckoTerminal has nothing yet or cannot be reached (the page then falls back to its own line).
  */
 
-export const GT_API = "https://api.geckoterminal.com/api/v2/networks/solana";
+export const GT_ROOT = "https://api.geckoterminal.com/api/v2/networks";
+export const GT_API = `${GT_ROOT}/solana`;
+/** The GeckoTerminal networks NIGHTSHIFT reads: Solana, Ethereum and Robinhood Chain (IMD's launch chains). */
+export type GtNetwork = "solana" | "eth" | "robinhood";
 /** The timeframes the page offers, as GeckoTerminal's OHLCV path and aggregate. */
 export const TIMEFRAMES = {
   "1m": { path: "minute", aggregate: 1 },
@@ -114,15 +117,28 @@ export class SolMarket {
   }
 
   /** One GeckoTerminal read, inside the engine-wide budget of calls a minute. */
-  private async get(path: string): Promise<unknown> {
+  private async get(path: string, network: GtNetwork = "solana"): Promise<unknown> {
     const now = this.now();
     while (this.calls.length && now - this.calls[0]! > 60_000) this.calls.shift();
     if (this.calls.length >= this.budget) throw new OverBudget("over budget");
     this.calls.push(now);
-    const r = await this.fetch(`${GT_API}${path}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(this.timeoutMs) });
+    const r = await this.fetch(`${GT_ROOT}/${network}${path}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(this.timeoutMs) });
     if (r.status === 404) throw new Upstream404("not indexed");
     if (!r.ok) throw new Error(`GeckoTerminal answered ${r.status}`);
     return r.json();
+  }
+
+  /**
+   * One uncached GeckoTerminal read on any network, inside the same engine-wide budget (the IMD Terminal's token
+   * lists keep their own cache). Throws when over budget, not indexed (404) or unreachable.
+   */
+  read(network: GtNetwork, path: string): Promise<unknown> { return this.get(path, network); }
+
+  /** Calls left in this minute's budget: the IMD Terminal only reads when the token pages keep room for theirs. */
+  left(): number {
+    const now = this.now();
+    while (this.calls.length && now - this.calls[0]! > 60_000) this.calls.shift();
+    return Math.max(0, this.budget - this.calls.length);
   }
 
   /**

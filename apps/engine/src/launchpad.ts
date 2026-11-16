@@ -292,6 +292,9 @@ const service = () => (live ??= launchpadService({
   now: Date.now,
 }));
 
+/** The IMD launch board (Ethereum and Robinhood Chain), shared with the IMD Terminal: one cache, rebuilt at most every 2 minutes. */
+export const launchpadBoard = (): Promise<Board> => service().board();
+
 type Context = {
   json(res: ServerResponse, status: number, body: unknown): void;
   body(req: IncomingMessage, max?: number): Promise<Record<string, unknown>>;

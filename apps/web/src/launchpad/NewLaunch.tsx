@@ -101,7 +101,7 @@ export function NewLaunch() {
   return (
     <div className="st-room lp">
       <div className="st-body lp-new">
-        <span className="st-deck lp-deck"><Link to="/launchpad">LAUNCHPAD</Link> · LAUNCH A COIN ON IMD</span>
+        <span className="st-deck lp-deck"><Link to="/launchpad/eth">IMD LAUNCHPAD · ETHEREUM</Link> · LAUNCH A COIN ON IMD</span>
         <h1 className="lp-h1">Launch a token</h1>
         <p className="st-note">IMD's swarm builds, tests, audits and deploys it with its Uniswap v4 pool. You pay 0.5 IMD from your own wallet; IMD checks the request for free first. Once it is live, anyone can buy it from Ethereum, Base, Robinhood Chain or Solana through NIGHTSHIFT's swap.</p>
 

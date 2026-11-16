@@ -106,14 +106,14 @@ describe("the feed from the older routes", () => {
 });
 
 describe("the one navigation file", () => {
-  const parked = ["/swap", "/deals", "/launchpad", "/forge", "/ship", "/play", "/live", "/partners", "/story", "/tg"];
+  const parked = ["/deals", "/forge", "/ship", "/play", "/live", "/partners", "/story", "/tg"];
   const listed = [...NAV.flatMap((g) => g.links), ...SYSTEMS, ...READING, ...SECTIONS.flatMap((s) => s.items)].map((l) => l.to);
 
   it("keeps parked pages out of every menu and the index", () => {
     for (const to of parked) expect(listed).not.toContain(to);
   });
   it("has the short main menu, in order", () => {
-    expect(NAV.map((g) => g.label)).toEqual(["Companies", "Market", "Live", "Games", "$SHIFT", "Observatory", "Start here"]);
+    expect(NAV.map((g) => g.label)).toEqual(["Discover", "Launchpad", "Companies", "Games", "$SHIFT", "Observatory", "Start here"]);
   });
   it("keeps the agent pages off the main menu and on the Observatory", () => {
     const main = NAV.flatMap((g) => g.links).map((l) => l.to);
@@ -123,15 +123,22 @@ describe("the one navigation file", () => {
       expect(groupOf(to)).toBe("observatory");
     }
   });
+  it("puts the Solana launchpad first among the launch pages, and keeps the IMD Ethereum launchpad and Swap in the menu", () => {
+    const launch = NAV.find((g) => g.id === "launch")!.links.map((l) => l.to);
+    expect(launch).toEqual(["/launchpad/sol/new", "/launchpad", "/launchpad/eth", "/swap"]);
+    expect(groupOf("/launchpad/sol/abc")).toBe("launch");
+    expect(groupOf("/discover")).toBe("discover");
+    expect(groupOf("/feed")).toBe("companies");
+  });
   it("knows which group a page belongs to", () => {
-    expect(groupOf("/")).toBe("live");
+    expect(groupOf("/")).toBe("discover");
     expect(groupOf("/games/chess")).toBe("games");
     expect(groupOf("/c/leadnest")).toBe("companies");
-    expect(groupOf("/swap")).toBeNull();
-    expect(tabsOf("market")).toEqual([]);
+    expect(groupOf("/deals")).toBeNull();
+    expect(tabsOf("discover")).toEqual([]);
     expect(tabsOf("observatory")).toBe(SYSTEMS);
     expect(isOn("/games/chess", "/games")).toBe(true);
-    expect(isOn("/", "/#feed")).toBe(true);
-    expect(isOn("/companies", "/#feed")).toBe(false);
+    expect(isOn("/feed", "/feed#feed")).toBe(true);
+    expect(isOn("/companies", "/feed#feed")).toBe(false);
   });
 });

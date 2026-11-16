@@ -31,15 +31,15 @@ export function TokenView({ ref_ }: { ref_: string }) {
 
   if (!v) return (
     <div className="lp lp3 lp3-coin">
-      <nav className="lp3-crumb" aria-label="Where you are"><Link to="/launchpad">LAUNCHPAD</Link></nav>
-      {err ? <p className="lp3-warn">{err} <Link to="/launchpad">Back to the board</Link></p> : <p className="lp3-empty">Reading the launch at IMD…</p>}
+      <nav className="lp3-crumb" aria-label="Where you are"><Link to="/launchpad/eth">IMD LAUNCHPAD · ETHEREUM</Link></nav>
+      {err ? <p className="lp3-warn">{err} <Link to="/launchpad/eth">Back to the board</Link></p> : <p className="lp3-empty">Reading the launch at IMD…</p>}
     </div>
   );
 
   const l = v.launch, m = v.market, live = v.stage === "live" && l?.token && l.chain;
   return (
     <div className="lp lp3 lp3-coin">
-      <nav className="lp3-crumb" aria-label="Where you are"><Link to="/launchpad">LAUNCHPAD</Link>{l && <><i aria-hidden="true">/</i><span className="imd">IMD LAUNCH #{l.launchNumber}</span></>}</nav>
+      <nav className="lp3-crumb" aria-label="Where you are"><Link to="/launchpad/eth">IMD LAUNCHPAD · ETHEREUM</Link>{l && <><i aria-hidden="true">/</i><span className="imd">IMD LAUNCH #{l.launchNumber}</span></>}</nav>
       <header className="lp-coin">
         <Logo src={l?.logo ?? m?.image ?? null} symbol={sym} size={72} />
         <div>

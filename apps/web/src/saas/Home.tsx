@@ -58,7 +58,7 @@ function useRich(): boolean {
   return rich;
 }
 
-/** The menu's "Live" lands here: /#feed scrolls to the feed, from any page. */
+/** The menu's "Live feed" lands here: /feed#feed scrolls to the feed, from any page. */
 function useFeedAnchor() {
   useEffect(() => {
     const jump = () => { if (location.hash === "#feed") setTimeout(() => document.getElementById("feed")?.scrollIntoView({ block: "start" }), 0); };
@@ -92,7 +92,7 @@ function Row({ item, now }: { item: FeedItem; now: number }) {
   );
 }
 
-/** The front page: the promise, one button, and what every company is doing right now. */
+/** The companies' front page (/feed, the front page before IMD TERMINAL): the promise, one button, and what every company is doing right now. */
 export function SxHome() {
   const swarm = useSwarm();
   const rich = useRich();
@@ -111,7 +111,7 @@ export function SxHome() {
   return (
     <ClickSpark sparkColor={["#b8ff3d", "#57d97b"]} sparkSize={7} sparkRadius={18} sparkCount={8} shape="line" duration={420}>
       <div className="px px-home ns3">
-        <SxHeader path="/" />
+        <SxHeader path="/feed" />
         <main className="px-main">
           <section className="px-hero ns3-hero">
             <div className="px-hero-bg" aria-hidden="true">
@@ -274,7 +274,7 @@ export function SxHome() {
           </section>
         </main>
         <SxFooter />
-        <SxTabs path="/" />
+        <SxTabs path="/feed" />
       </div>
     </ClickSpark>
   );

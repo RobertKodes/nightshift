@@ -14,12 +14,15 @@ import { TokenView } from "./TokenView";
 // the Solana launchpad brings Meteora's SDK and Solana's libraries: its own chunk, loaded only there
 const SolPages = lazy(() => import("./sol/SolPages").then((x) => ({ default: x.SolPages })));
 
-/** /launchpad (the board), /launchpad/new (launch a coin on IMD), /launchpad/t/:ref (one launch, followed to its pool). */
+/**
+ * /launchpad (the Solana board; /launchpad/sol and /launchpad/sol/... keep working), /launchpad/eth (IMD's launches on
+ * Ethereum and Robinhood Chain), /launchpad/new (launch a coin on IMD), /launchpad/t/:ref (one IMD launch, followed to its pool).
+ */
 export function LaunchpadPage({ seg }: { seg: string[] }) {
-  if (seg[1] === "sol") return <Suspense fallback={<p className="sl3-dim">Loading the Solana launchpad…</p>}><SolPages seg={seg} /></Suspense>;
+  if (seg[1] === "eth") return <BoardPage />;
   if (seg[1] === "new") return <NewLaunch />;
   if (seg[1] === "t" && seg[2]) return <TokenView key={seg[2]} ref_={decodeURIComponent(seg[2])} />;
-  return <BoardPage />;
+  return <Suspense fallback={<p className="sl3-dim">Loading the Solana launchpad…</p>}><SolPages seg={seg[1] === "sol" ? seg : ["launchpad", "sol"]} /></Suspense>;
 }
 
 type Tab = "trending" | "new" | "biggest" | "here";
@@ -57,7 +60,7 @@ function BoardPage() {
   const mine = useMemo(myLaunches, []);
   const rich = useRich();
   useEffect(() => {
-    document.title = "Launch a token · NIGHTSHIFT";
+    document.title = "IMD launches on Ethereum · NIGHTSHIFT";
     const load = () => lpApi.board().then((x) => { setB(x); setErr(null); }, (e: Error) => setErr(e.message));
     void load();
     const t = setInterval(load, 120_000);
@@ -77,18 +80,23 @@ function BoardPage() {
 
   return (
     <div className="lp lp3">
-      <nav className="lp3-crumb" aria-label="Where you are"><Link to="/geek">GEEK ROOM</Link><i aria-hidden="true">/</i><span>LAUNCHPAD</span><i aria-hidden="true">/</i><span className="imd">BUILT ON IMD</span></nav>
+      <nav className="lp3-crumb" aria-label="Where you are"><Link to="/">IMD TERMINAL</Link><i aria-hidden="true">/</i><Link to="/launchpad">LAUNCHPAD</Link><i aria-hidden="true">/</i><span className="imd">ETHEREUM · ROBINHOOD CHAIN</span></nav>
+      <Link to="/launchpad" className="lp3-solband">
+        <b><PxIcon name="bolt" size={14} />THE LAUNCHPAD IS ON SOLANA</b>
+        <span>Launch on a Solana bonding curve with the IMD swarm's review, logo, banner and website. This page is IMD's own launch on Ethereum and Robinhood Chain.</span>
+        <em>GO TO SOLANA →</em>
+      </Link>
       <PxHero
-        kicker="LAUNCHPAD · BUILT ON IMD"
-        title="Launch a"
-        accent="token."
+        kicker="IMD LAUNCHPAD · ETHEREUM & ROBINHOOD CHAIN"
+        title="Launch on"
+        accent="Ethereum."
         lead={<>Launch a coin with the <b>IMD swarm</b>: it is built, tested, audited and deployed with its Uniswap v4 pool, from your own wallet. Then anyone buys it from Ethereum, Base, Robinhood Chain or Solana, into that one pool.</>}
         bg={rich ? <DotGrid dotSize={3} gap={20} baseColor="#10254a" activeColor="#2f7bff" proximity={120} shockRadius={180} shockStrength={3} shape="square" glow={0.35} intro={false} /> : undefined}
         actions={<>
-          <StarBorder as="a" href="/launchpad/new" onClick={(e: React.MouseEvent) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go("/launchpad/new"); }} className="lp3-star" color="#b8ff3d" duration={5} thickness={1} radius={2} backgroundColor="#b8ff3d" textColor="#031007" borderColor="rgba(184,255,61,.6)">
-            <PxIcon name="token" size={14} />LAUNCH A COIN ON IMD
+          <StarBorder as="a" href="/launchpad/sol/new" onClick={(e: React.MouseEvent) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go("/launchpad/sol/new"); }} className="lp3-star" color="#b8ff3d" duration={5} thickness={1} radius={2} backgroundColor="#b8ff3d" textColor="#031007" borderColor="rgba(184,255,61,.6)">
+            <PxIcon name="bolt" size={14} />LAUNCH ON SOLANA
           </StarBorder>
-          <Link to="/launchpad/sol" className="px-btn"><PxIcon name="bolt" size={14} />NEW: LAUNCH ON SOLANA</Link>
+          <Link to="/launchpad/new" className="px-btn imd"><PxIcon name="token" size={14} />LAUNCH ON ETHEREUM WITH IMD</Link>
           <a className="px-btn ghost" href="#how"><PxIcon name="doc" size={14} />HOW IT WORKS</a>
         </>}
         aside={
